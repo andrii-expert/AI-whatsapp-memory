@@ -1,0 +1,28 @@
+{
+  "name": "@imaginecalendar/database",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./client": "./src/client.ts",
+    "./schema": "./src/schema.ts",
+    "./queries": "./src/queries/index.ts",
+    "./constants/onboarding": "./src/constants/onboarding.ts",
+    "./constants/voice-timing": "./src/constants/voice-timing.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "bun run seed.ts"
+  },
+  "dependencies": {
+    "@imaginecalendar/logger": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "drizzle-kit": "^0.31.1"
+  }
+}

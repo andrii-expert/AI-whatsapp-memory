@@ -1,0 +1,103 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "globalDependencies": ["**/.env", "**/.env.local"],
+  "ui": "stream",
+  "tasks": {
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.local"],
+      "dependsOn": ["^build"],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "next-env.d.ts",
+        "dist/**",
+        "build/**",
+        "lib/**"
+      ],
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "DATABASE_POOL_MAX",
+        "CLERK_PUBLISHABLE_KEY",
+        "CLERK_SECRET_KEY",
+        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+        "CLERK_WEBHOOK_SECRET",
+        "RESEND_API_KEY",
+        "RESEND_FROM_EMAIL",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_REDIRECT_URI",
+        "MICROSOFT_CLIENT_ID",
+        "MICROSOFT_CLIENT_SECRET",
+        "MICROSOFT_TENANT_ID",
+        "MICROSOFT_REDIRECT_URI",
+        "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "WHATSAPP_BUSINESS_ACCOUNT_ID",
+        "WHATSAPP_WEBHOOK_VERIFY_TOKEN",
+        "AI_PROVIDER",
+        "OPENAI_API_KEY",
+        "GOOGLE_AI_API_KEY",
+        "AZURE_SPEECH_KEY",
+        "AZURE_SPEECH_REGION",
+        "PAYMENT_MODE",
+        "PAYFAST_MERCHANT_ID",
+        "PAYFAST_MERCHANT_KEY",
+        "PAYFAST_PASSPHRASE",
+        "PAYFAST_SANDBOX_MERCHANT_ID",
+        "PAYFAST_SANDBOX_MERCHANT_KEY",
+        "PAYFAST_SANDBOX_PASSPHRASE",
+        "PAYFAST_RETURN_URL",
+        "PAYFAST_CANCEL_URL",
+        "PAYFAST_NOTIFY_URL",
+        "TRIGGER_API_KEY",
+        "TRIGGER_API_URL",
+        "NEXT_PUBLIC_APP_URL",
+        "NEXT_PUBLIC_ADMIN_URL",
+        "NEXT_PUBLIC_API_URL",
+        "WEBHOOK_URL",
+        "NODE_ENV"
+      ]
+    },
+    "start": {
+      "cache": false
+    },
+    "test": {
+      "cache": false
+    },
+    "dev": {
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.local"],
+      "persistent": true,
+      "cache": false
+    },
+    "jobs": {
+      "persistent": true,
+      "cache": false
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false
+    },
+    "db:migrate:prod": {
+      "cache": false
+    },
+    "db:seed": {
+      "cache": false
+    },
+    "db:reset": {
+      "cache": false
+    },
+    "format": {},
+    "lint": {
+      "dependsOn": ["^topo"]
+    },
+    "typecheck": {
+      "dependsOn": ["^topo"],
+      "outputs": []
+    }
+  }
+}

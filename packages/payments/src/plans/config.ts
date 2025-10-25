@@ -1,0 +1,1 @@
+export {}; // legacy placeholder to preserve import paths during migration

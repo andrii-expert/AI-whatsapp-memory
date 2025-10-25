@@ -1,0 +1,39 @@
+{
+  "name": "@imaginecalendar/api",
+  "scripts": {
+    "dev": "PORT=3002 bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "type-check": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
+  },
+  "exports": {
+    "./trpc/routers/_app": "./src/trpc/routers/_app.ts"
+  },
+  "dependencies": {
+    "@bull-board/api": "^6.13.0",
+    "@bull-board/hono": "^6.13.0",
+    "@clerk/backend": "^2.4.1",
+    "@hono/clerk-auth": "^2.0.0",
+    "@hono/trpc-server": "^0.4.0",
+    "@hono/zod-validator": "^0.7.0",
+    "@imaginecalendar/calendar-integrations": "workspace:*",
+    "@imaginecalendar/database": "workspace:*",
+    "@imaginecalendar/logger": "workspace:*",
+    "@imaginecalendar/payments": "workspace:*",
+    "@trpc/server": "^11.5.0",
+    "bullmq": "^5.61.0",
+    "date-fns": "^4.1.0",
+    "hono": "^4.8.12",
+    "hono-rate-limiter": "^0.4.2",
+    "ioredis": "^5.8.1",
+    "postgres": "^3.4.7",
+    "resend": "^4.6.0",
+    "superjson": "^2.2.2",
+    "zod": "4.1.6"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.16"
+  }
+}

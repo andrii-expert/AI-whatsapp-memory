@@ -1,0 +1,41 @@
+module.exports = {
+  apps: [
+    {
+      name: 'imaginecalendar-user',
+      script: 'node_modules/.bin/next',
+      args: 'start',
+      cwd: '/home/imaginecalendar/imaginecalendar/apps/user-portal',
+      instances: 1,
+      exec_mode: 'cluster',
+      autorestart: true,
+      watch: false,
+      interpreter: '/home/imaginecalendar/.bun/bin/bun',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3000,
+      },
+      error_file: '/home/imaginecalendar/imaginecalendar/logs/user-error.log',
+      out_file: '/home/imaginecalendar/imaginecalendar/logs/user-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+    },
+    {
+      name: 'imaginecalendar-api',
+      script: 'src/index.ts',
+      cwd: '/home/imaginecalendar/imaginecalendar/apps/api',
+      instances: 1,
+      exec_mode: 'cluster',
+      autorestart: true,
+      watch: false,
+      interpreter: '/home/imaginecalendar/.bun/bin/bun',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3002,
+      },
+      error_file: '/home/imaginecalendar/imaginecalendar/logs/api-error.log',
+      out_file: '/home/imaginecalendar/imaginecalendar/logs/api-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+    },
+  ],
+};

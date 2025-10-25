@@ -1,0 +1,22 @@
+{
+  "name": "@imaginecalendar/whatsapp",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@imaginecalendar/logger": "workspace:*",
+    "axios": "^1.7.7",
+    "zod": "4.1.6"
+  },
+  "devDependencies": {
+    "@imaginecalendar/tsconfig": "workspace:*",
+    "@types/node": "^20",
+    "eslint": "^8",
+    "typescript": "^5"
+  }
+}

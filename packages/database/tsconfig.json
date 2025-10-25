@@ -1,0 +1,11 @@
+{
+  "extends": "@imaginecalendar/tsconfig/base.json",
+  "include": ["src"],
+  "exclude": ["node_modules", "migrations"],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@database/*": ["./src/*"]
+    }
+  }
+}

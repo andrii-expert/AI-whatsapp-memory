@@ -1,0 +1,25 @@
+{
+  "name": "@imaginecalendar/voice-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@imaginecalendar/ai-services": "workspace:*",
+    "@imaginecalendar/database": "workspace:*",
+    "@imaginecalendar/logger": "workspace:*",
+    "@imaginecalendar/whatsapp": "workspace:*",
+    "@imaginecalendar/calendar-integrations": "workspace:*",
+    "axios": "^1.7.7",
+    "bullmq": "^5.28.1",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.16",
+    "@types/node": "^22.10.5",
+    "typescript": "^5.9.2"
+  }
+}

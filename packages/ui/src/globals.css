@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* White theme with blue primary */
+    --background: 0, 0%, 100%; /* White */
+    --foreground: 0, 0%, 7%; /* Near black */
+    --card: 0, 0%, 98%; /* Off-white for cards */
+    --card-foreground: 0, 0%, 7%; /* Dark text */
+    --popover: 0, 0%, 100%; /* White */
+    --popover-foreground: 0, 0%, 7%; /* Dark text */
+    --primary: 206, 61%, 47%; /* #2F7DC1 Blue for buttons */
+    --primary-foreground: 0, 0%, 100%; /* White text on blue */
+    --secondary: 206, 61%, 95%; /* Very light blue */
+    --secondary-foreground: 206, 61%, 47%; /* Blue text */
+    --muted: 0, 0%, 96%; /* Light gray */
+    --muted-foreground: 0, 0%, 45%; /* Medium gray */
+    --accent: 17, 87%, 54%; /* #F36C21 Orange accent */
+    --accent-foreground: 0, 0%, 100%; /* White */
+    --destructive: 0, 84%, 60%; /* Red for errors */
+    --destructive-foreground: 0, 0%, 100%; /* White */
+    --border: 0, 0%, 85%; /* Light gray border */
+    --input: 0, 0%, 100%; /* White background for inputs */
+    --ring: 206, 61%, 47%; /* Blue focus ring */
+    --radius: 0.5rem;
+
+    /* Brand colors */
+    --brand-blue: 206, 61%, 47%; /* #2F7DC1 */
+    --brand-orange: 17, 87%, 54%; /* #F36C21 */
+    --brand-green: 75, 46%, 57%; /* #A7C95C */
+    --brand-yellow: 48, 100%, 55%; /* #FFDE17 */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    font-family: var(--font-sans), system-ui, sans-serif;
+    @apply bg-background text-foreground;
+  }
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+[type="search"]::-webkit-search-cancel-button,
+[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+@keyframes dialog-overlay-show {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-overlay-hide {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-content-show {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialog-content-hide {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+}
+
+.loading-ellipsis:after {
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: bottom;
+  -webkit-animation: ellipsis steps(4, end) 900ms infinite;
+  animation: ellipsis steps(4, end) 900ms infinite;
+  content: "\2026"; /* ascii code for the ellipsis character */
+  width: 0px;
+}
+
+@keyframes ellipsis {
+  to {
+    width: 1.25em;
+  }
+}
+
+@-webkit-keyframes ellipsis {
+  to {
+    width: 1.25em;
+  }
+}
+
+/* Date picker */
+.rdp-tbody .rdp-button {
+  border-radius: 100%;
+}
+
+.aria-selected\:text-accent-foreground[aria-selected="true"] {
+  border-radius: 0px;
+}

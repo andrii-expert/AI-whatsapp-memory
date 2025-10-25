@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0, 0%, 100%;
+    --foreground: 0, 0%, 7%;
+    --card: 45 18% 96%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 45 18% 96%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 206, 61%, 47%; /* Blue primary for admin */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 40, 11%, 89%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 40, 11%, 89%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 40, 10%, 94%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --muted-foreground: 0, 0%, 38%;
+    --border: 45, 5%, 85%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+
+    /* Brand colors from logo */
+    --brand-orange: 20, 90%, 54%;
+    --brand-orange-light: 20, 90%, 64%;
+    --brand-yellow: 44, 100%, 55%;
+  }
+
+  /* Blue theme override for auth pages */
+  .auth-page-blue-theme {
+    --background: 206, 61%, 47%; /* #2F7DC1 Blue */
+    --foreground: 0, 0%, 100%; /* White */
+    --card: 206, 61%, 42%; /* Darker blue for cards */
+    --card-foreground: 0, 0%, 100%; /* White */
+    --popover: 0, 0%, 100%; /* White for readability */
+    --popover-foreground: 206, 61%, 47%; /* Blue text on white */
+    --primary: 20, 90%, 54%; /* #FF6B35 Orange for buttons */
+    --primary-foreground: 0, 0%, 100%; /* White */
+    --secondary: 206, 61%, 37%; /* Darker blue */
+    --secondary-foreground: 0, 0%, 100%; /* White */
+    --muted: 206, 30%, 60%; /* Muted blue */
+    --muted-foreground: 0, 0%, 100%; /* White */
+    --border: 206, 61%, 35%; /* Dark blue borders */
+    --input: 0, 0%, 100%; /* White inputs */
+  }
+
+  .dark {
+    --background: 0, 0%, 7%;
+    --foreground: 0 0% 98%;
+    --card: 0, 0%, 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0, 0%, 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 0, 0%, 11%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0, 0%, 11%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 0, 0%, 11%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 359, 100%, 61%;
+    --destructive-foreground: 0, 0%, 100%;
+    --muted-foreground: 0, 0%, 38%;
+    --border: 0, 0%, 17%;
+    --input: 0, 0%, 11%;
+    --ring: 240 4.9% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+html,
+body {
+  height: 100%;
+}
+
+*:focus {
+  outline: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -1,0 +1,204 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* White theme is now default from shared UI package */
+    /* Only brand-specific overrides here */
+    --brand-orange: 20, 90%, 54%; /* #F36C21 */
+    --brand-orange-light: 20, 90%, 64%;
+    --brand-yellow: 44, 100%, 55%;
+  }
+
+  /* Blue theme override for auth and onboarding pages */
+  .auth-page-blue-theme {
+    --background: 206, 61%, 47%; /* #2F7DC1 Blue */
+    --foreground: 0, 0%, 100%; /* White */
+    --card: 206, 61%, 42%; /* Darker blue for cards */
+    --card-foreground: 0, 0%, 100%; /* White */
+    --popover: 0, 0%, 100%; /* White for readability */
+    --popover-foreground: 206, 61%, 47%; /* Blue text on white */
+    --primary: 20, 90%, 54%; /* #FF6B35 Orange for buttons */
+    --primary-foreground: 0, 0%, 100%; /* White */
+    --secondary: 206, 61%, 37%; /* Darker blue */
+    --secondary-foreground: 0, 0%, 100%; /* White */
+    --muted: 206, 30%, 60%; /* Muted blue */
+    --muted-foreground: 0, 0%, 100%; /* White */
+    --border: 206, 61%, 35%; /* Dark blue borders */
+    --input: 0, 0%, 100%; /* White inputs */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply text-foreground;
+    /* Background is controlled by page wrappers, not globally */
+  }
+}
+
+html,
+body {
+  height: 100%;
+}
+
+*:focus {
+  outline: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+[type="search"]::-webkit-search-cancel-button,
+[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Form and loading animations */
+.skeleton-box {
+  background-color: hsl(var(--border));
+  color: hsl(var(--border)) !important;
+  user-select: none !important;
+  cursor: default !important;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-color: transparent !important;
+}
+
+.skeleton-circle {
+  background-color: hsl(var(--border));
+  border-radius: 1000px !important;
+  color: hsl(var(--border)) !important;
+  user-select: none !important;
+  cursor: default !important;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-color: transparent !important;
+}
+
+.skeleton-circle > *,
+.skeleton-box > *,
+.skeleton-line > * {
+  opacity: 0 !important;
+}
+
+.loading-ellipsis:after {
+  overflow: hidden;
+  display: inline-block;
+  vertical-align: bottom;
+  -webkit-animation: ellipsis steps(4, end) 900ms infinite;
+  animation: ellipsis steps(4, end) 900ms infinite;
+  content: "\2026"; /* ascii code for the ellipsis character */
+  width: 0px;
+}
+
+@keyframes ellipsis {
+  to {
+    width: 1.25em;
+  }
+}
+
+@-webkit-keyframes ellipsis {
+  to {
+    width: 1.25em;
+  }
+}
+
+/* Date picker */
+.rdp-tbody .rdp-button {
+  border-radius: 100%;
+}
+
+.aria-selected\:text-accent-foreground[aria-selected="true"] {
+  border-radius: 0px;
+}
+
+/* Remove input number arrows */
+.remove-arrow::-webkit-inner-spin-button,
+.remove-arrow::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.remove-arrow {
+  appearance: textfield;
+}
+
+input[type="time"]::-webkit-clear-button {
+  display: none;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+/* Dotted background pattern */
+.dotted-bg {
+  background-size: 6px 6px;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(255, 255, 255, 0.2) 0.5px,
+    transparent 0
+  );
+}
+
+/* Brand gradient text */
+.text-gradient-brand {
+  background: linear-gradient(135deg, #FF6B35 0%, #FFA947 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Brand gradient background */
+.bg-gradient-brand {
+  background: linear-gradient(135deg, #FF6B35 0%, #FFA947 100%);
+}
+
+/* Orange glow effect for dark theme */
+.orange-glow {
+  text-shadow: 0 0 20px rgba(255, 107, 53, 0.5),
+               0 0 40px rgba(255, 107, 53, 0.3);
+}
+
+/* Orange underline animation */
+.orange-underline {
+  position: relative;
+}
+
+.orange-underline::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: -4px;
+  left: 50%;
+  background: linear-gradient(90deg, #FF6B35 0%, #FFA947 100%);
+  transition: width 0.3s ease, left 0.3s ease;
+}
+
+.orange-underline:hover::after {
+  width: 100%;
+  left: 0;
+}
+
+/* Orange dot accent */
+.orange-dot::before {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(135deg, #FF6B35 0%, #FFA947 100%);
+  border-radius: 50%;
+  top: -2px;
+  right: -12px;
+  box-shadow: 0 0 12px rgba(255, 107, 53, 0.4);
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@imaginecalendar/ai-services",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./transcription": "./src/transcription/index.ts",
+    "./intent": "./src/intent/index.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@ai-sdk/elevenlabs": "^1.0.12",
+    "@ai-sdk/google": "^2.0.17",
+    "@ai-sdk/openai": "^2.0.42",
+    "@imaginecalendar/logger": "workspace:*",
+    "ai": "^5.0.59",
+    "chrono-node": "^2.9.0",
+    "zod": "4.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.9.2"
+  }
+}

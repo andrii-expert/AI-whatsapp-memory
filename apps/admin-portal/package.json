@@ -1,0 +1,51 @@
+{
+  "name": "@imaginecalendar/admin-portal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "NODE_ENV=production next build",
+    "clean": "git clean -xdf .next .turbo node_modules",
+    "dev": "next dev -p 3001",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.31.6",
+    "@hookform/resolvers": "^5.2.2",
+    "@imaginecalendar/api": "workspace:*",
+    "@imaginecalendar/tsconfig": "workspace:*",
+    "@imaginecalendar/ui": "workspace:*",
+    "@tanstack/react-query": "^5.85.5",
+    "@trpc/client": "^11.5.0",
+    "@trpc/react-query": "^11.5.0",
+    "@trpc/server": "^11.5.0",
+    "@trpc/tanstack-react-query": "^11.5.0",
+    "date-fns": "^4.1.0",
+    "geist": "^1.5.1",
+    "lucide-react": "^0.511.0",
+    "next": "15.2.3",
+    "next-themes": "^0.4.6",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "react-hook-form": "^7.51.1",
+    "recharts": "^2.15.3",
+    "server-only": "^0.0.1",
+    "superjson": "^2.2.2",
+    "zod": "4.1.6",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.1",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.9.2"
+  }
+}
