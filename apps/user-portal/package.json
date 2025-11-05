@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "NODE_ENV=production next build",
+    "build": "(cd ../.. && cp .env apps/user-portal/.env.local) && NODE_ENV=production next build",
     "clean": "git clean -xdf .next .turbo node_modules",
-    "dev": "next dev -p 3000",
+    "dev": "(cd ../.. && cp .env apps/user-portal/.env.local) && next dev -p 3000",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",

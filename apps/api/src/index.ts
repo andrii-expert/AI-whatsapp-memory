@@ -32,7 +32,10 @@ app.use(secureHeaders());
 app.route("/queues", serverAdapter.registerPlugin());
 
 // Apply Clerk authentication middleware (but NOT to /queues)
-app.use("*", clerkMiddleware());
+app.use("*", clerkMiddleware({
+  secretKey: process.env.CLERK_SECRET_KEY,
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+}));
 
 app.use(
   "*",

@@ -1,8 +1,8 @@
 {
   "name": "@imaginecalendar/api",
   "scripts": {
-    "dev": "PORT=3002 bun run --hot src/index.ts",
-    "start": "bun run src/index.ts",
+    "dev": "cd ../.. && PORT=3002 bun run --hot apps/api/src/index.ts",
+    "start": "cd ../.. && bun run apps/api/src/index.ts",
     "type-check": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
