@@ -43,6 +43,8 @@ app.use(
     origin: process.env.ALLOWED_API_ORIGINS?.split(",") ?? [
       "http://localhost:3000",
       "http://localhost:3001",
+      "https://dashboard.crackon.ai",
+      "https://admin.crackon.ai",
     ],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowHeaders: [
