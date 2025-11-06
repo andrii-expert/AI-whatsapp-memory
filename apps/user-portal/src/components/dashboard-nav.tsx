@@ -13,6 +13,8 @@ import {
   FileText,
   Menu,
   X,
+  StickyNote,
+  Bell,
 } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { Button } from "@imaginecalendar/ui/button";
@@ -27,11 +29,13 @@ import Image from "next/image";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Calendar", href: "/settings/calendars", icon: Calendar },
+  { name: "Notes", href: "/notes", icon: StickyNote },
+  { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Profile", href: "/settings/profile", icon: User },
-  { name: "Preferences", href: "/settings/preferences", icon: Settings },
-  { name: "Calendars", href: "/settings/calendars", icon: Calendar },
-  { name: "Subscription", href: "/billing", icon: CreditCard },
+  { name: "Subscriptions", href: "/billing", icon: CreditCard },
   { name: "Invoices", href: "/billing/invoices", icon: FileText },
+  { name: "Preferences", href: "/settings/preferences", icon: Settings },
 ];
 
 export function DashboardNav() {

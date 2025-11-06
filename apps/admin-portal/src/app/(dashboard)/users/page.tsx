@@ -33,6 +33,7 @@ import {
   DollarSign,
   Shield,
   ShieldOff,
+  Info,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -49,6 +50,7 @@ import { PauseSubscriptionModal } from "@/components/users/pause-subscription-mo
 import { CancelSubscriptionModal } from "@/components/users/cancel-subscription-modal";
 import { RefundModal } from "@/components/users/refund-modal";
 import { ToggleAdminModal } from "@/components/users/toggle-admin-modal";
+import { UserDetailsModal } from "@/components/users/user-details-modal";
 
 export default function UsersPage() {
   const { toast } = useToast();
@@ -63,6 +65,7 @@ export default function UsersPage() {
 
   // Modal states
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pauseModalOpen, setPauseModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -200,6 +203,11 @@ export default function UsersPage() {
   const openToggleAdminModal = (user: any) => {
     setSelectedUser(user);
     setToggleAdminModalOpen(true);
+  };
+
+  const openDetailsModal = (user: any) => {
+    setSelectedUser(user);
+    setDetailsModalOpen(true);
   };
 
   const getStatusBadge = (status: string) => {
@@ -388,6 +396,11 @@ export default function UsersPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => openDetailsModal(user)}>
+                            <Info className="mr-2 h-4 w-4" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => openRefundModal(user)}>
                             <DollarSign className="mr-2 h-4 w-4" />
                             Process Refund
@@ -496,6 +509,11 @@ export default function UsersPage() {
             onOpenChange={setToggleAdminModalOpen}
             user={selectedUser}
             onSuccess={handleModalSuccess}
+          />
+          <UserDetailsModal
+            open={detailsModalOpen}
+            onOpenChange={setDetailsModalOpen}
+            user={selectedUser}
           />
         </>
       )}

@@ -164,6 +164,8 @@ export async function getUserWhatsAppCosts(
       let searchCondition = eq(whatsappNumbers.isActive, true);
       if (search) {
         const searchFilter = sql`(
+          ${users.firstName} ILIKE ${`%${search}%`} OR
+          ${users.lastName} ILIKE ${`%${search}%`} OR
           ${users.name} ILIKE ${`%${search}%`} OR
           ${users.email} ILIKE ${`%${search}%`} OR
           ${whatsappNumbers.phoneNumber} ILIKE ${`%${search}%`}
@@ -194,7 +196,7 @@ export async function getUserWhatsAppCosts(
       const userCosts = await db
         .select({
           userId: users.id,
-          userName: users.name,
+          userName: sql<string>`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`.as('userName'),
           userEmail: users.email,
           phoneNumber: whatsappNumbers.phoneNumber,
           outgoingMessageCount: whatsappNumbers.outgoingMessageCount,
@@ -345,7 +347,7 @@ export async function getWhatsAppCostExportData(
         .select({
           messageId: whatsappMessageLogs.messageId,
           userId: whatsappMessageLogs.userId,
-          userName: users.name,
+          userName: sql<string>`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`.as('userName'),
           userEmail: users.email,
           phoneNumber: whatsappNumbers.phoneNumber,
           messageType: whatsappMessageLogs.messageType,

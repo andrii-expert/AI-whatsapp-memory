@@ -151,6 +151,8 @@ export async function getUsers(
       if (search && search.trim()) {
         const searchCondition = or(
           like(users.email, `%${search}%`),
+          like(users.firstName, `%${search}%`),
+          like(users.lastName, `%${search}%`),
           like(users.name, `%${search}%`),
           like(users.phone, `%${search}%`)
         );
@@ -205,11 +207,19 @@ export async function getUsers(
         users: paginatedUsers.map(user => ({
           id: user.id,
           email: user.email,
-          name: user.name,
+          name: [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.name || null,
           phone: user.phone,
           company: user.company,
           createdAt: user.createdAt,
           isAdmin: user.isAdmin,
+          // Onboarding/Profile fields
+          country: user.country,
+          ageGroup: user.ageGroup,
+          gender: user.gender,
+          birthday: user.birthday,
+          mainUse: user.mainUse,
+          howHeardAboutUs: user.howHeardAboutUs,
+          // Subscription fields
           plan: user.subscription?.plan || null,
           subscriptionStatus: user.subscription?.cancelAtPeriodEnd ? 'cancelled' : (user.subscription?.status || null),
           currentPeriodEnd: user.subscription?.currentPeriodEnd || null,
@@ -292,7 +302,7 @@ export async function getAllUsersForExport(
       return usersList.map(user => ({
         id: user.id,
         email: user.email,
-        name: user.name || "",
+        name: [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.name || "",
         phone: user.phone || "",
         company: user.company || "",
         plan: user.subscription?.plan || "trial",
@@ -392,6 +402,8 @@ export async function getAllPaymentsForExport(
             columns: {
               id: true,
               email: true,
+              firstName: true,
+              lastName: true,
               name: true,
             },
           },
@@ -401,7 +413,7 @@ export async function getAllPaymentsForExport(
       return paymentsList.map(payment => ({
         invoiceNumber: payment.invoiceNumber,
         userEmail: payment.user.email,
-        userName: payment.user.name || "",
+        userName: [payment.user.firstName, payment.user.lastName].filter(Boolean).join(' ').trim() || payment.user.name || "",
         amount: payment.amount,
         vatAmount: payment.vatAmount,
         totalAmount: payment.totalAmount,
