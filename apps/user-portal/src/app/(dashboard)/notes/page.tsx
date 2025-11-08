@@ -1,7 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import { Home, ChevronLeft } from "lucide-react";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
 
 export default function NotesPage() {
+  const { limits, isLoading } = usePlanLimits();
+  const hasNotesAccess = limits.hasNotes;
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
       {/* Breadcrumb Navigation */}
@@ -23,6 +30,15 @@ export default function NotesPage() {
           Create and manage your personal notes
         </p>
       </div>
+
+      {/* Show upgrade prompt if notes feature is locked */}
+      {!hasNotesAccess && (
+        <UpgradePrompt 
+          feature="Notes & Shared Notes" 
+          requiredTier="gold" 
+          variant="card"
+        />
+      )}
     </div>
   );
 }

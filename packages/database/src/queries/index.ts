@@ -13,3 +13,6 @@ export * from "./conversation-states";
 export * from "./event-verification";
 export * from "./pending-intents";
 export * from "./plans";
+
+// Re-export utility functions
+export * from "../utils/plan-limits";

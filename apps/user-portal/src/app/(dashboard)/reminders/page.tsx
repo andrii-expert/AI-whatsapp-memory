@@ -1,7 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import { Home, ChevronLeft } from "lucide-react";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
 
 export default function RemindersPage() {
+  const { limits, isLoading } = usePlanLimits();
+  const hasRemindersAccess = limits.hasReminders;
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
       {/* Breadcrumb Navigation */}
@@ -23,6 +30,15 @@ export default function RemindersPage() {
           Set and manage your reminders
         </p>
       </div>
+
+      {/* Show upgrade prompt if reminders feature is locked */}
+      {!hasRemindersAccess && (
+        <UpgradePrompt 
+          feature="WhatsApp Reminders" 
+          requiredTier="silver" 
+          variant="card"
+        />
+      )}
     </div>
   );
 }

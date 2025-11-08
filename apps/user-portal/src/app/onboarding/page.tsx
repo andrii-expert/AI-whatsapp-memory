@@ -15,6 +15,8 @@ import { normalizePhoneNumber, isValidPhoneNumber } from "@imaginecalendar/ui/ph
 import { Label } from "@imaginecalendar/ui/label";
 import { RadioGroup, RadioGroupItem } from "@imaginecalendar/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@imaginecalendar/ui/select";
+import { Switch } from "@imaginecalendar/ui/switch";
+import { Badge } from "@imaginecalendar/ui/badge";
 import { Calendar } from "@imaginecalendar/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
 import { useToast } from "@imaginecalendar/ui/use-toast";
@@ -27,8 +29,9 @@ import {
   COUNTRY_OPTIONS
 } from "@imaginecalendar/database/constants/onboarding";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Check, Sparkles, Zap, Crown } from "lucide-react";
 import { z } from "zod";
+import { cn } from "@imaginecalendar/ui/cn";
 import { FALLBACK_PLANS, toDisplayPlan } from "@/utils/plans";
 import type { DisplayPlan, PlanRecordLike } from "@/utils/plans";
 
@@ -53,7 +56,7 @@ const formSchema = z.object({
   howHeardAboutUs: z.string().min(1, "Please let us know how you heard about us"),
   company: z.string().optional(),
   timezone: z.string().default("Africa/Johannesburg"),
-  plan: z.string().min(1, "Please select a plan").default("trial"),
+  plan: z.string().min(1, "Please select a plan").default("free"),
 });
 
 export default function OnboardingPage() {
@@ -62,6 +65,7 @@ export default function OnboardingPage() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);
+  const [isAnnual, setIsAnnual] = useState(false);
   const trpc = useTRPC();
   const plansQueryOpts = trpc.plans.listActive.queryOptions();
   const plansQuery = useQuery(plansQueryOpts);
@@ -100,7 +104,7 @@ export default function OnboardingPage() {
     defaultValues: {
       firstName: "",
       lastName: "",
-      plan: "trial",
+      plan: "free",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
   });
@@ -140,14 +144,38 @@ export default function OnboardingPage() {
     }
   }, [plans, getValues, setValue]);
 
-  const trialPlanId = useMemo(
-    () => plans.find(plan => plan.isTrial)?.id ?? "trial",
+  // Update selected plan when billing cycle changes
+  useEffect(() => {
+    const currentPlan = getValues("plan");
+    
+    // If user toggles annual/monthly, update to the correct plan variant
+    if (currentPlan && currentPlan !== 'free') {
+      // Extract tier from current plan (silver or gold)
+      let tier = 'silver';
+      if (currentPlan.includes('gold')) {
+        tier = 'gold';
+      } else if (currentPlan.includes('silver')) {
+        tier = 'silver';
+      }
+      
+      // Generate new plan ID based on billing cycle
+      const newPlanId = isAnnual ? `${tier}-annual` : `${tier}-monthly`;
+      
+      // Only update if the new plan exists and is different from current
+      if (plans.some(p => p.id === newPlanId) && currentPlan !== newPlanId) {
+        setValue("plan", newPlanId, { shouldDirty: false });
+      }
+    }
+  }, [isAnnual, getValues, setValue, plans]);
+
+  const freePlanId = useMemo(
+    () => plans.find(plan => plan.id === 'free')?.id ?? "free",
     [plans]
   );
 
   const selectedPlan = watch("plan");
   const selectedPlanData = plans.find(plan => plan.id === selectedPlan);
-  const isTrialSelected = selectedPlanData?.isTrial ?? false;
+  const isFreeSelected = selectedPlan === 'free';
   const selectedBirthday = watch("birthday");
 
   if (!isLoaded || !user) {
@@ -160,9 +188,10 @@ export default function OnboardingPage() {
 
   async function handlePaidPlanSelection(values: z.infer<typeof formSchema>) {
     try {
+      // Complete onboarding with free plan first, then redirect to payment
       await completeOnboardingMutation.mutateAsync({
         ...values,
-        plan: trialPlanId,
+        plan: freePlanId,
       });
 
       const form = document.createElement('form');
@@ -185,12 +214,13 @@ export default function OnboardingPage() {
   function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
 
-    const chosenPlan = plans.find((plan) => plan.id === values.plan);
-    const isTrial = chosenPlan ? chosenPlan.isTrial : values.plan === trialPlanId;
+    const isFree = values.plan === 'free';
 
-    if (isTrial) {
+    if (isFree) {
+      // Free plan - complete onboarding directly
       completeOnboardingMutation.mutate(values);
     } else {
+      // Paid plan - complete onboarding then redirect to payment
       handlePaidPlanSelection(values);
     }
   }
@@ -417,10 +447,37 @@ export default function OnboardingPage() {
           </CardContent>
         </Card>
 
-        {/* Plan Selection - 3 Column Layout */}
+        {/* Plan Selection - Free/Silver/Gold with Monthly/Annual Toggle */}
         <div className="mb-8">
           <h3 className="text-2xl font-bold mb-2 text-center">Choose Your Plan</h3>
           <p className="text-muted-foreground text-center mb-6">Select the plan that works best for you</p>
+
+          {/* Monthly/Annual Toggle */}
+          <div className="flex flex-col items-center gap-3 mb-8">
+            <div className="flex items-center gap-4">
+              <span className={cn("text-base font-semibold transition-colors", !isAnnual ? "text-primary" : "text-muted-foreground")}>
+                Monthly Billing
+              </span>
+              <Switch
+                checked={isAnnual}
+                onCheckedChange={setIsAnnual}
+                className="data-[state=checked]:bg-primary"
+              />
+              <span className={cn("text-base font-semibold transition-colors", isAnnual ? "text-primary" : "text-muted-foreground")}>
+                Annual Billing
+              </span>
+              {isAnnual && (
+                <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 animate-in fade-in">
+                  💰 Save 20%
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isAnnual 
+                ? "Pay upfront for a full year and save 20% compared to monthly billing" 
+                : "Pay month-to-month with no long-term commitment"}
+            </p>
+          </div>
 
           {USE_DB_PLANS && plansQuery.isError && (
             <div className="mb-4 text-sm text-red-500">
@@ -438,75 +495,235 @@ export default function OnboardingPage() {
               onValueChange={(value) => setValue("plan", value as any)}
               className="grid grid-cols-1 md:grid-cols-3 gap-6"
             >
-              {plans.map((plan) => {
-                const isSelected = selectedPlan === plan.id;
-                const isTrial = plan.isTrial;
-
+              {/* Free Plan */}
+              {(() => {
+                const freePlan = plans.find(p => p.id === 'free');
+                if (!freePlan) return null;
+                const isSelected = selectedPlan === 'free';
+                
                 return (
                   <label
-                    key={plan.id}
-                    htmlFor={plan.id}
-                    className={`relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl ${
+                    key="free"
+                    htmlFor="free"
+                    className={cn(
+                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
                       isSelected
-                        ? isTrial
-                          ? "border-accent bg-accent shadow-xl scale-105"
-                          : "border-primary bg-primary shadow-xl scale-105"
-                        : "border-gray-300 hover:border-primary/50 bg-white"
-                    }`}
+                        ? "border-blue-500 bg-blue-500 shadow-xl scale-105"
+                        : "border-gray-300 hover:border-blue-400 bg-white"
+                    )}
                   >
                     <RadioGroupItem
-                      value={plan.id}
-                      id={plan.id}
-                      className={`absolute top-4 right-4 ${
-                        isSelected ? "!border-white !text-white [&_svg]:!fill-white" : ""
-                      }`}
+                      value="free"
+                      id="free"
+                      className={cn(
+                        "absolute top-4 right-4",
+                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                      )}
                     />
 
-                    {(plan.id === "monthly" || plan.sortOrder === 2) && (
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                        <span className="bg-accent text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md">
-                          Most Popular
-                        </span>
-                      </div>
-                    )}
-
                     <div className="text-center mb-6">
-                      <h4 className={`text-xl font-bold mb-3 ${isSelected ? "text-white" : "text-primary"}`}>
-                        {plan.name}
+                      <div className={cn(
+                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                        isSelected ? "bg-white/20" : "bg-blue-100"
+                      )}>
+                        <Sparkles className={cn("h-6 w-6", isSelected ? "text-white" : "text-blue-600")} />
+                      </div>
+                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                        {freePlan.name}
                       </h4>
                       <div className="mb-3">
-                        <span className={`text-4xl font-bold ${isSelected ? "text-white" : "text-primary"}`}>
-                          {plan.displayPrice}
+                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                          {freePlan.displayPrice}
                         </span>
-                        <span className={`text-base ml-1 ${isSelected ? "text-white/90" : "text-primary/80"}`}>
-                          /{plan.billingPeriod}
+                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                          /{freePlan.billingPeriod}
                         </span>
                       </div>
-                      <p className={`text-sm font-medium ${isSelected ? "text-white/90" : "text-primary/80"}`}>
-                        {plan.description}
+                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : "text-primary/80")}>
+                        {freePlan.description}
                       </p>
                     </div>
 
-                    <div className={`pt-4 flex-1 ${isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"}`}>
+                    <div className={cn(
+                      "pt-4 flex-1",
+                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                    )}>
                       <ul className="space-y-3">
-                        {plan.features.map((feature, i) => (
+                        {freePlan.features.map((feature, i) => (
                           <li key={i} className="flex items-start gap-3 text-sm">
-                            <svg
-                              className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isSelected ? "text-white" : "text-[hsl(var(--brand-green))]"}`}
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span className={isSelected ? "text-white" : "text-primary"}>{feature}</span>
+                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   </label>
                 );
-              })}
+              })()}
+
+              {/* Silver Plan */}
+              {(() => {
+                const planId = isAnnual ? 'silver-annual' : 'silver-monthly';
+                const silverPlan = plans.find(p => p.id === planId);
+                if (!silverPlan) return null;
+                const isSelected = selectedPlan === planId;
+                
+                // Get monthly plan for savings calculation
+                const silverMonthly = plans.find(p => p.id === 'silver-monthly');
+                const monthlyEquivalent = silverPlan.monthlyPriceCents / 100;
+                const savings = silverMonthly && isAnnual 
+                  ? (silverMonthly.amountCents * 12 - silverPlan.amountCents) / 100
+                  : 0;
+
+                return (
+                  <label
+                    key={planId}
+                    htmlFor={planId}
+                    className={cn(
+                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                      isSelected
+                        ? "border-purple-500 bg-purple-500 shadow-xl scale-105"
+                        : "border-gray-300 hover:border-purple-400 bg-white"
+                    )}
+                  >
+                    <RadioGroupItem
+                      value={planId}
+                      id={planId}
+                      className={cn(
+                        "absolute top-4 right-4",
+                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                      )}
+                    />
+
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className="bg-accent text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md">
+                        Most Popular
+                      </span>
+                    </div>
+
+                    <div className="text-center mb-6">
+                      <div className={cn(
+                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                        isSelected ? "bg-white/20" : "bg-purple-100"
+                      )}>
+                        <Zap className={cn("h-6 w-6", isSelected ? "text-white" : "text-purple-600")} />
+                      </div>
+                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                        {silverPlan.name.replace(' Annual', '')}
+                      </h4>
+                      <div className="mb-1">
+                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                          {silverPlan.displayPrice}
+                        </span>
+                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                          /{silverPlan.billingPeriod}
+                        </span>
+                      </div>
+                      {isAnnual && monthlyEquivalent && (
+                        <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
+                          R{monthlyEquivalent.toFixed(0)}/month when paid annually
+                        </p>
+                      )}
+                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
+                        {isAnnual && savings > 0 ? `💰 Save R${savings.toFixed(0)}/year` : silverPlan.description}
+                      </p>
+                    </div>
+
+                    <div className={cn(
+                      "pt-4 flex-1",
+                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                    )}>
+                      <ul className="space-y-3">
+                        {silverPlan.features.map((feature, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm">
+                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </label>
+                );
+              })()}
+
+              {/* Gold Plan */}
+              {(() => {
+                const planId = isAnnual ? 'gold-annual' : 'gold-monthly';
+                const goldPlan = plans.find(p => p.id === planId);
+                if (!goldPlan) return null;
+                const isSelected = selectedPlan === planId;
+                
+                // Get monthly plan for savings calculation
+                const goldMonthly = plans.find(p => p.id === 'gold-monthly');
+                const monthlyEquivalent = goldPlan.monthlyPriceCents / 100;
+                const savings = goldMonthly && isAnnual 
+                  ? (goldMonthly.amountCents * 12 - goldPlan.amountCents) / 100
+                  : 0;
+
+                return (
+                  <label
+                    key={planId}
+                    htmlFor={planId}
+                    className={cn(
+                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                      isSelected
+                        ? "border-yellow-500 bg-yellow-500 shadow-xl scale-105"
+                        : "border-gray-300 hover:border-yellow-400 bg-white"
+                    )}
+                  >
+                    <RadioGroupItem
+                      value={planId}
+                      id={planId}
+                      className={cn(
+                        "absolute top-4 right-4",
+                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                      )}
+                    />
+
+                    <div className="text-center mb-6">
+                      <div className={cn(
+                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                        isSelected ? "bg-white/20" : "bg-yellow-100"
+                      )}>
+                        <Crown className={cn("h-6 w-6", isSelected ? "text-white" : "text-yellow-600")} />
+                      </div>
+                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                        {goldPlan.name.replace(' Annual', '')}
+                      </h4>
+                      <div className="mb-1">
+                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                          {goldPlan.displayPrice}
+                        </span>
+                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                          /{goldPlan.billingPeriod}
+                        </span>
+                      </div>
+                      {isAnnual && monthlyEquivalent && (
+                        <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
+                          R{monthlyEquivalent.toFixed(0)}/month when paid annually
+                        </p>
+                      )}
+                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
+                        {isAnnual && savings > 0 ? `💰 Save R${savings.toFixed(0)}/year` : goldPlan.description}
+                      </p>
+                    </div>
+
+                    <div className={cn(
+                      "pt-4 flex-1",
+                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                    )}>
+                      <ul className="space-y-3">
+                        {goldPlan.features.map((feature, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm">
+                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </label>
+                );
+              })()}
             </RadioGroup>
           )}
         </div>
@@ -521,8 +738,8 @@ export default function OnboardingPage() {
           >
             {isSubmitting
               ? "Processing..."
-              : isTrialSelected
-                ? "Start Free Trial"
+              : isFreeSelected
+                ? "Start with Free Plan"
                 : "Continue to Payment"
             }
           </Button>

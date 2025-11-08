@@ -93,6 +93,27 @@ const payfastFrequencyOptions = [
   { value: "6", label: "Annually" },
 ];
 
+function getPlanTierBadge(planId: string, metadata: any) {
+  const tier = metadata?.tier || 'unknown';
+  const billingCycle = metadata?.billingCycle || 'none';
+  
+  const tierColors = {
+    free: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+    silver: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+    gold: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200' },
+    unknown: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' },
+  };
+  
+  const colors = tierColors[tier as keyof typeof tierColors] || tierColors.unknown;
+  const cycleLabel = billingCycle === 'annual' ? ' (Annual)' : billingCycle === 'monthly' ? ' (Monthly)' : '';
+  
+  return (
+    <Badge className={cn(colors.bg, colors.text, colors.border)}>
+      {tier.charAt(0).toUpperCase() + tier.slice(1)}{cycleLabel}
+    </Badge>
+  );
+}
+
 const featureSchema = z.object({ label: z.string().min(1).max(160).trim() });
 
 const planFormBaseSchema = z.object({
@@ -766,7 +787,12 @@ export default function PlansPage() {
                 orderedPlans.map((plan, index) => (
                   <TableRow key={plan.id}>
                     <TableCell className="font-mono text-xs">{plan.id}</TableCell>
-                    <TableCell>{plan.name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span>{plan.name}</span>
+                        {getPlanTierBadge(plan.id, plan.metadata)}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="space-y-1 text-sm">
                         <div className="font-medium">{plan.displayPrice}</div>

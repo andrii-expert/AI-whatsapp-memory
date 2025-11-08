@@ -15,8 +15,9 @@ import {
 } from "@imaginecalendar/ui/table";
 import { Badge } from "@imaginecalendar/ui/badge";
 import { useToast } from "@imaginecalendar/ui/use-toast";
-import { Download, FileText, Loader2, Receipt } from "lucide-react";
+import { Download, FileText, Loader2, Receipt, Home, ChevronLeft } from "lucide-react";
 import { format } from "date-fns";
+import Link from "next/link";
 
 export default function InvoicesPage() {
   const trpc = useTRPC();
@@ -76,34 +77,60 @@ export default function InvoicesPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
-        return <Badge className="bg-green-100 text-green-800">Paid</Badge>;
+        return <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-green-100 text-green-800 border-green-200">Paid</span>;
       case 'pending':
       case 'processing':
-        return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
+        return <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800 border-yellow-200">Pending</span>;
       case 'failed':
-        return <Badge className="bg-red-100 text-red-800">Failed</Badge>;
+        return <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-800 border-red-200">Failed</span>;
       case 'refunded':
-        return <Badge className="bg-purple-100 text-purple-800">Refunded</Badge>;
+        return <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-purple-100 text-purple-800 border-purple-200">Refunded</span>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold">{status}</span>;
     }
   };
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-600">Failed to load invoices</p>
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 text-destructive">
+              <p className="text-sm">Failed to load invoices. Please try again later.</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center gap-2 text-sm">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Home className="h-4 w-4" />
+          Dashboard
+        </Link>
+        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+        <Link
+          href="/billing"
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Billing
+        </Link>
+        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+        <span className="font-medium">Invoices</span>
+      </div>
+
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Invoices</h1>
-        <p className="text-muted-foreground">
-          View and download your billing invoices
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Payment Invoices</h1>
+        <p className="text-muted-foreground mt-2">
+          View and download your billing invoices and receipts
         </p>
       </div>
 

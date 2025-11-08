@@ -28,6 +28,8 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { CalendarSelectionDialog } from "@/components/calendar-selection-dialog";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
 
 export default function CalendarsPage() {
   const trpc = useTRPC();
@@ -50,6 +52,11 @@ export default function CalendarsPage() {
   const { data: calendars = [], isLoading, refetch } = useQuery(
     trpc.calendar.list.queryOptions()
   );
+  
+  // Get plan limits
+  const { limits, canAddCalendar, getCalendarsRemaining, tier } = usePlanLimits();
+  const canAddMore = canAddCalendar(calendars.length);
+  const remainingCalendars = getCalendarsRemaining(calendars.length);
 
   // Handle OAuth callback from cookies
   useEffect(() => {
@@ -411,42 +418,63 @@ export default function CalendarsPage() {
             <Plus className="h-5 w-5" />
             Connect Calendar
           </CardTitle>
-          <CardDescription>
-            Add a new calendar connection to start managing events
+          <CardDescription className="flex items-center justify-between">
+            <span>Add a new calendar connection to start managing events</span>
+            {limits.maxCalendars > 1 && (
+              <Badge variant="outline" className="ml-2">
+                {calendars.length} / {limits.maxCalendars} calendars
+              </Badge>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-4">
-            <Button
-              onClick={() => handleConnectCalendar("google")}
-              disabled={connectingProvider === "google"}
-              variant="blue-primary"
-              className="flex items-center gap-2 w-full sm:w-auto"
-              size="lg"
-            >
-              {connectingProvider === "google" ? (
-                <Clock className="h-4 w-4 animate-spin" />
-              ) : (
-                <span>🔗</span>
+          {!canAddMore ? (
+            <UpgradePrompt 
+              feature="Additional Calendars" 
+              requiredTier={tier === 'free' ? 'silver' : 'gold'} 
+              variant="alert"
+            />
+          ) : (
+            <>
+              {remainingCalendars > 0 && remainingCalendars <= 3 && (
+                <div className="mb-4 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <AlertCircle className="inline h-4 w-4 mr-2" />
+                  {remainingCalendars} {remainingCalendars === 1 ? 'slot' : 'slots'} remaining in your plan
+                </div>
               )}
-              {connectingProvider === "google" ? "Connecting..." : "Connect Google Calendar"}
-            </Button>
+              <div className="space-y-3 sm:space-y-0 sm:flex sm:gap-4">
+                <Button
+                  onClick={() => handleConnectCalendar("google")}
+                  disabled={connectingProvider === "google"}
+                  variant="blue-primary"
+                  className="flex items-center gap-2 w-full sm:w-auto"
+                  size="lg"
+                >
+                  {connectingProvider === "google" ? (
+                    <Clock className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <span>🔗</span>
+                  )}
+                  {connectingProvider === "google" ? "Connecting..." : "Connect Google Calendar"}
+                </Button>
 
-            <Button
-              onClick={() => handleConnectCalendar("microsoft")}
-              disabled={connectingProvider === "microsoft"}
-              variant="outline"
-              className="flex items-center gap-2 w-full sm:w-auto"
-              size="lg"
-            >
-              {connectingProvider === "microsoft" ? (
-                <Clock className="h-4 w-4 animate-spin" />
-              ) : (
-                <span>🔗</span>
-              )}
-              {connectingProvider === "microsoft" ? "Connecting..." : "Connect Microsoft 365"}
-            </Button>
-          </div>
+                <Button
+                  onClick={() => handleConnectCalendar("microsoft")}
+                  disabled={connectingProvider === "microsoft"}
+                  variant="outline"
+                  className="flex items-center gap-2 w-full sm:w-auto"
+                  size="lg"
+                >
+                  {connectingProvider === "microsoft" ? (
+                    <Clock className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <span>🔗</span>
+                  )}
+                  {connectingProvider === "microsoft" ? "Connecting..." : "Connect Microsoft 365"}
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

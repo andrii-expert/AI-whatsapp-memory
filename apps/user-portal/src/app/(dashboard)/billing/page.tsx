@@ -6,22 +6,27 @@ import { Button } from "@imaginecalendar/ui/button";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import {
   CreditCard,
-  Calendar,
   CheckCircle,
-  Clock,
-  ArrowRight,
-  Settings,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Check,
+  Home,
+  ChevronLeft,
+  Sparkles,
+  Zap,
+  Crown
 } from "lucide-react";
 import Link from "next/link";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { formatDistanceToNow, format } from "date-fns";
+import { format } from "date-fns";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FALLBACK_PLANS, getFallbackPlanById, toDisplayPlan } from "@/utils/plans";
 import type { DisplayPlan, PlanRecordLike } from "@/utils/plans";
+import { Switch } from "@imaginecalendar/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@imaginecalendar/ui/radio-group";
+import { cn } from "@imaginecalendar/ui/cn";
 
 function getStatusBadgeProps(status: string) {
   switch (status) {
@@ -60,6 +65,7 @@ export default function BillingPage() {
   const trpc = useTRPC();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const [isAnnual, setIsAnnual] = useState(false);
 
   const plansQueryOptions = trpc.plans.listActive.queryOptions();
   const plansQuery = useQuery(plansQueryOptions);
@@ -196,12 +202,18 @@ export default function BillingPage() {
     })
   );
 
-  const handlePlanChange = (newPlanId: string) => {
-    if (!subscription || updateSubscriptionMutation.isPending) return;
+  const [selectedPlanForChange, setSelectedPlanForChange] = useState<string | null>(null);
+
+  const handlePlanSelect = (planId: string) => {
+    setSelectedPlanForChange(planId);
+  };
+
+  const confirmPlanChange = () => {
+    if (!subscription || updateSubscriptionMutation.isPending || !selectedPlanForChange) return;
 
     // Use tRPC for all plan changes - it will handle the different scenarios
     updateSubscriptionMutation.mutate({
-      plan: newPlanId as any,
+      plan: selectedPlanForChange as any,
     });
   };
 
@@ -297,28 +309,11 @@ export default function BillingPage() {
     ? calculateRemainingDays(subscription.currentPeriodEnd)
     : (subscription?.trialEndsAt ? calculateRemainingDays(subscription.trialEndsAt) : 0);
 
-  const upgradePlans = useMemo(
-    () => plans.filter(plan => plan.id !== currentPlanId && !plan.isTrial),
-    [plans, currentPlanId]
-  );
-
   // Loading state
   if (isLoadingSubscription) {
     return (
-      <div className="max-w-4xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Billing & Subscription</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your ImagineCalendar subscription and payment details
-          </p>
-        </div>
-
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading subscription details...</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-pulse">Loading billing details...</div>
       </div>
     );
   }
@@ -326,14 +321,7 @@ export default function BillingPage() {
   // Error state
   if (subscriptionError) {
     return (
-      <div className="max-w-4xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Billing & Subscription</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your ImagineCalendar subscription and payment details
-          </p>
-        </div>
-
+      <div className="space-y-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-3 text-destructive">
@@ -355,102 +343,99 @@ export default function BillingPage() {
   const planLoadError = USE_DB_PLANS && plansQuery.isError;
 
   return (
-    <div className="max-w-4xl">
+    <div className="space-y-6">
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center gap-2 text-sm">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Home className="h-4 w-4" />
+          Dashboard
+        </Link>
+        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+        <span className="font-medium">Billing & Subscription</span>
+      </div>
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-primary">Billing & Subscription</h1>
         <p className="text-muted-foreground mt-2">
-          Manage your CrackOn subscription and payment details
+          Manage your subscription and payment details
         </p>
       </div>
 
       {/* Current Plan */}
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Current Plan
-          </CardTitle>
+          <CardTitle>Current Subscription</CardTitle>
           <CardDescription>
             Your active subscription details
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="text-xl font-semibold">{currentPlan?.name || 'Unknown Plan'}</h3>
-                <Badge
-                  variant={statusBadge.variant}
-                  className={statusBadge.className}
-                >
-                  {statusBadge.text}
-                </Badge>
-              </div>
-
-              {isOnTrial && subscription?.trialEndsAt && (
-                <>
-                  <p className="text-muted-foreground mb-1">
-                    {remainingDays} {remainingDays === 1 ? 'day' : 'days'} remaining
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Trial ends on {format(new Date(subscription.trialEndsAt), 'PPP')}
-                  </p>
-                </>
-              )}
-
-              {!isOnTrial && subscription?.currentPeriodEnd && (
-                <>
-                  <p className="text-muted-foreground mb-1">
-                    {isCancelled ? 'Expires' : 'Renews'} in {remainingDays} {remainingDays === 1 ? 'day' : 'days'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {isCancelled ? 'Expires' : 'Next billing'} on {format(new Date(subscription.currentPeriodEnd), 'PPP')}
-                  </p>
-                </>
-              )}
+              <p className="text-muted-foreground">Plan</p>
+              <p className="font-semibold">{currentPlan?.name || 'Unknown Plan'}</p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold">{currentPlan?.displayPrice || 'R0'}</div>
-              <div className="text-sm text-muted-foreground">{currentPlan?.billingPeriod || 'per month'}</div>
+            <div>
+              <p className="text-muted-foreground">Status</p>
+              <p className="font-semibold">
+                <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold", statusBadge.className)}>
+                  {statusBadge.text}
+                </span>
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Price</p>
+              <p className="font-semibold">{currentPlan?.displayPrice || 'R0'}/{currentPlan?.billingPeriod || 'month'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">{isCancelled ? 'Expires' : 'Renews'}</p>
+              <p className="font-semibold">
+                {subscription?.currentPeriodEnd 
+                  ? format(new Date(subscription.currentPeriodEnd), 'MMM d, yyyy')
+                  : (subscription?.trialEndsAt 
+                    ? format(new Date(subscription.trialEndsAt), 'MMM d, yyyy')
+                    : 'N/A')}
+              </p>
             </div>
           </div>
 
           {/* Update Card Details - Only for paid subscribers */}
           {!isOnTrial && subscription?.payfastToken && (
-            <>
-              <div className="border-t pt-4 mt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium">Payment Method</h4>
-                    <p className="text-sm text-muted-foreground">Update your card details with PayFast</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleUpdateCardDetails}
-                    disabled={getCardUpdateUrlMutation.isPending}
-                  >
-                    {getCardUpdateUrlMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        Update Card
-                      </>
-                    )}
-                  </Button>
+            <div className="pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Payment Method</p>
+                  <p className="text-sm text-muted-foreground">Update your card details with PayFast</p>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUpdateCardDetails}
+                  disabled={getCardUpdateUrlMutation.isPending}
+                >
+                  {getCardUpdateUrlMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Update Card
+                    </>
+                  )}
+                </Button>
               </div>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
 
       {/* Plan Features */}
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
           <CardTitle>Plan Features</CardTitle>
           <CardDescription>
@@ -458,167 +443,401 @@ export default function BillingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ul className="space-y-2">
             {currentPlan?.features?.map((feature: string, index: number) => (
-              <div key={index} className="flex items-center gap-3">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="text-sm">{feature}</span>
-              </div>
+              <li key={index} className="flex items-start gap-2 text-sm">
+                <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                <span>{feature}</span>
+              </li>
             ))}
-          </div>
+          </ul>
         </CardContent>
       </Card>
 
-      {/* Upgrade Section */}
-      <Card className="mb-6">
+      {/* Available Plans */}
+      <Card>
         <CardHeader>
-          <CardTitle>
-            {isOnTrial ? 'Choose Your Plan' : 'Change Plan'}
-          </CardTitle>
+          <CardTitle>Change Plan</CardTitle>
           <CardDescription>
-            {isOnTrial
-              ? 'Select a plan to continue after your trial ends'
-              : 'Upgrade or downgrade your subscription'
-            }
+            {currentPlanId === 'free' 
+              ? 'Upgrade to unlock premium features' 
+              : 'Switch to a different subscription plan'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Monthly/Annual Toggle */}
+          <div className="flex items-center justify-between space-x-2">
+            <div className="space-y-0.5">
+              <p className="text-base font-medium">
+                Billing Cycle
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {isAnnual 
+                  ? "Annual billing (Save 20%)" 
+                  : "Monthly billing"}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={cn("text-sm", !isAnnual && "font-semibold")}>
+                Monthly
+              </span>
+              <Switch
+                checked={isAnnual}
+                onCheckedChange={setIsAnnual}
+              />
+              <span className={cn("text-sm", isAnnual && "font-semibold")}>
+                Annual
+              </span>
+            </div>
+          </div>
+
           {planLoadError && (
-            <div className="mb-4 text-sm text-red-500">
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
               We couldn't load the latest plans. Showing default options instead.
             </div>
           )}
 
           {isLoadingPlans ? (
-            <div className="text-muted-foreground mb-6">Loading available plans...</div>
-          ) : upgradePlans.length === 0 ? (
-            <p className="text-sm text-muted-foreground mb-6">No alternative plans available at this time.</p>
+            <div className="text-center text-muted-foreground py-8">Loading available plans...</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {upgradePlans.map((plan) => {
-                const isCurrent = subscription?.plan === plan.id;
-                const isHighlighted = plan.id === "monthly" || plan.sortOrder === 2;
-                const isUpgrade = currentPlan ? plan.amountCents > (currentPlan.amountCents ?? 0) : false;
-                const buttonLabel = isUpgrade ? `Upgrade to ${plan.name}` : `Switch to ${plan.name}`;
+            <RadioGroup
+              value={selectedPlanForChange || currentPlanId}
+              onValueChange={handlePlanSelect}
+              className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4"
+            >
+              {/* Free Plan */}
+              {(() => {
+                const freePlan = plans.find(p => p.id === 'free');
+                if (!freePlan) return null;
+                const isSelected = (selectedPlanForChange || currentPlanId) === 'free';
+                const isCurrentPlan = currentPlanId === 'free';
+                
+                return (
+                  <label
+                    key="free"
+                    htmlFor="plan-free"
+                    className={cn(
+                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                      isSelected
+                        ? "border-blue-500 bg-blue-500 shadow-xl scale-105"
+                        : "border-gray-300 hover:border-blue-400 bg-white"
+                    )}
+                  >
+                    <RadioGroupItem
+                      value="free"
+                      id="plan-free"
+                      className={cn(
+                        "absolute top-4 right-4",
+                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                      )}
+                    />
+
+                    <div className={cn("text-center mb-6", isCurrentPlan && !isSelected && "mt-6")}>
+                      <div className={cn(
+                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                        isSelected ? "bg-white/20" : "bg-blue-100"
+                      )}>
+                        <Sparkles className={cn("h-6 w-6", isSelected ? "text-white" : "text-blue-600")} />
+                      </div>
+                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                        {freePlan.name}
+                      </h4>
+                      <div className="mb-3">
+                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                          {freePlan.displayPrice}
+                        </span>
+                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                          /{freePlan.billingPeriod}
+                        </span>
+                      </div>
+                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : "text-primary/80")}>
+                        {freePlan.description}
+                      </p>
+                    </div>
+
+                    <div className={cn(
+                      "pt-4 flex-1",
+                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                    )}>
+                      <ul className="space-y-3">
+                        {freePlan.features.map((feature, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm">
+                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </label>
+                );
+              })()}
+
+              {/* Silver Plan */}
+              {(() => {
+                const planId = isAnnual ? 'silver-annual' : 'silver-monthly';
+                const silverPlan = plans.find(p => p.id === planId);
+                if (!silverPlan) return null;
+                const isSelected = (selectedPlanForChange || currentPlanId) === planId;
+                const isCurrentPlan = currentPlanId === planId;
+                
+                const silverMonthly = plans.find(p => p.id === 'silver-monthly');
+                const monthlyEquivalent = silverPlan.monthlyPriceCents / 100;
+                const savings = silverMonthly && isAnnual 
+                  ? (silverMonthly.amountCents * 12 - silverPlan.amountCents) / 100
+                  : 0;
 
                 return (
-                  <div key={plan.id} className="border rounded-lg p-4 relative">
-                    {isHighlighted && !isCurrent && (
-                      <Badge className="absolute -top-2 left-4 bg-primary text-primary-foreground">
-                        Most Popular
-                      </Badge>
+                  <label
+                    key={planId}
+                    htmlFor={`plan-${planId}`}
+                    className={cn(
+                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                      isSelected
+                        ? "border-purple-500 bg-purple-500 shadow-xl scale-105"
+                        : "border-gray-300 hover:border-purple-400 bg-white"
                     )}
-                    <h4 className="font-semibold text-lg mb-2">{plan.name}</h4>
-                    <div className="mb-3">
-                      <span className="text-3xl font-bold">{plan.displayPrice}</span>
-                      <span className="text-muted-foreground">/{plan.billingPeriod}</span>
-                    </div>
-                    <ul className="space-y-2 text-sm mb-4">
-                      {plan.features.slice(0, 6).map((feature, index) => (
-                        <li key={index} className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
+                  >
+                    <RadioGroupItem
+                      value={planId}
+                      id={`plan-${planId}`}
+                      className={cn(
+                        "absolute top-4 right-4",
+                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                      )}
+                    />
 
-                    {isCurrent ? (
-                      <Button className="w-full" variant="orange-success" disabled>
-                        Current Plan
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="blue-primary"
-                        className="w-full"
-                        onClick={() => handlePlanChange(plan.id)}
-                        disabled={updateSubscriptionMutation.isPending}
-                      >
-                        {updateSubscriptionMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Updating...
-                          </>
-                        ) : (
-                          buttonLabel
-                        )}
-                      </Button>
-                    )}
-                  </div>
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className={cn(
+                        "text-xs font-bold px-4 py-1.5 rounded-full shadow-md",
+                        isCurrentPlan && !isSelected 
+                          ? "bg-green-500 text-white"
+                          : "bg-accent text-white"
+                      )}>
+                        {isCurrentPlan && !isSelected ? "Your Current Plan" : "Most Popular"}
+                      </span>
+                    </div>
+
+                    <div className="text-center mb-6 mt-4">
+                      <div className={cn(
+                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                        isSelected ? "bg-white/20" : "bg-purple-100"
+                      )}>
+                        <Zap className={cn("h-6 w-6", isSelected ? "text-white" : "text-purple-600")} />
+                      </div>
+                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                        {silverPlan.name.replace(' Annual', '')}
+                      </h4>
+                      <div className="mb-1">
+                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                          {silverPlan.displayPrice}
+                        </span>
+                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                          /{silverPlan.billingPeriod}
+                        </span>
+                      </div>
+                      {isAnnual && monthlyEquivalent && (
+                        <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
+                          R{monthlyEquivalent.toFixed(0)}/month when paid annually
+                        </p>
+                      )}
+                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
+                        {isAnnual && savings > 0 ? `💰 Save R${savings.toFixed(0)}/year` : silverPlan.description}
+                      </p>
+                    </div>
+
+                    <div className={cn(
+                      "pt-4 flex-1",
+                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                    )}>
+                      <ul className="space-y-3">
+                        {silverPlan.features.map((feature, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm">
+                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </label>
                 );
-              })}
-            </div>
+              })()}
+
+              {/* Gold Plan */}
+              {(() => {
+                const planId = isAnnual ? 'gold-annual' : 'gold-monthly';
+                const goldPlan = plans.find(p => p.id === planId);
+                if (!goldPlan) return null;
+                const isSelected = (selectedPlanForChange || currentPlanId) === planId;
+                const isCurrentPlan = currentPlanId === planId;
+                
+                const goldMonthly = plans.find(p => p.id === 'gold-monthly');
+                const monthlyEquivalent = goldPlan.monthlyPriceCents / 100;
+                const savings = goldMonthly && isAnnual 
+                  ? (goldMonthly.amountCents * 12 - goldPlan.amountCents) / 100
+                  : 0;
+
+                return (
+                  <label
+                    key={planId}
+                    htmlFor={`plan-${planId}`}
+                    className={cn(
+                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                      isSelected
+                        ? "border-yellow-500 bg-yellow-500 shadow-xl scale-105"
+                        : "border-gray-300 hover:border-yellow-400 bg-white"
+                    )}
+                  >
+                    <RadioGroupItem
+                      value={planId}
+                      id={`plan-${planId}`}
+                      className={cn(
+                        "absolute top-4 right-4",
+                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                      )}
+                    />
+
+                    <div className={cn("text-center mb-6", isCurrentPlan && !isSelected && "mt-6")}>
+                      <div className={cn(
+                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                        isSelected ? "bg-white/20" : "bg-yellow-100"
+                      )}>
+                        <Crown className={cn("h-6 w-6", isSelected ? "text-white" : "text-yellow-600")} />
+                      </div>
+                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                        {goldPlan.name.replace(' Annual', '')}
+                      </h4>
+                      <div className="mb-1">
+                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                          {goldPlan.displayPrice}
+                        </span>
+                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                          /{goldPlan.billingPeriod}
+                        </span>
+                      </div>
+                      {isAnnual && monthlyEquivalent && (
+                        <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
+                          R{monthlyEquivalent.toFixed(0)}/month when paid annually
+                        </p>
+                      )}
+                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
+                        {isAnnual && savings > 0 ? `💰 Save R${savings.toFixed(0)}/year` : goldPlan.description}
+                      </p>
+                    </div>
+
+                    <div className={cn(
+                      "pt-4 flex-1",
+                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                    )}>
+                      <ul className="space-y-3">
+                        {goldPlan.features.map((feature, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm">
+                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </label>
+                );
+              })()}
+            </RadioGroup>
           )}
 
-          {/* Subscription Management */}
-          <div className="text-center">
-            {isCancelled ? (
+          {/* Confirm Plan Change Button */}
+          {selectedPlanForChange && selectedPlanForChange !== currentPlanId && !isLoadingPlans && (
+            <div className="flex items-center justify-end gap-3 pt-6 mt-6 border-t">
               <Button
-                size="lg"
-                onClick={handleReactivateSubscription}
-                disabled={reactivateSubscriptionMutation.isPending}
-              >
-                {reactivateSubscriptionMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Reactivating...
-                  </>
-                ) : (
-                  <>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Reactivate Subscription
-                  </>
-                )}
-              </Button>
-            ) : (
-              <Button
-                size="lg"
                 variant="outline"
-                onClick={handleCancelSubscription}
-                disabled={cancelSubscriptionMutation.isPending || isOnTrial}
+                onClick={() => setSelectedPlanForChange(null)}
+                disabled={updateSubscriptionMutation.isPending}
               >
-                {cancelSubscriptionMutation.isPending ? (
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmPlanChange}
+                disabled={updateSubscriptionMutation.isPending}
+                variant="blue-primary"
+                size="lg"
+              >
+                {updateSubscriptionMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Cancelling...
+                    Updating...
                   </>
                 ) : (
-                  <>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Cancel Subscription
-                  </>
+                  'Confirm Plan Change'
                 )}
               </Button>
-            )}
-
-            {isOnTrial && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Cancel option available after trial ends
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Payment History Quick Link */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Clock className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <h3 className="font-medium">Payment History</h3>
-                <p className="text-sm text-muted-foreground">View all your invoices and receipts</p>
-              </div>
             </div>
-            <Link href="/billing/invoices">
-              <Button variant="outline">
-                View Invoices
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Subscription Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Subscription Actions</CardTitle>
+          <CardDescription>
+            Manage your subscription
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isCancelled ? (
+            <>
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                Your subscription is scheduled to cancel. You can reactivate it anytime before the end date.
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleReactivateSubscription}
+                  disabled={reactivateSubscriptionMutation.isPending}
+                  variant="blue-primary"
+                >
+                  {reactivateSubscriptionMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Reactivating...
+                    </>
+                  ) : (
+                    'Reactivate Subscription'
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {currentPlanId !== 'free' ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Your subscription is active and will auto-renew. You can cancel anytime.
+                  </p>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelSubscription}
+                      disabled={cancelSubscriptionMutation.isPending}
+                    >
+                      {cancelSubscriptionMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Cancelling...
+                        </>
+                      ) : (
+                        'Cancel Subscription'
+                      )}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  You're on the free plan. No subscription to manage.
+                </p>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }

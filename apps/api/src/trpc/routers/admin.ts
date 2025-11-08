@@ -363,7 +363,7 @@ export const adminRouter = createTRPCRouter({
         limit: z.number().min(1).max(100).default(50),
         filters: z
           .object({
-            plan: z.enum(["trial", "monthly", "annual"]).optional(),
+            plan: z.enum(["free", "silver-monthly", "silver-annual", "gold-monthly", "gold-annual", "trial", "monthly", "annual"]).optional(),
             status: z.enum(["active", "cancelled", "expired", "past_due", "paused"]).optional(),
             dateRange: z
               .object({
@@ -642,7 +642,7 @@ export const adminRouter = createTRPCRouter({
         filters: z
           .object({
             search: z.string().optional(),
-            plan: z.enum(["trial", "monthly", "annual"]).optional(),
+            plan: z.enum(["free", "silver-monthly", "silver-annual", "gold-monthly", "gold-annual", "trial", "monthly", "annual"]).optional(),
             status: z.enum(["active", "cancelled", "expired", "past_due", "paused"]).optional(),
             dateRange: z
               .object({

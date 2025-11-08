@@ -296,9 +296,14 @@ export default function UsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Plans</SelectItem>
-                  <SelectItem value="trial">Trial</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="annual">Annual</SelectItem>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="silver-monthly">Silver (Monthly)</SelectItem>
+                  <SelectItem value="silver-annual">Silver (Annual)</SelectItem>
+                  <SelectItem value="gold-monthly">Gold (Monthly)</SelectItem>
+                  <SelectItem value="gold-annual">Gold (Annual)</SelectItem>
+                  <SelectItem value="trial">Trial (Legacy)</SelectItem>
+                  <SelectItem value="monthly">Monthly (Legacy)</SelectItem>
+                  <SelectItem value="annual">Annual (Legacy)</SelectItem>
                 </SelectContent>
               </Select>
 
