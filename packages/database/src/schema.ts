@@ -915,7 +915,7 @@ export const taskFolders = pgTable("task_folders", {
 export const tasks = pgTable("tasks", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  folderId: uuid("folder_id").references(() => taskFolders.id, { onDelete: "set null" }),
+  folderId: uuid("folder_id").references(() => taskFolders.id, { onDelete: "cascade" }),
   
   title: text("title").notNull(),
   description: text("description"),

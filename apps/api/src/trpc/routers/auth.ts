@@ -14,6 +14,8 @@ import {
   updateUser,
   createSubscription,
   getPlanById,
+  createFolder,
+  getUserFolders,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";
@@ -226,6 +228,19 @@ export const authRouter = createTRPCRouter({
           currentPeriodStart,
           currentPeriodEnd,
         });
+      }
+
+      // Create default "General" task folder if user doesn't have any folders
+      const existingFolders = await getUserFolders(db, session.user.id);
+      if (existingFolders.length === 0) {
+        logger.info({ userId: session.user.id }, "Creating default 'General' task folder");
+        await createFolder(db, {
+          userId: session.user.id,
+          name: "General",
+          color: "#3B82F6", // Blue color
+          icon: "folder",
+        });
+        logger.info({ userId: session.user.id }, "Default 'General' task folder created");
       }
 
       // Update Clerk metadata

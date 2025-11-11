@@ -36,6 +36,7 @@ export default function TasksPage() {
 
   // State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [viewAllTasks, setViewAllTasks] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -46,6 +47,8 @@ export default function TasksPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskTitle, setEditTaskTitle] = useState("");
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editFolderName, setEditFolderName] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
@@ -163,13 +166,21 @@ export default function TasksPage() {
 
   const folderPath = selectedFolder ? getFolderPath(selectedFolder.id) : [];
 
+  // Get folder path for a task
+  const getTaskFolderPath = (folderId: string | null): string => {
+    if (!folderId) return "No folder";
+    const folder = allFolders.find((f) => f.id === folderId);
+    if (!folder) return "Unknown folder";
+    return getFolderPath(folderId).join(" / ");
+  };
+
   // Filter tasks
   const filteredTasks = useMemo(() => {
     let tasks = allTasks;
 
-    // Filter by folder - if a folder is selected, show only tasks in that folder
-    // If no folder is selected, show all tasks
-    if (selectedFolderId) {
+    // Filter by folder - if viewing all, show all tasks
+    // If a folder is selected, show only tasks in that folder
+    if (!viewAllTasks && selectedFolderId) {
       tasks = tasks.filter((t) => t.folderId === selectedFolderId);
     }
 
@@ -195,9 +206,12 @@ export default function TasksPage() {
       });
     } else if (sortBy === "date") {
       tasks = [...tasks].sort((a, b) => {
+        // Tasks without dates always go to the end
         if (!a.dueDate && !b.dueDate) return 0;
-        if (!a.dueDate) return sortOrder === "asc" ? 1 : -1;
-        if (!b.dueDate) return sortOrder === "asc" ? -1 : 1;
+        if (!a.dueDate) return 1;  // a goes to end
+        if (!b.dueDate) return -1; // b goes to end
+        
+        // Compare dates normally
         const comparison = a.dueDate.localeCompare(b.dueDate);
         return sortOrder === "asc" ? comparison : -comparison;
       });
@@ -265,6 +279,28 @@ export default function TasksPage() {
         toast({
           title: "Error",
           description: error.message || "Failed to create folder",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
+  const updateFolderMutation = useMutation(
+    trpc.tasks.folders.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        setEditingFolderId(null);
+        setEditFolderName("");
+        toast({
+          title: "Success",
+          description: "Folder updated successfully",
+        });
+      },
+      onError: (error) => {
+        console.error("Folder update error:", error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update folder",
           variant: "destructive",
         });
       },
@@ -407,8 +443,29 @@ export default function TasksPage() {
 
   const handleFolderSelect = (folderId: string) => {
     setSelectedFolderId(folderId);
+    setViewAllTasks(false);
     // Close mobile sidebar after selection
     setIsMobileSidebarOpen(false);
+  };
+
+  const handleViewAllTasks = () => {
+    setViewAllTasks(true);
+    setSelectedFolderId(null);
+    // Close mobile sidebar after selection
+    setIsMobileSidebarOpen(false);
+  };
+
+  const handleEditFolder = (folderId: string, folderName: string) => {
+    setEditingFolderId(folderId);
+    setEditFolderName(folderName);
+  };
+
+  const handleSaveFolder = (folderId: string) => {
+    if (!editFolderName.trim()) return;
+    updateFolderMutation.mutate({
+      id: folderId,
+      name: editFolderName,
+    });
   };
 
   const openAddTaskModal = () => {
@@ -534,9 +591,10 @@ export default function TasksPage() {
   // Recursive folder rendering component
   const renderFolder = (folder: any, level: number = 0) => {
     const isExpanded = expandedFolders.has(folder.id);
-    const isSelected = selectedFolderId === folder.id;
+    const isSelected = selectedFolderId === folder.id && !viewAllTasks;
     const hasSubfolders = folder.subfolders && folder.subfolders.length > 0;
     const isAddingSubfolder = addingSubfolderToId === folder.id;
+    const isEditingFolder = editingFolderId === folder.id;
     const taskCount = getTaskCount(folder.id);
     const totalTaskCount = getTotalTaskCount(folder);
     const subfolderCount = hasSubfolders ? folder.subfolders.length : 0;
@@ -566,19 +624,48 @@ export default function TasksPage() {
             ) : (
               <div className="w-5 flex-shrink-0" />
             )}
-            <button
-              onClick={() => handleFolderSelect(folder.id)}
-              className="flex items-center gap-2 flex-1 text-left min-w-0"
-            >
-              <FolderClosed className="h-4 w-4 flex-shrink-0" />
-              <span className="font-medium truncate">{folder.name}</span>
-            </button>
+            
+            {isEditingFolder ? (
+              <Input
+                value={editFolderName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEditFolderName(e.target.value)
+                }
+                onBlur={() => handleSaveFolder(folder.id)}
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                  if (e.key === "Enter") handleSaveFolder(folder.id);
+                  if (e.key === "Escape") setEditingFolderId(null);
+                }}
+                autoFocus
+                className="flex-1 h-7 text-sm"
+              />
+            ) : (
+              <button
+                onClick={() => handleFolderSelect(folder.id)}
+                className="flex items-center gap-2 flex-1 text-left min-w-0"
+              >
+                <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                <span className="font-medium truncate">{folder.name}</span>
+              </button>
+            )}
           </div>
 
           {/* Right side: Action buttons */}
           <div className="flex items-center gap-1 transition-opacity">
+            {/* Edit folder button */}
+            {!isEditingFolder && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 hover:bg-indigo-100 hover:text-indigo-600"
+                onClick={() => handleEditFolder(folder.id, folder.name)}
+                title="Edit folder name"
+              >
+                <Edit2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
             {/* Add subfolder button - only show on top-level folders (depth 0) */}
-            {level === 0 && (
+            {level === 0 && !isEditingFolder && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -589,15 +676,17 @@ export default function TasksPage() {
                 <Plus className="h-4 w-4" />
               </Button>
             )}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6 hover:bg-red-100 hover:text-red-600"
-              onClick={() => handleDeleteFolder(folder.id, folder.name)}
-              title="Delete folder"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {!isEditingFolder && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 hover:bg-red-100 hover:text-red-600"
+                onClick={() => handleDeleteFolder(folder.id, folder.name)}
+                title="Delete folder"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -728,20 +817,43 @@ export default function TasksPage() {
             </Button>
           </form>
 
-          {/* Folders List */}
-          <div className="space-y-1">
-            {folders.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p>No folders yet.</p>
-                <p className="text-xs mt-1">
-                  Create a folder above to get started.
-                </p>
-              </div>
-            ) : (
-              folders.map((folder) => renderFolder(folder, 0))
-            )}
-          </div>
+            {/* Folders List */}
+            <div className="space-y-1">
+              {folders.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 text-sm">
+                  <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p>No folders yet.</p>
+                  <p className="text-xs mt-1">
+                    Create a folder above to get started.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* All Tasks Button */}
+                  <button
+                    onClick={handleViewAllTasks}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                      viewAllTasks 
+                        ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300" 
+                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                    )}
+                  >
+                    <Folder className="h-4 w-4 flex-shrink-0" />
+                    <span className="flex-1 text-left">All Tasks</span>
+                    <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                      {allTasks.length}
+                    </span>
+                  </button>
+
+                  {/* Divider */}
+                  <div className="h-px bg-gray-200 my-2" />
+
+                  {/* Individual Folders */}
+                  {folders.map((folder) => renderFolder(folder, 0))}
+                </>
+              )}
+            </div>
         </div>
       </div>
 
@@ -783,7 +895,30 @@ export default function TasksPage() {
                   </p>
                 </div>
               ) : (
-                folders.map((folder) => renderFolder(folder, 0))
+                <>
+                  {/* All Tasks Button */}
+                  <button
+                    onClick={handleViewAllTasks}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                      viewAllTasks 
+                        ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300" 
+                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                    )}
+                  >
+                    <Folder className="h-4 w-4 flex-shrink-0" />
+                    <span className="flex-1 text-left">All Tasks</span>
+                    <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                      {allTasks.length}
+                    </span>
+                  </button>
+
+                  {/* Divider */}
+                  <div className="h-px bg-gray-200 my-2" />
+
+                  {/* Individual Folders */}
+                  {folders.map((folder) => renderFolder(folder, 0))}
+                </>
               )}
             </div>
           </div>
@@ -819,7 +954,15 @@ export default function TasksPage() {
             <div>
               {/* Desktop - Folder breadcrumb and Add Task button */}
               <div className="flex items-center justify-between mb-4 gap-4">
-                {selectedFolder && folderPath.length > 0 ? (
+                {viewAllTasks ? (
+                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                    <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
+                    <span className="font-bold text-gray-900">All Tasks</span>
+                    <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full font-semibold">
+                      {filteredTasks.length}
+                    </span>
+                  </div>
+                ) : selectedFolder && folderPath.length > 0 ? (
                   <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
                     <FolderClosed className="h-6 w-6 flex-shrink-0" />
                     {folderPath.map((name, index) => (
@@ -846,7 +989,7 @@ export default function TasksPage() {
                 <Button
                   onClick={openAddTaskModal}
                   variant="blue-primary"
-                  disabled={!selectedFolderId}
+                  disabled={!selectedFolderId || viewAllTasks}
                   className="flex-shrink-0"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -854,7 +997,7 @@ export default function TasksPage() {
                 </Button>
               </div>
 
-              {!selectedFolderId && (
+              {(!selectedFolderId && !viewAllTasks) && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-900">
                   <span className="font-medium">ℹ️ Select a folder</span> from
                   the left to add and manage tasks
@@ -1014,10 +1157,11 @@ export default function TasksPage() {
                                 )}
                               </button>
 
-                              {/* Task Title */}
+                            {/* Task Title and Folder Path */}
+                            <div className="flex-1 min-w-0">
                               <span
                                 className={cn(
-                                  "flex-1 text-base break-all leading-relaxed",
+                                  "text-base break-words leading-relaxed",
                                   task.status === "completed"
                                     ? "line-through text-gray-500"
                                     : "text-gray-900"
@@ -1025,11 +1169,20 @@ export default function TasksPage() {
                               >
                                 {task.title}
                               </span>
+                              {viewAllTasks && task.folderId && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <FolderClosed className="h-3 w-3 text-gray-400" />
+                                  <span className="text-xs text-gray-500">
+                                    {getTaskFolderPath(task.folderId)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
 
-                              {/* Due Date */}
-                              <span className="text-sm text-gray-500 flex-shrink-0 whitespace-nowrap">
-                                {task.dueDate}
-                              </span>
+                            {/* Due Date */}
+                            <span className="text-sm text-gray-500 flex-shrink-0 whitespace-nowrap">
+                              {task.dueDate}
+                            </span>
 
                               {/* Action Buttons */}
                               <div className="flex gap-2 flex-shrink-0">
@@ -1081,10 +1234,11 @@ export default function TasksPage() {
                                   )}
                                 </button>
 
-                                {/* Task Title */}
+                              {/* Task Title */}
+                              <div className="flex-1 min-w-0">
                                 <span
                                   className={cn(
-                                    "flex-1 text-sm break-all leading-relaxed",
+                                    "text-sm break-words leading-relaxed",
                                     task.status === "completed"
                                       ? "line-through text-gray-500"
                                       : "text-gray-900"
@@ -1092,10 +1246,19 @@ export default function TasksPage() {
                                 >
                                   {task.title}
                                 </span>
+                                {viewAllTasks && task.folderId && (
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <FolderClosed className="h-3 w-3 text-gray-400" />
+                                    <span className="text-xs text-gray-500">
+                                      {getTaskFolderPath(task.folderId)}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
+                            </div>
 
-                              {/* Second Row: Due Date + Action Buttons */}
-                              <div className="flex items-center justify-between pl-7">
+                            {/* Second Row: Due Date + Action Buttons */}
+                            <div className="flex items-center justify-between pl-7">
                                 {/* Due Date */}
                                 <span className="text-xs text-gray-500 font-medium">
                                   {task.dueDate}
