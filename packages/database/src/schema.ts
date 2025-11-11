@@ -197,6 +197,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   whatsappMessageLogs: many(whatsappMessageLogs),
   voiceMessageJobs: many(voiceMessageJobs),
   activityLogs: many(activityLogs),
+  taskFolders: many(taskFolders),
+  tasks: many(tasks),
 }));
 
 // ============================================
@@ -879,4 +881,84 @@ export const eventVerificationStatesRelations = relations(eventVerificationState
     fields: [eventVerificationStates.voiceJobId],
     references: [voiceMessageJobs.id],
   }),
+}));
+
+// ============================================
+// Tasks & Folders
+// ============================================
+
+export const taskStatusEnum = pgEnum("task_status", [
+  "open",
+  "completed",
+  "archived"
+]);
+
+export const taskFolders = pgTable("task_folders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  parentId: uuid("parent_id").references((): any => taskFolders.id, { onDelete: "cascade" }),
+  
+  name: text("name").notNull(),
+  color: text("color"),
+  icon: text("icon"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isExpanded: boolean("is_expanded").default(true).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("task_folders_user_id_idx").on(table.userId),
+  parentIdIdx: index("task_folders_parent_id_idx").on(table.parentId),
+  sortOrderIdx: index("task_folders_sort_order_idx").on(table.sortOrder),
+}));
+
+export const tasks = pgTable("tasks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  folderId: uuid("folder_id").references(() => taskFolders.id, { onDelete: "set null" }),
+  
+  title: text("title").notNull(),
+  description: text("description"),
+  status: taskStatusEnum("status").default("open").notNull(),
+  
+  dueDate: date("due_date"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  
+  sortOrder: integer("sort_order").default(0).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("tasks_user_id_idx").on(table.userId),
+  folderIdIdx: index("tasks_folder_id_idx").on(table.folderId),
+  statusIdx: index("tasks_status_idx").on(table.status),
+  dueDateIdx: index("tasks_due_date_idx").on(table.dueDate),
+  sortOrderIdx: index("tasks_sort_order_idx").on(table.sortOrder),
+}));
+
+export const tasksRelations = relations(tasks, ({ one }) => ({
+  user: one(users, {
+    fields: [tasks.userId],
+    references: [users.id],
+  }),
+  folder: one(taskFolders, {
+    fields: [tasks.folderId],
+    references: [taskFolders.id],
+  }),
+}));
+
+export const taskFoldersRelations = relations(taskFolders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [taskFolders.userId],
+    references: [users.id],
+  }),
+  parent: one(taskFolders, {
+    fields: [taskFolders.parentId],
+    references: [taskFolders.id],
+    relationName: "subfolders",
+  }),
+  subfolders: many(taskFolders, {
+    relationName: "subfolders",
+  }),
+  tasks: many(tasks),
 }));

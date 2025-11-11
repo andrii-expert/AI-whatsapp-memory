@@ -15,6 +15,7 @@ import {
   X,
   StickyNote,
   Bell,
+  CheckSquare,
 } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { Button } from "@imaginecalendar/ui/button";
@@ -30,6 +31,7 @@ import Image from "next/image";
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Calendar", href: "/settings/calendars", icon: Calendar },
+  { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Notes", href: "/notes", icon: StickyNote },
   { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Profile", href: "/settings/profile", icon: User },

@@ -92,6 +92,20 @@
       "when": 1761303123759,
       "tag": "0012_blushing_silver_centurion",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1762755759660,
+      "tag": "0013_furry_the_phantom",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1762757322956,
+      "tag": "0014_strange_the_executioner",
+      "breakpoints": true
     }
   ]
 }

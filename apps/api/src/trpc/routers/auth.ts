@@ -17,6 +17,7 @@ import {
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";
+// import { sendWelcomeEmail } from "@api/utils/email";
 
 function computeSubscriptionPeriods(plan: PlanRecord) {
   const currentPeriodStart = new Date();
@@ -273,7 +274,32 @@ export const authRouter = createTRPCRouter({
           message: 'Onboarding data was not properly saved. Please try again.',
         });
       }
-      
+
+      // Send welcome email (async, non-blocking)
+      // if (finalUser?.email && finalUser?.firstName && finalUser?.lastName) {
+      //   sendWelcomeEmail({
+      //     to: finalUser.email,
+      //     firstName: finalUser.firstName,
+      //     lastName: finalUser.lastName,
+      //   }).catch(error => {
+      //     logger.error({ error, userId: session.user.id, email: finalUser.email }, 
+      //       "Failed to send welcome email after onboarding");
+      //     // Don't fail the onboarding if email fails
+      //   });
+        
+      //   logger.info({ 
+      //     userId: session.user.id, 
+      //     email: finalUser.email 
+      //   }, "Welcome email queued for new user");
+      // } else {
+      //   logger.warn({ 
+      //     userId: session.user.id,
+      //     hasEmail: !!finalUser?.email,
+      //     hasFirstName: !!finalUser?.firstName,
+      //     hasLastName: !!finalUser?.lastName
+      //   }, "Skipping welcome email - missing required user data");
+      // }
+
       return finalUser;
     }),
 

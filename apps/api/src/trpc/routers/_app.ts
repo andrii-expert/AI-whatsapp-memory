@@ -13,6 +13,7 @@ import { whatsappAnalyticsRouter } from "./whatsapp-analytics";
 import { whatsappRouter } from "./whatsapp";
 import { voiceTestingRouter } from "./voice-testing";
 import { plansRouter } from "./plans";
+import { tasksRouter } from "./tasks";
 
 export const appRouter = createTRPCRouter({
   admin: adminRouter,
@@ -28,6 +29,7 @@ export const appRouter = createTRPCRouter({
   voiceTesting: voiceTestingRouter,
   dev: devRouter,
   plans: plansRouter,
+  tasks: tasksRouter,
 });
 
 // export type definition of API

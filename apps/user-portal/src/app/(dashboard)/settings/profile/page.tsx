@@ -47,12 +47,13 @@ export default function ProfilePage() {
   const [originalPhone, setOriginalPhone] = useState<string>("");
 
   // Fetch current user data
-  const { data: user, isLoading } = useQuery(
+  const { data: user, isLoading, error } = useQuery(
     trpc.user.me.queryOptions()
   );
 
   // Initialize form with Zod
   const form = useZodForm(profileSchema, {
+    mode: "onBlur",
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -72,30 +73,43 @@ export default function ProfilePage() {
     reset,
     setValue,
     watch,
+    getValues,
   } = form;
 
   const birthday = watch("birthday");
   const country = watch("country");
   const ageGroup = watch("ageGroup");
   const gender = watch("gender");
+  const firstName = watch("firstName");
+  const lastName = watch("lastName");
+  const phone = watch("phone");
+  const company = watch("company");
 
   // Update form when user data is loaded
   useEffect(() => {
     if (user) {
       const phoneValue = user.phone || "";
       setOriginalPhone(phoneValue);
-      reset({
+      
+      const countryValue = user.country || "";
+      const ageGroupValue = (user.ageGroup as "18-25" | "26-35" | "36-45" | "46 and over") || "26-35";
+      const genderValue = user.gender as "male" | "female" | "other" | "prefer_not_to_say" | undefined;
+
+      const formData = {
         firstName: user.firstName || "",
         lastName: user.lastName || "",
         company: user.company || "",
         phone: phoneValue,
-        country: user.country || "",
-        ageGroup: (user.ageGroup as "18-25" | "26-35" | "36-45" | "46 and over") || ("26-35" as const),
-        gender: user.gender as "male" | "female" | "other" | "prefer_not_to_say" | undefined,
+        country: countryValue,
+        ageGroup: ageGroupValue,
+        gender: genderValue,
         birthday: user.birthday ? new Date(user.birthday) : undefined,
-      });
+      };
+      
+      reset(formData, { keepDefaultValues: false });
     }
-  }, [user, reset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Update mutation
   const updateProfileMutation = useMutation(
@@ -147,6 +161,27 @@ export default function ProfilePage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-pulse">Loading profile...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-red-500">
+          <p className="font-semibold">Error loading profile</p>
+          <p className="text-sm mt-2">Please try refreshing the page</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-muted-foreground">
+          <p>No user data found</p>
+        </div>
       </div>
     );
   }
@@ -260,14 +295,21 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="country">Country *</Label>
-                <Select value={country} onValueChange={(value) => setValue("country", value)}>
+                <Select 
+                  key={`country-${country || 'empty'}`}
+                  value={country || ""} 
+                  onValueChange={(value) => {
+                    console.log("Country onValueChange called with:", value);
+                    setValue("country", value, { shouldValidate: true, shouldDirty: true });
+                  }}
+                >
                   <SelectTrigger className={errors.country ? "border-red-500" : ""}>
                     <SelectValue placeholder="Select country" />
                   </SelectTrigger>
                   <SelectContent>
-                    {COUNTRY_OPTIONS.map((country) => (
-                      <SelectItem key={country} value={country}>
-                        {country}
+                    {COUNTRY_OPTIONS.map((countryOption) => (
+                      <SelectItem key={countryOption} value={countryOption}>
+                        {countryOption}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -279,14 +321,14 @@ export default function ProfilePage() {
 
               <div>
                 <Label htmlFor="ageGroup">Age Group *</Label>
-                <Select value={ageGroup} onValueChange={(value) => setValue("ageGroup", value as any)}>
+                <Select value={ageGroup || "26-35"} onValueChange={(value) => setValue("ageGroup", value as any)}>
                   <SelectTrigger className={errors.ageGroup ? "border-red-500" : ""}>
                     <SelectValue placeholder="Select age group" />
                   </SelectTrigger>
                   <SelectContent>
-                    {AGE_GROUP_OPTIONS.map((age: string) => (
-                      <SelectItem key={age} value={age}>
-                        {age}
+                    {AGE_GROUP_OPTIONS.map((ageOption) => (
+                      <SelectItem key={ageOption} value={ageOption}>
+                        {ageOption}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -301,14 +343,21 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="gender">Gender (Optional)</Label>
-                <Select value={gender || ""} onValueChange={(value) => setValue("gender", value as any)}>
+                <Select 
+                  key={`gender-${gender || 'empty'}`}
+                  value={gender || ""} 
+                  onValueChange={(value) => {
+                    console.log("Gender onValueChange called with:", value);
+                    setValue("gender", value as any || undefined, { shouldValidate: true, shouldDirty: true });
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
-                    {GENDER_OPTIONS.map((gender: string) => (
-                      <SelectItem key={gender} value={gender}>
-                        {gender.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                    {GENDER_OPTIONS.map((genderOption) => (
+                      <SelectItem key={genderOption} value={genderOption}>
+                        {genderOption.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())}
                       </SelectItem>
                     ))}
                   </SelectContent>
