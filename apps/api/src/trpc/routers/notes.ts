@@ -10,10 +10,76 @@ import {
   createNote,
   updateNote,
   deleteNote,
+  getUserSubscription,
+  getPlanById,
+  getPlanLimits,
+  getPlanTier,
+  getUpgradeMessage,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+
+// Middleware to check if user has notes access
+const notesAccessProcedure = protectedProcedure.use(async (opts) => {
+  const { session, db } = opts.ctx;
+
+  // Get user's subscription
+  const subscription = await getUserSubscription(db, session.user.id);
+  
+  if (!subscription) {
+    logger.warn(
+      { userId: session.user.id },
+      "User attempted to access notes without a subscription"
+    );
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Notes feature requires an active subscription. Please upgrade to Gold plan.",
+    });
+  }
+
+  // Get the plan details
+  const plan = await getPlanById(db, subscription.plan);
+  
+  if (!plan) {
+    logger.error(
+      { userId: session.user.id, planId: subscription.plan },
+      "Plan not found for user subscription"
+    );
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unable to verify subscription plan",
+    });
+  }
+
+  // Check if the plan has notes access using the plan limits utility
+  const planLimits = getPlanLimits(plan.metadata as Record<string, unknown> | null);
+  const currentTier = getPlanTier(plan.metadata as Record<string, unknown> | null);
+  
+  if (!planLimits.hasNotes) {
+    const upgradeMessage = getUpgradeMessage('notes', currentTier);
+    logger.warn(
+      { userId: session.user.id, plan: subscription.plan, tier: currentTier },
+      "User attempted to access notes without proper plan"
+    );
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: upgradeMessage,
+    });
+  }
+
+  logger.info(
+    { userId: session.user.id, plan: subscription.plan, tier: currentTier },
+    "Notes access granted"
+  );
+
+  return opts.next({
+    ctx: {
+      session,
+      db,
+    },
+  });
+});
 
 // Folder schemas
 const createNoteFolderSchema = z.object({
@@ -57,11 +123,11 @@ export const notesRouter = createTRPCRouter({
   // ============================================
   
   folders: createTRPCRouter({
-    list: protectedProcedure.query(async ({ ctx: { db, session } }) => {
+    list: notesAccessProcedure.query(async ({ ctx: { db, session } }) => {
       return getUserNoteFolders(db, session.user.id);
     }),
 
-    get: protectedProcedure
+    get: notesAccessProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ ctx: { db, session }, input }) => {
         const folder = await getNoteFolderById(db, input.id, session.user.id);
@@ -76,7 +142,7 @@ export const notesRouter = createTRPCRouter({
         return folder;
       }),
 
-    create: protectedProcedure
+    create: notesAccessProcedure
       .input(createNoteFolderSchema)
       .mutation(async ({ ctx: { db, session }, input }) => {
         logger.info({ userId: session.user.id, folderName: input.name }, "Creating note folder");
@@ -90,7 +156,7 @@ export const notesRouter = createTRPCRouter({
         return folder;
       }),
 
-    update: protectedProcedure
+    update: notesAccessProcedure
       .input(updateNoteFolderSchema)
       .mutation(async ({ ctx: { db, session }, input }) => {
         const { id, ...data } = input;
@@ -110,7 +176,7 @@ export const notesRouter = createTRPCRouter({
         return folder;
       }),
 
-    delete: protectedProcedure
+    delete: notesAccessProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ ctx: { db, session }, input }) => {
         logger.info({ userId: session.user.id, folderId: input.id }, "Deleting note folder");
@@ -126,13 +192,13 @@ export const notesRouter = createTRPCRouter({
   // Note Endpoints
   // ============================================
   
-  list: protectedProcedure
+  list: notesAccessProcedure
     .input(getNotesSchema.optional())
     .query(async ({ ctx: { db, session }, input }) => {
       return getUserNotes(db, session.user.id, input);
     }),
 
-  get: protectedProcedure
+  get: notesAccessProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx: { db, session }, input }) => {
       const note = await getNoteById(db, input.id, session.user.id);
@@ -147,7 +213,7 @@ export const notesRouter = createTRPCRouter({
       return note;
     }),
 
-  create: protectedProcedure
+  create: notesAccessProcedure
     .input(createNoteSchema)
     .mutation(async ({ ctx: { db, session }, input }) => {
       logger.info({ userId: session.user.id, noteTitle: input.title }, "Creating note");
@@ -161,7 +227,7 @@ export const notesRouter = createTRPCRouter({
       return note;
     }),
 
-  update: protectedProcedure
+  update: notesAccessProcedure
     .input(updateNoteSchema)
     .mutation(async ({ ctx: { db, session }, input }) => {
       const { id, ...data } = input;
@@ -181,7 +247,7 @@ export const notesRouter = createTRPCRouter({
       return note;
     }),
 
-  delete: protectedProcedure
+  delete: notesAccessProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx: { db, session }, input }) => {
       logger.info({ userId: session.user.id, noteId: input.id }, "Deleting note");

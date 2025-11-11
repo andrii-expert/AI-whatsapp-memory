@@ -829,6 +829,23 @@ export default function TasksPage() {
 
             {/* Folders List */}
             <div className="space-y-1">
+              {/* All Tasks Button - Always show */}
+              <button
+                onClick={handleViewAllTasks}
+                className={cn(
+                  "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                  viewAllTasks 
+                    ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300" 
+                    : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                )}
+              >
+                <Folder className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 text-left">All Tasks</span>
+                <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                  {allTasks.length}
+                </span>
+              </button>
+
               {folders.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm">
                   <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
@@ -839,23 +856,6 @@ export default function TasksPage() {
                 </div>
               ) : (
                 <>
-                  {/* All Tasks Button */}
-                  <button
-                    onClick={handleViewAllTasks}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                      viewAllTasks 
-                        ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300" 
-                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                    )}
-                  >
-                    <Folder className="h-4 w-4 flex-shrink-0" />
-                    <span className="flex-1 text-left">All Tasks</span>
-                    <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
-                      {allTasks.length}
-                    </span>
-                  </button>
-
                   {/* Divider */}
                   <div className="h-px bg-gray-200 my-2" />
 
@@ -896,6 +896,23 @@ export default function TasksPage() {
 
             {/* Folders List */}
             <div className="space-y-1">
+              {/* All Tasks Button - Always show */}
+              <button
+                onClick={handleViewAllTasks}
+                className={cn(
+                  "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                  viewAllTasks 
+                    ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300" 
+                    : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                )}
+              >
+                <Folder className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 text-left">All Tasks</span>
+                <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                  {allTasks.length}
+                </span>
+              </button>
+
               {folders.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm">
                   <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
@@ -906,23 +923,6 @@ export default function TasksPage() {
                 </div>
               ) : (
                 <>
-                  {/* All Tasks Button */}
-                  <button
-                    onClick={handleViewAllTasks}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                      viewAllTasks 
-                        ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300" 
-                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                    )}
-                  >
-                    <Folder className="h-4 w-4 flex-shrink-0" />
-                    <span className="flex-1 text-left">All Tasks</span>
-                    <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
-                      {allTasks.length}
-                    </span>
-                  </button>
-
                   {/* Divider */}
                   <div className="h-px bg-gray-200 my-2" />
 
@@ -936,32 +936,7 @@ export default function TasksPage() {
 
         {/* Right Panel - Tasks */}
         <div className="space-y-4">
-          {folders.length === 0 ? (
-            <div>
-              <div className="lg:hidden mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsMobileSidebarOpen(true)}
-                  className="w-full flex items-center justify-between px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all group"
-                >
-                  <Menu className="h-4 w-4" />
-                  Folder Menu
-                </Button>
-              </div>
-              <div className="flex items-center justify-center h-96">
-                <div className="text-center text-gray-500">
-                  <FolderClosed className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                  <h2 className="text-2xl font-bold text-gray-700 mb-2">
-                    No Folders Yet
-                  </h2>
-                  <p className="text-sm">
-                    Create a folder on the left to start organizing your tasks.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div>
+          <div>
               {/* Desktop - Folder breadcrumb and Add Task button */}
               <div className="flex items-center justify-between mb-4 gap-4">
                 {viewAllTasks ? (
@@ -1006,13 +981,6 @@ export default function TasksPage() {
                   Add Task
                 </Button>
               </div>
-
-              {(!selectedFolderId && !viewAllTasks) && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-900">
-                  <span className="font-medium">ℹ️ Select a folder</span> from
-                  the left to add and manage tasks
-                </div>
-              )}
 
               {/* Search Bar */}
               <div className="mb-4 flex flex-col sm:flex-row gap-2">
@@ -1334,7 +1302,6 @@ export default function TasksPage() {
                 )}
               </div>
             </div>
-          )}
         </div>
       </div>
 

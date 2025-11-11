@@ -16,6 +16,7 @@ import {
   StickyNote,
   Bell,
   CheckSquare,
+  Crown,
 } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { Button } from "@imaginecalendar/ui/button";
@@ -32,7 +33,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Calendar", href: "/settings/calendars", icon: Calendar },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
-  { name: "Notes", href: "/notes", icon: StickyNote },
+  { name: "Notes", href: "/notes", icon: StickyNote, goldOnly: true },
   { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Profile", href: "/settings/profile", icon: User },
   { name: "Subscriptions", href: "/billing", icon: CreditCard },
@@ -82,7 +83,7 @@ export function DashboardNav() {
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    "px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2",
+                    "px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 relative",
                     isActive
                       ? "bg-white/20 text-white font-bold"
                       : "text-white/90 hover:bg-white/10 hover:text-white"
@@ -141,6 +142,11 @@ export function DashboardNav() {
                       >
                         <item.icon className="h-5 w-5" />
                         {item.name}
+                        {item.goldOnly && (
+                          <span title="Gold plan required" className="ml-auto">
+                            <Crown className="h-3.5 w-3.5 text-amber-500" />
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

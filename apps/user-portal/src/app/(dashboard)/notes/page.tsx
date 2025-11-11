@@ -56,11 +56,15 @@ import {
   DialogTitle,
 } from "@imaginecalendar/ui/dialog";
 import { Label } from "@imaginecalendar/ui/label";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
 
 export default function NotesPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { limits, isLoading: isLoadingLimits } = usePlanLimits();
+  const hasNotesAccess = limits.hasNotes;
 
   // State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -92,9 +96,15 @@ export default function NotesPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ type: "folder" | "note"; id: string; name: string } | null>(null);
 
-  // Fetch folders and notes
-  const { data: folders = [] } = useQuery(trpc.notes.folders.list.queryOptions());
-  const { data: allNotes = [] } = useQuery(trpc.notes.list.queryOptions({}));
+  // Fetch folders and notes - only if user has notes access
+  const { data: folders = [] } = useQuery({
+    ...trpc.notes.folders.list.queryOptions(),
+    enabled: hasNotesAccess,
+  });
+  const { data: allNotes = [] } = useQuery({
+    ...trpc.notes.list.queryOptions({}),
+    enabled: hasNotesAccess,
+  });
 
   // Helper function to flatten all folders including subfolders
   const flattenFolders = (folderList: any[]): any[] => {
@@ -645,6 +655,18 @@ export default function NotesPage() {
         </div>
       </div>
 
+      {/* Show upgrade prompt if notes feature is locked */}
+      {!hasNotesAccess && (
+        <UpgradePrompt 
+          feature="Notes & Shared Notes" 
+          requiredTier="gold" 
+          variant="card"
+        />
+      )}
+
+      {/* Only show notes functionality if user has access */}
+      {hasNotesAccess && (
+        <>
       {/* Mobile Sidebar Overlay */}
       {isMobileSidebarOpen && (
         <div
@@ -697,6 +719,23 @@ export default function NotesPage() {
 
           {/* Folders List */}
           <div className="space-y-1">
+            {/* All Notes Button - Always show */}
+            <button
+              onClick={handleViewAllNotes}
+              className={cn(
+                "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                viewAllNotes
+                  ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
+                  : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+              )}
+            >
+              <Folder className="h-4 w-4 flex-shrink-0" />
+              <span className="flex-1 text-left">All Notes</span>
+              <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                {allNotes.length}
+              </span>
+            </button>
+
             {folders.length === 0 ? (
               <div className="text-center py-8 text-gray-500 text-sm">
                 <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
@@ -705,23 +744,6 @@ export default function NotesPage() {
               </div>
             ) : (
               <>
-                {/* All Notes Button */}
-                <button
-                  onClick={handleViewAllNotes}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                    viewAllNotes
-                      ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                      : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                  )}
-                >
-                  <Folder className="h-4 w-4 flex-shrink-0" />
-                  <span className="flex-1 text-left">All Notes</span>
-                  <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
-                    {allNotes.length}
-                  </span>
-                </button>
-
                 {/* Divider */}
                 <div className="h-px bg-gray-200 my-2" />
 
@@ -762,6 +784,23 @@ export default function NotesPage() {
 
             {/* Folders List */}
             <div className="space-y-1">
+              {/* All Notes Button - Always show */}
+              <button
+                onClick={handleViewAllNotes}
+                className={cn(
+                  "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                  viewAllNotes
+                    ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
+                    : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                )}
+              >
+                <Folder className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 text-left">All Notes</span>
+                <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                  {allNotes.length}
+                </span>
+              </button>
+
               {folders.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm">
                   <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
@@ -770,23 +809,6 @@ export default function NotesPage() {
                 </div>
               ) : (
                 <>
-                  {/* All Notes Button */}
-                  <button
-                    onClick={handleViewAllNotes}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                      viewAllNotes
-                        ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                    )}
-                  >
-                    <Folder className="h-4 w-4 flex-shrink-0" />
-                    <span className="flex-1 text-left">All Notes</span>
-                    <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
-                      {allNotes.length}
-                    </span>
-                  </button>
-
                   {/* Divider */}
                   <div className="h-px bg-gray-200 my-2" />
 
@@ -800,28 +822,7 @@ export default function NotesPage() {
 
         {/* Right Panel - Notes */}
         <div className="space-y-4">
-          {folders.length === 0 ? (
-            <div>
-              <div className="lg:hidden mb-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsMobileSidebarOpen(true)}
-                  className="w-full flex items-center justify-between px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all group"
-                >
-                  <Menu className="h-4 w-4" />
-                  Folder Menu
-                </Button>
-              </div>
-              <div className="flex items-center justify-center h-96">
-                <div className="text-center text-gray-500">
-                  <FolderClosed className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                  <h2 className="text-2xl font-bold text-gray-700 mb-2">No Folders Yet</h2>
-                  <p className="text-sm">Create a folder on the left to start organizing your notes.</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div>
+          <div>
               {/* Desktop - Folder breadcrumb and Add Note button */}
               <div className="flex items-center justify-between mb-4 gap-4">
                 {viewAllNotes ? (
@@ -1036,11 +1037,14 @@ export default function NotesPage() {
                 )}
               </div>
             </div>
-          )}
         </div>
       </div>
+        </>
+      )}
 
-      {/* Add/Edit Note Modal */}
+      {/* Add/Edit Note Modal - Only render if user has access */}
+      {hasNotesAccess && (
+        <>
       <AlertDialog open={isNoteModalOpen} onOpenChange={setIsNoteModalOpen}>
         <AlertDialogContent className="sm:max-w-[600px] h-full overflow-y-auto">
           <AlertDialogHeader className="space-y-3 pb-4 border-b">
@@ -1316,6 +1320,8 @@ export default function NotesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+        </>
+      )}
     </div>
   );
 }
