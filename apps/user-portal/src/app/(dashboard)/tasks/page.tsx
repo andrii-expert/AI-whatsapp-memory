@@ -5,6 +5,13 @@ import Link from "next/link";
 import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@imaginecalendar/ui/select";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
@@ -36,11 +43,12 @@ export default function TasksPage() {
 
   // State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [viewAllTasks, setViewAllTasks] = useState(false);
+  const [viewAllTasks, setViewAllTasks] = useState(true); // Default to All Tasks view
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchScope, setSearchScope] = useState<"all" | "title" | "description">("all");
   const [newFolderName, setNewFolderName] = useState("");
   const [newSubfolderName, setNewSubfolderName] = useState("");
   const [addingSubfolderToId, setAddingSubfolderToId] = useState<string | null>(null);
@@ -85,13 +93,6 @@ export default function TasksPage() {
   };
 
   const allFolders = useMemo(() => flattenFolders(folders), [folders]);
-
-  // Auto-select first folder when folders first load
-  useEffect(() => {
-    if (allFolders.length > 0 && selectedFolderId === null && allFolders[0]) {
-      setSelectedFolderId(allFolders[0].id);
-    }
-  }, [allFolders, selectedFolderId]);
 
   // Auto-expand parent folders when a folder is selected
   useEffect(() => {
@@ -191,11 +192,20 @@ export default function TasksPage() {
 
     // Filter by search
     if (searchQuery) {
-      tasks = tasks.filter(
-        (t) =>
-          t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const query = searchQuery.toLowerCase();
+      tasks = tasks.filter((t) => {
+        if (searchScope === "title") {
+          return t.title.toLowerCase().includes(query);
+        } else if (searchScope === "description") {
+          return t.description?.toLowerCase().includes(query) || false;
+        } else {
+          // searchScope === "all"
+          return (
+            t.title.toLowerCase().includes(query) ||
+            t.description?.toLowerCase().includes(query)
+          );
+        }
+      });
     }
 
     // Sort tasks
@@ -218,7 +228,7 @@ export default function TasksPage() {
     }
 
     return tasks;
-  }, [allTasks, selectedFolderId, filterStatus, searchQuery, sortBy, sortOrder]);
+  }, [allTasks, selectedFolderId, filterStatus, searchQuery, searchScope, sortBy, sortOrder]);
 
   // Group tasks - only by date when sorting by date, otherwise show all in one group
   const groupedTasks = useMemo(() => {
@@ -1005,10 +1015,16 @@ export default function TasksPage() {
               )}
 
               {/* Search Bar */}
-              <div className="mb-4">
-                <div className="relative">
+              <div className="mb-4 flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
                   <Input
-                    placeholder="Search tasks..."
+                    placeholder={
+                      searchScope === "all"
+                        ? "Search tasks..."
+                        : searchScope === "title"
+                        ? "Search by title..."
+                        : "Search by description..."
+                    }
                     value={searchQuery}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setSearchQuery(e.target.value)
@@ -1017,6 +1033,21 @@ export default function TasksPage() {
                   />
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 </div>
+                <Select
+                  value={searchScope}
+                  onValueChange={(value: "all" | "title" | "description") =>
+                    setSearchScope(value)
+                  }
+                >
+                  <SelectTrigger className="w-full sm:w-[140px] h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Fields</SelectItem>
+                    <SelectItem value="title">Title Only</SelectItem>
+                    <SelectItem value="description">Description Only</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Filter and Sort Controls */}
@@ -1161,7 +1192,7 @@ export default function TasksPage() {
                             <div className="flex-1 min-w-0">
                               <span
                                 className={cn(
-                                  "text-base break-words leading-relaxed",
+                                  "text-base break-all leading-relaxed",
                                   task.status === "completed"
                                     ? "line-through text-gray-500"
                                     : "text-gray-900"
@@ -1238,7 +1269,7 @@ export default function TasksPage() {
                               <div className="flex-1 min-w-0">
                                 <span
                                   className={cn(
-                                    "text-sm break-words leading-relaxed",
+                                    "text-sm break-all leading-relaxed",
                                     task.status === "completed"
                                       ? "line-through text-gray-500"
                                       : "text-gray-900"

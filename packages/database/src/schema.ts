@@ -199,6 +199,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   activityLogs: many(activityLogs),
   taskFolders: many(taskFolders),
   tasks: many(tasks),
+  noteFolders: many(noteFolders),
+  notes: many(notes),
 }));
 
 // ============================================
@@ -961,4 +963,75 @@ export const taskFoldersRelations = relations(taskFolders, ({ one, many }) => ({
     relationName: "subfolders",
   }),
   tasks: many(tasks),
+}));
+
+// ============================================
+// Notes and Note Folders
+// ============================================
+
+export const noteFolders = pgTable("note_folders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  parentId: uuid("parent_id").references((): any => noteFolders.id, { onDelete: "cascade" }),
+  
+  name: text("name").notNull(),
+  color: text("color"),
+  icon: text("icon"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isExpanded: boolean("is_expanded").default(true).notNull(),
+  
+  // Sharing
+  sharedWith: text("shared_with").array().default([]).notNull(), // Array of user IDs
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("note_folders_user_id_idx").on(table.userId),
+  parentIdIdx: index("note_folders_parent_id_idx").on(table.parentId),
+  sortOrderIdx: index("note_folders_sort_order_idx").on(table.sortOrder),
+}));
+
+export const notes = pgTable("notes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  folderId: uuid("folder_id").references(() => noteFolders.id, { onDelete: "cascade" }),
+  
+  title: text("title").notNull(),
+  content: text("content"),
+  
+  sortOrder: integer("sort_order").default(0).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("notes_user_id_idx").on(table.userId),
+  folderIdIdx: index("notes_folder_id_idx").on(table.folderId),
+  sortOrderIdx: index("notes_sort_order_idx").on(table.sortOrder),
+}));
+
+export const notesRelations = relations(notes, ({ one }) => ({
+  user: one(users, {
+    fields: [notes.userId],
+    references: [users.id],
+  }),
+  folder: one(noteFolders, {
+    fields: [notes.folderId],
+    references: [noteFolders.id],
+  }),
+}));
+
+export const noteFoldersRelations = relations(noteFolders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [noteFolders.userId],
+    references: [users.id],
+  }),
+  parent: one(noteFolders, {
+    fields: [noteFolders.parentId],
+    references: [noteFolders.id],
+    relationName: "noteSubfolders",
+  }),
+  subfolders: many(noteFolders, {
+    relationName: "noteSubfolders",
+  }),
+  notes: many(notes),
 }));

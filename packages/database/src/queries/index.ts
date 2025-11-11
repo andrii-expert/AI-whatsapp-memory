@@ -14,6 +14,7 @@ export * from "./event-verification";
 export * from "./pending-intents";
 export * from "./plans";
 export * from "./tasks";
+export * from "./notes";
 
 // Re-export utility functions
 export * from "../utils/plan-limits";

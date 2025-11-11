@@ -16,6 +16,8 @@ import {
   getPlanById,
   createFolder,
   getUserFolders,
+  createNoteFolder,
+  getUserNoteFolders,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";
@@ -241,6 +243,19 @@ export const authRouter = createTRPCRouter({
           icon: "folder",
         });
         logger.info({ userId: session.user.id }, "Default 'General' task folder created");
+      }
+
+      // Create default "General" note folder if user doesn't have any note folders
+      const existingNoteFolders = await getUserNoteFolders(db, session.user.id);
+      if (existingNoteFolders.length === 0) {
+        logger.info({ userId: session.user.id }, "Creating default 'General' note folder");
+        await createNoteFolder(db, {
+          userId: session.user.id,
+          name: "General",
+          color: "#3B82F6", // Blue color
+          icon: "folder",
+        });
+        logger.info({ userId: session.user.id }, "Default 'General' note folder created");
       }
 
       // Update Clerk metadata
