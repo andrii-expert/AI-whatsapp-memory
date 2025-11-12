@@ -177,7 +177,7 @@ export function PauseSubscriptionModal({
           </Button>
           <Button
             type="button"
-            variant="default"
+            variant="blue-primary"
             onClick={handlePause}
             disabled={pauseSubscriptionMutation.isPending}
           >

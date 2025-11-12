@@ -1046,7 +1046,7 @@ export default function NotesPage() {
       {hasNotesAccess && (
         <>
       <AlertDialog open={isNoteModalOpen} onOpenChange={setIsNoteModalOpen}>
-        <AlertDialogContent className="sm:max-w-[600px] h-full overflow-y-auto">
+        <AlertDialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader className="space-y-3 pb-4 border-b">
             <AlertDialogTitle className="text-2xl font-bold flex items-center gap-3">
               <div

@@ -142,11 +142,6 @@ export function DashboardNav() {
                       >
                         <item.icon className="h-5 w-5" />
                         {item.name}
-                        {item.goldOnly && (
-                          <span title="Gold plan required" className="ml-auto">
-                            <Crown className="h-3.5 w-3.5 text-amber-500" />
-                          </span>
-                        )}
                       </Link>
                     );
                   })}
