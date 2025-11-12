@@ -99,6 +99,12 @@ export const entityTypeEnum = pgEnum("entity_type", [
   "whatsapp_number"
 ]);
 
+export const reminderFrequencyEnum = pgEnum("reminder_frequency", [
+  "daily",
+  "hourly",
+  "minutely"
+]);
+
 // ============================================
 // Plans
 // ============================================
@@ -1034,4 +1040,41 @@ export const noteFoldersRelations = relations(noteFolders, ({ one, many }) => ({
     relationName: "noteSubfolders",
   }),
   notes: many(notes),
+}));
+
+// ============================================
+// Reminders
+// ============================================
+
+export const reminders = pgTable("reminders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  title: text("title").notNull(),
+  frequency: reminderFrequencyEnum("frequency").notNull(),
+  
+  // For daily reminders - time in HH:MM format
+  time: text("time"),
+  
+  // For hourly reminders - minute of the hour (0-59)
+  minuteOfHour: integer("minute_of_hour"),
+  
+  // For minutely reminders - interval in minutes
+  intervalMinutes: integer("interval_minutes"),
+  
+  active: boolean("active").default(true).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("reminders_user_id_idx").on(table.userId),
+  activeIdx: index("reminders_active_idx").on(table.active),
+  frequencyIdx: index("reminders_frequency_idx").on(table.frequency),
+}));
+
+export const remindersRelations = relations(reminders, ({ one }) => ({
+  user: one(users, {
+    fields: [reminders.userId],
+    references: [users.id],
+  }),
 }));

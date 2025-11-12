@@ -60,18 +60,7 @@ export default function DashboardPage() {
   const { data: calendars } = useQuery(trpc.calendar.list.queryOptions());
   const { data: allTasks = [] } = useQuery(trpc.tasks.list.queryOptions({}));
   const { data: allNotes = [] } = useQuery(trpc.notes.list.queryOptions({}));
-  
-  // Get reminders from localStorage
-  const reminders = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("crackon.reminders");
-      if (raw) return JSON.parse(raw);
-    } catch (error) {
-      console.error("Failed to load reminders:", error);
-    }
-    return [];
-  }, []);
+  const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
 
   // Check verification status
   const hasVerifiedWhatsApp = whatsappNumbers?.some(number => number.isVerified) || false;

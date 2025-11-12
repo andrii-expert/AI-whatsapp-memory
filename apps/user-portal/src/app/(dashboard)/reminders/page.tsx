@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
+import { useTRPC } from "@/trpc/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlarmClock,
   Plus,
@@ -56,11 +58,12 @@ interface Reminder {
   id: string;
   title: string;
   frequency: ReminderFrequency;
-  time: string; // HH:MM format for daily
-  minuteOfHour: number; // 0-59 for hourly
-  intervalMinutes: number; // for minutely
+  time: string | null; // HH:MM format for daily
+  minuteOfHour: number | null; // 0-59 for hourly
+  intervalMinutes: number | null; // for minutely
   active: boolean;
-  createdAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface ReminderFormData {
@@ -165,42 +168,36 @@ function getRelativeTime(date: Date): string {
 function getFrequencyDescription(reminder: Reminder): string {
   switch (reminder.frequency) {
     case "daily":
-      return `Every day at ${reminder.time}`;
+      return `Every day at ${reminder.time || "00:00"}`;
     case "hourly":
-      return `Every hour at :${pad(reminder.minuteOfHour)}`;
+      return `Every hour at :${pad(reminder.minuteOfHour || 0)}`;
     case "minutely":
-      return `Every ${reminder.intervalMinutes} minute${reminder.intervalMinutes > 1 ? 's' : ''}`;
+      return `Every ${reminder.intervalMinutes || 5} minute${(reminder.intervalMinutes || 5) > 1 ? 's' : ''}`;
     default:
       return "";
   }
 }
 
-const STORAGE_KEY = "crackon.reminders";
-
 // ==================== MAIN COMPONENT ====================
 
 export default function RemindersPage() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const { limits, isLoading: isLoadingLimits } = usePlanLimits();
   const hasRemindersAccess = limits.hasReminders;
   const { toast } = useToast();
 
-  const [reminders, setReminders] = useState<Reminder[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw) as Reminder[];
-    } catch (error) {
-      console.error("Failed to load reminders:", error);
-    }
-    return [];
-  });
+  // Fetch reminders from database
+  const { data: reminders = [], isLoading, error } = useQuery(
+    trpc.reminders.list.queryOptions()
+  );
 
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState<string | null>(null);
   
-  const initialFormState: ReminderFormData = {
+  const initialFormState: ReminderFormData = useMemo(() => ({
     id: null,
     title: "",
     frequency: "daily",
@@ -208,22 +205,93 @@ export default function RemindersPage() {
     minuteOfHour: 0,
     intervalMinutes: 5,
     active: true,
-  };
+  }), []);
   
   const [form, setForm] = useState<ReminderFormData>(initialFormState);
 
-  // Save to localStorage whenever reminders change
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders));
-    }
-  }, [reminders]);
+  // Mutations
+  const createMutation = useMutation(
+    trpc.reminders.create.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        toast({ title: "Reminder created successfully" });
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Failed to create reminder",
+          description: error?.message || "Please try again",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
+  const updateMutation = useMutation(
+    trpc.reminders.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        toast({ title: "Reminder updated successfully" });
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Failed to update reminder",
+          description: error?.message || "Please try again",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
+  const deleteMutation = useMutation(
+    trpc.reminders.delete.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        toast({ title: "Reminder deleted successfully" });
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Failed to delete reminder",
+          description: error?.message || "Please try again",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
+  const toggleActiveMutation = useMutation(
+    trpc.reminders.toggleActive.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Failed to toggle reminder",
+          description: error?.message || "Please try again",
+          variant: "destructive",
+        });
+      },
+    })
+  );
 
   // Filter and sort reminders
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return reminders
-      .map((r) => ({ ...r, nextAt: computeNext(r) }))
+      .map((r) => {
+        // Prepare reminder object for compute function
+        const reminderForCompute: Reminder = {
+          ...r,
+          time: r.time ?? null,
+          minuteOfHour: r.minuteOfHour ?? null,
+          intervalMinutes: r.intervalMinutes ?? null,
+          createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
+          updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
+        };
+        return { 
+          ...r, 
+          nextAt: computeNext(reminderForCompute)
+        };
+      })
       .filter((r) => (q ? r.title.toLowerCase().includes(q) : true))
       .sort((a, b) => {
         // Active reminders first, sorted by next occurrence
@@ -235,9 +303,20 @@ export default function RemindersPage() {
         if (a.active) return -1;
         if (b.active) return 1;
         // Inactive sorted by creation date (newest first)
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        const aCreatedAt = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+        const bCreatedAt = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+        return bCreatedAt.getTime() - aCreatedAt.getTime();
       });
   }, [reminders, query]);
+
+  const resetForm = useCallback(() => {
+    setForm(initialFormState);
+  }, [initialFormState]);
+
+  const openNewForm = useCallback(() => {
+    resetForm();
+    setShowForm(true);
+  }, [resetForm]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -256,25 +335,16 @@ export default function RemindersPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showForm]);
-
-  const resetForm = useCallback(() => {
-    setForm(initialFormState);
-  }, []);
-
-  const openNewForm = useCallback(() => {
-    resetForm();
-    setShowForm(true);
-  }, [resetForm]);
+  }, [showForm, resetForm, openNewForm]);
 
   const openEditForm = useCallback((reminder: Reminder) => {
     setForm({
       id: reminder.id,
       title: reminder.title,
       frequency: reminder.frequency,
-      time: reminder.time,
-      minuteOfHour: reminder.minuteOfHour,
-      intervalMinutes: reminder.intervalMinutes,
+      time: reminder.time || "17:00",
+      minuteOfHour: reminder.minuteOfHour || 0,
+      intervalMinutes: reminder.intervalMinutes || 5,
       active: reminder.active,
     });
     setShowForm(true);
@@ -296,7 +366,7 @@ export default function RemindersPage() {
     return null;
   };
 
-  const saveForm = useCallback(() => {
+  const saveForm = useCallback(async () => {
     const validationError = validateForm();
     if (validationError) {
       toast({
@@ -307,79 +377,63 @@ export default function RemindersPage() {
       return;
     }
 
-    const payload = { ...form };
+    const payload = {
+      title: form.title,
+      frequency: form.frequency,
+      time: form.time,
+      minuteOfHour: form.minuteOfHour,
+      intervalMinutes: form.intervalMinutes,
+      active: form.active,
+    };
     
-    if (payload.id) {
-      // Update existing reminder
-      setReminders((prev) =>
-        prev.map((r) => (r.id === payload.id ? { ...r, ...payload, id: r.id } : r))
-      );
-      toast({
-        title: "Reminder Updated",
-        description: `"${payload.title}" has been updated successfully.`,
-        variant: "success",
-      });
-    } else {
-      // Create new reminder
-      const newReminder: Reminder = {
-        id: crypto.randomUUID(),
-        title: payload.title,
-        frequency: payload.frequency,
-        time: payload.time,
-        minuteOfHour: payload.minuteOfHour,
-        intervalMinutes: payload.intervalMinutes,
-        active: payload.active,
-        createdAt: new Date().toISOString(),
-      };
-      setReminders((prev) => [newReminder, ...prev]);
-      toast({
-        title: "Reminder Created",
-        description: `"${payload.title}" has been created successfully.`,
-        variant: "success",
-      });
+    try {
+      if (form.id) {
+        // Update existing reminder
+        await updateMutation.mutateAsync({ id: form.id, ...payload });
+      } else {
+        // Create new reminder
+        await createMutation.mutateAsync(payload);
+      }
+      
+      setShowForm(false);
+      resetForm();
+    } catch (error) {
+      // Error handling is done in the mutation
     }
-    
-    setShowForm(false);
-    resetForm();
-  }, [form, toast, resetForm]);
+  }, [form, toast, resetForm, createMutation, updateMutation]);
 
   const confirmDelete = useCallback((id: string) => {
     setReminderToDelete(id);
     setDeleteDialogOpen(true);
   }, []);
 
-  const removeReminder = useCallback(() => {
+  const removeReminder = useCallback(async () => {
     if (!reminderToDelete) return;
     
-    const reminder = reminders.find((r) => r.id === reminderToDelete);
-    setReminders((prev) => prev.filter((r) => r.id !== reminderToDelete));
-    
-    toast({
-      title: "Reminder Deleted",
-      description: reminder ? `"${reminder.title}" has been deleted.` : "Reminder has been deleted.",
-      variant: "success",
-    });
-    
-    setDeleteDialogOpen(false);
-    setReminderToDelete(null);
-  }, [reminderToDelete, reminders, toast]);
+    try {
+      await deleteMutation.mutateAsync({ id: reminderToDelete });
+      setDeleteDialogOpen(false);
+      setReminderToDelete(null);
+    } catch (error) {
+      // Error handling is done in the mutation
+    }
+  }, [reminderToDelete, deleteMutation]);
 
-  const toggleActive = useCallback((id: string) => {
-    setReminders((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          const newActive = !r.active;
-          toast({
-            title: newActive ? "Reminder Activated" : "Reminder Paused",
-            description: `"${r.title}" is now ${newActive ? "active" : "paused"}.`,
-            variant: "success",
-          });
-          return { ...r, active: newActive };
-        }
-        return r;
-      })
-    );
-  }, [toast]);
+  const toggleActive = useCallback(async (id: string) => {
+    const reminder = reminders.find((r) => r.id === id);
+    if (!reminder) return;
+    
+    const newActive = !reminder.active;
+    try {
+      await toggleActiveMutation.mutateAsync({ id, active: newActive });
+      toast({
+        title: newActive ? "Reminder Activated" : "Reminder Paused",
+        description: `"${reminder.title}" is now ${newActive ? "active" : "paused"}.`,
+      });
+    } catch (error) {
+      // Error handling is done in the mutation
+    }
+  }, [reminders, toast, toggleActiveMutation]);
 
   if (isLoadingLimits) {
     return (
@@ -566,7 +620,6 @@ export default function RemindersPage() {
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {/* @ts-expect-error - Badge component accepts children via HTMLAttributes */}
                   <Badge variant={r.active ? "default" : "secondary"}>
                     {r.active ? "Active" : "Paused"}
                   </Badge>
@@ -793,9 +846,10 @@ export default function RemindersPage() {
             <AlertDialogDescription className="space-y-4 text-base pt-2">
               <p className="text-gray-700">
                 Are you sure you want to delete the reminder
-                {reminderToDelete &&
-                  reminders.find((r) => r.id === reminderToDelete) &&
-                  ` "${reminders.find((r) => r.id === reminderToDelete)?.title}"`}
+                {reminderToDelete && (() => {
+                  const reminder = reminders.find((r) => r.id === reminderToDelete);
+                  return reminder ? ` "${reminder.title}"` : "";
+                })()}
                 ?
               </p>
               <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-3">

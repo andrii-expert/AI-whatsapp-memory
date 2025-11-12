@@ -15,6 +15,7 @@ export * from "./pending-intents";
 export * from "./plans";
 export * from "./tasks";
 export * from "./notes";
+export * from "./reminders";
 
 // Re-export utility functions
 export * from "../utils/plan-limits";
