@@ -11,6 +11,7 @@ import {
   Search,
   Edit2,
   Trash2,
+  Check,
   ChevronDown,
   ChevronRight,
   Menu,
@@ -87,6 +88,12 @@ export default function NotesPage() {
   const [noteModalTitle, setNoteModalTitle] = useState("");
   const [noteModalContent, setNoteModalContent] = useState("");
   const [noteModalId, setNoteModalId] = useState<string | null>(null);
+  const [noteModalFolderId, setNoteModalFolderId] = useState<string | null>(null);
+  
+  // Move folder states
+  const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
+  const [selectedMoveToFolderId, setSelectedMoveToFolderId] = useState<string | null>(null);
+  const [expandedMoveDialogFolders, setExpandedMoveDialogFolders] = useState<Set<string>>(new Set());
 
   // View note modal state
   const [isViewNoteModalOpen, setIsViewNoteModalOpen] = useState(false);
@@ -120,6 +127,29 @@ export default function NotesPage() {
   };
 
   const allFolders = useMemo(() => flattenFolders(folders), [folders]);
+
+  // Sort folders to show "General" at the top
+  const sortedFolders = useMemo(() => {
+    const sortFoldersRecursive = (folderList: any[]): any[] => {
+      return [...folderList]
+        .sort((a, b) => {
+          const aIsGeneral = a.name.toLowerCase() === "general";
+          const bIsGeneral = b.name.toLowerCase() === "general";
+          
+          if (aIsGeneral && !bIsGeneral) return -1;
+          if (!aIsGeneral && bIsGeneral) return 1;
+          
+          // If neither or both are "General", maintain original order
+          return 0;
+        })
+        .map(folder => ({
+          ...folder,
+          subfolders: folder.subfolders ? sortFoldersRecursive(folder.subfolders) : []
+        }));
+    };
+    
+    return sortFoldersRecursive(folders);
+  }, [folders]);
 
   // Get selected folder
   const selectedFolder = useMemo(() => {
@@ -285,6 +315,12 @@ export default function NotesPage() {
         setIsNoteModalOpen(false);
         setNoteModalTitle("");
         setNoteModalContent("");
+        
+        // If we were in All Notes view, return to it
+        if (viewAllNotes) {
+          setSelectedFolderId(null);
+        }
+        
         toast({
           title: "Success",
           description: "Note created successfully",
@@ -398,19 +434,52 @@ export default function NotesPage() {
     });
   };
 
-  const openAddNoteModal = () => {
+  const openAddNoteModal = async () => {
     setNoteModalMode("add");
     setNoteModalTitle("");
     setNoteModalContent("");
     setNoteModalId(null);
+    
+    // If viewing All Notes and no folder is selected, find or create General folder
+    if (viewAllNotes && !selectedFolderId) {
+      const generalFolder = folders.find(f => f.name.toLowerCase() === "general");
+      if (generalFolder) {
+        setSelectedFolderId(generalFolder.id);
+      } else {
+        // Create General folder
+        try {
+          const newFolder = await createFolderMutation.mutateAsync({
+            name: "General",
+            color: "#3B82F6", // Blue color
+            icon: "folder",
+          });
+          if (newFolder) {
+            setSelectedFolderId(newFolder.id);
+            toast({
+              title: "General folder created",
+              description: "Your note will be saved in the General folder",
+            });
+          }
+        } catch (error) {
+          toast({
+            title: "Error",
+            description: "Failed to create General folder",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    }
+    
     setIsNoteModalOpen(true);
   };
 
-  const openEditNoteModal = (noteId: string, noteTitle: string, noteContent: string | null) => {
+  const openEditNoteModal = (noteId: string, noteTitle: string, noteContent: string | null, noteFolderId: string | null | undefined) => {
     setNoteModalMode("edit");
     setNoteModalTitle(noteTitle);
     setNoteModalContent(noteContent || "");
     setNoteModalId(noteId);
+    setNoteModalFolderId(noteFolderId ?? null);
     setIsNoteModalOpen(true);
   };
 
@@ -428,7 +497,7 @@ export default function NotesPage() {
   const editFromViewModal = () => {
     if (viewNoteData) {
       setIsViewNoteModalOpen(false);
-      openEditNoteModal(viewNoteData.id, viewNoteData.title, viewNoteData.content);
+      openEditNoteModal(viewNoteData.id, viewNoteData.title, viewNoteData.content, viewNoteData.folderId);
     }
   };
 
@@ -456,6 +525,40 @@ export default function NotesPage() {
         content: noteModalContent,
       });
     }
+  };
+
+  const openMoveDialog = () => {
+    setSelectedMoveToFolderId(noteModalFolderId);
+    setExpandedMoveDialogFolders(new Set()); // Reset expanded folders
+    setIsMoveDialogOpen(true);
+  };
+
+  const toggleMoveDialogFolder = (folderId: string) => {
+    setExpandedMoveDialogFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const handleMoveNote = () => {
+    if (!noteModalId || !selectedMoveToFolderId) return;
+    
+    updateNoteMutation.mutate({
+      id: noteModalId,
+      folderId: selectedMoveToFolderId,
+    });
+    
+    setIsMoveDialogOpen(false);
+    setIsNoteModalOpen(false);
+    toast({
+      title: "Note moved",
+      description: "Note has been moved to the selected folder",
+    });
   };
 
   const handleDeleteNote = (noteId: string, noteName: string) => {
@@ -569,7 +672,7 @@ export default function NotesPage() {
                 <Plus className="h-4 w-4" />
               </Button>
             )}
-            {!isEditingFolder && (
+            {!isEditingFolder && folder.name.toLowerCase() !== "general" && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -627,8 +730,55 @@ export default function NotesPage() {
     );
   };
 
+  // Loading state
+  if (isLoadingLimits) {
+    return (
+      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+            <p className="mt-4 text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // No access state
+  if (!hasNotesAccess) {
+    return (
+      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-sm">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Home className="h-4 w-4" />
+            Dashboard
+          </Link>
+          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+          <span className="font-medium">Notes</span>
+        </div>
+
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-primary">Notes</h1>
+          <p className="text-muted-foreground mt-2">
+            Capture and organize your thoughts
+          </p>
+        </div>
+
+        <UpgradePrompt 
+          feature="Notes & Shared Notes" 
+          requiredTier="gold" 
+          variant="card"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
@@ -655,18 +805,6 @@ export default function NotesPage() {
         </div>
       </div>
 
-      {/* Show upgrade prompt if notes feature is locked */}
-      {!hasNotesAccess && (
-        <UpgradePrompt 
-          feature="Notes & Shared Notes" 
-          requiredTier="gold" 
-          variant="card"
-        />
-      )}
-
-      {/* Only show notes functionality if user has access */}
-      {hasNotesAccess && (
-        <>
       {/* Mobile Sidebar Overlay */}
       {isMobileSidebarOpen && (
         <div
@@ -748,7 +886,7 @@ export default function NotesPage() {
                 <div className="h-px bg-gray-200 my-2" />
 
                 {/* Individual Folders */}
-                {folders.map((folder) => renderFolder(folder, 0))}
+                {sortedFolders.map((folder) => renderFolder(folder, 0))}
               </>
             )}
           </div>
@@ -813,7 +951,7 @@ export default function NotesPage() {
                   <div className="h-px bg-gray-200 my-2" />
 
                   {/* Individual Folders */}
-                  {folders.map((folder) => renderFolder(folder, 0))}
+                  {sortedFolders.map((folder) => renderFolder(folder, 0))}
                 </>
               )}
             </div>
@@ -859,8 +997,8 @@ export default function NotesPage() {
                 {/* Add Note Button */}
                 <Button
                   onClick={openAddNoteModal}
-                  variant="blue-primary"
-                  disabled={!selectedFolderId || viewAllNotes}
+                  variant="orange-primary"
+                  disabled={!selectedFolderId && !viewAllNotes}
                   className="flex-shrink-0"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -993,7 +1131,7 @@ export default function NotesPage() {
                               className="h-7 w-7"
                               onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                                 e.stopPropagation();
-                                openEditNoteModal(note.id, note.title, note.content);
+                                openEditNoteModal(note.id, note.title, note.content, note.folderId);
                               }}
                               title="Edit note"
                             >
@@ -1039,12 +1177,8 @@ export default function NotesPage() {
             </div>
         </div>
       </div>
-        </>
-      )}
 
-      {/* Add/Edit Note Modal - Only render if user has access */}
-      {hasNotesAccess && (
-        <>
+      {/* Add/Edit Note Modal */}
       <AlertDialog open={isNoteModalOpen} onOpenChange={setIsNoteModalOpen}>
         <AlertDialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader className="space-y-3 pb-4 border-b">
@@ -1137,25 +1271,39 @@ export default function NotesPage() {
               </p>
             </div>
 
-            <AlertDialogFooter className="gap-3 pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsNoteModalOpen(false)}
-                className="flex-1 sm:flex-none h-11"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="blue-primary"
-                disabled={
-                  createNoteMutation.isPending ||
-                  updateNoteMutation.isPending ||
-                  !noteModalTitle.trim()
-                }
-                className="flex-1 sm:flex-none h-11 min-w-[140px]"
-              >
+            <AlertDialogFooter className="gap-3 pt-4 border-t flex-col sm:flex-row">
+              {/* Move to Folder button - only show in edit mode */}
+              {noteModalMode === "edit" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={openMoveDialog}
+                  className="w-full sm:w-auto sm:mr-auto h-11"
+                >
+                  <Folder className="h-4 w-4 mr-2" />
+                  Move to Folder
+                </Button>
+              )}
+              
+              <div className="flex gap-3 w-full sm:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsNoteModalOpen(false)}
+                  className="flex-1 sm:flex-none h-11"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="blue-primary"
+                  disabled={
+                    createNoteMutation.isPending ||
+                    updateNoteMutation.isPending ||
+                    !noteModalTitle.trim()
+                  }
+                  className="flex-1 sm:flex-none h-11 min-w-[140px]"
+                >
                 {createNoteMutation.isPending || updateNoteMutation.isPending ? (
                   <>
                     <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1173,8 +1321,134 @@ export default function NotesPage() {
                   </>
                 )}
               </Button>
+              </div>
             </AlertDialogFooter>
           </form>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Move to Folder Dialog */}
+      <AlertDialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
+        <AlertDialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader className="space-y-3">
+            <AlertDialogTitle className="text-xl font-bold flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <Folder className="h-5 w-5 text-blue-600" />
+              </div>
+              Move Note to Folder
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              Select a folder to move this note to
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="py-4 space-y-2 max-h-[400px] overflow-y-auto">
+            {sortedFolders.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FolderClosed className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No folders available</p>
+              </div>
+            ) : (
+              (() => {
+                const renderFolderOption = (folder: any, level: number = 0): React.ReactNode => {
+                  const isCurrentFolder = folder.id === noteModalFolderId;
+                  const isSelected = folder.id === selectedMoveToFolderId;
+                  const hasSubfolders = folder.subfolders && folder.subfolders.length > 0;
+                  const isExpanded = expandedMoveDialogFolders.has(folder.id);
+                  const noteCount = getNoteCount(folder.id);
+                  
+                  return (
+                    <div key={folder.id}>
+                      <div
+                        className={cn(
+                          "flex items-center justify-between px-3 py-2 rounded-lg transition-colors group",
+                          isSelected
+                            ? "bg-blue-100 text-blue-900"
+                            : "hover:bg-gray-100 text-gray-700",
+                          isCurrentFolder && !isSelected && "bg-gray-50"
+                        )}
+                        style={{ paddingLeft: `${5 + level * 20}px` }}
+                      >
+                        {/* Left side: Expand button + Folder name */}
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          {hasSubfolders ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleMoveDialogFolder(folder.id)}
+                              className="p-1 hover:bg-gray-200 rounded flex-shrink-0"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </button>
+                          ) : (
+                            <div className="w-6" />
+                          )}
+                          
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMoveToFolderId(folder.id)}
+                            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                          >
+                            <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                            <span className="font-medium truncate">{folder.name}</span>
+                          </button>
+                        </div>
+
+                        {/* Right side: Badges and indicators */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {isCurrentFolder && (
+                            <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                              Current
+                            </span>
+                          )}
+                          {noteCount > 0 && (
+                            <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-semibold">
+                              {noteCount}
+                            </span>
+                          )}
+                          {isSelected && (
+                            <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Render subfolders */}
+                      {isExpanded && hasSubfolders && (
+                        <div className="mt-0.5">
+                          {folder.subfolders.map((subfolder: any) => renderFolderOption(subfolder, level + 1))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+                
+                return sortedFolders.map((folder) => renderFolderOption(folder, 0));
+              })()
+            )}
+          </div>
+
+          <AlertDialogFooter className="gap-3 pt-4 border-t flex-col-reverse sm:flex-row">
+            <AlertDialogCancel
+              onClick={() => {
+                setIsMoveDialogOpen(false);
+                setSelectedMoveToFolderId(null);
+              }}
+              className="w-full sm:w-auto sm:flex-1 sm:flex-none h-11"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMoveNote}
+              disabled={!selectedMoveToFolderId || selectedMoveToFolderId === noteModalFolderId}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 focus:ring-blue-600 sm:flex-1 sm:flex-none h-11 sm:min-w-[140px]"
+            >
+              <Folder className="h-4 w-4 mr-2" />
+              Move Note
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -1320,8 +1594,6 @@ export default function NotesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-        </>
-      )}
     </div>
   );
 }

@@ -54,6 +54,7 @@ export default function DashboardPage() {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
+  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
 
   // Fetch all data
   const { data: whatsappNumbers } = useQuery(trpc.whatsapp.getMyNumbers.queryOptions());
@@ -189,6 +190,27 @@ export default function DashboardPage() {
     }
   };
 
+  const getFilterTypeLabel = () => {
+    switch (filterType) {
+      case "all": return "All Items";
+      case "reminders": return "Reminders";
+      case "tasks": return "Tasks";
+      case "events": return "Events";
+      case "notes": return "Notes";
+      default: return "Select Type";
+    }
+  };
+
+  const getFilterTypeIcon = () => {
+    switch (filterType) {
+      case "reminders": return <BellRing className="h-4 w-4" />;
+      case "tasks": return <CheckSquare className="h-4 w-4" />;
+      case "events": return <Calendar className="h-4 w-4" />;
+      case "notes": return <StickyNote className="h-4 w-4" />;
+      default: return <Filter className="h-4 w-4" />;
+    }
+  };
+
   // Filter active reminders
   const activeReminders = useMemo(() => {
     const filtered = reminders.filter((r: any) => r.active);
@@ -295,7 +317,6 @@ export default function DashboardPage() {
           <LayoutDashboard className="h-4 w-4" />
           <span className="font-medium">Overview</span>
         </div>
-        {/* @ts-expect-error - Badge component accepts children via HTMLAttributes */}
         <Badge variant="secondary" className="bg-primary-foreground/20 text-primary-foreground">
           {totalItems}
         </Badge>
@@ -310,7 +331,6 @@ export default function DashboardPage() {
           <StickyNote className="h-4 w-4" />
           <span>Notes</span>
         </div>
-        {/* @ts-expect-error - Badge component accepts children via HTMLAttributes */}
         <Badge variant="secondary">{allNotes.length}</Badge>
       </Link>
       
@@ -323,7 +343,6 @@ export default function DashboardPage() {
           <BellRing className="h-4 w-4" />
           <span>Reminders</span>
         </div>
-        {/* @ts-expect-error - Badge component accepts children via HTMLAttributes */}
         <Badge variant="secondary">{reminders.length}</Badge>
       </Link>
       
@@ -336,7 +355,6 @@ export default function DashboardPage() {
           <Calendar className="h-4 w-4" />
           <span>Calendar</span>
         </div>
-        {/* @ts-expect-error - Badge component accepts children via HTMLAttributes */}
         <Badge variant="secondary">{calendars?.length || 0}</Badge>
       </Link>
       
@@ -349,14 +367,13 @@ export default function DashboardPage() {
           <CheckSquare className="h-4 w-4" />
           <span>Tasks</span>
         </div>
-        {/* @ts-expect-error - Badge component accepts children via HTMLAttributes */}
         <Badge variant="secondary">{allTasks.length}</Badge>
       </Link>
     </div>
   );
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
       {/* Page Header */}
       <div className="mb-6 flex flex-col md:flex-row items-start justify-between gap-4">
         <div>
@@ -421,8 +438,8 @@ export default function DashboardPage() {
 
       {/* Search and Filter Bar */}
       <div className="mb-6 space-y-3">
-        <div className="flex flex-col lg:flex-row gap-3">
-          <div className="relative flex-1">
+        <div className="flex flex-col lg:flex-row gap-3 items-center w-full">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
               type="text"
@@ -441,120 +458,203 @@ export default function DashboardPage() {
             )}
           </div>
           
-          {/* Date Filter */}
-          <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="justify-between min-w-[200px] font-normal"
-              >
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4" />
-                  <span>{getDateFilterLabel()}</span>
-                </div>
-                <ChevronDown className="h-4 w-4 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-0" align="end">
-              <div className="p-4 space-y-4">
-                <div>
-                  <h4 className="font-semibold text-sm mb-3">Date Range</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant={dateFilter === "today" ? "blue-primary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setDateFilter("today");
-                        setIsDatePopoverOpen(false);
-                      }}
-                      className="w-full"
-                    >
-                      Today
-                    </Button>
-                    <Button
-                      variant={dateFilter === "week" ? "blue-primary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setDateFilter("week");
-                        setIsDatePopoverOpen(false);
-                      }}
-                      className="w-full"
-                    >
-                      This Week
-                    </Button>
-                    <Button
-                      variant={dateFilter === "month" ? "blue-primary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setDateFilter("month");
-                        setIsDatePopoverOpen(false);
-                      }}
-                      className="w-full"
-                    >
-                      This Month
-                    </Button>
-                    <Button
-                      variant={dateFilter === "all" ? "blue-primary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setDateFilter("all");
-                        setIsDatePopoverOpen(false);
-                      }}
-                      className="w-full"
-                    >
-                      All Time
-                    </Button>
+          <div className="flex gap-3 justify-between">
+            {/* Filter Type - Mobile Popover */}
+            <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="md:hidden justify-between w-full min-w-[140px] font-normal"
+                >
+                  <div className="flex items-center gap-2">
+                    {getFilterTypeIcon()}
+                    <span>{getFilterTypeLabel()}</span>
                   </div>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="start">
+                <div className="p-4 space-y-2">
+                  <h4 className="font-semibold text-sm mb-3">Filter by Type</h4>
+                  <Button
+                    variant={filterType === "all" ? "blue-primary" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setFilterType("all");
+                      setIsFilterPopoverOpen(false);
+                    }}
+                    className="w-full justify-start"
+                  >
+                    <Filter className="h-4 w-4 mr-2" />
+                    All Items
+                  </Button>
+                  <Button
+                    variant={filterType === "reminders" ? "blue-primary" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setFilterType("reminders");
+                      setIsFilterPopoverOpen(false);
+                    }}
+                    className="w-full justify-start"
+                  >
+                    <BellRing className="h-4 w-4 mr-2" />
+                    Reminders
+                  </Button>
+                  <Button
+                    variant={filterType === "tasks" ? "blue-primary" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setFilterType("tasks");
+                      setIsFilterPopoverOpen(false);
+                    }}
+                    className="w-full justify-start"
+                  >
+                    <CheckSquare className="h-4 w-4 mr-2" />
+                    Tasks
+                  </Button>
+                  <Button
+                    variant={filterType === "events" ? "blue-primary" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setFilterType("events");
+                      setIsFilterPopoverOpen(false);
+                    }}
+                    className="w-full justify-start"
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Events
+                  </Button>
+                  <Button
+                    variant={filterType === "notes" ? "blue-primary" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setFilterType("notes");
+                      setIsFilterPopoverOpen(false);
+                    }}
+                    className="w-full justify-start"
+                  >
+                    <StickyNote className="h-4 w-4 mr-2" />
+                    Notes
+                  </Button>
                 </div>
-                
-                <div className="border-t pt-4">
-                  <h4 className="font-semibold text-sm mb-3">Custom Range</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1.5 block">
-                        Start Date
-                      </label>
-                      <Input
-                        type="date"
-                        value={customStartDate}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomStartDate(e.target.value)}
-                        className="w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1.5 block">
-                        End Date
-                      </label>
-                      <Input
-                        type="date"
-                        value={customEndDate}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomEndDate(e.target.value)}
-                        className="w-full"
-                      />
-                    </div>
-                    <Button
-                      variant="blue-primary"
-                      size="sm"
-                      onClick={() => {
-                        if (customStartDate && customEndDate) {
-                          setDateFilter("custom");
+              </PopoverContent>
+            </Popover>
+            
+            {/* Date Filter */}
+            <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="justify-between w-full min-w-[140px] md:min-w-[200px] font-normal"
+                >
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4" />
+                    <span>{getDateFilterLabel()}</span>
+                  </div>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="end">
+                <div className="p-4 space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-3">Date Range</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant={dateFilter === "today" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDateFilter("today");
                           setIsDatePopoverOpen(false);
-                        }
-                      }}
-                      disabled={!customStartDate || !customEndDate}
-                      className="w-full"
-                    >
-                      Apply Custom Range
-                    </Button>
+                        }}
+                        className="w-full"
+                      >
+                        Today
+                      </Button>
+                      <Button
+                        variant={dateFilter === "week" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDateFilter("week");
+                          setIsDatePopoverOpen(false);
+                        }}
+                        className="w-full"
+                      >
+                        This Week
+                      </Button>
+                      <Button
+                        variant={dateFilter === "month" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDateFilter("month");
+                          setIsDatePopoverOpen(false);
+                        }}
+                        className="w-full"
+                      >
+                        This Month
+                      </Button>
+                      <Button
+                        variant={dateFilter === "all" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDateFilter("all");
+                          setIsDatePopoverOpen(false);
+                        }}
+                        className="w-full"
+                      >
+                        All Time
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-sm mb-3">Custom Range</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1.5 block">
+                          Start Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={customStartDate}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomStartDate(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1.5 block">
+                          End Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={customEndDate}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomEndDate(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      <Button
+                        variant="blue-primary"
+                        size="sm"
+                        onClick={() => {
+                          if (customStartDate && customEndDate) {
+                            setDateFilter("custom");
+                            setIsDatePopoverOpen(false);
+                          }
+                        }}
+                        disabled={!customStartDate || !customEndDate}
+                        className="w-full"
+                      >
+                        Apply Custom Range
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
 
-        {/* Filter Type Buttons */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        {/* Filter Type Buttons - Desktop Only */}
+        <div className="hidden md:flex gap-2">
           <Button
             variant={filterType === "all" ? "blue-primary" : "outline"}
             size="sm"
@@ -604,7 +704,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Search/Filter Results Info */}
-      {(searchQuery || dateFilter !== "today" || filterType !== "all") && (
+      {/* {(searchQuery || dateFilter !== "today" || filterType !== "all") && (
         <div className="mb-4 p-4 bg-muted/50 rounded-lg border border-border">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
@@ -647,7 +747,7 @@ export default function DashboardPage() {
             </Button>
           </div>
         </div>
-      )}
+      )} */}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Desktop Left Sidebar - My Workspace */}
@@ -697,9 +797,12 @@ export default function DashboardPage() {
             {/* Active Reminders */}
             {shouldShowReminders && (
             <Card className="flex flex-col h-[420px]">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <BellRing className="h-4 w-4 text-primary" />
+              <CardHeader className="flex flex-row bg-primary items-center justify-between space-y-0 pb-3 flex-shrink-0">
+                <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
+                  <BellRing className="h-4 w-4" />
+                  {dateFilter === "today" && "Today "}
+                  {dateFilter === "week" && "This Week "}
+                  {dateFilter === "month" && "This Month "}
                   Active Reminders
                 </CardTitle>
                 <div className="flex items-center gap-2">
@@ -756,9 +859,12 @@ export default function DashboardPage() {
             {/* Pending Tasks */}
             {shouldShowTasks && (
             <Card className="flex flex-col h-[420px]">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <CheckSquare className="h-4 w-4 text-primary" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
+                <CardTitle className="text-base text-white font-semibold flex items-center justify-center gap-2 m-0">
+                  <CheckSquare className="h-4 w-4" />
+                  {dateFilter === "today" && "Today "}
+                  {dateFilter === "week" && "This Week "}
+                  {dateFilter === "month" && "This Month "}
                   Pending Tasks
                 </CardTitle>
                 <div className="flex items-center gap-2">
@@ -810,9 +916,12 @@ export default function DashboardPage() {
             {/* Scheduled Events */}
             {shouldShowEvents && (
             <Card className="flex flex-col h-[420px]">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-primary" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
+                <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
+                  <Calendar className="h-4 w-4" />
+                  {dateFilter === "today" && "Today "}
+                  {dateFilter === "week" && "This Week "}
+                  {dateFilter === "month" && "This Month "}
                   Scheduled Events
                 </CardTitle>
                 <div className="flex items-center gap-2">
@@ -864,9 +973,12 @@ export default function DashboardPage() {
             {/* Quick Notes */}
             {shouldShowNotes && (
             <Card className="flex flex-col h-[420px]">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <StickyNote className="h-4 w-4 text-primary" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
+                <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
+                  <StickyNote className="h-4 w-4" />
+                  {dateFilter === "today" && "Today "}
+                  {dateFilter === "week" && "This Week "}
+                  {dateFilter === "month" && "This Month "}
                   Quick Notes
                 </CardTitle>
                 <div className="flex items-center gap-2">
@@ -922,9 +1034,9 @@ export default function DashboardPage() {
             <Card className="md:col-span-2">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center gap-3">
                     <MessageSquare className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base">WhatsApp Integration</CardTitle>
+                    <CardTitle className="text-base m-0">WhatsApp Integration</CardTitle>
                   </div>
                   {hasVerifiedWhatsApp && (
                     <Badge className="bg-green-100 text-green-800 border-green-200">
@@ -965,9 +1077,9 @@ export default function DashboardPage() {
             <Card className="md:col-span-2">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center gap-3">
                     <Calendar className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base">
+                    <CardTitle className="text-base m-0">
                       Calendar Integration
                     </CardTitle>
                   </div>

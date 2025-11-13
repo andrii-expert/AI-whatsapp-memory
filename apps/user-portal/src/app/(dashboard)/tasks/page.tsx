@@ -70,6 +70,12 @@ export default function TasksPage() {
   const [taskModalTitle, setTaskModalTitle] = useState("");
   const [taskModalDueDate, setTaskModalDueDate] = useState("");
   const [taskModalId, setTaskModalId] = useState<string | null>(null);
+  const [taskModalFolderId, setTaskModalFolderId] = useState<string | null>(null);
+  
+  // Move folder states
+  const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
+  const [selectedMoveToFolderId, setSelectedMoveToFolderId] = useState<string | null>(null);
+  const [expandedMoveDialogFolders, setExpandedMoveDialogFolders] = useState<Set<string>>(new Set());
 
   // Fetch folders and tasks
   const { data: folders = [] } = useQuery(
@@ -93,6 +99,29 @@ export default function TasksPage() {
   };
 
   const allFolders = useMemo(() => flattenFolders(folders), [folders]);
+
+  // Sort folders to show "General" at the top
+  const sortedFolders = useMemo(() => {
+    const sortFoldersRecursive = (folderList: any[]): any[] => {
+      return [...folderList]
+        .sort((a, b) => {
+          const aIsGeneral = a.name.toLowerCase() === "general";
+          const bIsGeneral = b.name.toLowerCase() === "general";
+          
+          if (aIsGeneral && !bIsGeneral) return -1;
+          if (!aIsGeneral && bIsGeneral) return 1;
+          
+          // If neither or both are "General", maintain original order
+          return 0;
+        })
+        .map(folder => ({
+          ...folder,
+          subfolders: folder.subfolders ? sortFoldersRecursive(folder.subfolders) : []
+        }));
+    };
+    
+    return sortFoldersRecursive(folders);
+  }, [folders]);
 
   // Auto-expand parent folders when a folder is selected
   useEffect(() => {
@@ -346,6 +375,12 @@ export default function TasksPage() {
         setIsTaskModalOpen(false);
         setTaskModalTitle("");
         setTaskModalDueDate("");
+        
+        // If we were in All Tasks view, return to it
+        if (viewAllTasks) {
+          setSelectedFolderId(null);
+        }
+        
         toast({
           title: "Success",
           description: "Task created successfully",
@@ -478,20 +513,53 @@ export default function TasksPage() {
     });
   };
 
-  const openAddTaskModal = () => {
+  const openAddTaskModal = async () => {
     const today = new Date().toISOString().split("T")[0];
     setTaskModalMode("add");
     setTaskModalTitle("");
     setTaskModalDueDate(today ?? "");
     setTaskModalId(null);
+    
+    // If viewing All Tasks and no folder is selected, find or create General folder
+    if (viewAllTasks && !selectedFolderId) {
+      const generalFolder = folders.find(f => f.name.toLowerCase() === "general");
+      if (generalFolder) {
+        setSelectedFolderId(generalFolder.id);
+      } else {
+        // Create General folder
+        try {
+          const newFolder = await createFolderMutation.mutateAsync({
+            name: "General",
+            color: "#3B82F6", // Blue color
+            icon: "folder",
+          });
+          if (newFolder) {
+            setSelectedFolderId(newFolder.id);
+            toast({
+              title: "General folder created",
+              description: "Your task will be saved in the General folder",
+            });
+          }
+        } catch (error) {
+          toast({
+            title: "Error",
+            description: "Failed to create General folder",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    }
+    
     setIsTaskModalOpen(true);
   };
 
-  const openEditTaskModal = (taskId: string, taskTitle: string, taskDueDate: string | null | undefined) => {
+  const openEditTaskModal = (taskId: string, taskTitle: string, taskDueDate: string | null | undefined, taskFolderId: string | null | undefined) => {
     setTaskModalMode("edit");
     setTaskModalTitle(taskTitle);
     setTaskModalDueDate(taskDueDate ?? "");
     setTaskModalId(taskId);
+    setTaskModalFolderId(taskFolderId ?? null);
     setIsTaskModalOpen(true);
   };
 
@@ -532,6 +600,40 @@ export default function TasksPage() {
     updateTaskMutation.mutate({
       id: taskId,
       title: editTaskTitle,
+    });
+  };
+
+  const openMoveDialog = () => {
+    setSelectedMoveToFolderId(taskModalFolderId);
+    setExpandedMoveDialogFolders(new Set()); // Reset expanded folders
+    setIsMoveDialogOpen(true);
+  };
+
+  const toggleMoveDialogFolder = (folderId: string) => {
+    setExpandedMoveDialogFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  const handleMoveTask = () => {
+    if (!taskModalId || !selectedMoveToFolderId) return;
+    
+    updateTaskMutation.mutate({
+      id: taskModalId,
+      folderId: selectedMoveToFolderId,
+    });
+    
+    setIsMoveDialogOpen(false);
+    setIsTaskModalOpen(false);
+    toast({
+      title: "Task moved",
+      description: "Task has been moved to the selected folder",
     });
   };
 
@@ -686,7 +788,7 @@ export default function TasksPage() {
                 <Plus className="h-4 w-4" />
               </Button>
             )}
-            {!isEditingFolder && (
+            {!isEditingFolder && folder.name.toLowerCase() !== "general" && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -750,7 +852,7 @@ export default function TasksPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
@@ -860,7 +962,7 @@ export default function TasksPage() {
                   <div className="h-px bg-gray-200 my-2" />
 
                   {/* Individual Folders */}
-                  {folders.map((folder) => renderFolder(folder, 0))}
+                  {sortedFolders.map((folder) => renderFolder(folder, 0))}
                 </>
               )}
             </div>
@@ -927,7 +1029,7 @@ export default function TasksPage() {
                   <div className="h-px bg-gray-200 my-2" />
 
                   {/* Individual Folders */}
-                  {folders.map((folder) => renderFolder(folder, 0))}
+                  {sortedFolders.map((folder) => renderFolder(folder, 0))}
                 </>
               )}
             </div>
@@ -973,8 +1075,8 @@ export default function TasksPage() {
                 {/* Add Task Button */}
                 <Button
                   onClick={openAddTaskModal}
-                  variant="blue-primary"
-                  disabled={!selectedFolderId || viewAllTasks}
+                  variant="orange-primary"
+                  disabled={!selectedFolderId && !viewAllTasks}
                   className="flex-shrink-0"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1001,7 +1103,7 @@ export default function TasksPage() {
                   />
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 </div>
-                <Select
+                {/* <Select
                   value={searchScope}
                   onValueChange={(value: "all" | "title" | "description") =>
                     setSearchScope(value)
@@ -1015,7 +1117,7 @@ export default function TasksPage() {
                     <SelectItem value="title">Title Only</SelectItem>
                     <SelectItem value="description">Description Only</SelectItem>
                   </SelectContent>
-                </Select>
+                </Select> */}
               </div>
 
               {/* Filter and Sort Controls */}
@@ -1193,7 +1295,8 @@ export default function TasksPage() {
                                     openEditTaskModal(
                                       task.id,
                                       task.title,
-                                      task.dueDate
+                                      task.dueDate,
+                                      task.folderId
                                     )
                                   }
                                   title="Edit task"
@@ -1273,7 +1376,8 @@ export default function TasksPage() {
                                       openEditTaskModal(
                                         task.id,
                                         task.title,
-                                        task.dueDate
+                                        task.dueDate,
+                                        task.folderId
                                       )
                                     }
                                     title="Edit task"
@@ -1382,25 +1486,39 @@ export default function TasksPage() {
               </p>
             </div>
 
-            <AlertDialogFooter className="gap-3 pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsTaskModalOpen(false)}
-                className="flex-1 sm:flex-none h-11"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="blue-primary"
-                disabled={
-                  createTaskMutation.isPending ||
-                  updateTaskMutation.isPending ||
-                  !taskModalTitle.trim()
-                }
-                className="flex-1 sm:flex-none h-11 min-w-[140px]"
-              >
+            <AlertDialogFooter className="gap-3 pt-4 border-t flex-col sm:flex-row">
+              {/* Move to Folder button - only show in edit mode */}
+              {taskModalMode === "edit" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={openMoveDialog}
+                  className="w-full sm:w-auto sm:mr-auto h-11"
+                >
+                  <Folder className="h-4 w-4 mr-2" />
+                  Move to Folder
+                </Button>
+              )}
+              
+              <div className="flex gap-3 w-full sm:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsTaskModalOpen(false)}
+                  className="flex-1 sm:flex-none h-11"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="blue-primary"
+                  disabled={
+                    createTaskMutation.isPending ||
+                    updateTaskMutation.isPending ||
+                    !taskModalTitle.trim()
+                  }
+                  className="flex-1 sm:flex-none h-11 min-w-[140px]"
+                >
                 {createTaskMutation.isPending ||
                 updateTaskMutation.isPending ? (
                   <>
@@ -1419,8 +1537,134 @@ export default function TasksPage() {
                   </>
                 )}
               </Button>
+              </div>
             </AlertDialogFooter>
           </form>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Move to Folder Dialog */}
+      <AlertDialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
+        <AlertDialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader className="space-y-3">
+            <AlertDialogTitle className="text-xl font-bold flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                <Folder className="h-5 w-5 text-blue-600" />
+              </div>
+              Move Task to Folder
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              Select a folder to move this task to
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="py-4 space-y-2 max-h-[400px] overflow-y-auto">
+            {sortedFolders.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FolderClosed className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No folders available</p>
+              </div>
+            ) : (
+              (() => {
+                const renderFolderOption = (folder: any, level: number = 0): React.ReactNode => {
+                  const isCurrentFolder = folder.id === taskModalFolderId;
+                  const isSelected = folder.id === selectedMoveToFolderId;
+                  const hasSubfolders = folder.subfolders && folder.subfolders.length > 0;
+                  const isExpanded = expandedMoveDialogFolders.has(folder.id);
+                  const taskCount = getTaskCount(folder.id);
+                  
+                  return (
+                    <div key={folder.id}>
+                      <div
+                        className={cn(
+                          "flex items-center justify-between px-3 py-2 rounded-lg transition-colors group",
+                          isSelected
+                            ? "bg-blue-100 text-blue-900"
+                            : "hover:bg-gray-100 text-gray-700",
+                          isCurrentFolder && !isSelected && "bg-gray-50"
+                        )}
+                        style={{ paddingLeft: `${5 + level * 20}px` }}
+                      >
+                        {/* Left side: Expand button + Folder name */}
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          {hasSubfolders ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleMoveDialogFolder(folder.id)}
+                              className="p-1 hover:bg-gray-200 rounded flex-shrink-0"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </button>
+                          ) : (
+                            <div className="w-6" />
+                          )}
+                          
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMoveToFolderId(folder.id)}
+                            className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                          >
+                            <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                            <span className="font-medium truncate">{folder.name}</span>
+                          </button>
+                        </div>
+
+                        {/* Right side: Badges and indicators */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {isCurrentFolder && (
+                            <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                              Current
+                            </span>
+                          )}
+                          {taskCount > 0 && (
+                            <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-semibold">
+                              {taskCount}
+                            </span>
+                          )}
+                          {isSelected && (
+                            <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Render subfolders */}
+                      {isExpanded && hasSubfolders && (
+                        <div className="mt-0.5">
+                          {folder.subfolders.map((subfolder: any) => renderFolderOption(subfolder, level + 1))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+                
+                return sortedFolders.map((folder) => renderFolderOption(folder, 0));
+              })()
+            )}
+          </div>
+
+          <AlertDialogFooter className="gap-3 pt-4 border-t flex-col-reverse sm:flex-row">
+            <AlertDialogCancel
+              onClick={() => {
+                setIsMoveDialogOpen(false);
+                setSelectedMoveToFolderId(null);
+              }}
+              className="w-full sm:w-auto sm:flex-1 sm:flex-none h-11"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleMoveTask}
+              disabled={!selectedMoveToFolderId || selectedMoveToFolderId === taskModalFolderId}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 focus:ring-blue-600 sm:flex-1 sm:flex-none h-11 sm:min-w-[140px]"
+            >
+              <Folder className="h-4 w-4 mr-2" />
+              Move Task
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 

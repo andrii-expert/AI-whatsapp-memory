@@ -4,7 +4,7 @@ export default function BillingLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
       {children}
     </div>
   );

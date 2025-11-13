@@ -20,6 +20,7 @@ const buttonVariants = cva(
         accent: "bg-accent text-accent-foreground hover:bg-accent/80",
         "blue-primary": "bg-primary text-primary-foreground hover:font-bold",
         "blue-secondary": "bg-white text-primary border-2 border-white hover:font-bold",
+        "orange-primary": "bg-orange-500 text-white hover:bg-orange-600 hover:font-bold",
         "orange-success": "bg-accent text-accent-foreground pointer-events-none", // Non-clickable success state
       },
       size: {

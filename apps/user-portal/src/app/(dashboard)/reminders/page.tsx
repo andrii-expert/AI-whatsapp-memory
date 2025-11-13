@@ -437,7 +437,7 @@ export default function RemindersPage() {
 
   if (isLoadingLimits) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
@@ -450,7 +450,7 @@ export default function RemindersPage() {
 
   if (!hasRemindersAccess) {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm">
         <Link
@@ -481,7 +481,7 @@ export default function RemindersPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm">
         <Link
@@ -517,7 +517,7 @@ export default function RemindersPage() {
         <Button
           onClick={openNewForm}
           type="button"
-          variant="blue-primary"
+          variant="orange-primary"
           className="w-full sm:w-auto"
         >
           <Plus size={18} className="mr-2" /> New Reminder
