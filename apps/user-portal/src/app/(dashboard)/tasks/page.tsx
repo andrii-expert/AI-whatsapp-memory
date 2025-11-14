@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown } from "lucide-react";
+import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown, Users, Eye, Edit3 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -35,6 +35,9 @@ import {
   DialogTitle,
 } from "@imaginecalendar/ui/dialog";
 import { Label } from "@imaginecalendar/ui/label";
+import { ShareButton } from "@/components/share-button";
+import { ShareModal } from "@/components/share-modal";
+import { ShareDetailsModal } from "@/components/share-details-modal";
 
 export default function TasksPage() {
   const trpc = useTRPC();
@@ -44,6 +47,7 @@ export default function TasksPage() {
   // State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [viewAllTasks, setViewAllTasks] = useState(true); // Default to All Tasks view
+  const [viewAllShared, setViewAllShared] = useState(false); // View all shared tasks
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -77,13 +81,69 @@ export default function TasksPage() {
   const [selectedMoveToFolderId, setSelectedMoveToFolderId] = useState<string | null>(null);
   const [expandedMoveDialogFolders, setExpandedMoveDialogFolders] = useState<Set<string>>(new Set());
 
+  // Share states
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isShareDetailsModalOpen, setIsShareDetailsModalOpen] = useState(false);
+  const [shareResourceType, setShareResourceType] = useState<"task" | "task_folder">("task");
+  const [shareResourceId, setShareResourceId] = useState<string | null>(null);
+  const [shareResourceName, setShareResourceName] = useState("");
+
   // Fetch folders and tasks
-  const { data: folders = [] } = useQuery(
+  const { data: allFolders = [] } = useQuery(
     trpc.tasks.folders.list.queryOptions()
   );
   const { data: allTasks = [] } = useQuery(
     trpc.tasks.list.queryOptions({})
   );
+  const { data: myShares = [] } = useQuery(
+    trpc.taskSharing.getMyShares.queryOptions()
+  );
+  const { data: sharedResources } = useQuery(
+    trpc.taskSharing.getSharedWithMe.queryOptions()
+  );
+
+  // Extract shared tasks and folders from sharedResources with proper permission metadata
+  const sharedTasks = useMemo(() => {
+    return (sharedResources?.tasks || []).map((task: any) => ({
+      ...task,
+      isSharedWithMe: true,
+      sharePermission: task.shareInfo?.permission || "view",
+      ownerId: task.shareInfo?.ownerId,
+    }));
+  }, [sharedResources]);
+
+  const sharedFolders = useMemo(() => {
+    return (sharedResources?.folders || []).map((folder: any) => {
+      const folderPermission = folder.shareInfo?.permission || "view";
+      return {
+        ...folder,
+        isSharedWithMe: true,
+        sharePermission: folderPermission,
+        ownerId: folder.shareInfo?.ownerId,
+        // Add permission to all tasks in this folder
+        tasks: (folder.tasks || []).map((task: any) => ({
+          ...task,
+          isSharedWithMe: true,
+          sharePermission: folderPermission, // Tasks inherit folder permission
+          sharedViaFolder: true,
+        })),
+      };
+    });
+  }, [sharedResources]);
+  
+  // Calculate total shared task count (deduplicated)
+  const totalSharedTaskCount = useMemo(() => {
+    // Combine all shared tasks
+    const tasksFromSharedFolders = sharedFolders.flatMap((folder: any) => folder.tasks || []);
+    const allSharedTasks = [...sharedTasks, ...tasksFromSharedFolders];
+    
+    // Deduplicate by task ID
+    const uniqueTaskIds = new Set(allSharedTasks.map((task: any) => task.id));
+    return uniqueTaskIds.size;
+  }, [sharedTasks, sharedFolders]);
+  
+  // Filter out shared folders from main folder list - only show owned folders
+  const folders = allFolders.filter((folder: any) => !folder.isSharedWithMe);
 
   // Helper function to flatten all folders including subfolders
   const flattenFolders = (folderList: any[]): any[] => {
@@ -98,7 +158,7 @@ export default function TasksPage() {
     return result;
   };
 
-  const allFolders = useMemo(() => flattenFolders(folders), [folders]);
+  const allOwnedFolders = useMemo(() => flattenFolders(folders), [folders]);
 
   // Sort folders to show "General" at the top
   const sortedFolders = useMemo(() => {
@@ -126,11 +186,11 @@ export default function TasksPage() {
   // Auto-expand parent folders when a folder is selected
   useEffect(() => {
     if (selectedFolderId) {
-      const selectedFolderData = allFolders.find((f) => f.id === selectedFolderId);
+      const selectedFolderData = allOwnedFolders.find((f) => f.id === selectedFolderId);
       if (selectedFolderData?.parentId) {
         // Find all parent folders and expand them
         const expandParents = (folderId: string) => {
-          const folder = allFolders.find((f) => f.id === folderId);
+          const folder = allOwnedFolders.find((f) => f.id === folderId);
           if (folder?.parentId) {
             setExpandedFolders((prev) => {
               const next = new Set(prev);
@@ -143,7 +203,7 @@ export default function TasksPage() {
         expandParents(selectedFolderId);
       }
     }
-  }, [selectedFolderId, allFolders]);
+  }, [selectedFolderId, allOwnedFolders]);
 
   // Close mobile sidebar on Escape key
   useEffect(() => {
@@ -170,11 +230,14 @@ export default function TasksPage() {
     };
   }, [isMobileSidebarOpen]);
 
-  // Get selected folder
+  // Get selected folder (check both owned and shared folders)
   const selectedFolder = useMemo(() => {
     if (!selectedFolderId) return null;
-    return allFolders.find((f) => f.id === selectedFolderId) || null;
-  }, [selectedFolderId, allFolders]);
+    // First check owned folders, then shared folders
+    return allOwnedFolders.find((f) => f.id === selectedFolderId) || 
+           sharedFolders.find((f: any) => f.id === selectedFolderId) || 
+           null;
+  }, [selectedFolderId, allOwnedFolders, sharedFolders]);
 
   // Get folder path (breadcrumb trail)
   const getFolderPath = (folderId: string): string[] => {
@@ -182,7 +245,9 @@ export default function TasksPage() {
     let currentId: string | null = folderId;
     
     while (currentId) {
-      const folder = allFolders.find((f) => f.id === currentId);
+      // Check both owned and shared folders
+      const folder = allOwnedFolders.find((f) => f.id === currentId) || 
+                     sharedFolders.find((f: any) => f.id === currentId);
       if (folder) {
         path.unshift(folder.name);
         currentId = folder.parentId;
@@ -196,10 +261,19 @@ export default function TasksPage() {
 
   const folderPath = selectedFolder ? getFolderPath(selectedFolder.id) : [];
 
+  // Check if a folder is accessible (either owned or shared with us)
+  const isFolderAccessible = (folderId: string | null): boolean => {
+    if (!folderId) return false;
+    return !!(allOwnedFolders.find((f) => f.id === folderId) || 
+              sharedFolders.find((f: any) => f.id === folderId));
+  };
+
   // Get folder path for a task
   const getTaskFolderPath = (folderId: string | null): string => {
     if (!folderId) return "No folder";
-    const folder = allFolders.find((f) => f.id === folderId);
+    // Check both owned and shared folders
+    const folder = allOwnedFolders.find((f) => f.id === folderId) || 
+                   sharedFolders.find((f: any) => f.id === folderId);
     if (!folder) return "Unknown folder";
     return getFolderPath(folderId).join(" / ");
   };
@@ -208,10 +282,51 @@ export default function TasksPage() {
   const filteredTasks = useMemo(() => {
     let tasks = allTasks;
 
+    // If viewing all shared tasks, show both individual shared tasks AND tasks from shared folders
+    if (viewAllShared && !selectedFolderId) {
+      // Combine individual shared tasks with tasks from all shared folders
+      const tasksFromSharedFolders = sharedFolders.flatMap((folder: any) => folder.tasks || []);
+      const allSharedTasks = [...sharedTasks, ...tasksFromSharedFolders];
+      
+      // Deduplicate tasks by ID and keep the one with better permission (edit > view)
+      const taskMap = new Map<string, any>();
+      allSharedTasks.forEach((task: any) => {
+        const existingTask = taskMap.get(task.id);
+        if (!existingTask) {
+          // First time seeing this task, add it
+          taskMap.set(task.id, task);
+        } else {
+          // Task already exists, check if we should replace it with better permission
+          const currentPermission = existingTask.sharePermission || "view";
+          const newPermission = task.sharePermission || "view";
+          
+          // Replace if new permission is "edit" and current is "view"
+          if (newPermission === "edit" && currentPermission === "view") {
+            taskMap.set(task.id, task);
+          }
+        }
+      });
+      
+      // Convert map back to array
+      tasks = Array.from(taskMap.values());
+    }
     // Filter by folder - if viewing all, show all tasks
     // If a folder is selected, show only tasks in that folder
-    if (!viewAllTasks && selectedFolderId) {
-      tasks = tasks.filter((t) => t.folderId === selectedFolderId);
+    else if (!viewAllTasks && !viewAllShared && selectedFolderId) {
+      // Check if it's a shared folder
+      const isSharedFolder = sharedFolders.some((f: any) => f.id === selectedFolderId);
+      if (isSharedFolder) {
+        // Show tasks from the shared folder
+        const sharedFolder = sharedFolders.find((f: any) => f.id === selectedFolderId);
+        tasks = sharedFolder?.tasks || [];
+      } else {
+        // Regular owned folder - exclude shared tasks
+        tasks = tasks.filter((t) => t.folderId === selectedFolderId && !t.isSharedWithMe);
+      }
+    }
+    // When viewing "All Tasks", exclude shared tasks
+    else if (viewAllTasks) {
+      tasks = tasks.filter((t) => !t.isSharedWithMe);
     }
 
     // Filter by status
@@ -257,7 +372,7 @@ export default function TasksPage() {
     }
 
     return tasks;
-  }, [allTasks, selectedFolderId, filterStatus, searchQuery, searchScope, sortBy, sortOrder]);
+  }, [allTasks, selectedFolderId, filterStatus, searchQuery, searchScope, sortBy, sortOrder, viewAllShared, viewAllTasks, sharedTasks, sharedFolders]);
 
   // Group tasks - only by date when sorting by date, otherwise show all in one group
   const groupedTasks = useMemo(() => {
@@ -489,13 +604,31 @@ export default function TasksPage() {
   const handleFolderSelect = (folderId: string) => {
     setSelectedFolderId(folderId);
     setViewAllTasks(false);
+    setViewAllShared(false);
     // Close mobile sidebar after selection
     setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllTasks = () => {
     setViewAllTasks(true);
+    setViewAllShared(false);
     setSelectedFolderId(null);
+    // Close mobile sidebar after selection
+    setIsMobileSidebarOpen(false);
+  };
+
+  const handleViewAllShared = () => {
+    setViewAllShared(true);
+    setViewAllTasks(false);
+    setSelectedFolderId(null);
+    // Close mobile sidebar after selection
+    setIsMobileSidebarOpen(false);
+  };
+
+  const handleSharedFolderSelect = (folderId: string) => {
+    setSelectedFolderId(folderId);
+    setViewAllTasks(false);
+    setViewAllShared(false);
     // Close mobile sidebar after selection
     setIsMobileSidebarOpen(false);
   };
@@ -684,9 +817,31 @@ export default function TasksPage() {
     });
   };
 
-  // Get task count for a folder
+  // Share handlers
+  const openShareModal = (type: "task" | "task_folder", id: string, name: string) => {
+    setShareResourceType(type);
+    setShareResourceId(id);
+    setShareResourceName(name);
+    setIsShareModalOpen(true);
+  };
+
+  const openShareDetails = (type: "task" | "task_folder", id: string, name: string) => {
+    setShareResourceType(type);
+    setShareResourceId(id);
+    setShareResourceName(name);
+    setIsShareDetailsModalOpen(true);
+  };
+
+  // Get share count for a resource
+  const getShareCount = (resourceType: "task" | "task_folder", resourceId: string): number => {
+    return myShares.filter(
+      (share: any) => share.resourceType === resourceType && share.resourceId === resourceId
+    ).length;
+  };
+
+  // Get task count for a folder (excluding shared tasks)
   const getTaskCount = (folderId: string) => {
-    return allTasks.filter((t) => t.folderId === folderId).length;
+    return allTasks.filter((t) => t.folderId === folderId && !t.isSharedWithMe).length;
   };
 
   // Get total task count including subfolders
@@ -710,6 +865,11 @@ export default function TasksPage() {
     const taskCount = getTaskCount(folder.id);
     const totalTaskCount = getTotalTaskCount(folder);
     const subfolderCount = hasSubfolders ? folder.subfolders.length : 0;
+    
+    // Check if folder is shared with user (not owned)
+    const isSharedFolder = folder.isSharedWithMe || false;
+    const canEdit = !isSharedFolder || folder.sharePermission === "edit";
+    const isOwner = !isSharedFolder;
 
     return (
       <div key={folder.id}>
@@ -758,14 +918,46 @@ export default function TasksPage() {
               >
                 <FolderClosed className="h-4 w-4 flex-shrink-0" />
                 <span className="font-medium truncate">{folder.name}</span>
+                {/* Shared indicator badge - clickable to view who shared this */}
+                {isSharedFolder && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openShareDetails("task_folder", folder.id, folder.name);
+                    }}
+                    className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
+                    title="View who shared this folder with you"
+                  >
+                    <Users className="h-2.5 w-2.5" />
+                    <span className="hidden sm:inline">
+                      {folder.sharePermission === "view" ? "View" : "Edit"}
+                    </span>
+                  </button>
+                )}
               </button>
             )}
           </div>
 
           {/* Right side: Action buttons */}
           <div className="flex items-center gap-1 transition-opacity">
-            {/* Edit folder button */}
-            {!isEditingFolder && (
+            {/* Share button - only show for owned folders */}
+            {!isEditingFolder && isOwner && (
+              <ShareButton
+                onClick={() => {
+                  const shareCount = getShareCount("task_folder", folder.id);
+                  if (shareCount > 0) {
+                    openShareDetails("task_folder", folder.id, folder.name);
+                  } else {
+                    openShareModal("task_folder", folder.id, folder.name);
+                  }
+                }}
+                isShared={getShareCount("task_folder", folder.id) > 0}
+                shareCount={getShareCount("task_folder", folder.id)}
+                size="sm"
+              />
+            )}
+            {/* Edit folder button - only if can edit */}
+            {!isEditingFolder && canEdit && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -776,8 +968,8 @@ export default function TasksPage() {
                 <Edit2 className="h-3.5 w-3.5" />
               </Button>
             )}
-            {/* Add subfolder button - only show on top-level folders (depth 0) */}
-            {level === 0 && !isEditingFolder && (
+            {/* Add subfolder button - only show on top-level folders (depth 0) and if can edit */}
+            {level === 0 && !isEditingFolder && canEdit && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -788,7 +980,8 @@ export default function TasksPage() {
                 <Plus className="h-4 w-4" />
               </Button>
             )}
-            {!isEditingFolder && folder.name.toLowerCase() !== "general" && (
+            {/* Delete button - only for owned folders (not shared) and not General */}
+            {!isEditingFolder && isOwner && folder.name.toLowerCase() !== "general" && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -944,7 +1137,7 @@ export default function TasksPage() {
                 <Folder className="h-4 w-4 flex-shrink-0" />
                 <span className="flex-1 text-left">All Tasks</span>
                 <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
-                  {allTasks.length}
+                  {allTasks.filter((t) => !t.isSharedWithMe).length}
                 </span>
               </button>
 
@@ -963,6 +1156,76 @@ export default function TasksPage() {
 
                   {/* Individual Folders */}
                   {sortedFolders.map((folder) => renderFolder(folder, 0))}
+                </>
+              )}
+
+              {/* Shared Section */}
+              {(sharedTasks.length > 0 || sharedFolders.length > 0) && (
+                <>
+                  {/* Divider */}
+                  <div className="h-px bg-gray-200 my-2" />
+
+                  {/* Shared Section Header */}
+                  <div className="px-2 py-2">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5" />
+                      Shared with me
+                    </h3>
+                  </div>
+
+                  {/* All Shared Tasks Button */}
+                  {totalSharedTaskCount > 0 && (
+                    <button
+                      onClick={handleViewAllShared}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                        viewAllShared && !selectedFolderId
+                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300" 
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      <Folder className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1 text-left">All Shared</span>
+                      <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                        {totalSharedTaskCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Shared Folders */}
+                  {sharedFolders.length > 0 && sharedFolders.map((folder: any) => (
+                    <button
+                      key={folder.id}
+                      onClick={() => handleSharedFolderSelect(folder.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                        selectedFolderId === folder.id && !viewAllTasks && !viewAllShared
+                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300" 
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1 text-left truncate">{folder.name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openShareDetails("task_folder", folder.id, folder.name);
+                        }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
+                        title="View who shared this folder with you"
+                      >
+                        <Users className="h-2.5 w-2.5" />
+                        <span className="hidden sm:inline">
+                          {folder.sharePermission === "view" ? "View" : "Edit"}
+                        </span>
+                      </button>
+                      {folder.tasks && folder.tasks.length > 0 && (
+                        <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                          {folder.tasks.length}
+                        </span>
+                      )}
+                    </button>
+                  ))}
                 </>
               )}
             </div>
@@ -1011,7 +1274,7 @@ export default function TasksPage() {
                 <Folder className="h-4 w-4 flex-shrink-0" />
                 <span className="flex-1 text-left">All Tasks</span>
                 <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
-                  {allTasks.length}
+                  {allTasks.filter((t) => !t.isSharedWithMe).length}
                 </span>
               </button>
 
@@ -1032,6 +1295,76 @@ export default function TasksPage() {
                   {sortedFolders.map((folder) => renderFolder(folder, 0))}
                 </>
               )}
+
+              {/* Shared Section */}
+              {(sharedTasks.length > 0 || sharedFolders.length > 0) && (
+                <>
+                  {/* Divider */}
+                  <div className="h-px bg-gray-200 my-2" />
+
+                  {/* Shared Section Header */}
+                  <div className="px-2 py-2">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5" />
+                      Shared with me
+                    </h3>
+                  </div>
+
+                  {/* All Shared Tasks Button */}
+                  {totalSharedTaskCount > 0 && (
+                    <button
+                      onClick={handleViewAllShared}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                        viewAllShared && !selectedFolderId
+                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300" 
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      <Folder className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1 text-left">All Shared</span>
+                      <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                        {totalSharedTaskCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Shared Folders */}
+                  {sharedFolders.length > 0 && sharedFolders.map((folder: any) => (
+                    <button
+                      key={folder.id}
+                      onClick={() => handleSharedFolderSelect(folder.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                        selectedFolderId === folder.id && !viewAllTasks && !viewAllShared
+                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300" 
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1 text-left truncate">{folder.name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openShareDetails("task_folder", folder.id, folder.name);
+                        }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
+                        title="View who shared this folder with you"
+                      >
+                        <Users className="h-2.5 w-2.5" />
+                        <span className="hidden sm:inline">
+                          {folder.sharePermission === "view" ? "View" : "Edit"}
+                        </span>
+                      </button>
+                      {folder.tasks && folder.tasks.length > 0 && (
+                        <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                          {folder.tasks.length}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1046,6 +1379,14 @@ export default function TasksPage() {
                     <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
                     <span className="font-bold text-gray-900">All Tasks</span>
                     <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full font-semibold">
+                      {filteredTasks.length}
+                    </span>
+                  </div>
+                ) : viewAllShared ? (
+                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                    <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                    <span className="font-bold text-gray-900">All Shared</span>
+                    <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-semibold">
                       {filteredTasks.length}
                     </span>
                   </div>
@@ -1068,15 +1409,29 @@ export default function TasksPage() {
                       </span>
                     ))}
                   </div>
+                ) : selectedFolderId && sharedFolders.find((f: any) => f.id === selectedFolderId) ? (
+                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                    <FolderClosed className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                    <span className="font-bold text-gray-900">
+                      {sharedFolders.find((f: any) => f.id === selectedFolderId)?.name}
+                    </span>
+                    <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                      <Users className="h-3 w-3" />
+                      Shared
+                    </span>
+                    <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-semibold">
+                      {filteredTasks.length}
+                    </span>
+                  </div>
                 ) : (
                   <div className="flex-1" />
                 )}
 
-                {/* Add Task Button */}
+                {/* Add Task Button - disabled when viewing shared tasks/folders */}
                 <Button
                   onClick={openAddTaskModal}
                   variant="orange-primary"
-                  disabled={!selectedFolderId && !viewAllTasks}
+                  disabled={!selectedFolderId && !viewAllTasks || viewAllShared || (selectedFolderId && sharedFolders.some((f: any) => f.id === selectedFolderId))}
                   className="flex-shrink-0"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1236,119 +1591,211 @@ export default function TasksPage() {
                         "space-y-2",
                         sortBy === "alphabetical" && "mt-0"
                       )}>
-                        {tasks.map((task) => (
-                          <div
-                            key={task.id}
-                            className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4 min-w-0"
-                          >
-                            {/* Desktop Layout - Single Row */}
-                            <div className="hidden sm:flex items-center gap-3">
-                              {/* Checkbox */}
-                              <button
-                                onClick={() => handleToggleTask(task.id)}
-                                className={cn(
-                                  "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
-                                  task.status === "completed"
-                                    ? "bg-green-500 border-green-500 text-white"
-                                    : "border-gray-300 hover:border-gray-400"
-                                )}
-                              >
-                                {task.status === "completed" && (
-                                  <Check className="h-4 w-4" />
-                                )}
-                              </button>
+                        {tasks.map((task) => {
+                          // Check task permissions
+                          const isSharedTask = task.isSharedWithMe || false;
+                          const canEditTask = !isSharedTask || task.sharePermission === "edit";
+                          const isTaskOwner = !isSharedTask;
 
-                            {/* Task Title and Folder Path */}
-                            <div className="flex-1 min-w-0">
-                              <span
-                                className={cn(
-                                  "text-base break-all leading-relaxed",
-                                  task.status === "completed"
-                                    ? "line-through text-gray-500"
-                                    : "text-gray-900"
+                          return (
+                            <div
+                              key={task.id}
+                              className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4 min-w-0"
+                            >
+                              {/* Desktop Layout - Single Row */}
+                              <div className="hidden sm:flex items-center gap-3">
+                                {/* Checkbox - only if can edit */}
+                                {canEditTask ? (
+                                  <button
+                                    onClick={() => handleToggleTask(task.id)}
+                                    className={cn(
+                                      "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                                      task.status === "completed"
+                                        ? "bg-green-500 border-green-500 text-white"
+                                        : "border-gray-300 hover:border-gray-400"
+                                    )}
+                                  >
+                                    {task.status === "completed" && (
+                                      <Check className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <div
+                                    className={cn(
+                                      "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center",
+                                      task.status === "completed"
+                                        ? "bg-green-500 border-green-500 text-white"
+                                        : "border-gray-300"
+                                    )}
+                                  >
+                                    {task.status === "completed" && (
+                                      <Check className="h-4 w-4" />
+                                    )}
+                                  </div>
                                 )}
-                              >
-                                {task.title}
-                              </span>
-                              {viewAllTasks && task.folderId && (
-                                <div className="flex items-center gap-1.5 mt-1">
-                                  <FolderClosed className="h-3 w-3 text-gray-400" />
-                                  <span className="text-xs text-gray-500">
-                                    {getTaskFolderPath(task.folderId)}
+
+                              {/* Task Title and Folder Path */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={cn(
+                                      "text-base break-all leading-relaxed",
+                                      task.status === "completed"
+                                        ? "line-through text-gray-500"
+                                        : "text-gray-900"
+                                    )}
+                                  >
+                                    {task.title}
                                   </span>
+                                  {/* Shared indicator badge - clickable to view who shared this */}
+                                  {isSharedTask && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openShareDetails("task", task.id, task.title);
+                                      }}
+                                      className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
+                                      title="View who shared this task with you"
+                                    >
+                                      <Users className="h-3 w-3" />
+                                      <span>{task.sharePermission === "view" ? "View Only" : "Can Edit"}</span>
+                                    </button>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-
-                            {/* Due Date */}
-                            <span className="text-sm text-gray-500 flex-shrink-0 whitespace-nowrap">
-                              {task.dueDate}
-                            </span>
-
-                              {/* Action Buttons */}
-                              <div className="flex gap-2 flex-shrink-0">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8"
-                                  onClick={() =>
-                                    openEditTaskModal(
-                                      task.id,
-                                      task.title,
-                                      task.dueDate,
-                                      task.folderId
-                                    )
-                                  }
-                                  title="Edit task"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 hover:text-red-600"
-                                  onClick={() =>
-                                    handleDeleteTask(task.id, task.title)
-                                  }
-                                  title="Delete task"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {/* Show folder path for All Tasks or All Shared views - only if task has an accessible folder */}
+                                {(viewAllTasks || viewAllShared) && task.folderId && isFolderAccessible(task.folderId) && (
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <FolderClosed className="h-3 w-3 text-gray-400" />
+                                    <span className="text-xs text-gray-500">
+                                      {getTaskFolderPath(task.folderId)}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                            </div>
+
+                              {/* Due Date */}
+                              <span className="text-sm text-gray-500 flex-shrink-0 whitespace-nowrap">
+                                {task.dueDate}
+                              </span>
+
+                                {/* Action Buttons */}
+                                <div className="flex gap-2 flex-shrink-0">
+                                  {/* Share button - only for owned tasks */}
+                                  {isTaskOwner && (
+                                    <ShareButton
+                                      onClick={() => {
+                                        const shareCount = getShareCount("task", task.id);
+                                        if (shareCount > 0) {
+                                          openShareDetails("task", task.id, task.title);
+                                        } else {
+                                          openShareModal("task", task.id, task.title);
+                                        }
+                                      }}
+                                      isShared={getShareCount("task", task.id) > 0}
+                                      shareCount={getShareCount("task", task.id)}
+                                      size="md"
+                                    />
+                                  )}
+                                  {/* Edit button - only if can edit */}
+                                  {canEditTask && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() =>
+                                        openEditTaskModal(
+                                          task.id,
+                                          task.title,
+                                          task.dueDate,
+                                          task.folderId
+                                        )
+                                      }
+                                      title="Edit task"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {/* Delete button - only for owned tasks */}
+                                  {isTaskOwner && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8 hover:text-red-600"
+                                      onClick={() =>
+                                        handleDeleteTask(task.id, task.title)
+                                      }
+                                      title="Delete task"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
 
                             {/* Mobile Layout - Two Rows */}
                             <div className="sm:hidden">
                               {/* First Row: Checkbox + Task Title */}
                               <div className="flex items-center gap-2 mb-2">
-                                {/* Checkbox */}
-                                <button
-                                  onClick={() => handleToggleTask(task.id)}
-                                  className={cn(
-                                    "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors mt-0.5",
-                                    task.status === "completed"
-                                      ? "bg-green-500 border-green-500 text-white"
-                                      : "border-gray-300 hover:border-gray-400"
-                                  )}
-                                >
-                                  {task.status === "completed" && (
-                                    <Check className="h-4 w-4" />
-                                  )}
-                                </button>
+                                {/* Checkbox - only if can edit */}
+                                {canEditTask ? (
+                                  <button
+                                    onClick={() => handleToggleTask(task.id)}
+                                    className={cn(
+                                      "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors mt-0.5",
+                                      task.status === "completed"
+                                        ? "bg-green-500 border-green-500 text-white"
+                                        : "border-gray-300 hover:border-gray-400"
+                                    )}
+                                  >
+                                    {task.status === "completed" && (
+                                      <Check className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <div
+                                    className={cn(
+                                      "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5",
+                                      task.status === "completed"
+                                        ? "bg-green-500 border-green-500 text-white"
+                                        : "border-gray-300"
+                                    )}
+                                  >
+                                    {task.status === "completed" && (
+                                      <Check className="h-4 w-4" />
+                                    )}
+                                  </div>
+                                )}
 
                               {/* Task Title */}
                               <div className="flex-1 min-w-0">
-                                <span
-                                  className={cn(
-                                    "text-sm break-all leading-relaxed",
-                                    task.status === "completed"
-                                      ? "line-through text-gray-500"
-                                      : "text-gray-900"
+                                <div className="flex flex-col gap-1">
+                                  <span
+                                    className={cn(
+                                      "text-sm break-all leading-relaxed",
+                                      task.status === "completed"
+                                        ? "line-through text-gray-500"
+                                        : "text-gray-900"
+                                    )}
+                                  >
+                                    {task.title}
+                                  </span>
+                                  {/* Shared indicator badge - clickable to view who shared this */}
+                                  {isSharedTask && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openShareDetails("task", task.id, task.title);
+                                      }}
+                                      className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium w-fit hover:bg-purple-200 transition-colors"
+                                      title="View who shared this task with you"
+                                    >
+                                      <Users className="h-2.5 w-2.5" />
+                                      <span>{task.sharePermission === "view" ? "View" : "Edit"}</span>
+                                    </button>
                                   )}
-                                >
-                                  {task.title}
-                                </span>
-                                {viewAllTasks && task.folderId && (
+                                </div>
+                                {/* Show folder path for All Tasks or All Shared views - only if task has an accessible folder */}
+                                {(viewAllTasks || viewAllShared) && task.folderId && isFolderAccessible(task.folderId) && (
                                   <div className="flex items-center gap-1 mt-1">
                                     <FolderClosed className="h-3 w-3 text-gray-400" />
                                     <span className="text-xs text-gray-500">
@@ -1368,38 +1815,61 @@ export default function TasksPage() {
 
                                 {/* Action Buttons */}
                                 <div className="flex gap-1">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7"
-                                    onClick={() =>
-                                      openEditTaskModal(
-                                        task.id,
-                                        task.title,
-                                        task.dueDate,
-                                        task.folderId
-                                      )
-                                    }
-                                    title="Edit task"
-                                  >
-                                    <Edit2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 hover:text-red-600"
-                                    onClick={() =>
-                                      handleDeleteTask(task.id, task.title)
-                                    }
-                                    title="Delete task"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
+                                  {/* Share button - only for owned tasks */}
+                                  {isTaskOwner && (
+                                    <ShareButton
+                                      onClick={() => {
+                                        const shareCount = getShareCount("task", task.id);
+                                        if (shareCount > 0) {
+                                          openShareDetails("task", task.id, task.title);
+                                        } else {
+                                          openShareModal("task", task.id, task.title);
+                                        }
+                                      }}
+                                      isShared={getShareCount("task", task.id) > 0}
+                                      shareCount={getShareCount("task", task.id)}
+                                      size="sm"
+                                    />
+                                  )}
+                                  {/* Edit button - only if can edit */}
+                                  {canEditTask && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7"
+                                      onClick={() =>
+                                        openEditTaskModal(
+                                          task.id,
+                                          task.title,
+                                          task.dueDate,
+                                          task.folderId
+                                        )
+                                      }
+                                      title="Edit task"
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                  {/* Delete button - only for owned tasks */}
+                                  {isTaskOwner && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 hover:text-red-600"
+                                      onClick={() =>
+                                        handleDeleteTask(task.id, task.title)
+                                      }
+                                      title="Delete task"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))
@@ -1744,6 +2214,28 @@ export default function TasksPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Share Modal */}
+      {shareResourceId && (
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          resourceType={shareResourceType}
+          resourceId={shareResourceId}
+          resourceName={shareResourceName}
+        />
+      )}
+
+      {/* Share Details Modal */}
+      {shareResourceId && (
+        <ShareDetailsModal
+          isOpen={isShareDetailsModalOpen}
+          onClose={() => setIsShareDetailsModalOpen(false)}
+          resourceType={shareResourceType}
+          resourceId={shareResourceId}
+          resourceName={shareResourceName}
+        />
+      )}
     </div>
   );
 }

@@ -901,6 +901,16 @@ export const taskStatusEnum = pgEnum("task_status", [
   "archived"
 ]);
 
+export const sharePermissionEnum = pgEnum("share_permission", [
+  "view",
+  "edit"
+]);
+
+export const shareResourceTypeEnum = pgEnum("share_resource_type", [
+  "task",
+  "task_folder"
+]);
+
 export const taskFolders = pgTable("task_folders", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -969,6 +979,54 @@ export const taskFoldersRelations = relations(taskFolders, ({ one, many }) => ({
     relationName: "subfolders",
   }),
   tasks: many(tasks),
+}));
+
+// ============================================
+// Task and Folder Sharing
+// ============================================
+
+export const taskShares = pgTable("task_shares", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  
+  // Owner who is sharing
+  ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // User being shared with
+  sharedWithUserId: text("shared_with_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // Resource being shared
+  resourceType: shareResourceTypeEnum("resource_type").notNull(),
+  resourceId: uuid("resource_id").notNull(), // Can be task.id or taskFolders.id
+  
+  // Permission level
+  permission: sharePermissionEnum("permission").default("view").notNull(),
+  
+  // Metadata
+  sharedAt: timestamp("shared_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  ownerIdIdx: index("task_shares_owner_id_idx").on(table.ownerId),
+  sharedWithUserIdIdx: index("task_shares_shared_with_user_id_idx").on(table.sharedWithUserId),
+  resourceIdx: index("task_shares_resource_idx").on(table.resourceType, table.resourceId),
+  uniqueShare: uniqueIndex("task_shares_unique_share_idx").on(
+    table.ownerId, 
+    table.sharedWithUserId, 
+    table.resourceType, 
+    table.resourceId
+  ),
+}));
+
+export const taskSharesRelations = relations(taskShares, ({ one }) => ({
+  owner: one(users, {
+    fields: [taskShares.ownerId],
+    references: [users.id],
+    relationName: "sharesGiven",
+  }),
+  sharedWithUser: one(users, {
+    fields: [taskShares.sharedWithUserId],
+    references: [users.id],
+    relationName: "sharesReceived",
+  }),
 }));
 
 // ============================================

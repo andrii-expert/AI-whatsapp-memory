@@ -14,6 +14,7 @@ import { whatsappRouter } from "./whatsapp";
 import { voiceTestingRouter } from "./voice-testing";
 import { plansRouter } from "./plans";
 import { tasksRouter } from "./tasks";
+import { taskSharingRouter } from "./task-sharing";
 import { notesRouter } from "./notes";
 import { remindersRouter } from "./reminders";
 
@@ -32,6 +33,7 @@ export const appRouter = createTRPCRouter({
   dev: devRouter,
   plans: plansRouter,
   tasks: tasksRouter,
+  taskSharing: taskSharingRouter,
   notes: notesRouter,
   reminders: remindersRouter,
 });
