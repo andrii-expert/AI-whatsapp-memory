@@ -908,7 +908,9 @@ export const sharePermissionEnum = pgEnum("share_permission", [
 
 export const shareResourceTypeEnum = pgEnum("share_resource_type", [
   "task",
-  "task_folder"
+  "task_folder",
+  "note",
+  "note_folder"
 ]);
 
 export const taskFolders = pgTable("task_folders", {

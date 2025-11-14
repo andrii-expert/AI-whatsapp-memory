@@ -22,6 +22,9 @@ import {
   Calendar,
   ArrowUp,
   ArrowDown,
+  Users,
+  Eye,
+  Edit3,
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -59,6 +62,9 @@ import {
 import { Label } from "@imaginecalendar/ui/label";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { ShareButton } from "@/components/share-button";
+import { ShareModal } from "@/components/share-modal";
+import { ShareDetailsModal } from "@/components/share-details-modal";
 
 export default function NotesPage() {
   const trpc = useTRPC();
@@ -70,6 +76,7 @@ export default function NotesPage() {
   // State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [viewAllNotes, setViewAllNotes] = useState(true); // Default to All Notes view
+  const [viewAllShared, setViewAllShared] = useState(false); // View all shared notes
   const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc"); // Newest first by default
   const [searchQuery, setSearchQuery] = useState("");
@@ -103,8 +110,15 @@ export default function NotesPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ type: "folder" | "note"; id: string; name: string } | null>(null);
 
+  // Share states
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isShareDetailsModalOpen, setIsShareDetailsModalOpen] = useState(false);
+  const [shareResourceType, setShareResourceType] = useState<"note" | "note_folder">("note");
+  const [shareResourceId, setShareResourceId] = useState<string | null>(null);
+  const [shareResourceName, setShareResourceName] = useState("");
+
   // Fetch folders and notes - only if user has notes access
-  const { data: folders = [] } = useQuery({
+  const { data: allFolders = [] } = useQuery({
     ...trpc.notes.folders.list.queryOptions(),
     enabled: hasNotesAccess,
   });
@@ -112,6 +126,57 @@ export default function NotesPage() {
     ...trpc.notes.list.queryOptions({}),
     enabled: hasNotesAccess,
   });
+  const { data: myShares = [] } = useQuery({
+    ...trpc.noteSharing.getMyShares.queryOptions(),
+    enabled: hasNotesAccess,
+  });
+  const { data: sharedResources } = useQuery({
+    ...trpc.noteSharing.getSharedWithMe.queryOptions(),
+    enabled: hasNotesAccess,
+  });
+
+  // Extract shared notes and folders from sharedResources with proper permission metadata
+  const sharedNotes = useMemo(() => {
+    return (sharedResources?.notes || []).map((note: any) => ({
+      ...note,
+      isSharedWithMe: true,
+      sharePermission: note.shareInfo?.permission || "view",
+      ownerId: note.shareInfo?.ownerId,
+    }));
+  }, [sharedResources]);
+
+  const sharedFolders = useMemo(() => {
+    return (sharedResources?.folders || []).map((folder: any) => {
+      const folderPermission = folder.shareInfo?.permission || "view";
+      return {
+        ...folder,
+        isSharedWithMe: true,
+        sharePermission: folderPermission,
+        ownerId: folder.shareInfo?.ownerId,
+        // Add permission to all notes in this folder
+        notes: (folder.notes || []).map((note: any) => ({
+          ...note,
+          isSharedWithMe: true,
+          sharePermission: folderPermission, // Notes inherit folder permission
+          sharedViaFolder: true,
+        })),
+      };
+    });
+  }, [sharedResources]);
+  
+  // Calculate total shared note count (deduplicated)
+  const totalSharedNoteCount = useMemo(() => {
+    // Combine all shared notes
+    const notesFromSharedFolders = sharedFolders.flatMap((folder: any) => folder.notes || []);
+    const allSharedNotes = [...sharedNotes, ...notesFromSharedFolders];
+    
+    // Deduplicate by note ID
+    const uniqueNoteIds = new Set(allSharedNotes.map((note: any) => note.id));
+    return uniqueNoteIds.size;
+  }, [sharedNotes, sharedFolders]);
+  
+  // Filter out shared folders from main folder list - only show owned folders
+  const folders = allFolders.filter((folder: any) => !folder.isSharedWithMe);
 
   // Helper function to flatten all folders including subfolders
   const flattenFolders = (folderList: any[]): any[] => {
@@ -126,7 +191,7 @@ export default function NotesPage() {
     return result;
   };
 
-  const allFolders = useMemo(() => flattenFolders(folders), [folders]);
+  const allOwnedFolders = useMemo(() => flattenFolders(folders), [folders]);
 
   // Sort folders to show "General" at the top
   const sortedFolders = useMemo(() => {
@@ -151,19 +216,24 @@ export default function NotesPage() {
     return sortFoldersRecursive(folders);
   }, [folders]);
 
-  // Get selected folder
+  // Get selected folder (check both owned and shared folders)
   const selectedFolder = useMemo(() => {
     if (!selectedFolderId) return null;
-    return allFolders.find((f) => f.id === selectedFolderId) || null;
-  }, [selectedFolderId, allFolders]);
+    // First check owned folders, then shared folders
+    return allOwnedFolders.find((f) => f.id === selectedFolderId) || 
+           sharedFolders.find((f: any) => f.id === selectedFolderId) || 
+           null;
+  }, [selectedFolderId, allOwnedFolders, sharedFolders]);
 
-  // Get folder path
+  // Get folder path (breadcrumb trail)
   const getFolderPath = (folderId: string): string[] => {
     const path: string[] = [];
     let currentId: string | null = folderId;
 
     while (currentId) {
-      const folder = allFolders.find((f) => f.id === currentId);
+      // Check both owned and shared folders
+      const folder = allOwnedFolders.find((f) => f.id === currentId) || 
+                     sharedFolders.find((f: any) => f.id === currentId);
       if (folder) {
         path.unshift(folder.name);
         currentId = folder.parentId;
@@ -177,10 +247,19 @@ export default function NotesPage() {
 
   const folderPath = selectedFolder ? getFolderPath(selectedFolder.id) : [];
 
+  // Check if a folder is accessible (either owned or shared with us)
+  const isFolderAccessible = (folderId: string | null): boolean => {
+    if (!folderId) return false;
+    return !!(allOwnedFolders.find((f) => f.id === folderId) || 
+              sharedFolders.find((f: any) => f.id === folderId));
+  };
+
   // Get folder path for a note
   const getNoteFolderPath = (folderId: string | null): string => {
     if (!folderId) return "No folder";
-    const folder = allFolders.find((f) => f.id === folderId);
+    // Check both owned and shared folders
+    const folder = allOwnedFolders.find((f) => f.id === folderId) || 
+                   sharedFolders.find((f: any) => f.id === folderId);
     if (!folder) return "Unknown folder";
     return getFolderPath(folderId).join(" / ");
   };
@@ -189,9 +268,51 @@ export default function NotesPage() {
   const filteredNotes = useMemo(() => {
     let notes = allNotes;
 
-    // Filter by folder
-    if (!viewAllNotes && selectedFolderId) {
-      notes = notes.filter((n) => n.folderId === selectedFolderId);
+    // If viewing all shared notes, show both individual shared notes AND notes from shared folders
+    if (viewAllShared && !selectedFolderId) {
+      // Combine individual shared notes with notes from all shared folders
+      const notesFromSharedFolders = sharedFolders.flatMap((folder: any) => folder.notes || []);
+      const allSharedNotes = [...sharedNotes, ...notesFromSharedFolders];
+      
+      // Deduplicate notes by ID and keep the one with better permission (edit > view)
+      const noteMap = new Map<string, any>();
+      allSharedNotes.forEach((note: any) => {
+        const existingNote = noteMap.get(note.id);
+        if (!existingNote) {
+          // First time seeing this note, add it
+          noteMap.set(note.id, note);
+        } else {
+          // Note already exists, check if we should replace it with better permission
+          const currentPermission = existingNote.sharePermission || "view";
+          const newPermission = note.sharePermission || "view";
+          
+          // Replace if new permission is "edit" and current is "view"
+          if (newPermission === "edit" && currentPermission === "view") {
+            noteMap.set(note.id, note);
+          }
+        }
+      });
+      
+      // Convert map back to array
+      notes = Array.from(noteMap.values());
+    }
+    // Filter by folder - if viewing all, show all notes
+    // If a folder is selected, show only notes in that folder
+    else if (!viewAllNotes && !viewAllShared && selectedFolderId) {
+      // Check if it's a shared folder
+      const isSharedFolder = sharedFolders.some((f: any) => f.id === selectedFolderId);
+      if (isSharedFolder) {
+        // Show notes from the shared folder
+        const sharedFolder = sharedFolders.find((f: any) => f.id === selectedFolderId);
+        notes = sharedFolder?.notes || [];
+      } else {
+        // Regular owned folder - exclude shared notes
+        notes = notes.filter((n) => n.folderId === selectedFolderId && !n.isSharedWithMe);
+      }
+    }
+    // When viewing "All Notes", exclude shared notes
+    else if (viewAllNotes) {
+      notes = notes.filter((n) => !n.isSharedWithMe);
     }
 
     // Filter by search
@@ -228,7 +349,7 @@ export default function NotesPage() {
     }
 
     return notes;
-  }, [allNotes, selectedFolderId, viewAllNotes, searchQuery, searchScope, sortBy, sortOrder]);
+  }, [allNotes, selectedFolderId, viewAllNotes, viewAllShared, searchQuery, searchScope, sortBy, sortOrder, sharedNotes, sharedFolders]);
 
   // Mutations
   const createFolderMutation = useMutation(
@@ -412,12 +533,28 @@ export default function NotesPage() {
   const handleFolderSelect = (folderId: string) => {
     setSelectedFolderId(folderId);
     setViewAllNotes(false);
+    setViewAllShared(false);
     setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllNotes = () => {
     setViewAllNotes(true);
+    setViewAllShared(false);
     setSelectedFolderId(null);
+    setIsMobileSidebarOpen(false);
+  };
+
+  const handleViewAllShared = () => {
+    setViewAllShared(true);
+    setViewAllNotes(false);
+    setSelectedFolderId(null);
+    setIsMobileSidebarOpen(false);
+  };
+
+  const handleSharedFolderSelect = (folderId: string) => {
+    setSelectedFolderId(folderId);
+    setViewAllNotes(false);
+    setViewAllShared(false);
     setIsMobileSidebarOpen(false);
   };
 
@@ -583,19 +720,46 @@ export default function NotesPage() {
     setItemToDelete(null);
   };
 
-  // Get note count for a folder
+  // Share handlers
+  const openShareModal = (type: "note" | "note_folder", id: string, name: string) => {
+    setShareResourceType(type);
+    setShareResourceId(id);
+    setShareResourceName(name);
+    setIsShareModalOpen(true);
+  };
+
+  const openShareDetails = (type: "note" | "note_folder", id: string, name: string) => {
+    setShareResourceType(type);
+    setShareResourceId(id);
+    setShareResourceName(name);
+    setIsShareDetailsModalOpen(true);
+  };
+
+  // Get share count for a resource
+  const getShareCount = (resourceType: "note" | "note_folder", resourceId: string): number => {
+    return myShares.filter(
+      (share: any) => share.resourceType === resourceType && share.resourceId === resourceId
+    ).length;
+  };
+
+  // Get note count for a folder (excluding shared notes)
   const getNoteCount = (folderId: string) => {
-    return allNotes.filter((n) => n.folderId === folderId).length;
+    return allNotes.filter((n) => n.folderId === folderId && !n.isSharedWithMe).length;
   };
 
   // Recursive folder rendering component
   const renderFolder = (folder: any, level: number = 0) => {
     const isExpanded = expandedFolders.has(folder.id);
-    const isSelected = selectedFolderId === folder.id && !viewAllNotes;
+    const isSelected = selectedFolderId === folder.id && !viewAllNotes && !viewAllShared;
     const hasSubfolders = folder.subfolders && folder.subfolders.length > 0;
     const isAddingSubfolder = addingSubfolderToId === folder.id;
     const isEditingFolder = editingFolderId === folder.id;
     const noteCount = getNoteCount(folder.id);
+    
+    // Check if folder is shared with user (not owned)
+    const isSharedFolder = folder.isSharedWithMe || false;
+    const canEdit = !isSharedFolder || folder.sharePermission === "edit";
+    const isOwner = !isSharedFolder;
 
     return (
       <div key={folder.id}>
@@ -644,13 +808,46 @@ export default function NotesPage() {
               >
                 <FolderClosed className="h-4 w-4 flex-shrink-0" />
                 <span className="font-medium truncate">{folder.name}</span>
+                {/* Shared indicator badge - clickable to view who shared this */}
+                {isSharedFolder && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openShareDetails("note_folder", folder.id, folder.name);
+                    }}
+                    className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
+                    title="View who shared this folder with you"
+                  >
+                    <Users className="h-2.5 w-2.5" />
+                    <span className="hidden sm:inline">
+                      {folder.sharePermission === "view" ? "View" : "Edit"}
+                    </span>
+                  </button>
+                )}
               </button>
             )}
           </div>
 
           {/* Right side: Action buttons */}
           <div className="flex items-center gap-1 transition-opacity">
-            {!isEditingFolder && (
+            {/* Share button - only show for owned folders */}
+            {!isEditingFolder && isOwner && (
+              <ShareButton
+                onClick={() => {
+                  const shareCount = getShareCount("note_folder", folder.id);
+                  if (shareCount > 0) {
+                    openShareDetails("note_folder", folder.id, folder.name);
+                  } else {
+                    openShareModal("note_folder", folder.id, folder.name);
+                  }
+                }}
+                isShared={getShareCount("note_folder", folder.id) > 0}
+                shareCount={getShareCount("note_folder", folder.id)}
+                size="sm"
+              />
+            )}
+            {/* Edit folder button - only if can edit */}
+            {!isEditingFolder && canEdit && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -661,7 +858,8 @@ export default function NotesPage() {
                 <Edit2 className="h-3.5 w-3.5" />
               </Button>
             )}
-            {level === 0 && !isEditingFolder && (
+            {/* Add subfolder button - only show on top-level folders (depth 0) and if can edit */}
+            {level === 0 && !isEditingFolder && canEdit && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -672,7 +870,8 @@ export default function NotesPage() {
                 <Plus className="h-4 w-4" />
               </Button>
             )}
-            {!isEditingFolder && folder.name.toLowerCase() !== "general" && (
+            {/* Delete button - only for owned folders (not shared) and not General */}
+            {!isEditingFolder && isOwner && folder.name.toLowerCase() !== "general" && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -870,7 +1069,7 @@ export default function NotesPage() {
               <Folder className="h-4 w-4 flex-shrink-0" />
               <span className="flex-1 text-left">All Notes</span>
               <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
-                {allNotes.length}
+                {allNotes.filter((n) => !n.isSharedWithMe).length}
               </span>
             </button>
 
@@ -887,6 +1086,76 @@ export default function NotesPage() {
 
                 {/* Individual Folders */}
                 {sortedFolders.map((folder) => renderFolder(folder, 0))}
+              </>
+            )}
+
+            {/* Shared Section */}
+            {(sharedNotes.length > 0 || sharedFolders.length > 0) && (
+              <>
+                {/* Divider */}
+                <div className="h-px bg-gray-200 my-2" />
+
+                {/* Shared Section Header */}
+                <div className="px-2 py-2">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5" />
+                    Shared with me
+                  </h3>
+                </div>
+
+                {/* All Shared Notes Button */}
+                {totalSharedNoteCount > 0 && (
+                  <button
+                    onClick={handleViewAllShared}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                      viewAllShared && !selectedFolderId
+                        ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300" 
+                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                    )}
+                  >
+                    <Folder className="h-4 w-4 flex-shrink-0" />
+                    <span className="flex-1 text-left">All Shared</span>
+                    <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                      {totalSharedNoteCount}
+                    </span>
+                  </button>
+                )}
+
+                {/* Shared Folders */}
+                {sharedFolders.length > 0 && sharedFolders.map((folder: any) => (
+                  <button
+                    key={folder.id}
+                    onClick={() => handleSharedFolderSelect(folder.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                      selectedFolderId === folder.id && !viewAllNotes && !viewAllShared
+                        ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300" 
+                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                    )}
+                  >
+                    <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                    <span className="flex-1 text-left truncate">{folder.name}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openShareDetails("note_folder", folder.id, folder.name);
+                      }}
+                      className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
+                      title="View who shared this folder with you"
+                    >
+                      <Users className="h-2.5 w-2.5" />
+                      <span className="hidden sm:inline">
+                        {folder.sharePermission === "view" ? "View" : "Edit"}
+                      </span>
+                    </button>
+                    {folder.notes && folder.notes.length > 0 && (
+                      <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                        {folder.notes.length}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </>
             )}
           </div>
@@ -935,7 +1204,7 @@ export default function NotesPage() {
                 <Folder className="h-4 w-4 flex-shrink-0" />
                 <span className="flex-1 text-left">All Notes</span>
                 <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
-                  {allNotes.length}
+                  {allNotes.filter((n) => !n.isSharedWithMe).length}
                 </span>
               </button>
 
@@ -954,6 +1223,76 @@ export default function NotesPage() {
                   {sortedFolders.map((folder) => renderFolder(folder, 0))}
                 </>
               )}
+
+              {/* Shared Section */}
+              {(sharedNotes.length > 0 || sharedFolders.length > 0) && (
+                <>
+                  {/* Divider */}
+                  <div className="h-px bg-gray-200 my-2" />
+
+                  {/* Shared Section Header */}
+                  <div className="px-2 py-2">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5" />
+                      Shared with me
+                    </h3>
+                  </div>
+
+                  {/* All Shared Notes Button */}
+                  {totalSharedNoteCount > 0 && (
+                    <button
+                      onClick={handleViewAllShared}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                        viewAllShared && !selectedFolderId
+                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300" 
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      <Folder className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1 text-left">All Shared</span>
+                      <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                        {totalSharedNoteCount}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Shared Folders */}
+                  {sharedFolders.length > 0 && sharedFolders.map((folder: any) => (
+                    <button
+                      key={folder.id}
+                      onClick={() => handleSharedFolderSelect(folder.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                        selectedFolderId === folder.id && !viewAllNotes && !viewAllShared
+                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300" 
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1 text-left truncate">{folder.name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openShareDetails("note_folder", folder.id, folder.name);
+                        }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
+                        title="View who shared this folder with you"
+                      >
+                        <Users className="h-2.5 w-2.5" />
+                        <span className="hidden sm:inline">
+                          {folder.sharePermission === "view" ? "View" : "Edit"}
+                        </span>
+                      </button>
+                      {folder.notes && folder.notes.length > 0 && (
+                        <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                          {folder.notes.length}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -968,6 +1307,14 @@ export default function NotesPage() {
                     <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
                     <span className="font-bold text-gray-900">All Notes</span>
                     <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full font-semibold">
+                      {filteredNotes.length}
+                    </span>
+                  </div>
+                ) : viewAllShared ? (
+                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                    <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                    <span className="font-bold text-gray-900">All Shared</span>
+                    <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-semibold">
                       {filteredNotes.length}
                     </span>
                   </div>
@@ -990,15 +1337,29 @@ export default function NotesPage() {
                       </span>
                     ))}
                   </div>
+                ) : selectedFolderId && sharedFolders.find((f: any) => f.id === selectedFolderId) ? (
+                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                    <FolderClosed className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                    <span className="font-bold text-gray-900">
+                      {sharedFolders.find((f: any) => f.id === selectedFolderId)?.name}
+                    </span>
+                    <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                      <Users className="h-3 w-3" />
+                      Shared
+                    </span>
+                    <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-semibold">
+                      {filteredNotes.length}
+                    </span>
+                  </div>
                 ) : (
                   <div className="flex-1" />
                 )}
 
-                {/* Add Note Button */}
+                {/* Add Note Button - disabled when viewing shared notes/folders */}
                 <Button
                   onClick={openAddNoteModal}
                   variant="orange-primary"
-                  disabled={!selectedFolderId && !viewAllNotes}
+                  disabled={!selectedFolderId && !viewAllNotes || viewAllShared || (selectedFolderId && sharedFolders.some((f: any) => f.id === selectedFolderId))}
                   className="flex-shrink-0"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1112,66 +1473,114 @@ export default function NotesPage() {
                     No notes found. Click "Add Note" to create your first note!
                   </div>
                 ) : (
-                  filteredNotes.map((note) => (
-                    <Card
-                      key={note.id}
-                      className="hover:shadow-lg transition-shadow cursor-pointer group relative"
-                      onClick={() => openViewNoteModal(note)}
-                    >
-                      <CardContent className="p-4 space-y-3">
-                        {/* Note Header */}
-                        <div className="flex justify-between items-start gap-2">
-                          <h3 className="font-semibold text-base break-all flex-1 line-clamp-1">
-                            {note.title}
-                          </h3>
-                          <div className="flex gap-1 transition-opacity">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                                e.stopPropagation();
-                                openEditNoteModal(note.id, note.title, note.content, note.folderId);
-                              }}
-                              title="Edit note"
-                            >
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 hover:text-red-600"
-                              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                                e.stopPropagation();
-                                handleDeleteNote(note.id, note.title);
-                              }}
-                              title="Delete note"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
+                  filteredNotes.map((note) => {
+                    // Check note permissions
+                    const isSharedNote = note.isSharedWithMe || false;
+                    const canEditNote = !isSharedNote || note.sharePermission === "edit";
+                    const isNoteOwner = !isSharedNote;
 
-                        {/* Note Content Preview */}
-                        <p className="text-sm text-gray-600 line-clamp-4 break-all min-h-[5rem]">
-                          {note.content || "No content"}
-                        </p>
-
-                        {/* Note Footer */}
-                        <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t">
-                          {viewAllNotes && note.folderId && (
-                            <div className="flex items-center gap-1">
-                              <FolderClosed className="h-3 w-3" />
-                              <span className="truncate">{getNoteFolderPath(note.folderId)}</span>
+                    return (
+                      <Card
+                        key={note.id}
+                        className="hover:shadow-lg transition-shadow cursor-pointer group relative"
+                        onClick={() => openViewNoteModal(note)}
+                      >
+                        <CardContent className="p-4 space-y-3">
+                          {/* Note Header */}
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <h3 className="font-semibold text-base break-all line-clamp-1">
+                                {note.title}
+                              </h3>
+                              {/* Shared indicator badge - clickable to view who shared this */}
+                              {isSharedNote && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openShareDetails("note", note.id, note.title);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 transition-colors"
+                                  title="View who shared this note with you"
+                                >
+                                  <Users className="h-2.5 w-2.5" />
+                                  <span>{note.sharePermission === "view" ? "View Only" : "Can Edit"}</span>
+                                </button>
+                              )}
                             </div>
-                          )}
-                          <span className="ml-auto">
-                            {new Date(note.createdAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                            <div className="flex gap-1 transition-opacity flex-shrink-0">
+                              {/* Share button - only for owned notes */}
+                              {isNoteOwner && (
+                                <div onClick={(e) => e.stopPropagation()}>
+                                  <ShareButton
+                                    onClick={() => {
+                                      const shareCount = getShareCount("note", note.id);
+                                      if (shareCount > 0) {
+                                        openShareDetails("note", note.id, note.title);
+                                      } else {
+                                        openShareModal("note", note.id, note.title);
+                                      }
+                                    }}
+                                    isShared={getShareCount("note", note.id) > 0}
+                                    shareCount={getShareCount("note", note.id)}
+                                    size="sm"
+                                  />
+                                </div>
+                              )}
+                              {/* Edit button - only if can edit */}
+                              {canEditNote && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                    e.stopPropagation();
+                                    openEditNoteModal(note.id, note.title, note.content, note.folderId);
+                                  }}
+                                  title="Edit note"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              {/* Delete button - only for owned notes */}
+                              {isNoteOwner && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 hover:text-red-600"
+                                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                    e.stopPropagation();
+                                    handleDeleteNote(note.id, note.title);
+                                  }}
+                                  title="Delete note"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Note Content Preview */}
+                          <p className="text-sm text-gray-600 line-clamp-4 break-all min-h-[5rem]">
+                            {note.content || "No content"}
+                          </p>
+
+                          {/* Note Footer */}
+                          <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t">
+                            {/* Show folder path for All Notes or All Shared views - only if note has an accessible folder */}
+                            {(viewAllNotes || viewAllShared) && note.folderId && isFolderAccessible(note.folderId) && (
+                              <div className="flex items-center gap-1">
+                                <FolderClosed className="h-3 w-3" />
+                                <span className="truncate">{getNoteFolderPath(note.folderId)}</span>
+                              </div>
+                            )}
+                            <span className="ml-auto">
+                              {new Date(note.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1594,6 +2003,28 @@ export default function NotesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Share Modal */}
+      {shareResourceId && (
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          resourceType={shareResourceType}
+          resourceId={shareResourceId}
+          resourceName={shareResourceName}
+        />
+      )}
+
+      {/* Share Details Modal */}
+      {shareResourceId && (
+        <ShareDetailsModal
+          isOpen={isShareDetailsModalOpen}
+          onClose={() => setIsShareDetailsModalOpen(false)}
+          resourceType={shareResourceType}
+          resourceId={shareResourceId}
+          resourceName={shareResourceName}
+        />
+      )}
     </div>
   );
 }

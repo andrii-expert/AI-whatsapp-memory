@@ -16,6 +16,7 @@ export * from "./plans";
 export * from "./tasks";
 export * from "./task-sharing";
 export * from "./notes";
+export * from "./note-sharing";
 export * from "./reminders";
 
 // Re-export utility functions

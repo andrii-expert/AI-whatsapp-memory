@@ -28,7 +28,7 @@ import { useState } from "react";
 interface ShareDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  resourceType: "task" | "task_folder";
+  resourceType: "task" | "task_folder" | "note" | "note_folder";
   resourceId: string;
   resourceName: string;
 }
@@ -50,26 +50,36 @@ export function ShareDetailsModal({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Determine which sharing router to use based on resource type
+  const isNoteResource = resourceType === "note" || resourceType === "note_folder";
+
   // Fetch shares for this resource (only works if you're the owner)
   const { data: shares = [], isLoading, isError } = useQuery(
-    trpc.taskSharing.getResourceShares.queryOptions({
-      resourceType,
-      resourceId,
-    })
+    isNoteResource
+      ? trpc.noteSharing.getResourceShares.queryOptions({
+          resourceType,
+          resourceId,
+        })
+      : trpc.taskSharing.getResourceShares.queryOptions({
+          resourceType,
+          resourceId,
+        })
   );
 
   // If query errors, it means we're viewing a shared resource (not the owner)
   // Fetch the shared resources to get owner info
-  const { data: sharedResources } = useQuery({
-    ...trpc.taskSharing.getSharedWithMe.queryOptions(),
-    enabled: isError, // Only fetch if getResourceShares failed
-  });
+  const { data: sharedResources } = useQuery(
+    (isNoteResource 
+        ? trpc.noteSharing.getSharedWithMe.queryOptions() 
+        : trpc.taskSharing.getSharedWithMe.queryOptions()) as any
+  );
 
   // Find the owner info and permission from shared resources
   const sharedResourceInfo = isError && sharedResources ? (() => {
+    const sharedData: any = sharedResources;
     const allShared = [
-      ...(sharedResources.tasks || []),
-      ...(sharedResources.folders || [])
+      ...(sharedData.tasks || sharedData.notes || []),
+      ...(sharedData.folders || [])
     ];
     const resource = allShared.find((r: any) => r.id === resourceId);
     return {
@@ -83,67 +93,121 @@ export function ShareDetailsModal({
   const isViewingShared = isError && ownerInfo;
 
   const createShareMutation = useMutation(
-    trpc.taskSharing.createShare.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries();
-        toast({
-          title: "User added",
-          description: "User has been added successfully",
-        });
-        setSearchTerm("");
-        setSearchResults([]);
-      },
-      onError: (error) => {
-        toast({
-          title: "Failed to add user",
-          description: error.message || "An error occurred",
-          variant: "destructive",
-        });
-      },
-    })
+    (isNoteResource
+      ? trpc.noteSharing.createShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "User added",
+              description: "User has been added successfully",
+            });
+            setSearchTerm("");
+            setSearchResults([]);
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to add user",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
+      : trpc.taskSharing.createShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "User added",
+              description: "User has been added successfully",
+            });
+            setSearchTerm("");
+            setSearchResults([]);
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to add user",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })) as any
   );
 
   const updatePermissionMutation = useMutation(
-    trpc.taskSharing.updatePermission.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries();
-        toast({
-          title: "Permission updated",
-          description: "Share permission has been updated",
-        });
-      },
-      onError: (error) => {
-        toast({
-          title: "Failed to update permission",
-          description: error.message || "An error occurred",
-          variant: "destructive",
-        });
-      },
-    })
+    (isNoteResource
+      ? trpc.noteSharing.updatePermission.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "Permission updated",
+              description: "Share permission has been updated",
+            });
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to update permission",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
+      : trpc.taskSharing.updatePermission.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "Permission updated",
+              description: "Share permission has been updated",
+            });
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to update permission",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })) as any
   );
 
   const deleteShareMutation = useMutation(
-    trpc.taskSharing.deleteShare.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries();
-        toast({
-          title: "Share removed",
-          description: "User no longer has access",
-        });
-        setShareToDelete(null);
-      },
-      onError: (error) => {
-        toast({
-          title: "Failed to remove share",
-          description: error.message || "An error occurred",
-          variant: "destructive",
-        });
-      },
-    })
+    (isNoteResource
+      ? trpc.noteSharing.deleteShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "Share removed",
+              description: "User no longer has access",
+            });
+            setShareToDelete(null);
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to remove share",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
+      : trpc.taskSharing.deleteShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "Share removed",
+              description: "User no longer has access",
+            });
+            setShareToDelete(null);
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to remove share",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })) as any
   );
 
   const handlePermissionChange = (shareId: string, permission: "view" | "edit") => {
-    updatePermissionMutation.mutate({
+    (updatePermissionMutation.mutate as any)({
       shareId,
       permission,
     });
@@ -151,7 +215,7 @@ export function ShareDetailsModal({
 
   const handleDeleteShare = () => {
     if (shareToDelete) {
-      deleteShareMutation.mutate({ shareId: shareToDelete });
+      (deleteShareMutation.mutate as any)({ shareId: shareToDelete });
     }
   };
 
@@ -164,9 +228,13 @@ export function ShareDetailsModal({
     setIsSearching(true);
     try {
       const results = await queryClient.fetchQuery(
-        trpc.taskSharing.searchUsers.queryOptions({
-          searchTerm: searchTerm.trim(),
-        })
+        isNoteResource
+          ? trpc.noteSharing.searchUsers.queryOptions({
+              searchTerm: searchTerm.trim(),
+            })
+          : trpc.taskSharing.searchUsers.queryOptions({
+              searchTerm: searchTerm.trim(),
+            })
       );
       
       // Filter out users who are already shared with
@@ -197,7 +265,7 @@ export function ShareDetailsModal({
   };
 
   const handleAddUser = (user: any, permission: "view" | "edit" = "view") => {
-    createShareMutation.mutate({
+    (createShareMutation.mutate as any)({
       resourceType,
       resourceId,
       sharedWithUserId: user.id,
@@ -225,7 +293,7 @@ export function ShareDetailsModal({
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm sm:text-base pt-1 break-all">
               {isViewingShared 
-                ? `This ${resourceType === "task" ? "task" : "folder"} was shared with you by:`
+                ? `This ${resourceType === "task" || resourceType === "note" ? (resourceType === "task" ? "task" : "note") : "folder"} was shared with you by:`
                 : `People who have access to "${resourceName}"`
               }
             </AlertDialogDescription>
@@ -306,7 +374,7 @@ export function ShareDetailsModal({
               <div className="text-center py-6 sm:py-8 text-gray-500">
                 <Users className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 text-gray-300" />
                 <p className="text-xs sm:text-sm">
-                  This {resourceType === "task" ? "task" : "folder"} hasn't been shared yet
+                  This {resourceType === "task" || resourceType === "note" ? (resourceType === "task" ? "task" : "note") : "folder"} hasn't been shared yet
                 </p>
               </div>
             ) : (

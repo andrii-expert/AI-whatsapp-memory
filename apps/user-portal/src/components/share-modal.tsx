@@ -26,7 +26,7 @@ import { cn } from "@imaginecalendar/ui/cn";
 interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
-  resourceType: "task" | "task_folder";
+  resourceType: "task" | "task_folder" | "note" | "note_folder";
   resourceId: string;
   resourceName: string;
 }
@@ -50,19 +50,35 @@ export function ShareModal({
     permission: "view" | "edit";
   }>>([]);
 
+  // Determine which sharing router to use based on resource type
+  const isNoteResource = resourceType === "note" || resourceType === "note_folder";
+  
   const createShareMutation = useMutation(
-    trpc.taskSharing.createShare.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries();
-      },
-      onError: (error) => {
-        toast({
-          title: "Failed to share",
-          description: error.message || "An error occurred while sharing",
-          variant: "destructive",
-        });
-      },
-    })
+    (isNoteResource 
+      ? trpc.noteSharing.createShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to share",
+              description: error.message || "An error occurred while sharing",
+              variant: "destructive",
+            });
+          },
+        })
+      : trpc.taskSharing.createShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to share",
+              description: error.message || "An error occurred while sharing",
+              variant: "destructive",
+            });
+          },
+        })) as any
   );
 
   const handleShareAll = async () => {
@@ -72,7 +88,7 @@ export function ShareModal({
       // Share with all users in parallel
       await Promise.all(
         pendingShares.map((share) =>
-          createShareMutation.mutateAsync({
+          (createShareMutation.mutateAsync as any)({
             resourceType,
             resourceId,
             sharedWithUserId: share.user.id,
@@ -103,11 +119,15 @@ export function ShareModal({
 
     setIsSearching(true);
     try {
-      // Use queryClient to fetch the query
+      // Use queryClient to fetch the query - use appropriate router based on resource type
       const results = await queryClient.fetchQuery(
-        trpc.taskSharing.searchUsers.queryOptions({
-          searchTerm: searchTerm.trim(),
-        })
+        isNoteResource
+          ? trpc.noteSharing.searchUsers.queryOptions({
+              searchTerm: searchTerm.trim(),
+            })
+          : trpc.taskSharing.searchUsers.queryOptions({
+              searchTerm: searchTerm.trim(),
+            })
       );
       
       console.log('Search term:', searchTerm.trim());

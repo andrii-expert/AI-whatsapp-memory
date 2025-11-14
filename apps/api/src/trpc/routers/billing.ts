@@ -199,12 +199,19 @@ export const billingRouter = createTRPCRouter({
           };
         }
 
-        // Existing PayFast subscription - update via API
+        // Subscription without PayFast token - redirect to payment
         if (!subscription.payfastToken) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Cannot update subscription - missing payment information",
-          });
+          logger.info({
+            userId: session.user.id,
+            subscriptionId: subscription.id,
+            targetPlan: newPlanRecord.id
+          }, 'Subscription missing PayFast token - redirecting to payment');
+
+          return {
+            type: "requiresPayment" as const,
+            message: "Redirecting to payment provider to complete subscription",
+            plan: newPlanRecord.id,
+          };
         }
 
         const payfast = new PayFastService();

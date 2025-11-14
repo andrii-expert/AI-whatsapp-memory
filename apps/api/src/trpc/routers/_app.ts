@@ -16,6 +16,7 @@ import { plansRouter } from "./plans";
 import { tasksRouter } from "./tasks";
 import { taskSharingRouter } from "./task-sharing";
 import { notesRouter } from "./notes";
+import { noteSharingRouter } from "./note-sharing";
 import { remindersRouter } from "./reminders";
 
 export const appRouter = createTRPCRouter({
@@ -35,6 +36,7 @@ export const appRouter = createTRPCRouter({
   tasks: tasksRouter,
   taskSharing: taskSharingRouter,
   notes: notesRouter,
+  noteSharing: noteSharingRouter,
   reminders: remindersRouter,
 });
 

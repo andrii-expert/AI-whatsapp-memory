@@ -1,6 +1,6 @@
-import { eq, and, desc, asc, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, isNull, inArray, or } from "drizzle-orm";
 import type { Database } from "../client";
-import { notes, noteFolders } from "../schema";
+import { notes, noteFolders, taskShares } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
 
 // ============================================
@@ -11,26 +11,83 @@ export async function getUserNoteFolders(db: Database, userId: string) {
   return withQueryLogging(
     'getUserNoteFolders',
     { userId },
-    () => db.query.noteFolders.findMany({
-      where: and(
-        eq(noteFolders.userId, userId),
-        isNull(noteFolders.parentId)
-      ),
-      orderBy: [asc(noteFolders.sortOrder), asc(noteFolders.createdAt)],
-      with: {
-        subfolders: {
+    async () => {
+      // Get owned folders
+      const ownedFolders = await db.query.noteFolders.findMany({
+        where: and(
+          eq(noteFolders.userId, userId),
+          isNull(noteFolders.parentId)
+        ),
+        orderBy: [asc(noteFolders.sortOrder), asc(noteFolders.createdAt)],
+        with: {
+          subfolders: {
+            orderBy: [asc(noteFolders.sortOrder), asc(noteFolders.createdAt)],
+            with: {
+              notes: {
+                orderBy: [asc(notes.sortOrder), desc(notes.createdAt)],
+              },
+            },
+          },
+          notes: {
+            orderBy: [asc(notes.sortOrder), desc(notes.createdAt)],
+          },
+        },
+      });
+
+      // Get shared folders (only top-level ones)
+      const sharedFolderData = await db
+        .select({
+          folderId: taskShares.resourceId,
+          permission: taskShares.permission,
+          ownerId: taskShares.ownerId,
+        })
+        .from(taskShares)
+        .where(
+          and(
+            eq(taskShares.sharedWithUserId, userId),
+            eq(taskShares.resourceType, "note_folder" as any)
+          )
+        );
+
+      let sharedFolders: any[] = [];
+      if (sharedFolderData.length > 0) {
+        const folderIds = sharedFolderData.map(s => s.folderId);
+        const fetchedFolders = await db.query.noteFolders.findMany({
+          where: and(
+            inArray(noteFolders.id, folderIds),
+            isNull(noteFolders.parentId) // Only top-level shared folders
+          ),
           orderBy: [asc(noteFolders.sortOrder), asc(noteFolders.createdAt)],
           with: {
+            subfolders: {
+              orderBy: [asc(noteFolders.sortOrder), asc(noteFolders.createdAt)],
+              with: {
+                notes: {
+                  orderBy: [asc(notes.sortOrder), desc(notes.createdAt)],
+                },
+              },
+            },
             notes: {
               orderBy: [asc(notes.sortOrder), desc(notes.createdAt)],
             },
           },
-        },
-        notes: {
-          orderBy: [asc(notes.sortOrder), desc(notes.createdAt)],
-        },
-      },
-    })
+        });
+
+        // Add share metadata
+        sharedFolders = fetchedFolders.map(folder => {
+          const shareData = sharedFolderData.find(s => s.folderId === folder.id);
+          return {
+            ...folder,
+            isSharedWithMe: true,
+            sharePermission: shareData?.permission || "view",
+            sharedByUserId: shareData?.ownerId,
+          };
+        });
+      }
+
+      // Combine owned and shared folders
+      return [...ownedFolders, ...sharedFolders];
+    }
   );
 }
 
@@ -135,20 +192,114 @@ export async function getUserNotes(
   return withQueryLogging(
     'getUserNotes',
     { userId, ...options },
-    () => {
-      const conditions = [eq(notes.userId, userId)];
+    async () => {
+      // Get owned notes
+      const ownedConditions = [eq(notes.userId, userId)];
       
       if (options?.folderId) {
-        conditions.push(eq(notes.folderId, options.folderId));
+        ownedConditions.push(eq(notes.folderId, options.folderId));
       }
       
-      return db.query.notes.findMany({
-        where: and(...conditions),
+      const ownedNotes = await db.query.notes.findMany({
+        where: and(...ownedConditions),
         orderBy: [asc(notes.sortOrder), desc(notes.createdAt)],
         with: {
           folder: true,
         },
       });
+
+      // Get shared notes (with permission info)
+      const sharedNoteData = await db
+        .select({ 
+          noteId: taskShares.resourceId,
+          permission: taskShares.permission,
+          ownerId: taskShares.ownerId,
+        })
+        .from(taskShares)
+        .where(
+          and(
+            eq(taskShares.sharedWithUserId, userId),
+            eq(taskShares.resourceType, "note" as any)
+          )
+        );
+
+      let sharedNotes: any[] = [];
+      if (sharedNoteData.length > 0) {
+        const noteIds = sharedNoteData.map(s => s.noteId);
+        const sharedConditions: any[] = [inArray(notes.id, noteIds)];
+        
+        if (options?.folderId) {
+          sharedConditions.push(eq(notes.folderId, options.folderId));
+        }
+
+        const fetchedNotes = await db.query.notes.findMany({
+          where: and(...sharedConditions),
+          orderBy: [asc(notes.sortOrder), desc(notes.createdAt)],
+          with: {
+            folder: true,
+          },
+        });
+
+        // Add share metadata
+        sharedNotes = fetchedNotes.map(note => {
+          const shareData = sharedNoteData.find(s => s.noteId === note.id);
+          return {
+            ...note,
+            isSharedWithMe: true,
+            sharePermission: shareData?.permission || "view",
+            sharedByUserId: shareData?.ownerId,
+          };
+        });
+      }
+
+      // Get notes from shared folders (with permission info)
+      const sharedFolderData = await db
+        .select({ 
+          folderId: taskShares.resourceId,
+          permission: taskShares.permission,
+          ownerId: taskShares.ownerId,
+        })
+        .from(taskShares)
+        .where(
+          and(
+            eq(taskShares.sharedWithUserId, userId),
+            eq(taskShares.resourceType, "note_folder" as any)
+          )
+        );
+
+      let notesFromSharedFolders: any[] = [];
+      if (sharedFolderData.length > 0) {
+        const folderIds = sharedFolderData.map(s => s.folderId);
+        const folderNoteConditions: any[] = [inArray(notes.folderId, folderIds)];
+
+        const fetchedNotes = await db.query.notes.findMany({
+          where: and(...folderNoteConditions),
+          orderBy: [asc(notes.sortOrder), desc(notes.createdAt)],
+          with: {
+            folder: true,
+          },
+        });
+
+        // Add share metadata from parent folder
+        notesFromSharedFolders = fetchedNotes.map(note => {
+          const shareData = sharedFolderData.find(s => s.folderId === note.folderId);
+          return {
+            ...note,
+            isSharedWithMe: true,
+            sharePermission: shareData?.permission || "view",
+            sharedByUserId: shareData?.ownerId,
+            sharedViaFolder: true,
+          };
+        });
+      }
+
+      // Combine and deduplicate notes
+      const allNotes = [...ownedNotes, ...sharedNotes, ...notesFromSharedFolders];
+      const uniqueNotes = Array.from(
+        new Map(allNotes.map(note => [note.id, note])).values()
+      );
+
+      return uniqueNotes;
     }
   );
 }

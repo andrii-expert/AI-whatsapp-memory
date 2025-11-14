@@ -96,7 +96,24 @@ export async function POST(req: NextRequest) {
 
     // Generate PayFast form data server-side
     logger.info({ userId }, 'Initializing PayFast service');
-    const payfast = new PayFastService();
+    
+    let payfast: PayFastService;
+    try {
+      payfast = new PayFastService();
+    } catch (configError) {
+      logger.error({ 
+        error: configError instanceof Error ? configError.message : String(configError),
+        userId 
+      }, 'PayFast configuration error');
+      
+      return NextResponse.json(
+        { 
+          error: 'Payment service configuration error',
+          details: configError instanceof Error ? configError.message : 'Invalid PayFast credentials'
+        },
+        { status: 500 }
+      );
+    }
     
     logger.info({ 
       userId, 
@@ -104,7 +121,9 @@ export async function POST(req: NextRequest) {
       userEmail
     }, 'Calling PayFast createPaymentRequest');
     
-    const paymentData = await payfast.createPaymentRequest({
+    let paymentData;
+    try {
+      paymentData = await payfast.createPaymentRequest({
       userId,
       plan: {
         id: planRecord.id,
@@ -116,7 +135,23 @@ export async function POST(req: NextRequest) {
       userEmail,
       userName: userEmail || 'Customer', // Use email as name or fallback to 'Customer'
       isBillingFlow, // Pass billing flow flag to use correct return/cancel URLs
-    });
+      });
+    } catch (payfastError) {
+      logger.error({ 
+        error: payfastError instanceof Error ? payfastError.message : String(payfastError),
+        stack: payfastError instanceof Error ? payfastError.stack : undefined,
+        userId,
+        plan: planRecord.id
+      }, 'Error creating PayFast payment request');
+      
+      return NextResponse.json(
+        { 
+          error: 'Failed to create payment request',
+          details: payfastError instanceof Error ? payfastError.message : 'Unknown error'
+        },
+        { status: 500 }
+      );
+    }
     
     logger.info({ 
       userId, 
