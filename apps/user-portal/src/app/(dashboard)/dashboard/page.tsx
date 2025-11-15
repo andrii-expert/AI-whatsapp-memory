@@ -331,7 +331,7 @@ export default function DashboardPage() {
           <StickyNote className="h-4 w-4" />
           <span>Notes</span>
         </div>
-        <Badge variant="secondary">{allNotes.length}</Badge>
+        <Badge variant="orange">{allNotes.length}</Badge>
       </Link>
       
       <Link
@@ -343,7 +343,7 @@ export default function DashboardPage() {
           <BellRing className="h-4 w-4" />
           <span>Reminders</span>
         </div>
-        <Badge variant="secondary">{reminders.length}</Badge>
+        <Badge variant="orange">{reminders.length}</Badge>
       </Link>
       
       <Link
@@ -355,7 +355,7 @@ export default function DashboardPage() {
           <Calendar className="h-4 w-4" />
           <span>Calendar</span>
         </div>
-        <Badge variant="secondary">{calendars?.length || 0}</Badge>
+        <Badge variant="orange">{calendars?.length || 0}</Badge>
       </Link>
       
       <Link
@@ -367,7 +367,7 @@ export default function DashboardPage() {
           <CheckSquare className="h-4 w-4" />
           <span>Tasks</span>
         </div>
-        <Badge variant="secondary">{allTasks.length}</Badge>
+        <Badge variant="orange">{allTasks.length}</Badge>
       </Link>
     </div>
   );
@@ -806,7 +806,7 @@ export default function DashboardPage() {
                   Active Reminders
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{activeReminders.length}</Badge>
+                  <Badge variant="orange">{activeReminders.length}</Badge>
                   {totalActiveReminders > activeReminders.length && (
                     <span className="text-xs text-muted-foreground">of {totalActiveReminders}</span>
                   )}
@@ -868,7 +868,7 @@ export default function DashboardPage() {
                   Pending Tasks
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{pendingTasks.length}</Badge>
+                  <Badge variant="orange">{pendingTasks.length}</Badge>
                   {totalPendingTasks > pendingTasks.length && (
                     <span className="text-xs text-muted-foreground">of {totalPendingTasks}</span>
                   )}
@@ -925,7 +925,7 @@ export default function DashboardPage() {
                   Scheduled Events
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{scheduledEvents.length}</Badge>
+                  <Badge variant="orange">{scheduledEvents.length}</Badge>
                   {totalScheduledEvents > scheduledEvents.length && (
                     <span className="text-xs text-muted-foreground">of {totalScheduledEvents}</span>
                   )}
@@ -982,7 +982,7 @@ export default function DashboardPage() {
                   Quick Notes
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{quickNotes.length}</Badge>
+                  <Badge variant="orange">{quickNotes.length}</Badge>
                   {totalQuickNotes > quickNotes.length && (
                     <span className="text-xs text-muted-foreground">of {totalQuickNotes}</span>
                   )}

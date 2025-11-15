@@ -1211,7 +1211,7 @@ export default function TasksPage() {
               >
                 <Folder className="h-4 w-4 flex-shrink-0" />
                 <span className="flex-1 text-left">All Tasks</span>
-                <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                   {allTasks.filter((t) => !t.isSharedWithMe).length}
                 </span>
               </button>
@@ -1261,7 +1261,7 @@ export default function TasksPage() {
                     >
                       <Folder className="h-4 w-4 flex-shrink-0" />
                       <span className="flex-1 text-left">All Shared</span>
-                      <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                      <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                         {totalSharedTaskCount}
                       </span>
                     </button>
@@ -1295,7 +1295,7 @@ export default function TasksPage() {
                         </span>
                       </button>
                       {folder.tasks && folder.tasks.length > 0 && (
-                        <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                        <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                           {folder.tasks.length}
                         </span>
                       )}
@@ -1348,7 +1348,7 @@ export default function TasksPage() {
               >
                 <Folder className="h-4 w-4 flex-shrink-0" />
                 <span className="flex-1 text-left">All Tasks</span>
-                <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                   {allTasks.filter((t) => !t.isSharedWithMe).length}
                 </span>
               </button>
@@ -1398,7 +1398,7 @@ export default function TasksPage() {
                     >
                       <Folder className="h-4 w-4 flex-shrink-0" />
                       <span className="flex-1 text-left">All Shared</span>
-                      <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                      <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                         {totalSharedTaskCount}
                       </span>
                     </button>
@@ -1432,7 +1432,7 @@ export default function TasksPage() {
                         </span>
                       </button>
                       {folder.tasks && folder.tasks.length > 0 && (
-                        <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                        <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                           {folder.tasks.length}
                         </span>
                       )}
@@ -1453,17 +1453,11 @@ export default function TasksPage() {
                   <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
                     <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
                     <span className="font-bold text-gray-900">All Tasks</span>
-                    <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full font-semibold">
-                      {filteredTasks.length}
-                    </span>
                   </div>
                 ) : viewAllShared ? (
                   <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
                     <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
                     <span className="font-bold text-gray-900">All Shared</span>
-                    <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-semibold">
-                      {filteredTasks.length}
-                    </span>
                   </div>
                 ) : selectedFolder && folderPath.length > 0 ? (
                   <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
@@ -1494,7 +1488,7 @@ export default function TasksPage() {
                       <Users className="h-3 w-3" />
                       Shared
                     </span>
-                    <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-semibold">
+                    <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
                       {filteredTasks.length}
                     </span>
                   </div>
@@ -1596,7 +1590,7 @@ export default function TasksPage() {
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                       Delete All
-                      <span className="ml-1.5 px-1.5 py-0.5 bg-orange-500 text-white rounded-full text-xs font-semibold">
+                      <span className="ml-1.5 px-1.5 py-0.5 bg-[hsl(var(--brand-orange))] text-white rounded-full text-xs font-semibold">
                         {deletableTasks.length}
                       </span>
                     </Button>

@@ -421,7 +421,7 @@ export default function CalendarsPage() {
           <CardDescription className="flex items-center justify-between">
             <span>Add a new calendar connection to start managing events</span>
             {limits.maxCalendars > 1 && (
-              <Badge variant="outline" className="ml-2">
+              <Badge variant="orange" className="ml-2">
                 {calendars.length} / {limits.maxCalendars} calendars
               </Badge>
             )}

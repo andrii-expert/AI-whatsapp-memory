@@ -529,7 +529,7 @@ export default function RemindersPage() {
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card className="rounded-xl border-slate-200">
               <CardContent className="p-4">
-                <div className="text-2xl font-bold text-blue-600">{reminders.length}</div>
+                <div className="text-2xl font-bold text-[hsl(var(--brand-orange))]">{reminders.length}</div>
                 <div className="text-xs text-slate-600">Total Reminders</div>
               </CardContent>
             </Card>
