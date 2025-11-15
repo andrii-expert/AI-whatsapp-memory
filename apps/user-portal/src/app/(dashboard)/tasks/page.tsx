@@ -50,7 +50,7 @@ export default function TasksPage() {
   const [viewAllShared, setViewAllShared] = useState(false); // View all shared tasks
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("open");
   const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchScope, setSearchScope] = useState<"all" | "title" | "description">("all");
   const [newFolderName, setNewFolderName] = useState("");
@@ -1511,7 +1511,7 @@ export default function TasksPage() {
               </div>
 
               {/* Filter and Sort Controls */}
-              <div className="flex justify-between items-center gap-3 mb-4">
+              <div className="flex flex-row justify-between items-center gap-3 mb-4">
                 {/* Filter Buttons */}
                 <div className="flex gap-2 flex-wrap">
                   <Button
@@ -1544,7 +1544,7 @@ export default function TasksPage() {
                 </div>
 
                 {/* Sort Controls - Dropdown on mobile, buttons on desktop */}
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                   {/* Mobile: Dropdown Menu */}
                   <div className="sm:hidden w-full">
                     <Select
@@ -1557,39 +1557,49 @@ export default function TasksPage() {
                     >
                       <SelectTrigger className="w-full h-11">
                         <SelectValue>
-                          {sortBy === "date" && sortOrder === "asc" && (
                           <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <ArrowUp className="h-3 w-3" />
-                          </div>  )}
-                          {sortBy === "date" && sortOrder === "desc" && (
-                            <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <ArrowDown className="h-3 w-3" />
-                          </div>)}
-                          {sortBy === "alphabetical" && sortOrder === "asc" && (
-                            <div className="flex items-center gap-2">
-                            <SortAsc className="h-4 w-4" />
-                            <span>A-Z</span>
-                          </div>)}
-                          {sortBy === "alphabetical" && sortOrder === "desc" && (
-                            <div className="flex items-center gap-2">
-                            <SortDesc className="h-4 w-4" />
-                            <span>Z-A</span>
-                          </div>)}
+                            {sortBy === "date" ? (
+                              <>
+                                <Calendar className="h-4 w-4" />
+                                {sortOrder === "asc" ? (
+                                  <>
+                                    <ArrowUp className="h-3 w-3" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <ArrowDown className="h-3 w-3" />
+                                  </>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                {sortOrder === "asc" ? (
+                                  <>
+                                    <SortAsc className="h-4 w-4" />
+                                    <span className="text-sm">A-Z</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <SortDesc className="h-4 w-4" />
+                                    <span className="text-sm">Z-A</span>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="date-asc">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <ArrowUp className="h-3 w-3" />
-                          </div>
-                        </SelectItem>
                         <SelectItem value="date-desc">
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4" />
                             <ArrowDown className="h-3 w-3" />
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="date-asc">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <ArrowUp className="h-3 w-3" />
                           </div>
                         </SelectItem>
                         <SelectItem value="alphabetical-asc">
@@ -1613,28 +1623,28 @@ export default function TasksPage() {
                     {/* Date Sort */}
                     <div className="flex gap-0 border rounded-lg overflow-hidden">
                       <Button
-                        variant={sortBy === "date" && sortOrder === "asc" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setSortBy("date");
-                          setSortOrder("asc");
-                        }}
-                        className="gap-1.5 rounded-none border-0 border-r"
-                      >
-                        <Calendar className="h-3.5 w-3.5" />
-                        <ArrowUp className="h-3 w-3" />
-                      </Button>
-                      <Button
                         variant={sortBy === "date" && sortOrder === "desc" ? "blue-primary" : "outline"}
                         size="sm"
                         onClick={() => {
                           setSortBy("date");
                           setSortOrder("desc");
                         }}
-                        className="gap-1.5 rounded-none border-0"
+                        className="gap-1.5 rounded-none border-0 border-r"
                       >
                         <Calendar className="h-3.5 w-3.5" />
                         <ArrowDown className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant={sortBy === "date" && sortOrder === "asc" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSortBy("date");
+                          setSortOrder("asc");
+                        }}
+                        className="gap-1.5 rounded-none border-0"
+                      >
+                        <Calendar className="h-3.5 w-3.5" />
+                        <ArrowUp className="h-3 w-3" />
                       </Button>
                     </div>
 
