@@ -333,7 +333,42 @@ export async function createNote(
     'createNote',
     { userId: data.userId, title: data.title },
     async () => {
-      const [note] = await db.insert(notes).values(data).returning();
+      let noteOwnerId = data.userId; // Default to the user creating the note
+      
+      // If adding to a folder, check if user has access
+      if (data.folderId) {
+        const folder = await db.query.noteFolders.findFirst({
+          where: eq(noteFolders.id, data.folderId),
+        });
+
+        if (folder) {
+          const isOwner = folder.userId === data.userId;
+
+          // If not owner, check if folder is shared with edit permission
+          if (!isOwner) {
+            const share = await db.query.taskShares.findFirst({
+              where: and(
+                eq(taskShares.resourceType, "note_folder" as any),
+                eq(taskShares.resourceId, data.folderId),
+                eq(taskShares.sharedWithUserId, data.userId),
+                eq(taskShares.permission, "edit")
+              ),
+            });
+
+            if (!share) {
+              throw new Error("No permission to add notes to this folder");
+            }
+            
+            // If guest is creating note in shared folder, set note owner as folder owner
+            noteOwnerId = folder.userId;
+          }
+        }
+      }
+
+      const [note] = await db.insert(notes).values({
+        ...data,
+        userId: noteOwnerId, // Use folder owner's ID if in shared folder
+      }).returning();
       return note;
     }
   );
@@ -371,10 +406,39 @@ export async function deleteNote(db: Database, noteId: string, userId: string) {
   return withMutationLogging(
     'deleteNote',
     { noteId, userId },
-    () => db.delete(notes).where(and(
-      eq(notes.id, noteId),
-      eq(notes.userId, userId)
-    ))
+    async () => {
+      // First check if user owns the note
+      const note = await db.query.notes.findFirst({
+        where: eq(notes.id, noteId),
+      });
+
+      if (!note) {
+        throw new Error("Note not found");
+      }
+
+      const isOwner = note.userId === userId;
+
+      // If not owner, check if note is in a folder shared with edit permission
+      if (!isOwner && note.folderId) {
+        const folderShare = await db.query.taskShares.findFirst({
+          where: and(
+            eq(taskShares.resourceType, "note_folder" as any),
+            eq(taskShares.resourceId, note.folderId),
+            eq(taskShares.sharedWithUserId, userId),
+            eq(taskShares.permission, "edit")
+          ),
+        });
+
+        if (!folderShare) {
+          throw new Error("No permission to delete this note");
+        }
+      } else if (!isOwner) {
+        throw new Error("No permission to delete this note");
+      }
+
+      // Delete the note (user either owns it or has edit permission on the folder)
+      await db.delete(notes).where(eq(notes.id, noteId));
+    }
   );
 }
 

@@ -527,6 +527,8 @@ export async function createTask(
     'createTask',
     { userId: data.userId, title: data.title },
     async () => {
+      let taskOwnerId = data.userId; // Default to the user creating the task
+      
       // If adding to a folder, check if user has access
       if (data.folderId) {
         const folder = await db.query.taskFolders.findFirst({
@@ -550,11 +552,17 @@ export async function createTask(
             if (!share) {
               throw new Error("No permission to add tasks to this folder");
             }
+            
+            // If guest is creating task in shared folder, set task owner as folder owner
+            taskOwnerId = folder.userId;
           }
         }
       }
 
-      const [task] = await db.insert(tasks).values(data).returning();
+      const [task] = await db.insert(tasks).values({
+        ...data,
+        userId: taskOwnerId, // Use folder owner's ID if in shared folder
+      }).returning();
       return task;
     }
   );
@@ -642,10 +650,39 @@ export async function deleteTask(db: Database, taskId: string, userId: string) {
   return withMutationLogging(
     'deleteTask',
     { taskId, userId },
-    () => db.delete(tasks).where(and(
-      eq(tasks.id, taskId),
-      eq(tasks.userId, userId)
-    ))
+    async () => {
+      // First check if user owns the task
+      const task = await db.query.tasks.findFirst({
+        where: eq(tasks.id, taskId),
+      });
+
+      if (!task) {
+        throw new Error("Task not found");
+      }
+
+      const isOwner = task.userId === userId;
+
+      // If not owner, check if task is in a folder shared with edit permission
+      if (!isOwner && task.folderId) {
+        const folderShare = await db.query.taskShares.findFirst({
+          where: and(
+            eq(taskShares.resourceType, "task_folder"),
+            eq(taskShares.resourceId, task.folderId),
+            eq(taskShares.sharedWithUserId, userId),
+            eq(taskShares.permission, "edit")
+          ),
+        });
+
+        if (!folderShare) {
+          throw new Error("No permission to delete this task");
+        }
+      } else if (!isOwner) {
+        throw new Error("No permission to delete this task");
+      }
+
+      // Delete the task (user either owns it or has edit permission on the folder)
+      await db.delete(tasks).where(eq(tasks.id, taskId));
+    }
   );
 }
 

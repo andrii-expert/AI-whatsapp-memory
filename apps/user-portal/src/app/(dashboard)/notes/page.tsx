@@ -1355,11 +1355,15 @@ export default function NotesPage() {
                   <div className="flex-1" />
                 )}
 
-                {/* Add Note Button - disabled when viewing shared notes/folders */}
+                {/* Add Note Button - enabled for owned folders, all notes, or shared folders with edit permission */}
                 <Button
                   onClick={openAddNoteModal}
                   variant="orange-primary"
-                  disabled={!selectedFolderId && !viewAllNotes || viewAllShared || (selectedFolderId && sharedFolders.some((f: any) => f.id === selectedFolderId))}
+                  disabled={
+                    viewAllShared || 
+                    (!selectedFolderId && !viewAllNotes) ||
+                    (selectedFolderId && sharedFolders.some((f: any) => f.id === selectedFolderId && f.sharePermission !== "edit"))
+                  }
                   className="flex-shrink-0"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1541,8 +1545,8 @@ export default function NotesPage() {
                                   <Edit2 className="h-3.5 w-3.5" />
                                 </Button>
                               )}
-                              {/* Delete button - only for owned notes */}
-                              {isNoteOwner && (
+                              {/* Delete button - for owned notes or notes in shared folders with edit permission */}
+                              {(isNoteOwner || (isSharedNote && canEditNote && note.sharedViaFolder)) && (
                                 <Button
                                   variant="ghost"
                                   size="icon"

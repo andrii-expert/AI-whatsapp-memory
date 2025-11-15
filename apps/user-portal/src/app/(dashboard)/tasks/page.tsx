@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown, Users, Eye, Edit3 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
@@ -48,7 +48,7 @@ export default function TasksPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [viewAllTasks, setViewAllTasks] = useState(true); // Default to All Tasks view
   const [viewAllShared, setViewAllShared] = useState(false); // View all shared tasks
-  const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("open");
   const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,6 +63,8 @@ export default function TasksPage() {
   const [editFolderName, setEditFolderName] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const lastExpandedFolderRef = useRef<string | null>(null);
+  const foldersRef = useRef<any[]>([]);
   
   // Delete confirmation states
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -183,27 +185,56 @@ export default function TasksPage() {
     return sortFoldersRecursive(folders);
   }, [folders]);
 
+  // Update folders ref when allOwnedFolders changes
+  useEffect(() => {
+    foldersRef.current = allOwnedFolders;
+  }, [allOwnedFolders]);
+
   // Auto-expand parent folders when a folder is selected
   useEffect(() => {
-    if (selectedFolderId) {
-      const selectedFolderData = allOwnedFolders.find((f) => f.id === selectedFolderId);
-      if (selectedFolderData?.parentId) {
-        // Find all parent folders and expand them
-        const expandParents = (folderId: string) => {
-          const folder = allOwnedFolders.find((f) => f.id === folderId);
-          if (folder?.parentId) {
-            setExpandedFolders((prev) => {
-              const next = new Set(prev);
-              next.add(folder.parentId);
-              return next;
-            });
-            expandParents(folder.parentId);
-          }
-        };
-        expandParents(selectedFolderId);
-      }
+    if (!selectedFolderId) {
+      lastExpandedFolderRef.current = null;
+      return;
     }
-  }, [selectedFolderId, allOwnedFolders]);
+    
+    // Prevent re-expanding the same folder
+    if (lastExpandedFolderRef.current === selectedFolderId) {
+      return;
+    }
+    
+    const selectedFolderData = foldersRef.current.find((f) => f.id === selectedFolderId);
+    if (!selectedFolderData?.parentId) {
+      lastExpandedFolderRef.current = selectedFolderId;
+      return;
+    }
+
+    // Collect all parent folder IDs first
+    const parentIds = new Set<string>();
+    const collectParents = (folderId: string) => {
+      const folder = foldersRef.current.find((f) => f.id === folderId);
+      if (folder?.parentId) {
+        parentIds.add(folder.parentId);
+        collectParents(folder.parentId);
+      }
+    };
+    collectParents(selectedFolderId);
+
+    // Update state once with all parent IDs
+    if (parentIds.size > 0) {
+      setExpandedFolders((prev) => {
+        const next = new Set(prev);
+        parentIds.forEach(id => next.add(id));
+        // Only update if there are actually new folders to expand
+        if (next.size === prev.size && Array.from(parentIds).every(id => prev.has(id))) {
+          return prev; // Return same reference if no changes
+        }
+        return next;
+      });
+    }
+    
+    // Mark this folder as expanded
+    lastExpandedFolderRef.current = selectedFolderId;
+  }, [selectedFolderId]); // Only depend on selectedFolderId to prevent infinite loops
 
   // Close mobile sidebar on Escape key
   useEffect(() => {
@@ -1427,11 +1458,15 @@ export default function TasksPage() {
                   <div className="flex-1" />
                 )}
 
-                {/* Add Task Button - disabled when viewing shared tasks/folders */}
+                {/* Add Task Button - enabled for owned folders, all tasks, or shared folders with edit permission */}
                 <Button
                   onClick={openAddTaskModal}
                   variant="orange-primary"
-                  disabled={!selectedFolderId && !viewAllTasks || viewAllShared || (selectedFolderId && sharedFolders.some((f: any) => f.id === selectedFolderId))}
+                  disabled={
+                    viewAllShared || 
+                    (!selectedFolderId && !viewAllTasks) ||
+                    (selectedFolderId && sharedFolders.some((f: any) => f.id === selectedFolderId && f.sharePermission !== "edit"))
+                  }
                   className="flex-shrink-0"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1476,18 +1511,9 @@ export default function TasksPage() {
               </div>
 
               {/* Filter and Sort Controls */}
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="flex justify-between items-center gap-3 mb-4">
                 {/* Filter Buttons */}
                 <div className="flex gap-2 flex-wrap">
-                  <Button
-                    variant={
-                      filterStatus === "all" ? "blue-primary" : "outline"
-                    }
-                    size="sm"
-                    onClick={() => setFilterStatus("all")}
-                  >
-                    All
-                  </Button>
                   <Button
                     variant={
                       filterStatus === "open" ? "blue-primary" : "outline"
@@ -1504,66 +1530,141 @@ export default function TasksPage() {
                     size="sm"
                     onClick={() => setFilterStatus("completed")}
                   >
-                    Completed
+                    Closed
+                  </Button>
+                  <Button
+                    variant={
+                      filterStatus === "all" ? "blue-primary" : "outline"
+                    }
+                    size="sm"
+                    onClick={() => setFilterStatus("all")}
+                  >
+                    All
                   </Button>
                 </div>
 
-                {/* Sort Buttons */}
-                <div className="flex gap-2 flex-wrap sm:ml-auto">
-                  {/* Date Sort */}
-                  <div className="flex gap-0 border rounded-lg overflow-hidden">
-                    <Button
-                      variant={sortBy === "date" && sortOrder === "asc" ? "blue-primary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setSortBy("date");
-                        setSortOrder("asc");
+                {/* Sort Controls - Dropdown on mobile, buttons on desktop */}
+                <div className="flex gap-2 flex-wrap">
+                  {/* Mobile: Dropdown Menu */}
+                  <div className="sm:hidden w-full">
+                    <Select
+                      value={`${sortBy}-${sortOrder}`}
+                      onValueChange={(value) => {
+                        const [by, order] = value.split("-") as ["date" | "alphabetical", "asc" | "desc"];
+                        setSortBy(by);
+                        setSortOrder(order);
                       }}
-                      className="gap-1.5 rounded-none border-0 border-r"
                     >
-                      <Calendar className="h-3.5 w-3.5" />
-                      <ArrowUp className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant={sortBy === "date" && sortOrder === "desc" ? "blue-primary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setSortBy("date");
-                        setSortOrder("desc");
-                      }}
-                      className="gap-1.5 rounded-none border-0"
-                    >
-                      <Calendar className="h-3.5 w-3.5" />
-                      <ArrowDown className="h-3 w-3" />
-                    </Button>
+                      <SelectTrigger className="w-full h-11">
+                        <SelectValue>
+                          {sortBy === "date" && sortOrder === "asc" && (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <ArrowUp className="h-3 w-3" />
+                          </div>  )}
+                          {sortBy === "date" && sortOrder === "desc" && (
+                            <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <ArrowDown className="h-3 w-3" />
+                          </div>)}
+                          {sortBy === "alphabetical" && sortOrder === "asc" && (
+                            <div className="flex items-center gap-2">
+                            <SortAsc className="h-4 w-4" />
+                            <span>A-Z</span>
+                          </div>)}
+                          {sortBy === "alphabetical" && sortOrder === "desc" && (
+                            <div className="flex items-center gap-2">
+                            <SortDesc className="h-4 w-4" />
+                            <span>Z-A</span>
+                          </div>)}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date-asc">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <ArrowUp className="h-3 w-3" />
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="date-desc">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <ArrowDown className="h-3 w-3" />
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="alphabetical-asc">
+                          <div className="flex items-center gap-2">
+                            <SortAsc className="h-4 w-4" />
+                            <span>A-Z</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="alphabetical-desc">
+                          <div className="flex items-center gap-2">
+                            <SortDesc className="h-4 w-4" />
+                            <span>Z-A</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {/* Alphabetical Sort */}
-                  <div className="flex gap-0 border rounded-lg overflow-hidden">
-                    <Button
-                      variant={sortBy === "alphabetical" && sortOrder === "asc" ? "blue-primary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setSortBy("alphabetical");
-                        setSortOrder("asc");
-                      }}
-                      className="gap-1.5 rounded-none border-0 border-r"
-                    >
-                      <SortAsc className="h-3.5 w-3.5" />
-                      A-Z
-                    </Button>
-                    <Button
-                      variant={sortBy === "alphabetical" && sortOrder === "desc" ? "blue-primary" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setSortBy("alphabetical");
-                        setSortOrder("desc");
-                      }}
-                      className="gap-1.5 rounded-none border-0"
-                    >
-                      <SortDesc className="h-3.5 w-3.5" />
-                      Z-A
-                    </Button>
+                  {/* Desktop: Sort Buttons */}
+                  <div className="hidden sm:flex gap-2 flex-wrap">
+                    {/* Date Sort */}
+                    <div className="flex gap-0 border rounded-lg overflow-hidden">
+                      <Button
+                        variant={sortBy === "date" && sortOrder === "asc" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSortBy("date");
+                          setSortOrder("asc");
+                        }}
+                        className="gap-1.5 rounded-none border-0 border-r"
+                      >
+                        <Calendar className="h-3.5 w-3.5" />
+                        <ArrowUp className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant={sortBy === "date" && sortOrder === "desc" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSortBy("date");
+                          setSortOrder("desc");
+                        }}
+                        className="gap-1.5 rounded-none border-0"
+                      >
+                        <Calendar className="h-3.5 w-3.5" />
+                        <ArrowDown className="h-3 w-3" />
+                      </Button>
+                    </div>
+
+                    {/* Alphabetical Sort */}
+                    <div className="flex gap-0 border rounded-lg overflow-hidden">
+                      <Button
+                        variant={sortBy === "alphabetical" && sortOrder === "asc" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSortBy("alphabetical");
+                          setSortOrder("asc");
+                        }}
+                        className="gap-1.5 rounded-none border-0 border-r"
+                      >
+                        <SortAsc className="h-3.5 w-3.5" />
+                        A-Z
+                      </Button>
+                      <Button
+                        variant={sortBy === "alphabetical" && sortOrder === "desc" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSortBy("alphabetical");
+                          setSortOrder("desc");
+                        }}
+                        className="gap-1.5 rounded-none border-0"
+                      >
+                        <SortDesc className="h-3.5 w-3.5" />
+                        Z-A
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1715,8 +1816,8 @@ export default function TasksPage() {
                                       <Edit2 className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {/* Delete button - only for owned tasks */}
-                                  {isTaskOwner && (
+                                  {/* Delete button - for owned tasks or tasks in shared folders with edit permission */}
+                                  {(isTaskOwner || (isSharedTask && canEditTask && task.sharedViaFolder)) && (
                                     <Button
                                       size="icon"
                                       variant="ghost"
@@ -1850,8 +1951,8 @@ export default function TasksPage() {
                                       <Edit2 className="h-3.5 w-3.5" />
                                     </Button>
                                   )}
-                                  {/* Delete button - only for owned tasks */}
-                                  {isTaskOwner && (
+                                  {/* Delete button - for owned tasks or tasks in shared folders with edit permission */}
+                                  {(isTaskOwner || (isSharedTask && canEditTask && task.sharedViaFolder)) && (
                                     <Button
                                       size="icon"
                                       variant="ghost"
