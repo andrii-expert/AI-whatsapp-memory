@@ -69,6 +69,7 @@ export default function TasksPage() {
   // Delete confirmation states
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ type: "folder" | "task"; id: string; name: string } | null>(null);
+  const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
   
   // Task modal states
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -404,6 +405,17 @@ export default function TasksPage() {
 
     return tasks;
   }, [allTasks, selectedFolderId, filterStatus, searchQuery, searchScope, sortBy, sortOrder, viewAllShared, viewAllTasks, sharedTasks, sharedFolders]);
+
+  // Calculate deletable tasks (only tasks user can delete)
+  const deletableTasks = useMemo(() => {
+    return filteredTasks.filter((task) => {
+      const isSharedTask = task.isSharedWithMe || false;
+      const isTaskOwner = !isSharedTask;
+      const canEditTask = !isSharedTask || task.sharePermission === "edit";
+      // User can delete if they own the task OR if it's a shared task with edit permission via folder
+      return isTaskOwner || (isSharedTask && canEditTask && task.sharedViaFolder);
+    });
+  }, [filteredTasks]);
 
   // Group tasks - only by date when sorting by date, otherwise show all in one group
   const groupedTasks = useMemo(() => {
@@ -821,6 +833,38 @@ export default function TasksPage() {
     }
     setDeleteConfirmOpen(false);
     setItemToDelete(null);
+  };
+
+  const handleDeleteAll = () => {
+    if (deletableTasks.length === 0) return;
+    setDeleteAllConfirmOpen(true);
+  };
+
+  const confirmDeleteAll = async () => {
+    if (deletableTasks.length === 0) return;
+    
+    const taskIds = deletableTasks.map(task => task.id);
+    const count = taskIds.length;
+    
+    try {
+      // Delete all tasks in parallel
+      await Promise.all(
+        taskIds.map(taskId => deleteTaskMutation.mutateAsync({ id: taskId }))
+      );
+      
+      setDeleteAllConfirmOpen(false);
+      toast({
+        title: "Success",
+        description: `Deleted ${count} task${count !== 1 ? 's' : ''} successfully`,
+      });
+    } catch (error) {
+      console.error("Error deleting tasks:", error);
+      toast({
+        title: "Error",
+        description: "Some tasks could not be deleted. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleToggleTask = (taskId: string) => {
@@ -1512,8 +1556,8 @@ export default function TasksPage() {
 
               {/* Filter and Sort Controls */}
               <div className="flex flex-row justify-between items-center gap-3 mb-4">
-                {/* Filter Buttons */}
-                <div className="flex gap-2 flex-wrap">
+                {/* Filter Buttons and Delete All */}
+                <div className="flex gap-2 flex-wrap items-center">
                   <Button
                     variant={
                       filterStatus === "open" ? "blue-primary" : "outline"
@@ -1541,6 +1585,22 @@ export default function TasksPage() {
                   >
                     All
                   </Button>
+                  
+                  {/* Delete All Button */}
+                  {deletableTasks.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDeleteAll}
+                      className="bg-red-600 text-white border-red-600 hover:bg-red-700 hover:border-red-700"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Delete All
+                      <span className="ml-1.5 px-1.5 py-0.5 bg-orange-500 text-white rounded-full text-xs font-semibold">
+                        {deletableTasks.length}
+                      </span>
+                    </Button>
+                  )}
                 </div>
 
                 {/* Sort Controls - Dropdown on mobile, buttons on desktop */}
@@ -2321,6 +2381,74 @@ export default function TasksPage() {
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete {itemToDelete?.type === "folder" ? "Folder" : "Task"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete All Confirmation Modal */}
+      <AlertDialog open={deleteAllConfirmOpen} onOpenChange={setDeleteAllConfirmOpen}>
+        <AlertDialogContent className="sm:max-w-[500px]">
+          <AlertDialogHeader className="space-y-3">
+            <AlertDialogTitle className="text-xl font-bold flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              Delete All Tasks
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4 text-base pt-2">
+              <p className="text-gray-700">
+                Are you sure you want to delete{" "}
+                <span className="font-bold text-gray-900">
+                  {deletableTasks.length} task{deletableTasks.length !== 1 ? 's' : ''}
+                </span>
+                ?
+              </p>
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">
+                        !
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-red-900 mb-1">
+                      Warning: Permanent Action
+                    </p>
+                    <p className="text-sm text-red-800">
+                      This will permanently delete all {deletableTasks.length} currently visible task{deletableTasks.length !== 1 ? 's' : ''}. 
+                      This action cannot be undone.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3 pt-4">
+            <AlertDialogCancel
+              onClick={() => setDeleteAllConfirmOpen(false)}
+              className="flex-1 sm:flex-none h-11"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteAll}
+              disabled={deleteTaskMutation.isPending || deletableTasks.length === 0}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600 flex-1 sm:flex-none h-11 min-w-[140px]"
+            >
+              {deleteTaskMutation.isPending ? (
+                <>
+                  <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete All ({deletableTasks.length})
+                </>
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
