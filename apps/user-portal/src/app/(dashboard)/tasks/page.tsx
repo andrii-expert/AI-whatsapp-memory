@@ -2152,7 +2152,7 @@ export default function TasksPage() {
                     updateTaskMutation.isPending ||
                     !taskModalTitle.trim()
                   }
-                  className="flex-1 sm:flex-none h-11 min-w-[140px]"
+                  className="flex-1 sm:flex-none h-11 min-w-[160px]"
                 >
                 {createTaskMutation.isPending ||
                 updateTaskMutation.isPending ? (
