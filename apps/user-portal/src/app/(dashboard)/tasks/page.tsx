@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown, Users, Eye, Edit3 } from "lucide-react";
+import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown, Users, Eye, Edit3, MoreVertical, Share2 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -35,6 +35,12 @@ import {
   DialogTitle,
 } from "@imaginecalendar/ui/dialog";
 import { Label } from "@imaginecalendar/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@imaginecalendar/ui/dropdown-menu";
 import { ShareButton } from "@/components/share-button";
 import { ShareModal } from "@/components/share-modal";
 import { ShareDetailsModal } from "@/components/share-details-modal";
@@ -1013,61 +1019,98 @@ export default function TasksPage() {
             )}
           </div>
 
-          {/* Right side: Action buttons */}
-          <div className="flex items-center gap-1 transition-opacity">
-            {/* Share button - only show for owned folders */}
-            {!isEditingFolder && isOwner && (
-              <ShareButton
-                onClick={() => {
+          {/* Right side: 3-dot menu button with dropdown */}
+          {!isEditingFolder && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 hover:bg-gray-200"
+                  title="Folder options"
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                {/* Share button - only show for owned folders */}
+                {isOwner && (() => {
                   const shareCount = getShareCount("task_folder", folder.id);
-                  if (shareCount > 0) {
-                    openShareDetails("task_folder", folder.id, folder.name);
-                  } else {
-                    openShareModal("task_folder", folder.id, folder.name);
-                  }
-                }}
-                isShared={getShareCount("task_folder", folder.id) > 0}
-                shareCount={getShareCount("task_folder", folder.id)}
-                size="sm"
-              />
-            )}
-            {/* Edit folder button - only if can edit */}
-            {!isEditingFolder && canEdit && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-indigo-100 hover:text-indigo-600"
-                onClick={() => handleEditFolder(folder.id, folder.name)}
-                title="Edit folder name"
-              >
-                <Edit2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {/* Add subfolder button - only show on top-level folders (depth 0) and if can edit */}
-            {level === 0 && !isEditingFolder && canEdit && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-blue-100 hover:text-blue-600"
-                onClick={() => setAddingSubfolderToId(folder.id)}
-                title="Add subfolder"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            )}
-            {/* Delete button - only for owned folders (not shared) and not General */}
-            {!isEditingFolder && isOwner && folder.name.toLowerCase() !== "general" && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-red-100 hover:text-red-600"
-                onClick={() => handleDeleteFolder(folder.id, folder.name)}
-                title="Delete folder"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+                  const isShared = shareCount > 0;
+                  return (
+                    <DropdownMenuItem
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        if (isShared) {
+                          openShareDetails("task_folder", folder.id, folder.name);
+                        } else {
+                          openShareModal("task_folder", folder.id, folder.name);
+                        }
+                      }}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      {isShared ? (
+                        <>
+                          <Users className="h-4 w-4" />
+                          <span>Shared</span>
+                          <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                            {shareCount}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Share2 className="h-4 w-4" />
+                          <span>Share</span>
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })()}
+                {/* Edit folder button - only if can edit */}
+                {canEdit && (
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleEditFolder(folder.id, folder.name);
+                    }}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    <span>Edit</span>
+                  </DropdownMenuItem>
+                )}
+                {/* Add subfolder button - only show on top-level folders (depth 0) and if can edit */}
+                {level === 0 && canEdit && (
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      setAddingSubfolderToId(folder.id);
+                    }}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add subfolder</span>
+                  </DropdownMenuItem>
+                )}
+                {/* Delete button - only for owned folders (not shared) and not General */}
+                {isOwner && folder.name.toLowerCase() !== "general" && (
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleDeleteFolder(folder.id, folder.name);
+                    }}
+                    className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Subfolder input form */}
