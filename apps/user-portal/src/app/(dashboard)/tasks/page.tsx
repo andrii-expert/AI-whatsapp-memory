@@ -657,16 +657,46 @@ export default function TasksPage() {
 
   const toggleTaskMutation = useMutation(
     trpc.tasks.toggleStatus.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries();
+      onMutate: async ({ id }) => {
+        // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+        await queryClient.cancelQueries({ queryKey: trpc.tasks.list.queryKey({}) });
+
+        // Snapshot the previous value
+        const previousTasks = queryClient.getQueryData(trpc.tasks.list.queryKey({}));
+
+        // Optimistically update to the new value
+        queryClient.setQueryData(trpc.tasks.list.queryKey({}), (old: any) => {
+          if (!old) return old;
+          return old.map((task: any) => {
+            if (task.id === id) {
+              return {
+                ...task,
+                status: task.status === "completed" ? "open" : "completed",
+                completedAt: task.status === "completed" ? null : new Date().toISOString(),
+              };
+            }
+            return task;
+          });
+        });
+
+        // Return a context object with the snapshotted value
+        return { previousTasks };
       },
-      onError: (error) => {
+      onError: (error, variables, context) => {
+        // If the mutation fails, use the context returned from onMutate to roll back
+        if (context?.previousTasks) {
+          queryClient.setQueryData(trpc.tasks.list.queryKey({}), context.previousTasks);
+        }
         console.error("Task status toggle error:", error);
         toast({
           title: "Error",
           description: error.message || "Failed to update task status",
           variant: "destructive",
         });
+      },
+      onSettled: () => {
+        // Always refetch after error or success to ensure we have the latest data
+        queryClient.invalidateQueries({ queryKey: trpc.tasks.list.queryKey({}) });
       },
     })
   );
