@@ -947,6 +947,26 @@ export default function TasksPage() {
     });
   };
 
+  const formatDateTime = (dateTimeStr: string | Date | null | undefined) => {
+    if (!dateTimeStr) return "";
+    const date = new Date(dateTimeStr);
+    if (isNaN(date.getTime())) return "";
+    
+    // Format: "MM/DD/YYYY, HH:MM AM/PM"
+    const dateStr = date.toLocaleDateString("en-US", {
+      month: "2-digit",
+      day: "2-digit",
+      year: "numeric",
+    });
+    const timeStr = date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+    
+    return `${dateStr}, ${timeStr}`;
+  };
+
   // Share handlers
   const openShareModal = (type: "task" | "task_folder", id: string, name: string) => {
     setShareResourceType(type);
@@ -1938,6 +1958,7 @@ export default function TasksPage() {
                                   )}
                                 </div>
                                 {/* Show folder path for All Tasks or All Shared views - only if task has an accessible folder */}
+                                <div className="flex items-center justify-between gap-1.5 mt-1">
                                 {(viewAllTasks || viewAllShared) && task.folderId && isFolderAccessible(task.folderId) && (
                                   <div className="flex items-center gap-1.5 mt-1">
                                     <FolderClosed className="h-3 w-3 text-gray-400" />
@@ -1946,6 +1967,16 @@ export default function TasksPage() {
                                     </span>
                                   </div>
                                 )}
+                                {/* Created Date & Time */}
+                                {task.createdAt && (
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <Calendar className="h-3 w-3 text-gray-400" />
+                                    <span className="text-xs text-gray-500">
+                                      Created: {formatDateTime(task.createdAt)}
+                                    </span>
+                                  </div>
+                                )}
+                                </div>
                               </div>
 
                               {/* Due Date */}
@@ -2075,6 +2106,15 @@ export default function TasksPage() {
                                     <FolderClosed className="h-3 w-3 text-gray-400" />
                                     <span className="text-xs text-gray-500">
                                       {getTaskFolderPath(task.folderId)}
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Created Date & Time */}
+                                {task.createdAt && (
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <Calendar className="h-3 w-3 text-gray-400" />
+                                    <span className="text-xs text-gray-500">
+                                      Created: {formatDateTime(task.createdAt)}
                                     </span>
                                   </div>
                                 )}
