@@ -110,6 +110,9 @@ export default function TasksPage() {
   const { data: sharedResources } = useQuery(
     trpc.taskSharing.getSharedWithMe.queryOptions()
   );
+  const { data: userPreferences } = useQuery(
+    trpc.preferences.get.queryOptions()
+  );
 
   // Extract shared tasks and folders from sharedResources with proper permission metadata
   const sharedTasks = useMemo(() => {
@@ -982,16 +985,45 @@ export default function TasksPage() {
     const date = new Date(dateTimeStr);
     if (isNaN(date.getTime())) return "";
     
-    // Format: "MM/DD/YYYY, HH:MM AM/PM"
-    const dateStr = date.toLocaleDateString("en-US", {
+    const dateFormat = userPreferences?.dateFormat || "DD/MM/YYYY";
+    const timeFormat = userPreferences?.timeFormat || "24h";
+    const timezone = userPreferences?.timezone || "Africa/Johannesburg";
+    
+    // Use Intl.DateTimeFormat to get date components in user's timezone
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
       month: "2-digit",
       day: "2-digit",
-      year: "numeric",
     });
+    
+    const parts = formatter.formatToParts(date);
+    const year = parts.find(p => p.type === "year")?.value || "";
+    const month = parts.find(p => p.type === "month")?.value || "";
+    const day = parts.find(p => p.type === "day")?.value || "";
+    
+    // Format date based on user preference
+    let dateStr = "";
+    switch (dateFormat) {
+      case "DD/MM/YYYY":
+        dateStr = `${day}/${month}/${year}`;
+        break;
+      case "MM/DD/YYYY":
+        dateStr = `${month}/${day}/${year}`;
+        break;
+      case "YYYY-MM-DD":
+        dateStr = `${year}-${month}-${day}`;
+        break;
+      default:
+        dateStr = `${day}/${month}/${year}`;
+    }
+    
+    // Format time based on user preference
     const timeStr = date.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
-      hour12: true,
+      hour12: timeFormat === "12h",
+      timeZone: timezone,
     });
     
     return `${dateStr}, ${timeStr}`;
