@@ -412,6 +412,55 @@ export default function TasksPage() {
     return tasks;
   }, [allTasks, selectedFolderId, filterStatus, searchQuery, searchScope, sortBy, sortOrder, viewAllShared, viewAllTasks, sharedTasks, sharedFolders]);
 
+  // Calculate task counts for status badges (before status and search filtering)
+  const taskCounts = useMemo(() => {
+    let tasks = allTasks;
+
+    // If viewing all shared tasks, show both individual shared tasks AND tasks from shared folders
+    if (viewAllShared && !selectedFolderId) {
+      // Combine individual shared tasks with tasks from all shared folders
+      const tasksFromSharedFolders = sharedFolders.flatMap((folder: any) => folder.tasks || []);
+      const allSharedTasks = [...sharedTasks, ...tasksFromSharedFolders];
+      
+      // Deduplicate tasks by ID and keep the one with better permission (edit > view)
+      const taskMap = new Map<string, any>();
+      allSharedTasks.forEach((task: any) => {
+        const existingTask = taskMap.get(task.id);
+        if (!existingTask) {
+          taskMap.set(task.id, task);
+        } else {
+          const currentPermission = existingTask.sharePermission || "view";
+          const newPermission = task.sharePermission || "view";
+          if (newPermission === "edit" && currentPermission === "view") {
+            taskMap.set(task.id, task);
+          }
+        }
+      });
+      tasks = Array.from(taskMap.values());
+    }
+    // Filter by folder
+    else if (!viewAllTasks && !viewAllShared && selectedFolderId) {
+      const isSharedFolder = sharedFolders.some((f: any) => f.id === selectedFolderId);
+      if (isSharedFolder) {
+        const sharedFolder = sharedFolders.find((f: any) => f.id === selectedFolderId);
+        tasks = sharedFolder?.tasks || [];
+      } else {
+        tasks = tasks.filter((t) => t.folderId === selectedFolderId && !t.isSharedWithMe);
+      }
+    }
+    // When viewing "All Tasks", exclude shared tasks
+    else if (viewAllTasks) {
+      tasks = tasks.filter((t) => !t.isSharedWithMe);
+    }
+
+    // Count tasks by status (before search filtering)
+    const openCount = tasks.filter((t) => t.status === "open").length;
+    const completedCount = tasks.filter((t) => t.status === "completed").length;
+    const allCount = tasks.length;
+
+    return { open: openCount, completed: completedCount, all: allCount };
+  }, [allTasks, selectedFolderId, viewAllShared, viewAllTasks, sharedTasks, sharedFolders]);
+
   // Calculate deletable tasks (only tasks user can delete)
   const deletableTasks = useMemo(() => {
     return filteredTasks.filter((task) => {
@@ -1601,8 +1650,14 @@ export default function TasksPage() {
                     }
                     size="sm"
                     onClick={() => setFilterStatus("open")}
+                    className="relative"
                   >
                     Open
+                    {taskCounts.open > 0 && (
+                      <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+                        {taskCounts.open}
+                      </span>
+                    )}
                   </Button>
                   <Button
                     variant={
@@ -1610,8 +1665,14 @@ export default function TasksPage() {
                     }
                     size="sm"
                     onClick={() => setFilterStatus("completed")}
+                    className="relative"
                   >
                     Closed
+                    {taskCounts.completed > 0 && (
+                      <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+                        {taskCounts.completed}
+                      </span>
+                    )}
                   </Button>
                   <Button
                     variant={
@@ -1619,8 +1680,14 @@ export default function TasksPage() {
                     }
                     size="sm"
                     onClick={() => setFilterStatus("all")}
+                    className="relative"
                   >
                     All
+                    {taskCounts.all > 0 && (
+                      <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+                        {taskCounts.all}
+                      </span>
+                    )}
                   </Button>
                   
                   {/* Delete All Button */}
