@@ -1310,23 +1310,22 @@ export default function TasksPage() {
         </div>
 
         <Button
-                onClick={openAddTaskModal}
-                variant="orange-primary"
-                disabled={
-                  viewAllShared ||
-                  (!selectedFolderId && !viewAllTasks) ||
-                  (selectedFolderId &&
-                    sharedFolders.some(
-                      (f: any) =>
-                        f.id === selectedFolderId &&
-                        f.sharePermission !== "edit"
-                    ))
-                }
-                className="flex-shrink-0 lg:hidden"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Task
-              </Button>
+          onClick={openAddTaskModal}
+          variant="orange-primary"
+          disabled={
+            viewAllShared ||
+            (!selectedFolderId && !viewAllTasks) ||
+            (selectedFolderId &&
+              sharedFolders.some(
+                (f: any) =>
+                  f.id === selectedFolderId && f.sharePermission !== "edit"
+              ))
+          }
+          className="flex-shrink-0 lg:hidden"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Task
+        </Button>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -1722,16 +1721,16 @@ export default function TasksPage() {
                 Add Task
               </Button>
               {/* Mobile - Folder Menu and Add Task Button */}
-        <div className="lg:hidden flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setIsMobileSidebarOpen(true)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-          >
-            <Menu className="h-4 w-4" />
-            <span className="font-medium">Folders</span>
-          </Button>
-        </div>
+              <div className="lg:hidden flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsMobileSidebarOpen(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
+                >
+                  <Menu className="h-4 w-4" />
+                  <span className="font-medium">Folders</span>
+                </Button>
+              </div>
             </div>
 
             {/* Search Bar */}

@@ -25,6 +25,7 @@ import {
   Users,
   Eye,
   Edit3,
+  MoreVertical,
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -60,6 +61,12 @@ import {
   DialogTitle,
 } from "@imaginecalendar/ui/dialog";
 import { Label } from "@imaginecalendar/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@imaginecalendar/ui/dropdown-menu";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { ShareButton } from "@/components/share-button";
@@ -747,14 +754,27 @@ export default function NotesPage() {
     return allNotes.filter((n) => n.folderId === folderId && !n.isSharedWithMe).length;
   };
 
+  // Get total note count including subfolders
+  const getTotalNoteCount = (folder: any): number => {
+    let count = getNoteCount(folder.id);
+    if (folder.subfolders && folder.subfolders.length > 0) {
+      folder.subfolders.forEach((subfolder: any) => {
+        count += getTotalNoteCount(subfolder);
+      });
+    }
+    return count;
+  };
+
   // Recursive folder rendering component
   const renderFolder = (folder: any, level: number = 0) => {
     const isExpanded = expandedFolders.has(folder.id);
-    const isSelected = selectedFolderId === folder.id && !viewAllNotes && !viewAllShared;
+    const isSelected = selectedFolderId === folder.id && !viewAllNotes;
     const hasSubfolders = folder.subfolders && folder.subfolders.length > 0;
     const isAddingSubfolder = addingSubfolderToId === folder.id;
     const isEditingFolder = editingFolderId === folder.id;
     const noteCount = getNoteCount(folder.id);
+    const totalNoteCount = getTotalNoteCount(folder);
+    const subfolderCount = hasSubfolders ? folder.subfolders.length : 0;
     
     // Check if folder is shared with user (not owned)
     const isSharedFolder = folder.isSharedWithMe || false;
@@ -828,61 +848,98 @@ export default function NotesPage() {
             )}
           </div>
 
-          {/* Right side: Action buttons */}
-          <div className="flex items-center gap-1 transition-opacity">
-            {/* Share button - only show for owned folders */}
-            {!isEditingFolder && isOwner && (
-              <ShareButton
-                onClick={() => {
+          {/* Right side: 3-dot menu button with dropdown */}
+          {!isEditingFolder && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 hover:bg-gray-200"
+                  title="Folder options"
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                {/* Share button - only show for owned folders */}
+                {isOwner && (() => {
                   const shareCount = getShareCount("note_folder", folder.id);
-                  if (shareCount > 0) {
-                    openShareDetails("note_folder", folder.id, folder.name);
-                  } else {
-                    openShareModal("note_folder", folder.id, folder.name);
-                  }
-                }}
-                isShared={getShareCount("note_folder", folder.id) > 0}
-                shareCount={getShareCount("note_folder", folder.id)}
-                size="sm"
-              />
-            )}
-            {/* Edit folder button - only if can edit */}
-            {!isEditingFolder && canEdit && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-indigo-100 hover:text-indigo-600"
-                onClick={() => handleEditFolder(folder.id, folder.name)}
-                title="Edit folder name"
-              >
-                <Edit2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {/* Add subfolder button - only show on top-level folders (depth 0) and if can edit */}
-            {level === 0 && !isEditingFolder && canEdit && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-blue-100 hover:text-blue-600"
-                onClick={() => setAddingSubfolderToId(folder.id)}
-                title="Add subfolder"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            )}
-            {/* Delete button - only for owned folders (not shared) and not General */}
-            {!isEditingFolder && isOwner && folder.name.toLowerCase() !== "general" && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-red-100 hover:text-red-600"
-                onClick={() => handleDeleteFolder(folder.id, folder.name)}
-                title="Delete folder"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+                  const isShared = shareCount > 0;
+                  return (
+                    <DropdownMenuItem
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        if (isShared) {
+                          openShareDetails("note_folder", folder.id, folder.name);
+                        } else {
+                          openShareModal("note_folder", folder.id, folder.name);
+                        }
+                      }}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      {isShared ? (
+                        <>
+                          <Users className="h-4 w-4" />
+                          <span>Shared</span>
+                          <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                            {shareCount}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Share2 className="h-4 w-4" />
+                          <span>Share</span>
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })()}
+                {/* Edit folder button - only if can edit */}
+                {canEdit && (
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleEditFolder(folder.id, folder.name);
+                    }}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    <span>Edit</span>
+                  </DropdownMenuItem>
+                )}
+                {/* Add subfolder button - only show on top-level folders (depth 0) and if can edit */}
+                {level === 0 && canEdit && (
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      setAddingSubfolderToId(folder.id);
+                    }}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add subfolder</span>
+                  </DropdownMenuItem>
+                )}
+                {/* Delete button - only for owned folders (not shared) and not General */}
+                {isOwner && folder.name.toLowerCase() !== "general" && (
+                  <DropdownMenuItem
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      handleDeleteFolder(folder.id, folder.name);
+                    }}
+                    className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Subfolder input form */}
@@ -901,20 +958,13 @@ export default function NotesPage() {
               className="flex-1 h-8 text-sm"
               autoFocus
             />
-            <Button type="submit" size="sm" variant="blue-primary" className="h-8" disabled={createFolderMutation.isPending}>
-              Add
-            </Button>
             <Button
-              type="button"
+              type="submit"
               size="sm"
-              variant="outline"
-              className="h-8"
-              onClick={() => {
-                setAddingSubfolderToId(null);
-                setNewSubfolderName("");
-              }}
+              variant="blue-primary"
+              className="h-8" disabled={createFolderMutation.isPending}
             >
-              Cancel
+              Add
             </Button>
           </form>
         )}
@@ -1837,7 +1887,7 @@ export default function NotesPage() {
                     updateNoteMutation.isPending ||
                     !noteModalTitle.trim()
                   }
-                  className="flex-1 sm:flex-none h-11 min-w-[140px]"
+                  className="flex-1 sm:flex-none h-11 min-w-[160px]"
                 >
                 {createNoteMutation.isPending || updateNoteMutation.isPending ? (
                   <>
