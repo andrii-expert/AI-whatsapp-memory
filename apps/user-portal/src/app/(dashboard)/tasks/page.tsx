@@ -1773,7 +1773,7 @@ export default function TasksPage() {
                   </Button>
                   
                   {/* Delete All Button */}
-                  {deletableTasks.length > 0 && (
+                  {deletableTasks.length > 0 && filterStatus === "completed" && !searchQuery && (
                     <Button
                       variant="outline"
                       size="sm"
