@@ -2005,7 +2005,7 @@ export default function TasksPage() {
             <div className="space-y-6">
               {groupedTasks.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  No tasks found. Create your first task above!
+                  No tasks found. Create your first task here or through WhatsApp!
                 </div>
               ) : (
                 groupedTasks.map(([dateKey, tasks]) => (

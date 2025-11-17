@@ -645,7 +645,7 @@ export default function RemindersPage() {
       {filtered.length === 0 && !query && (
         <div className="col-span-full text-center py-12 text-muted-foreground">
           <BellRing className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <p className="text-sm">No reminders yet. Click "New Reminder" to create your first reminder!</p>
+          <p className="text-sm">No reminders found. Create your first reminder here or through WhatsApp!</p>
         </div>
       )}
 

@@ -1698,7 +1698,7 @@ export default function NotesPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredNotes.length === 0 ? (
                   <div className="col-span-full text-center py-12 text-gray-500">
-                    No notes found. Click "Add Note" to create your first note!
+                    No notes found. Create your first note here or through WhatsApp!
                   </div>
                 ) : (
                   filteredNotes.map((note) => {
