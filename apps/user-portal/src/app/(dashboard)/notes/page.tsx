@@ -981,27 +981,34 @@ export default function NotesPage() {
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Home className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <span className="font-medium">Notes</span>
-      </div>
-        {/* Mobile - Folder Menu Button */}
-        <div className="lg:hidden flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setIsMobileSidebarOpen(true)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Menu className="h-4 w-4" />
-            <span className="font-medium">Folders</span>
-          </Button>
+            <Home className="h-4 w-4" />
+            Dashboard
+          </Link>
+          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+          <span className="font-medium">Notes</span>
         </div>
+
+        <Button
+          onClick={openAddNoteModal}
+          variant="orange-primary"
+          disabled={
+            viewAllShared ||
+            (!selectedFolderId && !viewAllNotes) ||
+            (selectedFolderId &&
+              sharedFolders.some(
+                (f: any) =>
+                  f.id === selectedFolderId && f.sharePermission !== "edit"
+              ))
+          }
+          className="flex-shrink-0 lg:hidden"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Note
+        </Button>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -1251,7 +1258,7 @@ export default function NotesPage() {
                     >
                       <Folder className="h-4 w-4 flex-shrink-0" />
                       <span className="flex-1 text-left">All Shared</span>
-                      <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                      <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                         {totalSharedNoteCount}
                       </span>
                     </button>
@@ -1285,7 +1292,7 @@ export default function NotesPage() {
                         </span>
                       </button>
                       {folder.notes && folder.notes.length > 0 && (
-                        <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                        <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                           {folder.notes.length}
                         </span>
                       )}
@@ -1300,96 +1307,187 @@ export default function NotesPage() {
         {/* Right Panel - Notes */}
         <div className="space-y-4">
           <div>
-              {/* Desktop - Folder breadcrumb and Add Note button */}
-              <div className="flex items-center justify-between mb-4 gap-4">
-                {viewAllNotes ? (
-                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                    <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
-                    <span className="font-bold text-gray-900">All Notes</span>
-                    <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
-                      {filteredNotes.length}
-                    </span>
-                  </div>
-                ) : viewAllShared ? (
-                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                    <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
-                    <span className="font-bold text-gray-900">All Shared</span>
-                    <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
-                      {filteredNotes.length}
-                    </span>
-                  </div>
-                ) : selectedFolder && folderPath.length > 0 ? (
-                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                    <FolderClosed className="h-6 w-6 flex-shrink-0" />
-                    {folderPath.map((name, index) => (
-                      <span key={index} className="flex items-center gap-2">
-                        {index > 0 && <span className="text-gray-400">/</span>}
-                        <span
-                          className={cn(
-                            index === folderPath.length - 1
-                              ? "font-semibold text-gray-900"
-                              : "",
-                            "truncate"
-                          )}
-                        >
-                          {name}
-                        </span>
+            {/* Desktop - Folder breadcrumb and Add Note button */}
+            <div className="flex items-center justify-between mb-4 gap-4">
+              {viewAllNotes ? (
+                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                  <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
+                  <span className="font-bold text-gray-900">All Notes</span>
+                </div>
+              ) : viewAllShared ? (
+                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                  <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                  <span className="font-bold text-gray-900">All Shared</span>
+                </div>
+              ) : selectedFolder && folderPath.length > 0 ? (
+                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                  <FolderClosed className="h-6 w-6 flex-shrink-0" />
+                  {folderPath.map((name, index) => (
+                    <span key={index} className="flex items-center gap-2">
+                      {index > 0 && <span className="text-gray-400">/</span>}
+                      <span
+                        className={cn(
+                          index === folderPath.length - 1
+                            ? "font-semibold text-gray-900"
+                            : "",
+                          "truncate"
+                        )}
+                      >
+                        {name}
                       </span>
-                    ))}
-                  </div>
-                ) : selectedFolderId && sharedFolders.find((f: any) => f.id === selectedFolderId) ? (
-                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                    <FolderClosed className="h-6 w-6 flex-shrink-0 text-purple-600" />
-                    <span className="font-bold text-gray-900">
-                      {sharedFolders.find((f: any) => f.id === selectedFolderId)?.name}
                     </span>
-                    <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                      <Users className="h-3 w-3" />
-                      Shared
-                    </span>
-                    <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
-                      {filteredNotes.length}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex-1" />
-                )}
+                  ))}
+                </div>
+              ) : selectedFolderId &&
+                sharedFolders.find((f: any) => f.id === selectedFolderId) ? (
+                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                  <FolderClosed className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                  <span className="font-bold text-gray-900">
+                    {
+                      sharedFolders.find((f: any) => f.id === selectedFolderId)
+                        ?.name
+                    }
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                    <Users className="h-3 w-3" />
+                    Shared
+                  </span>
+                  <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
+                    {filteredNotes.length}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex-1" />
+              )}
 
-                {/* Add Note Button - enabled for owned folders, all notes, or shared folders with edit permission */}
+              {/* Add Note Button - enabled for owned folders, all notes, or shared folders with edit permission */}
+              <Button
+                onClick={openAddNoteModal}
+                variant="orange-primary"
+                disabled={
+                  viewAllShared ||
+                  (!selectedFolderId && !viewAllNotes) ||
+                  (selectedFolderId &&
+                    sharedFolders.some(
+                      (f: any) =>
+                        f.id === selectedFolderId &&
+                        f.sharePermission !== "edit"
+                    ))
+                }
+                className="flex-shrink-0 hidden lg:flex"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Note
+              </Button>
+              {/* Mobile - Folder Menu and Add Note Button */}
+              <div className="lg:hidden flex gap-2">
                 <Button
-                  onClick={openAddNoteModal}
-                  variant="orange-primary"
-                  disabled={
-                    viewAllShared || 
-                    (!selectedFolderId && !viewAllNotes) ||
-                    (selectedFolderId && sharedFolders.some((f: any) => f.id === selectedFolderId && f.sharePermission !== "edit"))
-                  }
-                  className="flex-shrink-0"
+                  variant="outline"
+                  onClick={() => setIsMobileSidebarOpen(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Note
+                  <Menu className="h-4 w-4" />
+                  <span className="font-medium">Folders</span>
                 </Button>
               </div>
+            </div>
 
-              {/* Search Bar */}
-              <div className="mb-4 flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    placeholder={
-                      searchScope === "all"
-                        ? "Search notes..."
-                        : searchScope === "title"
-                        ? "Search by title..."
-                        : "Search by content..."
-                    }
-                    value={searchQuery}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setSearchQuery(e.target.value)
-                    }
-                    className="pr-10 h-11"
-                  />
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                </div>
+            {/* Search Bar */}
+            <div className="mb-4 w-full justify-between flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  placeholder={
+                    searchScope === "all"
+                      ? "Search notes..."
+                      : searchScope === "title"
+                      ? "Search by title..."
+                      : "Search by content..."
+                  }
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="pr-10 h-11"
+                />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              </div>
+              {/* Mobile: Dropdown Menu */}
+              <div className="sm:hidden w-full max-w-[100px]">
+                <Select
+                  value={`${sortBy}-${sortOrder}`}
+                  onValueChange={(value) => {
+                    const [by, order] = value.split("-") as [
+                      "date" | "alphabetical",
+                      "asc" | "desc"
+                    ];
+                    setSortBy(by);
+                    setSortOrder(order);
+                  }}
+                >
+                  <SelectTrigger className="w-full h-11">
+                    <SelectValue>
+                      <div className="flex items-center gap-2">
+                        {sortBy === "date" ? (
+                          <>
+                            <Calendar className="h-4 w-4" />
+                            {sortOrder === "asc" ? (
+                              <>
+                                <ArrowUp className="h-3 w-3" />
+                              </>
+                            ) : (
+                              <>
+                                <ArrowDown className="h-3 w-3" />
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {sortOrder === "asc" ? (
+                              <>
+                                <SortAsc className="h-4 w-4" />
+                                <span className="text-sm">A-Z</span>
+                              </>
+                            ) : (
+                              <>
+                                <SortDesc className="h-4 w-4" />
+                                <span className="text-sm">Z-A</span>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date-desc">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        <ArrowDown className="h-3 w-3" />
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="date-asc">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        <ArrowUp className="h-3 w-3" />
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="alphabetical-asc">
+                      <div className="flex items-center gap-2">
+                        <SortAsc className="h-4 w-4" />
+                        <span>A-Z</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="alphabetical-desc">
+                      <div className="flex items-center gap-2">
+                        <SortDesc className="h-4 w-4" />
+                        <span>Z-A</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Search Scope Selector - Desktop only */}
+              {/* <div className="hidden sm:block">
                 <Select
                   value={searchScope}
                   onValueChange={(value: "all" | "title" | "content") =>
@@ -1405,70 +1503,94 @@ export default function NotesPage() {
                     <SelectItem value="content">Content Only</SelectItem>
                   </SelectContent>
                 </Select>
+              </div> */}
+            </div>
+
+            {/* Sort Controls */}
+            <div className="flex flex-row w-full justify-between items-center sm:gap-3 sm:mb-4">
+              {/* Empty space for filter buttons (if needed in future) */}
+              <div className="flex w-full sm:w-auto justify-start gap-1.5 sm:gap-2 flex-wrap items-center">
+                {/* Placeholder for potential filter buttons */}
               </div>
 
-              {/* Sort Controls */}
-              <div className="flex justify-end gap-2 mb-4">
-                {/* Date Sort */}
-                <div className="flex gap-0 border rounded-lg overflow-hidden">
-                  <Button
-                    variant={sortBy === "date" && sortOrder === "desc" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setSortBy("date");
-                      setSortOrder("desc");
-                    }}
-                    className="gap-1.5 rounded-none border-0 border-r"
-                    title="Newest first"
-                  >
-                    <Calendar className="h-3.5 w-3.5" />
-                    <ArrowDown className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant={sortBy === "date" && sortOrder === "asc" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setSortBy("date");
-                      setSortOrder("asc");
-                    }}
-                    className="gap-1.5 rounded-none border-0"
-                    title="Oldest first"
-                  >
-                    <Calendar className="h-3.5 w-3.5" />
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
-                </div>
+              {/* Sort Controls - Dropdown on mobile, buttons on desktop */}
+              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                {/* Desktop: Sort Buttons */}
+                <div className="hidden sm:flex gap-2 flex-wrap">
+                  {/* Date Sort */}
+                  <div className="flex gap-0 border rounded-lg overflow-hidden">
+                    <Button
+                      variant={
+                        sortBy === "date" && sortOrder === "desc"
+                          ? "blue-primary"
+                          : "outline"
+                      }
+                      size="sm"
+                      onClick={() => {
+                        setSortBy("date");
+                        setSortOrder("desc");
+                      }}
+                      className="gap-1.5 rounded-none border-0 border-r"
+                    >
+                      <Calendar className="h-3.5 w-3.5" />
+                      <ArrowDown className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant={
+                        sortBy === "date" && sortOrder === "asc"
+                          ? "blue-primary"
+                          : "outline"
+                      }
+                      size="sm"
+                      onClick={() => {
+                        setSortBy("date");
+                        setSortOrder("asc");
+                      }}
+                      className="gap-1.5 rounded-none border-0"
+                    >
+                      <Calendar className="h-3.5 w-3.5" />
+                      <ArrowUp className="h-3 w-3" />
+                    </Button>
+                  </div>
 
-                {/* Alphabetical Sort */}
-                <div className="flex gap-0 border rounded-lg overflow-hidden">
-                  <Button
-                    variant={sortBy === "alphabetical" && sortOrder === "asc" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setSortBy("alphabetical");
-                      setSortOrder("asc");
-                    }}
-                    className="gap-1.5 rounded-none border-0 border-r"
-                    title="A to Z"
-                  >
-                    <SortAsc className="h-3.5 w-3.5" />
-                    A-Z
-                  </Button>
-                  <Button
-                    variant={sortBy === "alphabetical" && sortOrder === "desc" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setSortBy("alphabetical");
-                      setSortOrder("desc");
-                    }}
-                    className="gap-1.5 rounded-none border-0"
-                    title="Z to A"
-                  >
-                    <SortDesc className="h-3.5 w-3.5" />
-                    Z-A
-                  </Button>
+                  {/* Alphabetical Sort */}
+                  <div className="flex gap-0 border rounded-lg overflow-hidden">
+                    <Button
+                      variant={
+                        sortBy === "alphabetical" && sortOrder === "asc"
+                          ? "blue-primary"
+                          : "outline"
+                      }
+                      size="sm"
+                      onClick={() => {
+                        setSortBy("alphabetical");
+                        setSortOrder("asc");
+                      }}
+                      className="gap-1.5 rounded-none border-0 border-r"
+                    >
+                      <SortAsc className="h-3.5 w-3.5" />
+                      A-Z
+                    </Button>
+                    <Button
+                      variant={
+                        sortBy === "alphabetical" && sortOrder === "desc"
+                          ? "blue-primary"
+                          : "outline"
+                      }
+                      size="sm"
+                      onClick={() => {
+                        setSortBy("alphabetical");
+                        setSortOrder("desc");
+                      }}
+                      className="gap-1.5 rounded-none border-0"
+                    >
+                      <SortDesc className="h-3.5 w-3.5" />
+                      Z-A
+                    </Button>
+                  </div>
                 </div>
               </div>
+            </div>
 
               {/* Notes Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
