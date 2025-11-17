@@ -98,21 +98,24 @@ export default function TasksPage() {
   const [shareResourceName, setShareResourceName] = useState("");
 
   // Fetch folders and tasks
-  const { data: allFolders = [] } = useQuery(
+  const { data: allFolders = [], isLoading: isLoadingFolders } = useQuery(
     trpc.tasks.folders.list.queryOptions()
   );
-  const { data: allTasks = [] } = useQuery(
+  const { data: allTasks = [], isLoading: isLoadingTasks } = useQuery(
     trpc.tasks.list.queryOptions({})
   );
-  const { data: myShares = [] } = useQuery(
+  const { data: myShares = [], isLoading: isLoadingShares } = useQuery(
     trpc.taskSharing.getMyShares.queryOptions()
   );
-  const { data: sharedResources } = useQuery(
+  const { data: sharedResources, isLoading: isLoadingSharedResources } = useQuery(
     trpc.taskSharing.getSharedWithMe.queryOptions()
   );
-  const { data: userPreferences } = useQuery(
+  const { data: userPreferences, isLoading: isLoadingPreferences } = useQuery(
     trpc.preferences.get.queryOptions()
   );
+
+  // Check if initial data is loading
+  const isLoadingInitialData = isLoadingFolders || isLoadingTasks || isLoadingShares || isLoadingSharedResources || isLoadingPreferences;
 
   // Extract shared tasks and folders from sharedResources with proper permission metadata
   const sharedTasks = useMemo(() => {
@@ -1292,6 +1295,20 @@ export default function TasksPage() {
       </div>
     );
   };
+
+  // Loading state
+  if (isLoadingInitialData) {
+    return (
+      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+            <p className="mt-4 text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">

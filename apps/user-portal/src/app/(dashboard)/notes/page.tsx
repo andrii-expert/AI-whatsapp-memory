@@ -141,6 +141,9 @@ export default function NotesPage() {
     ...trpc.noteSharing.getSharedWithMe.queryOptions(),
     enabled: hasNotesAccess,
   });
+  const { data: userPreferences } = useQuery(
+    trpc.preferences.get.queryOptions()
+  );
 
   // Extract shared notes and folders from sharedResources with proper permission metadata
   const sharedNotes = useMemo(() => {
@@ -740,6 +743,55 @@ export default function NotesPage() {
     setShareResourceId(id);
     setShareResourceName(name);
     setIsShareDetailsModalOpen(true);
+  };
+
+  const formatDateTime = (dateTimeStr: string | Date | null | undefined) => {
+    if (!dateTimeStr) return "";
+    const date = new Date(dateTimeStr);
+    if (isNaN(date.getTime())) return "";
+    
+    const dateFormat = userPreferences?.dateFormat || "DD/MM/YYYY";
+    const timeFormat = userPreferences?.timeFormat || "24h";
+    const timezone = userPreferences?.timezone || "Africa/Johannesburg";
+    
+    // Use Intl.DateTimeFormat to get date components in user's timezone
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    
+    const parts = formatter.formatToParts(date);
+    const year = parts.find(p => p.type === "year")?.value || "";
+    const month = parts.find(p => p.type === "month")?.value || "";
+    const day = parts.find(p => p.type === "day")?.value || "";
+    
+    // Format date based on user preference
+    let dateStr = "";
+    switch (dateFormat) {
+      case "DD/MM/YYYY":
+        dateStr = `${day}/${month}/${year}`;
+        break;
+      case "MM/DD/YYYY":
+        dateStr = `${month}/${day}/${year}`;
+        break;
+      case "YYYY-MM-DD":
+        dateStr = `${year}-${month}-${day}`;
+        break;
+      default:
+        dateStr = `${day}/${month}/${year}`;
+    }
+    
+    // Format time based on user preference
+    const timeStr = date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: timeFormat === "12h",
+      timeZone: timezone,
+    });
+    
+    return `${dateStr}, ${timeStr}`;
   };
 
   // Get share count for a resource
@@ -1750,7 +1802,7 @@ export default function NotesPage() {
                               </div>
                             )}
                             <span className="ml-auto">
-                              {new Date(note.createdAt).toLocaleDateString()}
+                              {formatDateTime(note.createdAt)}
                             </span>
                           </div>
                         </CardContent>
@@ -2053,7 +2105,7 @@ export default function NotesPage() {
                   </div>
                 )}
                 <span className="text-gray-500">
-                  {viewNoteData?.createdAt && new Date(viewNoteData.createdAt).toLocaleString()}
+                  {viewNoteData?.createdAt && formatDateTime(viewNoteData.createdAt)}
                 </span>
               </div>
             </AlertDialogDescription>
