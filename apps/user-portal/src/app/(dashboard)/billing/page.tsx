@@ -301,37 +301,74 @@ export default function BillingPage() {
   
   // Get default currency based on user's country
   const getDefaultCurrency = (): Currency => {
-    if (typeof window === "undefined") return "ZAR";
+    if (typeof window === "undefined") return "USD";
     
     try {
-      // Try to get country from browser's locale/timezone
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Method 1: Try to get country from browser's locale
       const locale = navigator.language || (navigator.languages && navigator.languages.length > 0 ? navigator.languages[0] : null) || "en-US";
       
-      // Extract country code from locale (e.g., "en-ZA" -> "ZA")
+      // Extract country code from locale (e.g., "en-ZA" -> "ZA", "en-US" -> "US")
       const localeParts = locale.split("-");
       const countryCode = localeParts.length > 1 && localeParts[1] ? localeParts[1].toUpperCase() : null;
       
-      // Map country codes to currencies
+      // Map country codes to currencies (priority order)
       if (countryCode === "ZA") return "ZAR";
       if (countryCode === "US") return "USD";
       if (countryCode === "GB" || countryCode === "UK") return "GBP";
       if (countryCode === "CA") return "CAD";
       if (countryCode === "AU") return "AUD";
-      if (countryCode === "DE" || countryCode === "NL" || countryCode === "FR") return "EUR";
+      if (countryCode === "DE" || countryCode === "NL" || countryCode === "FR" || 
+          countryCode === "BE" || countryCode === "AT" || countryCode === "IT" || 
+          countryCode === "ES" || countryCode === "PT" || countryCode === "IE" ||
+          countryCode === "FI" || countryCode === "GR" || countryCode === "LU") {
+        return "EUR";
+      }
       
-      // Check timezone for additional hints
+      // Method 2: Check timezone for additional hints
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      
+      // South Africa
+      if (timezone.includes("Africa/Johannesburg") || timezone.includes("Africa/Cape_Town")) {
+        return "ZAR";
+      }
+      
+      // United States
       if (timezone.includes("America/New_York") || timezone.includes("America/Chicago") || 
-          timezone.includes("America/Denver") || timezone.includes("America/Los_Angeles")) {
+          timezone.includes("America/Denver") || timezone.includes("America/Los_Angeles") ||
+          timezone.includes("America/Phoenix") || timezone.includes("America/Anchorage") ||
+          timezone.includes("America/Honolulu")) {
         return "USD";
       }
-      if (timezone.includes("Europe/London")) return "GBP";
-      if (timezone.includes("America/Toronto") || timezone.includes("America/Vancouver")) return "CAD";
-      if (timezone.includes("Australia")) return "AUD";
-      if (timezone.includes("Europe/Berlin") || timezone.includes("Europe/Amsterdam") || 
-          timezone.includes("Europe/Paris")) return "EUR";
       
-      // Default to USD for most countries, ZAR for South Africa
+      // United Kingdom
+      if (timezone.includes("Europe/London")) {
+        return "GBP";
+      }
+      
+      // Canada
+      if (timezone.includes("America/Toronto") || timezone.includes("America/Vancouver") ||
+          timezone.includes("America/Montreal") || timezone.includes("America/Edmonton") ||
+          timezone.includes("America/Winnipeg") || timezone.includes("America/Halifax")) {
+        return "CAD";
+      }
+      
+      // Australia
+      if (timezone.includes("Australia/Sydney") || timezone.includes("Australia/Melbourne") ||
+          timezone.includes("Australia/Brisbane") || timezone.includes("Australia/Perth") ||
+          timezone.includes("Australia/Adelaide") || timezone.includes("Australia/Darwin")) {
+        return "AUD";
+      }
+      
+      // European countries (EUR)
+      if (timezone.includes("Europe/Berlin") || timezone.includes("Europe/Amsterdam") || 
+          timezone.includes("Europe/Paris") || timezone.includes("Europe/Rome") ||
+          timezone.includes("Europe/Madrid") || timezone.includes("Europe/Brussels") ||
+          timezone.includes("Europe/Vienna") || timezone.includes("Europe/Stockholm") ||
+          timezone.includes("Europe/Copenhagen") || timezone.includes("Europe/Helsinki")) {
+        return "EUR";
+      }
+      
+      // Default to USD for most other countries
       return "USD";
     } catch (error) {
       console.error("Error detecting country:", error);
@@ -339,18 +376,28 @@ export default function BillingPage() {
     }
   };
 
-  // Currency state with localStorage persistence and country-based default
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("billing-currency");
-      if (saved && ["ZAR", "USD", "EUR", "GBP", "CAD", "AUD"].includes(saved)) {
-        return saved as Currency;
-      }
-      // If no saved currency, detect from country
-      return getDefaultCurrency();
+  // Currency state - will be set based on country detection on mount
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>("USD");
+
+  // Detect user's country and set currency on page load
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Check if user has a saved currency preference
+    const saved = localStorage.getItem("billing-currency");
+    if (saved && ["ZAR", "USD", "EUR", "GBP", "CAD", "AUD"].includes(saved)) {
+      // User has a saved preference, use it
+      setSelectedCurrency(saved as Currency);
+      return;
     }
-    return "ZAR";
-  });
+
+    // No saved preference - detect country and set currency automatically
+    const detectedCurrency = getDefaultCurrency();
+    setSelectedCurrency(detectedCurrency);
+    
+    // Save the detected currency so it persists
+    localStorage.setItem("billing-currency", detectedCurrency);
+  }, []);
 
   // Exchange rates state - only use real-time rates, no defaults
   const [exchangeRates, setExchangeRates] = useState<Record<Currency, number> | null>(null);
@@ -564,37 +611,6 @@ export default function BillingPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Currency Selector */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-600">Billing Currency</p>
-                {isLoadingRates && (
-                  <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
-                )}
-                {ratesLastUpdated && !isLoadingRates && exchangeRates && (
-                  <p className="text-xs text-gray-400">
-                    Updated {format(ratesLastUpdated, 'HH:mm')}
-                  </p>
-                )}
-              </div>
-              <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ZAR">ZAR (R) - South African Rand</SelectItem>
-                  <SelectItem value="USD">USD ($) - US Dollar</SelectItem>
-                  <SelectItem value="EUR">EUR (€) - Euro</SelectItem>
-                  <SelectItem value="GBP">GBP (£) - British Pound</SelectItem>
-                  <SelectItem value="CAD">CAD (CA$) - Canadian Dollar</SelectItem>
-                  <SelectItem value="AUD">AUD (AU$) - Australian Dollar</SelectItem>
-                </SelectContent>
-              </Select>
-              {ratesError && (
-                <p className="text-xs text-red-600 mt-1">{ratesError}</p>
-              )}
-            </div>
-
             {/* Subscription Details in 2-column grid */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -686,12 +702,45 @@ export default function BillingPage() {
       {/* Available Plans */}
       <Card>
         <CardHeader>
-          <CardTitle>Change Plan</CardTitle>
-          <CardDescription>
-            {currentPlanId === 'free' 
-              ? 'Upgrade to unlock premium features' 
-              : 'Switch to a different subscription plan'}
-          </CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <CardTitle>Change Plan</CardTitle>
+              <CardDescription>
+                {currentPlanId === 'free' 
+                  ? 'Upgrade to unlock premium features' 
+                  : 'Switch to a different subscription plan'}
+              </CardDescription>
+            </div>
+            {/* Currency Selector */}
+            <div className="flex-shrink-0">
+              <div className="flex items-center justify-end gap-2 mb-2">
+                {isLoadingRates && (
+                  <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+                )}
+                {ratesLastUpdated && !isLoadingRates && exchangeRates && (
+                  <p className="text-xs text-gray-400">
+                    Updated {format(ratesLastUpdated, 'HH:mm')}
+                  </p>
+                )}
+              </div>
+              <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ZAR">ZAR (R) - South African Rand</SelectItem>
+                  <SelectItem value="USD">USD ($) - US Dollar</SelectItem>
+                  <SelectItem value="EUR">EUR (€) - Euro</SelectItem>
+                  <SelectItem value="GBP">GBP (£) - British Pound</SelectItem>
+                  <SelectItem value="CAD">CAD (CA$) - Canadian Dollar</SelectItem>
+                  <SelectItem value="AUD">AUD (AU$) - Australian Dollar</SelectItem>
+                </SelectContent>
+              </Select>
+              {ratesError && (
+                <p className="text-xs text-red-600 mt-1 text-right">{ratesError}</p>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Monthly/Annual Toggle */}
