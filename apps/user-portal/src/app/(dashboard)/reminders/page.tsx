@@ -52,7 +52,7 @@ import { Home, ChevronLeft } from "lucide-react";
 
 // ==================== TYPES ====================
 
-type ReminderFrequency = "daily" | "hourly" | "minutely";
+type ReminderFrequency = "daily" | "hourly" | "minutely" | "once" | "monthly" | "yearly";
 
 interface Reminder {
   id: string;
@@ -61,6 +61,10 @@ interface Reminder {
   time: string | null; // HH:MM format for daily
   minuteOfHour: number | null; // 0-59 for hourly
   intervalMinutes: number | null; // for minutely
+  daysFromNow: number | null; // for once reminders
+  targetDate: Date | null; // for once reminders
+  dayOfMonth: number | null; // for monthly/yearly reminders
+  month: number | null; // for yearly reminders
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -73,6 +77,10 @@ interface ReminderFormData {
   time: string;
   minuteOfHour: number;
   intervalMinutes: number;
+  daysFromNow: number;
+  targetDate: string; // ISO date string for datetime-local input
+  dayOfMonth: number;
+  month: number;
   active: boolean;
 }
 
@@ -126,6 +134,66 @@ function nextForMinutely(interval: number = 1, from: Date = new Date()): Date {
   return d;
 }
 
+function nextForOnce(daysFromNow: number | null, targetDate: Date | null, from: Date = new Date()): Date | null {
+  if (targetDate) {
+    const target = new Date(targetDate);
+    return target > from ? target : null;
+  }
+  if (daysFromNow !== null) {
+    const d = new Date(from);
+    d.setDate(d.getDate() + daysFromNow);
+    d.setHours(9, 0, 0, 0); // Default to 9 AM
+    return d;
+  }
+  return null;
+}
+
+function nextForMonthly(dayOfMonth: number, time: string | null, from: Date = new Date()): Date {
+  const d = new Date(from);
+  const targetDay = Math.min(dayOfMonth, 31);
+  const [hours, minutes] = time ? time.split(":").map(Number) : [9, 0];
+  
+  // Set to this month first
+  d.setDate(targetDay);
+  d.setHours(hours ?? 9, minutes ?? 0, 0, 0);
+  
+  // If the date has passed this month, move to next month
+  if (d <= from) {
+    d.setMonth(d.getMonth() + 1);
+    // Handle edge case where day doesn't exist in next month (e.g., Feb 31)
+    const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    if (targetDay > lastDayOfMonth) {
+      d.setDate(lastDayOfMonth);
+    } else {
+      d.setDate(targetDay);
+    }
+  }
+  
+  return d;
+}
+
+function nextForYearly(month: number, dayOfMonth: number, time: string | null, from: Date = new Date()): Date {
+  const d = new Date(from);
+  const targetDay = Math.min(dayOfMonth, 31);
+  const [hours, minutes] = time ? time.split(":").map(Number) : [9, 0];
+  
+  // Set to this year first
+  d.setMonth(month - 1); // month is 1-12, setMonth expects 0-11
+  const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(targetDay, lastDayOfMonth));
+  d.setHours(hours ?? 9, minutes ?? 0, 0, 0);
+  
+  // If the date has passed this year, move to next year
+  if (d <= from) {
+    d.setFullYear(d.getFullYear() + 1);
+    // Recalculate last day of month for next year
+    const nextYearLastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(targetDay, nextYearLastDay));
+  }
+  
+  return d;
+}
+
 function computeNext(reminder: Reminder, from: Date = new Date()): Date | null {
   if (!reminder.active) return null;
   switch (reminder.frequency) {
@@ -135,6 +203,17 @@ function computeNext(reminder: Reminder, from: Date = new Date()): Date | null {
       return nextForHourly(Number(reminder.minuteOfHour ?? 0), from);
     case "minutely":
       return nextForMinutely(Math.max(1, Number(reminder.intervalMinutes ?? 1)), from);
+    case "once":
+      return nextForOnce(reminder.daysFromNow, reminder.targetDate, from);
+    case "monthly":
+      return nextForMonthly(Number(reminder.dayOfMonth ?? 1), reminder.time, from);
+    case "yearly":
+      return nextForYearly(
+        Number(reminder.month ?? 1),
+        Number(reminder.dayOfMonth ?? 1),
+        reminder.time,
+        from
+      );
     default:
       return null;
   }
@@ -173,6 +252,28 @@ function getFrequencyDescription(reminder: Reminder): string {
       return `Every hour at :${pad(reminder.minuteOfHour || 0)}`;
     case "minutely":
       return `Every ${reminder.intervalMinutes || 5} minute${(reminder.intervalMinutes || 5) > 1 ? 's' : ''}`;
+    case "once":
+      if (reminder.targetDate) {
+        const target = new Date(reminder.targetDate);
+        return `On ${target.toLocaleDateString()} at ${target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      }
+      if (reminder.daysFromNow !== null) {
+        const days = reminder.daysFromNow;
+        if (days === 0) return "Today";
+        if (days === 1) return "Tomorrow";
+        return `In ${days} day${days > 1 ? 's' : ''}`;
+      }
+      return "One-time reminder";
+    case "monthly":
+      const day = reminder.dayOfMonth || 1;
+      const suffix = day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th";
+      return `On the ${day}${suffix} of every month${reminder.time ? ` at ${reminder.time}` : ''}`;
+    case "yearly":
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const m = reminder.month || 1;
+      const d = reminder.dayOfMonth || 1;
+      const daySuffix = d === 1 ? "st" : d === 2 ? "nd" : d === 3 ? "rd" : "th";
+      return `Every year on ${monthNames[m - 1]} ${d}${daySuffix}${reminder.time ? ` at ${reminder.time}` : ''}`;
     default:
       return "";
   }
@@ -197,15 +298,26 @@ export default function RemindersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState<string | null>(null);
   
-  const initialFormState: ReminderFormData = useMemo(() => ({
-    id: null,
-    title: "",
-    frequency: "daily",
-    time: "17:00",
-    minuteOfHour: 0,
-    intervalMinutes: 5,
-    active: true,
-  }), []);
+  const initialFormState: ReminderFormData = useMemo(() => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    
+    return {
+      id: null,
+      title: "",
+      frequency: "daily",
+      time: "17:00",
+      minuteOfHour: 0,
+      intervalMinutes: 5,
+      daysFromNow: 1,
+      targetDate: tomorrow.toISOString().slice(0, 16), // Format for datetime-local input
+      dayOfMonth: 1,
+      month: 1,
+      active: true,
+    };
+  }, []);
   
   const [form, setForm] = useState<ReminderFormData>(initialFormState);
 
@@ -284,6 +396,10 @@ export default function RemindersPage() {
           time: r.time ?? null,
           minuteOfHour: r.minuteOfHour ?? null,
           intervalMinutes: r.intervalMinutes ?? null,
+          daysFromNow: r.daysFromNow ?? null,
+          targetDate: r.targetDate ? (r.targetDate instanceof Date ? r.targetDate : new Date(r.targetDate)) : null,
+          dayOfMonth: r.dayOfMonth ?? null,
+          month: r.month ?? null,
           createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
           updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
         };
@@ -338,6 +454,13 @@ export default function RemindersPage() {
   }, [showForm, resetForm, openNewForm]);
 
   const openEditForm = useCallback((reminder: Reminder) => {
+    const targetDateValue = reminder.targetDate 
+      ? (reminder.targetDate instanceof Date 
+          ? reminder.targetDate 
+          : new Date(reminder.targetDate)
+        ).toISOString().slice(0, 16)
+      : initialFormState.targetDate;
+    
     setForm({
       id: reminder.id,
       title: reminder.title,
@@ -345,10 +468,14 @@ export default function RemindersPage() {
       time: reminder.time || "17:00",
       minuteOfHour: reminder.minuteOfHour || 0,
       intervalMinutes: reminder.intervalMinutes || 5,
+      daysFromNow: reminder.daysFromNow ?? 1,
+      targetDate: targetDateValue,
+      dayOfMonth: reminder.dayOfMonth ?? 1,
+      month: reminder.month ?? 1,
       active: reminder.active,
     });
     setShowForm(true);
-  }, []);
+  }, [initialFormState]);
 
   const validateForm = (): string | null => {
     if (!form.title.trim()) {
@@ -362,6 +489,24 @@ export default function RemindersPage() {
     }
     if (form.frequency === "minutely" && (form.intervalMinutes < 1 || form.intervalMinutes > 720)) {
       return "Interval must be between 1 and 720 minutes";
+    }
+    if (form.frequency === "once") {
+      const hasTargetDate = form.targetDate && form.targetDate.trim() !== "";
+      const hasDaysFromNow = form.daysFromNow !== undefined && form.daysFromNow >= 0;
+      if (!hasTargetDate && !hasDaysFromNow) {
+        return "Please specify either days from now or a target date";
+      }
+    }
+    if (form.frequency === "monthly" && (form.dayOfMonth < 1 || form.dayOfMonth > 31)) {
+      return "Day of month must be between 1 and 31";
+    }
+    if (form.frequency === "yearly") {
+      if (form.month < 1 || form.month > 12) {
+        return "Month must be between 1 and 12";
+      }
+      if (form.dayOfMonth < 1 || form.dayOfMonth > 31) {
+        return "Day of month must be between 1 and 31";
+      }
     }
     return null;
   };
@@ -377,14 +522,33 @@ export default function RemindersPage() {
       return;
     }
 
-    const payload = {
+    const payload: any = {
       title: form.title,
       frequency: form.frequency,
-      time: form.time,
-      minuteOfHour: form.minuteOfHour,
-      intervalMinutes: form.intervalMinutes,
       active: form.active,
     };
+    
+    // Add frequency-specific fields
+    if (form.frequency === "daily") {
+      payload.time = form.time;
+    } else if (form.frequency === "hourly") {
+      payload.minuteOfHour = form.minuteOfHour;
+    } else if (form.frequency === "minutely") {
+      payload.intervalMinutes = form.intervalMinutes;
+    } else if (form.frequency === "once") {
+      if (form.targetDate && form.targetDate.trim() !== "") {
+        payload.targetDate = new Date(form.targetDate);
+      } else {
+        payload.daysFromNow = form.daysFromNow;
+      }
+    } else if (form.frequency === "monthly") {
+      payload.dayOfMonth = form.dayOfMonth;
+      if (form.time) payload.time = form.time;
+    } else if (form.frequency === "yearly") {
+      payload.month = form.month;
+      payload.dayOfMonth = form.dayOfMonth;
+      if (form.time) payload.time = form.time;
+    }
     
     try {
       if (form.id) {
@@ -727,6 +891,9 @@ export default function RemindersPage() {
                   <SelectItem value="daily">Every day</SelectItem>
                   <SelectItem value="hourly">Every hour</SelectItem>
                   <SelectItem value="minutely">Every N minutes</SelectItem>
+                  <SelectItem value="once">One-time reminder</SelectItem>
+                  <SelectItem value="monthly">Monthly (specific date)</SelectItem>
+                  <SelectItem value="yearly">Yearly (specific date)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -792,6 +959,190 @@ export default function RemindersPage() {
                 <p className="text-xs text-gray-500">
                   Reminder will trigger every {form.intervalMinutes} minute
                   {form.intervalMinutes > 1 ? "s" : ""}
+                </p>
+              </div>
+            )}
+
+            {/* Once - Days from now or Target Date */}
+            {form.frequency === "once" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-gray-700">
+                    Reminder Type
+                  </Label>
+                  <Select
+                    value={form.targetDate ? "date" : "days"}
+                    onValueChange={(v: string) => {
+                      if (v === "date") {
+                        const now = new Date();
+                        now.setHours(9, 0, 0, 0);
+                        setForm({ ...form, targetDate: now.toISOString().slice(0, 16), daysFromNow: 0 });
+                      } else {
+                        setForm({ ...form, targetDate: "", daysFromNow: 1 });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="days">In X days from now</SelectItem>
+                      <SelectItem value="date">On a specific date</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {form.targetDate ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="targetDate" className="text-sm font-semibold text-gray-700">
+                      Date & Time
+                    </Label>
+                    <Input
+                      id="targetDate"
+                      type="datetime-local"
+                      value={form.targetDate}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setForm({ ...form, targetDate: e.target.value })
+                      }
+                      className="h-11"
+                      min={new Date().toISOString().slice(0, 16)}
+                    />
+                    <p className="text-xs text-gray-500">
+                      Reminder will trigger on this specific date and time
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="daysFromNow" className="text-sm font-semibold text-gray-700">
+                      Days from now
+                    </Label>
+                    <Input
+                      id="daysFromNow"
+                      type="number"
+                      min={0}
+                      max={3650}
+                      value={form.daysFromNow}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setForm({ ...form, daysFromNow: Number(e.target.value) })
+                      }
+                      className="h-11"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Reminder will trigger in {form.daysFromNow} day{form.daysFromNow !== 1 ? "s" : ""} from now
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Monthly - Day of month */}
+            {form.frequency === "monthly" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dayOfMonth" className="text-sm font-semibold text-gray-700">
+                    Day of month
+                  </Label>
+                  <Input
+                    id="dayOfMonth"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={form.dayOfMonth}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setForm({ ...form, dayOfMonth: Number(e.target.value) })
+                    }
+                    className="h-11"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Reminder will trigger on the {form.dayOfMonth}
+                    {form.dayOfMonth === 1 ? "st" : form.dayOfMonth === 2 ? "nd" : form.dayOfMonth === 3 ? "rd" : "th"} of every month
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="time" className="text-sm font-semibold text-gray-700">
+                    Time (optional)
+                  </Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={form.time}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                      setForm({ ...form, time: e.target.value })
+                    }
+                    className="h-11"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Yearly - Month and Day */}
+            {form.frequency === "yearly" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="month" className="text-sm font-semibold text-gray-700">
+                      Month
+                    </Label>
+                    <Select
+                      value={form.month.toString()}
+                      onValueChange={(v: string) =>
+                        setForm({ ...form, month: Number(v) })
+                      }
+                    >
+                      <SelectTrigger className="h-11" id="month">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">January</SelectItem>
+                        <SelectItem value="2">February</SelectItem>
+                        <SelectItem value="3">March</SelectItem>
+                        <SelectItem value="4">April</SelectItem>
+                        <SelectItem value="5">May</SelectItem>
+                        <SelectItem value="6">June</SelectItem>
+                        <SelectItem value="7">July</SelectItem>
+                        <SelectItem value="8">August</SelectItem>
+                        <SelectItem value="9">September</SelectItem>
+                        <SelectItem value="10">October</SelectItem>
+                        <SelectItem value="11">November</SelectItem>
+                        <SelectItem value="12">December</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dayOfMonth" className="text-sm font-semibold text-gray-700">
+                      Day
+                    </Label>
+                    <Input
+                      id="dayOfMonth"
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={form.dayOfMonth}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setForm({ ...form, dayOfMonth: Number(e.target.value) })
+                      }
+                      className="h-11"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="time" className="text-sm font-semibold text-gray-700">
+                    Time (optional)
+                  </Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={form.time}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                      setForm({ ...form, time: e.target.value })
+                    }
+                    className="h-11"
+                  />
+                </div>
+                <p className="text-xs text-gray-500">
+                  Reminder will trigger every year on{" "}
+                  {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][form.month - 1]} {form.dayOfMonth}
+                  {form.dayOfMonth === 1 ? "st" : form.dayOfMonth === 2 ? "nd" : form.dayOfMonth === 3 ? "rd" : "th"}
                 </p>
               </div>
             )}

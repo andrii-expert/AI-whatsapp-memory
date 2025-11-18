@@ -102,7 +102,10 @@ export const entityTypeEnum = pgEnum("entity_type", [
 export const reminderFrequencyEnum = pgEnum("reminder_frequency", [
   "daily",
   "hourly",
-  "minutely"
+  "minutely",
+  "once",
+  "monthly",
+  "yearly"
 ]);
 
 // ============================================
@@ -1121,6 +1124,18 @@ export const reminders = pgTable("reminders", {
   
   // For minutely reminders - interval in minutes
   intervalMinutes: integer("interval_minutes"),
+  
+  // For "once" reminders - remind me in X days from now
+  daysFromNow: integer("days_from_now"),
+  
+  // For "once" reminders - specific target date/time
+  targetDate: timestamp("target_date", { withTimezone: true }),
+  
+  // For monthly reminders - day of month (1-31)
+  dayOfMonth: integer("day_of_month"),
+  
+  // For yearly reminders - month (1-12) and day of month (1-31)
+  month: integer("month"),
   
   active: boolean("active").default(true).notNull(),
   

@@ -5,6 +5,16 @@ import { Badge } from "@imaginecalendar/ui/badge";
 import { Button } from "@imaginecalendar/ui/button";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@imaginecalendar/ui/alert-dialog";
+import {
   CreditCard,
   CheckCircle,
   Loader2,
@@ -146,6 +156,7 @@ export default function BillingPage() {
   const cancelSubscriptionMutation = useMutation(
     trpc.billing.cancelSubscription.mutationOptions({
       onSuccess: () => {
+        setShowCancelDialog(false);
         toast({
           title: "Subscription Cancelled",
           description: "Your subscription will be cancelled at the end of the current period.",
@@ -203,6 +214,7 @@ export default function BillingPage() {
   );
 
   const [selectedPlanForChange, setSelectedPlanForChange] = useState<string | null>(null);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const handlePlanSelect = (planId: string) => {
     setSelectedPlanForChange(planId);
@@ -217,9 +229,13 @@ export default function BillingPage() {
     });
   };
 
-  const handleCancelSubscription = () => {
+  const handleCancelSubscription = async () => {
     if (!subscription || cancelSubscriptionMutation.isPending) return;
-    cancelSubscriptionMutation.mutate();
+    try {
+      await cancelSubscriptionMutation.mutateAsync();
+    } catch (error) {
+      // Error is handled by the mutation's onError callback
+    }
   };
 
   const handleReactivateSubscription = () => {
@@ -364,57 +380,28 @@ export default function BillingPage() {
         </p>
       </div>
 
-      {/* Current Plan */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Current Subscription</CardTitle>
-          <CardDescription>
-            Your active subscription details
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground">Plan</p>
-              <p className="font-semibold">{currentPlan?.name || 'Unknown Plan'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Status</p>
-              <p className="font-semibold">
-                <span className={cn("inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold", statusBadge.className)}>
-                  {statusBadge.text}
-                </span>
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Price</p>
-              <p className="font-semibold">{currentPlan?.displayPrice || 'R0'}/{currentPlan?.billingPeriod || 'month'}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">{isCancelled ? 'Expires' : 'Renews'}</p>
-              <p className="font-semibold">
-                {subscription?.currentPeriodEnd 
-                  ? format(new Date(subscription.currentPeriodEnd), 'MMM d, yyyy')
-                  : (subscription?.trialEndsAt 
-                    ? format(new Date(subscription.trialEndsAt), 'MMM d, yyyy')
-                    : 'N/A')}
-              </p>
-            </div>
-          </div>
-
-          {/* Update Card Details - Only for paid subscribers */}
-          {!isOnTrial && subscription?.payfastToken && (
-            <div className="pt-4 border-t">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Payment Method</p>
-                  <p className="text-sm text-muted-foreground">Update your card details with PayFast</p>
-                </div>
+      {/* Current Subscription and Plan Features - Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Current Subscription */}
+        <Card className="border border-gray-200">
+          <CardHeader>
+            <CardTitle className="font-bold">Current Subscription</CardTitle>
+            <CardDescription className="text-sm text-gray-600">
+              Your active subscription details
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Payment Method Section */}
+            {!isOnTrial && subscription?.payfastToken && (
+              <div>
+                <p className="font-bold text-base mb-1">Payment Method</p>
+                <p className="text-sm text-gray-600 mb-4">Update your card details with PayFast</p>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleUpdateCardDetails}
                   disabled={getCardUpdateUrlMutation.isPending}
+                  className="border-orange-500 text-orange-600 hover:bg-orange-50"
                 >
                   {getCardUpdateUrlMutation.isPending ? (
                     <>
@@ -429,30 +416,60 @@ export default function BillingPage() {
                   )}
                 </Button>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
 
-      {/* Plan Features */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Plan Features</CardTitle>
-          <CardDescription>
-            What's included in your current plan
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-2">
-            {currentPlan?.features?.map((feature: string, index: number) => (
-              <li key={index} className="flex items-start gap-2 text-sm">
-                <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <span>{feature}</span>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+            {/* Subscription Details in 2-column grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Plan</p>
+                <p className="font-bold text-base">{currentPlan?.name || 'Unknown Plan'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Status</p>
+                <span className="inline-flex items-center rounded-full bg-green-100 text-green-800 px-3 py-1 text-sm font-semibold">
+                  {statusBadge.text}
+                </span>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Price</p>
+                <p className="font-bold text-base">
+                  {currentPlan?.displayPrice || 'R0'} {currentPlan?.billingPeriod || 'month'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 mb-1">{isCancelled ? 'Expires' : 'Renews'}</p>
+                <p className="font-bold text-base">
+                  {subscription?.currentPeriodEnd 
+                    ? format(new Date(subscription.currentPeriodEnd), 'MMM d, yyyy')
+                    : (subscription?.trialEndsAt 
+                      ? format(new Date(subscription.trialEndsAt), 'MMM d, yyyy')
+                      : 'N/A')}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Plan Features */}
+        <Card className="border border-gray-200">
+          <CardHeader>
+            <CardTitle className="font-bold">Plan Features</CardTitle>
+            <CardDescription className="text-sm text-gray-600">
+              What's included in your current plan
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3">
+              {currentPlan?.features?.map((feature: string, index: number) => (
+                <li key={index} className="flex items-start gap-2 text-sm">
+                  <Check className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-800">{feature}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Available Plans */}
       <Card>
@@ -519,8 +536,8 @@ export default function BillingPage() {
                     className={cn(
                       "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
                       isSelected
-                        ? "border-blue-500 bg-blue-500 shadow-xl scale-105"
-                        : "border-gray-300 hover:border-blue-400 bg-white"
+                        ? "border-gray-500 bg-gray-500 shadow-xl scale-105"
+                        : "border-gray-300 hover:border-gray-400 bg-white"
                     )}
                   >
                     <RadioGroupItem
@@ -535,9 +552,9 @@ export default function BillingPage() {
                     <div className={cn("text-center mb-6", isCurrentPlan && !isSelected && "mt-6")}>
                       <div className={cn(
                         "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
-                        isSelected ? "bg-white/20" : "bg-blue-100"
+                        isSelected ? "bg-white/20" : "bg-gray-100"
                       )}>
-                        <Sparkles className={cn("h-6 w-6", isSelected ? "text-white" : "text-blue-600")} />
+                        <Sparkles className={cn("h-6 w-6", isSelected ? "text-white" : "text-gray-600")} />
                       </div>
                       <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
                         {freePlan.name}
@@ -606,17 +623,6 @@ export default function BillingPage() {
                       )}
                     />
 
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <span className={cn(
-                        "text-xs font-bold px-4 py-1.5 rounded-full shadow-md",
-                        isCurrentPlan && !isSelected 
-                          ? "bg-green-500 text-white"
-                          : "bg-accent text-white"
-                      )}>
-                        {isCurrentPlan && !isSelected ? "Your Current Plan" : "Most Popular"}
-                      </span>
-                    </div>
-
                     <div className="text-center mb-6 mt-4">
                       <div className={cn(
                         "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
@@ -683,8 +689,8 @@ export default function BillingPage() {
                     className={cn(
                       "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
                       isSelected
-                        ? "border-yellow-500 bg-yellow-500 shadow-xl scale-105"
-                        : "border-gray-300 hover:border-yellow-400 bg-white"
+                        ? "border-blue-500 bg-blue-500 shadow-xl scale-105"
+                        : "border-gray-300 hover:border-blue-400 bg-white"
                     )}
                   >
                     <RadioGroupItem
@@ -696,12 +702,23 @@ export default function BillingPage() {
                       )}
                     />
 
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className={cn(
+                        "text-xs font-bold px-4 py-1.5 rounded-full shadow-md",
+                        isCurrentPlan && !isSelected 
+                          ? "bg-green-500 text-white"
+                          : "bg-accent text-white"
+                      )}>
+                        {isCurrentPlan && !isSelected ? "Your Current Plan" : "Most Popular"}
+                      </span>
+                    </div>
+
                     <div className={cn("text-center mb-6", isCurrentPlan && !isSelected && "mt-6")}>
                       <div className={cn(
                         "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
-                        isSelected ? "bg-white/20" : "bg-yellow-100"
+                        isSelected ? "bg-white/20" : "bg-blue-100"
                       )}>
-                        <Crown className={cn("h-6 w-6", isSelected ? "text-white" : "text-yellow-600")} />
+                        <Crown className={cn("h-6 w-6", isSelected ? "text-white" : "text-blue-600")} />
                       </div>
                       <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
                         {goldPlan.name.replace(' Annual', '')}
@@ -814,18 +831,48 @@ export default function BillingPage() {
                   <div className="flex justify-end">
                     <Button
                       variant="outline"
-                      onClick={handleCancelSubscription}
                       disabled={cancelSubscriptionMutation.isPending}
+                      className="border-red-500 text-red-600 hover:bg-red-50"
+                      onClick={() => setShowCancelDialog(true)}
                     >
-                      {cancelSubscriptionMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Cancelling...
-                        </>
-                      ) : (
-                        'Cancel Subscription'
-                      )}
+                      Cancel Subscription
                     </Button>
+                    <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to cancel your subscription? Your subscription will remain active until the end of your current billing period ({subscription?.currentPeriodEnd 
+                              ? format(new Date(subscription.currentPeriodEnd), 'MMM d, yyyy')
+                              : 'N/A'}). You can reactivate it anytime before then.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel 
+                            disabled={cancelSubscriptionMutation.isPending}
+                          >
+                            Keep Subscription
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                              e.preventDefault();
+                              handleCancelSubscription();
+                            }}
+                            disabled={cancelSubscriptionMutation.isPending}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                          >
+                            {cancelSubscriptionMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Cancelling...
+                              </>
+                            ) : (
+                              'Yes, Cancel Subscription'
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </>
               ) : (

@@ -78,7 +78,7 @@ const remindersAccessProcedure = protectedProcedure.use(async (opts) => {
 });
 
 // Reminder schemas
-const frequencyEnum = z.enum(["daily", "hourly", "minutely"]);
+const frequencyEnum = z.enum(["daily", "hourly", "minutely", "once", "monthly", "yearly"]);
 
 const createReminderSchema = z.object({
   title: z.string().min(1, "Reminder title is required").max(200),
@@ -86,7 +86,34 @@ const createReminderSchema = z.object({
   time: z.string().optional(),
   minuteOfHour: z.number().min(0).max(59).optional(),
   intervalMinutes: z.number().min(1).max(1440).optional(),
+  daysFromNow: z.number().min(0).max(3650).optional(), // Max 10 years
+  targetDate: z.date().optional(),
+  dayOfMonth: z.number().min(1).max(31).optional(),
+  month: z.number().min(1).max(12).optional(),
   active: z.boolean().optional(),
+}).refine((data) => {
+  // Validation based on frequency type
+  if (data.frequency === "daily" && !data.time) {
+    return false;
+  }
+  if (data.frequency === "hourly" && data.minuteOfHour === undefined) {
+    return false;
+  }
+  if (data.frequency === "minutely" && !data.intervalMinutes) {
+    return false;
+  }
+  if (data.frequency === "once" && data.daysFromNow === undefined && !data.targetDate) {
+    return false;
+  }
+  if (data.frequency === "monthly" && !data.dayOfMonth) {
+    return false;
+  }
+  if (data.frequency === "yearly" && (!data.month || !data.dayOfMonth)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Invalid reminder configuration for selected frequency",
 });
 
 const updateReminderSchema = z.object({
@@ -96,6 +123,10 @@ const updateReminderSchema = z.object({
   time: z.string().optional(),
   minuteOfHour: z.number().min(0).max(59).optional(),
   intervalMinutes: z.number().min(1).max(1440).optional(),
+  daysFromNow: z.number().min(0).max(3650).optional(),
+  targetDate: z.date().optional(),
+  dayOfMonth: z.number().min(1).max(31).optional(),
+  month: z.number().min(1).max(12).optional(),
   active: z.boolean().optional(),
 });
 
