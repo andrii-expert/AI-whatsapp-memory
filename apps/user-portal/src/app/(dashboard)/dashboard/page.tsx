@@ -1031,80 +1031,97 @@ export default function DashboardPage() {
             )}
 
             {/* WhatsApp Integration */}
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center justify-center gap-3">
-                    <MessageSquare className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base m-0">WhatsApp Integration</CardTitle>
+            <Card className="md:col-span-2 relative pt-6">
+              {hasVerifiedWhatsApp && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-white border-transparent shadow-sm">
+                  Connected
+                </Badge>
+              )}
+              <CardHeader className="pb-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <MessageSquare className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base m-0">WhatsApp Integration</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                        {hasVerifiedWhatsApp
+                          ? "Your WhatsApp account is securely connected and verified."
+                          : "Link your WhatsApp account to manage your workspace through messages and voice notes seamlessly."}
+                      </p>
+                    </div>
                   </div>
-                  {hasVerifiedWhatsApp && (
-                    <Badge className="bg-green-100 text-green-800 border-green-200">
-                      Connected
-                    </Badge>
+                  {hasVerifiedWhatsApp ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push("/settings/whatsapp")}
+                      className="whitespace-nowrap"
+                    >
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Manage Integration
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="blue-primary"
+                      onClick={() =>
+                        router.push("/settings/whatsapp?from=dashboard")
+                      }
+                      className="whitespace-nowrap"
+                    >
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Connect WhatsApp
+                    </Button>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {hasVerifiedWhatsApp
-                    ? "Your WhatsApp account is securely connected and verified."
-                    : "Link your WhatsApp account to manage your workspace through messages and voice notes seamlessly."}
-                </p>
-                {hasVerifiedWhatsApp ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push("/settings/whatsapp")}
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Manage Integration
-                  </Button>
-                ) : (
-                  <Button
-                    variant="blue-primary"
-                    onClick={() =>
-                      router.push("/settings/whatsapp?from=dashboard")
-                    }
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Connect WhatsApp
-                  </Button>
-                )}
+              <CardContent className="pt-0">
+                <div className="text-sm text-muted-foreground">
+                  Stay connected to receive reminders, share tasks with your team, and sync updates instantly through WhatsApp.
+                </div>
               </CardContent>
             </Card>
 
             {/* Calendar Integration */}
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center justify-center gap-3">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base m-0">
-                      Calendar Integration
-                    </CardTitle>
+            <Card className="md:col-span-2 relative pt-6">
+              {hasCalendar && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-white border-transparent shadow-sm">
+                  Connected
+                </Badge>
+              )}
+              <CardHeader className="pb-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Calendar className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base m-0">
+                        Calendar Integration
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                        {hasCalendar
+                          ? calendars!.length === 1
+                            ? "You have 1 calendar successfully integrated."
+                            : `You have ${calendars!.length} calendars successfully integrated.`
+                          : "Integrate Google or Microsoft calendars to streamline event management through WhatsApp."}
+                      </p>
+                    </div>
                   </div>
-                  {hasCalendar && (
-                    <Badge className="bg-green-100 text-green-800 border-green-200">
-                      Connected
-                    </Badge>
-                  )}
+                  <Button
+                    variant={hasCalendar ? "outline" : "blue-primary"}
+                    onClick={() => router.push("/settings/calendars")}
+                    className="whitespace-nowrap"
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {hasCalendar ? "Manage Integration" : "Connect Calendar"}
+                  </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {hasCalendar
-                    ? calendars!.length === 1
-                      ? "You have 1 calendar successfully integrated."
-                      : `You have ${calendars!.length} calendars successfully integrated.`
-                    : "Integrate your Google Calendar or Microsoft Outlook to streamline event management through WhatsApp."}
-                </p>
-                <Button
-                  variant={hasCalendar ? "outline" : "blue-primary"}
-                  onClick={() => router.push("/settings/calendars")}
-                >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  {hasCalendar ? "Manage Integration" : "Connect Calendar"}
-                </Button>
+              <CardContent className="pt-0">
+                <div className="text-sm text-muted-foreground">
+                  Sync events, automate reminders, and keep your team aligned by connecting your preferred calendar services.
+                </div>
               </CardContent>
             </Card>
           </div>
