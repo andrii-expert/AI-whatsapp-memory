@@ -52,19 +52,20 @@ import { Home, ChevronLeft } from "lucide-react";
 
 // ==================== TYPES ====================
 
-type ReminderFrequency = "daily" | "hourly" | "minutely" | "once" | "monthly" | "yearly";
+type ReminderFrequency = "daily" | "hourly" | "minutely" | "once" | "weekly" | "monthly" | "yearly";
 
 interface Reminder {
   id: string;
   title: string;
   frequency: ReminderFrequency;
-  time: string | null; // HH:MM format for daily
+  time: string | null; // HH:MM format for daily/weekly
   minuteOfHour: number | null; // 0-59 for hourly
   intervalMinutes: number | null; // for minutely
   daysFromNow: number | null; // for once reminders
   targetDate: Date | null; // for once reminders
   dayOfMonth: number | null; // for monthly/yearly reminders
   month: number | null; // for yearly reminders
+  daysOfWeek: number[] | null; // Array of integers 0-6 (0=Sunday, 1=Monday, ..., 6=Saturday) for weekly
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -81,6 +82,7 @@ interface ReminderFormData {
   targetDate: string; // ISO date string for datetime-local input
   dayOfMonth: number;
   month: number;
+  daysOfWeek: number[]; // Array of integers 0-6 (0=Sunday, 1=Monday, ..., 6=Saturday) for weekly
   active: boolean;
 }
 
@@ -194,6 +196,45 @@ function nextForYearly(month: number, dayOfMonth: number, time: string | null, f
   return d;
 }
 
+function nextForWeekly(daysOfWeek: number[], time: string, from: Date = new Date()): Date | null {
+  if (!daysOfWeek || daysOfWeek.length === 0 || !time) return null;
+  
+  const [hours, minutes] = time.split(":").map(Number);
+  const currentDayOfWeek = from.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+  const currentTime = from.getHours() * 60 + from.getMinutes();
+  const targetTime = (hours ?? 0) * 60 + (minutes ?? 0);
+  
+  // Sort days of week
+  const sortedDays = [...daysOfWeek].sort((a, b) => a - b);
+  
+  // Find the next day this week
+  for (const day of sortedDays) {
+    if (day > currentDayOfWeek) {
+      const d = new Date(from);
+      const daysToAdd = day - currentDayOfWeek;
+      d.setDate(d.getDate() + daysToAdd);
+      d.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+      return d;
+    }
+    // If same day, check if time hasn't passed
+    if (day === currentDayOfWeek && targetTime > currentTime) {
+      const d = new Date(from);
+      d.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+      return d;
+    }
+  }
+  
+  // If no day found this week, use the first day of next week
+  const firstDay = sortedDays[0]!;
+  const d = new Date(from);
+  // Calculate days until next week's first day
+  const daysUntilNextWeek = 7 - currentDayOfWeek;
+  const daysToAdd = daysUntilNextWeek + firstDay;
+  d.setDate(d.getDate() + daysToAdd);
+  d.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+  return d;
+}
+
 function computeNext(reminder: Reminder, from: Date = new Date()): Date | null {
   if (!reminder.active) return null;
   switch (reminder.frequency) {
@@ -205,6 +246,8 @@ function computeNext(reminder: Reminder, from: Date = new Date()): Date | null {
       return nextForMinutely(Math.max(1, Number(reminder.intervalMinutes ?? 1)), from);
     case "once":
       return nextForOnce(reminder.daysFromNow, reminder.targetDate, from);
+    case "weekly":
+      return nextForWeekly(reminder.daysOfWeek || [], reminder.time || "09:00", from);
     case "monthly":
       return nextForMonthly(Number(reminder.dayOfMonth ?? 1), reminder.time, from);
     case "yearly":
@@ -264,6 +307,16 @@ function getFrequencyDescription(reminder: Reminder): string {
         return `In ${days} day${days > 1 ? 's' : ''}`;
       }
       return "One-time reminder";
+    case "weekly":
+      if (!reminder.daysOfWeek || reminder.daysOfWeek.length === 0) {
+        return "Weekly (no days selected)";
+      }
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const selectedDays = reminder.daysOfWeek
+        .sort((a, b) => a - b)
+        .map(day => dayNames[day])
+        .join(", ");
+      return `Every ${selectedDays} at ${reminder.time || "00:00"}`;
     case "monthly":
       const day = reminder.dayOfMonth || 1;
       const suffix = day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th";
@@ -315,6 +368,7 @@ export default function RemindersPage() {
       targetDate: tomorrow.toISOString().slice(0, 16), // Format for datetime-local input
       dayOfMonth: 1,
       month: 1,
+      daysOfWeek: [1], // Default to Monday
       active: true,
     };
   }, []);
@@ -400,6 +454,7 @@ export default function RemindersPage() {
           targetDate: r.targetDate ? (r.targetDate instanceof Date ? r.targetDate : new Date(r.targetDate)) : null,
           dayOfMonth: r.dayOfMonth ?? null,
           month: r.month ?? null,
+          daysOfWeek: r.daysOfWeek ?? null,
           createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
           updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
         };
@@ -472,6 +527,7 @@ export default function RemindersPage() {
       targetDate: targetDateValue,
       dayOfMonth: reminder.dayOfMonth ?? 1,
       month: reminder.month ?? 1,
+      daysOfWeek: reminder.daysOfWeek && reminder.daysOfWeek.length > 0 ? reminder.daysOfWeek : [1],
       active: reminder.active,
     });
     setShowForm(true);
@@ -495,6 +551,14 @@ export default function RemindersPage() {
       const hasDaysFromNow = form.daysFromNow !== undefined && form.daysFromNow >= 0;
       if (!hasTargetDate && !hasDaysFromNow) {
         return "Please specify either days from now or a target date";
+      }
+    }
+    if (form.frequency === "weekly") {
+      if (!form.daysOfWeek || form.daysOfWeek.length === 0) {
+        return "Please select at least one day of the week";
+      }
+      if (!form.time || form.time.trim() === "") {
+        return "Please specify a time for the weekly reminder";
       }
     }
     if (form.frequency === "monthly" && (form.dayOfMonth < 1 || form.dayOfMonth > 31)) {
@@ -541,6 +605,9 @@ export default function RemindersPage() {
       } else {
         payload.daysFromNow = form.daysFromNow;
       }
+    } else if (form.frequency === "weekly") {
+      payload.daysOfWeek = form.daysOfWeek;
+      payload.time = form.time;
     } else if (form.frequency === "monthly") {
       payload.dayOfMonth = form.dayOfMonth;
       if (form.time) payload.time = form.time;
@@ -880,18 +947,30 @@ export default function RemindersPage() {
               </Label>
               <Select
                 value={form.frequency}
-                onValueChange={(v: string) =>
-                  setForm({ ...form, frequency: v as ReminderFrequency })
-                }
+                onValueChange={(v: string) => {
+                  const newFrequency = v as ReminderFrequency;
+                  // Initialize daysOfWeek when switching to weekly
+                  if (newFrequency === "weekly") {
+                    const currentDays = form.daysOfWeek || [];
+                    if (currentDays.length === 0) {
+                      setForm({ ...form, frequency: newFrequency, daysOfWeek: [1] }); // Default to Monday
+                    } else {
+                      setForm({ ...form, frequency: newFrequency });
+                    }
+                  } else {
+                    setForm({ ...form, frequency: newFrequency });
+                  }
+                }}
               >
                 <SelectTrigger className="h-11" id="frequency">
-                  <SelectValue />
+                  <SelectValue placeholder="Select frequency" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] z-50">
                   <SelectItem value="daily">Every day</SelectItem>
                   <SelectItem value="hourly">Every hour</SelectItem>
                   <SelectItem value="minutely">Every N minutes</SelectItem>
                   <SelectItem value="once">One-time reminder</SelectItem>
+                  <SelectItem value="weekly">Weekly (specific days)</SelectItem>
                   <SelectItem value="monthly">Monthly (specific date)</SelectItem>
                   <SelectItem value="yearly">Yearly (specific date)</SelectItem>
                 </SelectContent>
@@ -1032,6 +1111,89 @@ export default function RemindersPage() {
                     </p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Weekly - Days of week and time */}
+            {form.frequency === "weekly" && (
+              <div className="space-y-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <span>Days of the week</span>
+                    <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="grid grid-cols-7 gap-2">
+                    {[
+                      { value: 0, label: "Sun" },
+                      { value: 1, label: "Mon" },
+                      { value: 2, label: "Tue" },
+                      { value: 3, label: "Wed" },
+                      { value: 4, label: "Thu" },
+                      { value: 5, label: "Fri" },
+                      { value: 6, label: "Sat" },
+                    ].map((day) => {
+                      const daysOfWeek = form.daysOfWeek || [];
+                      const isSelected = daysOfWeek.includes(day.value);
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => {
+                            const currentDays = form.daysOfWeek || [];
+                            if (isSelected) {
+                              const newDays = currentDays.filter((d) => d !== day.value);
+                              setForm({
+                                ...form,
+                                daysOfWeek: newDays.length > 0 ? newDays : [day.value], // Prevent removing all days
+                              });
+                            } else {
+                              setForm({
+                                ...form,
+                                daysOfWeek: [...currentDays, day.value].sort((a, b) => a - b),
+                              });
+                            }
+                          }}
+                          className={`
+                            h-12 w-full rounded-lg border-2 transition-all font-semibold text-sm
+                            flex items-center justify-center
+                            ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
+                                : "bg-white border-gray-300 hover:border-primary hover:bg-blue-50 text-gray-700 hover:scale-105"
+                            }
+                          `}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {(!form.daysOfWeek || form.daysOfWeek.length === 0)
+                      ? "Select at least one day"
+                      : `Selected: ${form.daysOfWeek
+                          .sort((a, b) => a - b)
+                          .map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d])
+                          .join(", ")}`}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="time" className="text-sm font-semibold text-gray-700">
+                    Time
+                  </Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={form.time}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                      setForm({ ...form, time: e.target.value })
+                    }
+                    className="h-11"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Reminder will trigger at this time on the selected days
+                  </p>
+                </div>
               </div>
             )}
 

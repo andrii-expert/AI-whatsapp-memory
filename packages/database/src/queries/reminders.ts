@@ -2,7 +2,7 @@ import { eq, and, desc } from "drizzle-orm";
 import type { Database } from "../client";
 import { reminders } from "../schema";
 
-export type ReminderFrequency = "daily" | "hourly" | "minutely" | "once" | "monthly" | "yearly";
+export type ReminderFrequency = "daily" | "hourly" | "minutely" | "once" | "weekly" | "monthly" | "yearly";
 
 export interface CreateReminderInput {
   userId: string;
@@ -15,6 +15,7 @@ export interface CreateReminderInput {
   targetDate?: Date;
   dayOfMonth?: number;
   month?: number;
+  daysOfWeek?: number[]; // Array of integers 0-6 (0=Sunday, 1=Monday, ..., 6=Saturday)
   active?: boolean;
 }
 
@@ -28,6 +29,7 @@ export interface UpdateReminderInput {
   targetDate?: Date;
   dayOfMonth?: number;
   month?: number;
+  daysOfWeek?: number[]; // Array of integers 0-6 (0=Sunday, 1=Monday, ..., 6=Saturday)
   active?: boolean;
 }
 
@@ -45,6 +47,7 @@ export async function createReminder(db: Database, input: CreateReminderInput) {
       targetDate: input.targetDate,
       dayOfMonth: input.dayOfMonth,
       month: input.month,
+      daysOfWeek: input.daysOfWeek,
       active: input.active ?? true,
     })
     .returning();

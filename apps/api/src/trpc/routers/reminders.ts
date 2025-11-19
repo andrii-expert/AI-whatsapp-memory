@@ -78,7 +78,7 @@ const remindersAccessProcedure = protectedProcedure.use(async (opts) => {
 });
 
 // Reminder schemas
-const frequencyEnum = z.enum(["daily", "hourly", "minutely", "once", "monthly", "yearly"]);
+const frequencyEnum = z.enum(["daily", "hourly", "minutely", "once", "weekly", "monthly", "yearly"]);
 
 const createReminderSchema = z.object({
   title: z.string().min(1, "Reminder title is required").max(200),
@@ -90,6 +90,7 @@ const createReminderSchema = z.object({
   targetDate: z.date().optional(),
   dayOfMonth: z.number().min(1).max(31).optional(),
   month: z.number().min(1).max(12).optional(),
+  daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day of week must be selected").optional(),
   active: z.boolean().optional(),
 }).refine((data) => {
   // Validation based on frequency type
@@ -104,6 +105,14 @@ const createReminderSchema = z.object({
   }
   if (data.frequency === "once" && data.daysFromNow === undefined && !data.targetDate) {
     return false;
+  }
+  if (data.frequency === "weekly") {
+    if (!data.daysOfWeek || data.daysOfWeek.length === 0) {
+      return false;
+    }
+    if (!data.time) {
+      return false;
+    }
   }
   if (data.frequency === "monthly" && !data.dayOfMonth) {
     return false;
@@ -127,6 +136,7 @@ const updateReminderSchema = z.object({
   targetDate: z.date().optional(),
   dayOfMonth: z.number().min(1).max(31).optional(),
   month: z.number().min(1).max(12).optional(),
+  daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day of week must be selected").optional(),
   active: z.boolean().optional(),
 });
 
@@ -137,7 +147,23 @@ const toggleActiveSchema = z.object({
 
 export const remindersRouter = createTRPCRouter({
   list: remindersAccessProcedure.query(async ({ ctx: { db, session } }) => {
-    return getRemindersByUserId(db, session.user.id);
+    try {
+      const reminders = await getRemindersByUserId(db, session.user.id);
+      // Ensure daysOfWeek is properly serialized (handle null/undefined)
+      return reminders.map(reminder => ({
+        ...reminder,
+        daysOfWeek: reminder.daysOfWeek ?? null,
+      }));
+    } catch (error: any) {
+      logger.error(
+        { userId: session.user.id, error: error.message, stack: error.stack },
+        "Failed to fetch reminders"
+      );
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to fetch reminders",
+      });
+    }
   }),
 
   get: remindersAccessProcedure

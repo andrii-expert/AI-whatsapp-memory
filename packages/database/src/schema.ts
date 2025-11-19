@@ -104,6 +104,7 @@ export const reminderFrequencyEnum = pgEnum("reminder_frequency", [
   "hourly",
   "minutely",
   "once",
+  "weekly",
   "monthly",
   "yearly"
 ]);
@@ -1136,6 +1137,9 @@ export const reminders = pgTable("reminders", {
   
   // For yearly reminders - month (1-12) and day of month (1-31)
   month: integer("month"),
+  
+  // For weekly reminders - array of days of week (0=Sunday, 1=Monday, ..., 6=Saturday)
+  daysOfWeek: integer("days_of_week").array(),
   
   active: boolean("active").default(true).notNull(),
   
