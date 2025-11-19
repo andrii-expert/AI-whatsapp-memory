@@ -60,28 +60,43 @@ const SheetContent = React.forwardRef<
   (
     { side = "right", stack = false, className, children, title, ...props },
     ref,
-  ) => (
-    <SheetPortal>
-      <SheetOverlay />
-      <SheetPrimitive.Content
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        ref={ref}
-        className={cn("md:p-4", sheetVariants({ side }))}
-        aria-describedby={props["aria-describedby"] || undefined}
-        {...props}
-      >
-        <div
+  ) => {
+    // Extract positioning/width classes (for outer) and content classes (for inner)
+    const positioningRegex = /\b(w-|max-w-|min-w-|!?right-|!?left-|!?top-|!?bottom-|!?inset-)[^\s]*/g;
+    const positioningClasses = className?.match(positioningRegex)?.join(" ") || "";
+    const contentClasses = className?.replace(positioningRegex, "").trim() || "";
+    const hasPositioningOverride = !!positioningClasses;
+    
+    return (
+      <SheetPortal>
+        <SheetOverlay />
+        <SheetPrimitive.Content
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          ref={ref}
           className={cn(
-            "border w-full h-full bg-[#FAFAF9] dark:bg-[#121212] p-6 relative overflow-hidden",
-            className,
+            sheetVariants({ side }),
+            // Apply positioning/width classes to outer element (after variants to override)
+            positioningClasses,
+            // Only add md:p-4 if no positioning override is provided
+            !hasPositioningOverride ? "md:p-4" : ""
           )}
+          aria-describedby={props["aria-describedby"] || undefined}
+          {...props}
         >
-          <SheetTitle className="sr-only">{title}</SheetTitle>
-          {children}
-        </div>
-      </SheetPrimitive.Content>
-    </SheetPortal>
-  ),
+          <div
+            className={cn(
+              "border w-full h-full bg-[#FAFAF9] dark:bg-[#121212] relative overflow-hidden",
+              // Default padding, can be overridden by contentClasses (e.g., p-0)
+              contentClasses || "p-6"
+            )}
+          >
+            <SheetTitle className="sr-only">{title}</SheetTitle>
+            {children}
+          </div>
+        </SheetPrimitive.Content>
+      </SheetPortal>
+    );
+  },
 );
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 

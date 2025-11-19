@@ -517,7 +517,7 @@ export default function DashboardPage() {
                     : "/settings/whatsapp?from=dashboard"
                 )
               }
-              className="group relative flex flex-1 items-center justify-center gap-3 rounded-full border border-muted bg-background px-4 py-3 shadow-sm transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="group relative flex flex-1 items-center justify-center gap-2 rounded-full border border-muted bg-background px-3 py-2 shadow-sm transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {hasVerifiedWhatsApp && (
                 <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-100 text-green-700 border-green-200 tracking-tight">
@@ -526,21 +526,21 @@ export default function DashboardPage() {
               )}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-7 w-7 flex-shrink-0"
+                className="h-5 w-5 flex-shrink-0"
                 fill="currentColor"
                 style={{ color: "#128c7e" }}
                 viewBox="0 0 24 24"
               >
                 <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
               </svg>
-              <span className="text-sm font-black uppercase tracking-wide text-foreground">
+              <span className="text-sm font-normal tracking-wide text-foreground whitespace-nowrap">
                 {hasVerifiedWhatsApp ? "Manage WhatsApp" : "Link WhatsApp"}
               </span>
             </button>
 
             <button
               onClick={() => router.push("/settings/calendars")}
-              className="group relative flex flex-1 items-center justify-center gap-3 rounded-full border border-muted bg-background px-4 py-3 shadow-sm transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="group relative flex flex-1 items-center justify-center gap-2 rounded-full border border-muted bg-background px-3 py-2 shadow-sm transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {hasCalendar && (
                 <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-100 text-green-700 border-green-200 tracking-tight">
@@ -548,17 +548,17 @@ export default function DashboardPage() {
                 </Badge>
               )}
               <Calendar
-                className="h-7 w-7 flex-shrink-0"
+                className="h-5 w-5 flex-shrink-0"
                 style={{ color: "#0f52ba" }}
               />
-              <span className="text-sm font-black uppercase tracking-wide text-foreground">
+              <span className="text-sm font-normal tracking-wide text-foreground whitespace-nowrap">
                 {hasCalendar ? "Manage Your Calendar" : "Connect Your Calendar"}
               </span>
             </button>
           </div>
         </div>
 
-        <div className="flex justify-start xl:justify-end">
+        <div className="flex justify-between xl:justify-end gap-3">
           {/* Mobile Workspace Menu Button */}
           <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
             <SheetTrigger asChild>
@@ -608,13 +608,126 @@ export default function DashboardPage() {
               </Card>
             </SheetContent>
           </Sheet>
+
+          {/* Mobile Date Range Picker */}
+          <div className="lg:hidden">
+            <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="justify-between min-w-[140px] max-w-[140px] font-normal"
+                >
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4" />
+                    <span>{getDateFilterLabel()}</span>
+                  </div>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="end">
+                <div className="p-4 space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-3">Date Range</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant={dateFilter === "today" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDateFilter("today");
+                          setIsDatePopoverOpen(false);
+                        }}
+                        className="w-full"
+                      >
+                        Today
+                      </Button>
+                      <Button
+                        variant={dateFilter === "week" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDateFilter("week");
+                          setIsDatePopoverOpen(false);
+                        }}
+                        className="w-full"
+                      >
+                        This Week
+                      </Button>
+                      <Button
+                        variant={dateFilter === "month" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDateFilter("month");
+                          setIsDatePopoverOpen(false);
+                        }}
+                        className="w-full"
+                      >
+                        This Month
+                      </Button>
+                      <Button
+                        variant={dateFilter === "all" ? "blue-primary" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDateFilter("all");
+                          setIsDatePopoverOpen(false);
+                        }}
+                        className="w-full"
+                      >
+                        All Time
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-sm mb-3">Custom Range</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1.5 block">
+                          Start Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={customStartDate}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomStartDate(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1.5 block">
+                          End Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={customEndDate}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomEndDate(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      <Button
+                        variant="blue-primary"
+                        size="sm"
+                        onClick={() => {
+                          if (customStartDate && customEndDate) {
+                            setDateFilter("custom");
+                            setIsDatePopoverOpen(false);
+                          }
+                        }}
+                        disabled={!customStartDate || !customEndDate}
+                        className="w-full"
+                      >
+                        Apply Custom Range
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
       </div>
 
       {/* Search and Filter Bar */}
       <div className="mb-6 space-y-3">
         <div className="flex flex-col lg:flex-row gap-3 items-center w-full">
-          <div className="relative w-full">
+          <div className="relative w-full lg:flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <input
               type="text"
@@ -633,12 +746,12 @@ export default function DashboardPage() {
             )}
           </div>
           
-          <div className="flex w-full justify-end">
+          <div className="hidden lg:flex lg:w-auto justify-end">
             <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="justify-between w-full min-w-[140px] md:min-w-[200px] font-normal"
+                  className="justify-between w-full min-w-[140px] max-w-[140px] font-normal"
                 >
                   <div className="flex items-center gap-2">
                     <CalendarDays className="h-4 w-4" />
@@ -796,12 +909,12 @@ export default function DashboardPage() {
             {/* Active Reminders */}
             {shouldShowReminders && (
             <Card className="flex flex-col h-[420px] rounded-3xl border border-[#dbe6ff] shadow-[0_10px_40px_rgba(15,82,186,0.12)] overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between bg-[#1c7ed6] px-5 py-4">
-                <div className="flex items-center gap-2 text-white text-base font-semibold">
+              <CardHeader className="flex flex-row items-center justify-between bg-[#1976c5] px-4 py-3">
+                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <BellRing className="h-4 w-4 text-white" />
                   Active Reminders
                 </div>
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#1c7ed6] text-sm font-bold">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1976c5] text-xs font-bold">
                   {totalActiveReminders}
                 </div>
               </CardHeader>
