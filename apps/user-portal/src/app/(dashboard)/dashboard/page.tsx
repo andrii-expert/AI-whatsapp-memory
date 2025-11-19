@@ -36,7 +36,6 @@ import {
   Menu,
   X,
   Search,
-  Filter,
   CalendarDays,
   ChevronDown,
 } from "lucide-react";
@@ -52,12 +51,10 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "reminders" | "tasks" | "events" | "notes">("all");
   const [dateFilter, setDateFilter] = useState<"today" | "week" | "month" | "all" | "custom">("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
-  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
 
   // Fetch all data
   const { data: whatsappNumbers } = useQuery(trpc.whatsapp.getMyNumbers.queryOptions());
@@ -249,27 +246,6 @@ export default function DashboardPage() {
     }
   };
 
-  const getFilterTypeLabel = () => {
-    switch (filterType) {
-      case "all": return "All Items";
-      case "reminders": return "Reminders";
-      case "tasks": return "Tasks";
-      case "events": return "Events";
-      case "notes": return "Notes";
-      default: return "Select Type";
-    }
-  };
-
-  const getFilterTypeIcon = () => {
-    switch (filterType) {
-      case "reminders": return <BellRing className="h-4 w-4" />;
-      case "tasks": return <CheckSquare className="h-4 w-4" />;
-      case "events": return <Calendar className="h-4 w-4" />;
-      case "notes": return <StickyNote className="h-4 w-4" />;
-      default: return <Filter className="h-4 w-4" />;
-    }
-  };
-
   // Filter active reminders
   const activeReminders = useMemo(() => {
     const filtered = reminders.filter((r: any) => r.active);
@@ -299,11 +275,10 @@ export default function DashboardPage() {
     return filtered.slice(0, 10); // Show up to 10 events
   }, [upcomingEvents, searchQuery, dateFilter, customStartDate, customEndDate]);
 
-  // Check if cards should be visible based on filter
-  const shouldShowReminders = filterType === "all" || filterType === "reminders";
-  const shouldShowTasks = filterType === "all" || filterType === "tasks";
-  const shouldShowEvents = filterType === "all" || filterType === "events";
-  const shouldShowNotes = filterType === "all" || filterType === "notes";
+  const shouldShowReminders = true;
+  const shouldShowTasks = true;
+  const shouldShowEvents = true;
+  const shouldShowNotes = true;
 
   // Setup steps
   const setupSteps = [
@@ -658,89 +633,7 @@ export default function DashboardPage() {
             )}
           </div>
           
-          <div className="flex gap-3 justify-between">
-            {/* Filter Type - Mobile Popover */}
-            <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="md:hidden justify-between w-full min-w-[140px] font-normal"
-                >
-                  <div className="flex items-center gap-2">
-                    {getFilterTypeIcon()}
-                    <span>{getFilterTypeLabel()}</span>
-                  </div>
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-0" align="start">
-                <div className="p-4 space-y-2">
-                  <h4 className="font-semibold text-sm mb-3">Filter by Type</h4>
-                  <Button
-                    variant={filterType === "all" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setFilterType("all");
-                      setIsFilterPopoverOpen(false);
-                    }}
-                    className="w-full justify-start"
-                  >
-                    <Filter className="h-4 w-4 mr-2" />
-                    All Items
-                  </Button>
-                  <Button
-                    variant={filterType === "reminders" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setFilterType("reminders");
-                      setIsFilterPopoverOpen(false);
-                    }}
-                    className="w-full justify-start"
-                  >
-                    <BellRing className="h-4 w-4 mr-2" />
-                    Reminders
-                  </Button>
-                  <Button
-                    variant={filterType === "tasks" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setFilterType("tasks");
-                      setIsFilterPopoverOpen(false);
-                    }}
-                    className="w-full justify-start"
-                  >
-                    <CheckSquare className="h-4 w-4 mr-2" />
-                    Tasks
-                  </Button>
-                  <Button
-                    variant={filterType === "events" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setFilterType("events");
-                      setIsFilterPopoverOpen(false);
-                    }}
-                    className="w-full justify-start"
-                  >
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Events
-                  </Button>
-                  <Button
-                    variant={filterType === "notes" ? "blue-primary" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setFilterType("notes");
-                      setIsFilterPopoverOpen(false);
-                    }}
-                    className="w-full justify-start"
-                  >
-                    <StickyNote className="h-4 w-4 mr-2" />
-                    Notes
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            
-            {/* Date Filter */}
+          <div className="flex w-full justify-end">
             <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -853,101 +746,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Filter Type Buttons - Desktop Only */}
-        <div className="hidden md:flex gap-2">
-          <Button
-            variant={filterType === "all" ? "blue-primary" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("all")}
-            className="flex-shrink-0"
-          >
-            <Filter className="h-3.5 w-3.5 mr-1.5" />
-            All
-          </Button>
-          <Button
-            variant={filterType === "reminders" ? "blue-primary" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("reminders")}
-            className="flex-shrink-0"
-          >
-            <BellRing className="h-3.5 w-3.5 mr-1.5" />
-            Reminders
-          </Button>
-          <Button
-            variant={filterType === "tasks" ? "blue-primary" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("tasks")}
-            className="flex-shrink-0"
-          >
-            <CheckSquare className="h-3.5 w-3.5 mr-1.5" />
-            Tasks
-          </Button>
-          <Button
-            variant={filterType === "events" ? "blue-primary" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("events")}
-            className="flex-shrink-0"
-          >
-            <Calendar className="h-3.5 w-3.5 mr-1.5" />
-            Events
-          </Button>
-          <Button
-            variant={filterType === "notes" ? "blue-primary" : "outline"}
-            size="sm"
-            onClick={() => setFilterType("notes")}
-            className="flex-shrink-0"
-          >
-            <StickyNote className="h-3.5 w-3.5 mr-1.5" />
-            Notes
-          </Button>
-        </div>
       </div>
-
-      {/* Search/Filter Results Info */}
-      {/* {(searchQuery || dateFilter !== "today" || filterType !== "all") && (
-        <div className="mb-4 p-4 bg-muted/50 rounded-lg border border-border">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <p className="text-sm font-medium">Active Filters:</p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {searchQuery && (
-                  <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                    Search: "{searchQuery}"
-                  </Badge>
-                )}
-                {dateFilter !== "today" && (
-                  <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                    Date: {getDateFilterLabel()}
-                  </Badge>
-                )}
-                {filterType !== "all" && (
-                  <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-                    Type: {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
-                  </Badge>
-                )}
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSearchQuery("");
-                setFilterType("all");
-                setDateFilter("today");
-                setCustomStartDate("");
-                setCustomEndDate("");
-              }}
-              className="text-sm flex-shrink-0 h-8"
-            >
-              Clear All
-              <X className="h-3 w-3 ml-1" />
-            </Button>
-          </div>
-        </div>
-      )} */}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Desktop Left Sidebar - My Workspace */}
