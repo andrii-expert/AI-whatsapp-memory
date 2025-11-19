@@ -4,6 +4,7 @@ import { useTRPC } from "@/trpc/client";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
 import { Badge } from "@imaginecalendar/ui/badge";
+import { useToast } from "@imaginecalendar/ui/use-toast";
 import {
   Sheet,
   SheetContent,
@@ -17,7 +18,7 @@ import {
   PopoverTrigger,
 } from "@imaginecalendar/ui/popover";
 import { Input } from "@imaginecalendar/ui/input";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
@@ -47,10 +48,12 @@ export default function DashboardPage() {
   const router = useRouter();
   const trpc = useTRPC();
   const { user } = useUser();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "reminders" | "tasks" | "events" | "notes">("all");
-  const [dateFilter, setDateFilter] = useState<"today" | "week" | "month" | "all" | "custom">("today");
+  const [dateFilter, setDateFilter] = useState<"today" | "week" | "month" | "all" | "custom">("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
@@ -62,6 +65,62 @@ export default function DashboardPage() {
   const { data: allTasks = [] } = useQuery(trpc.tasks.list.queryOptions({}));
   const { data: allNotes = [] } = useQuery(trpc.notes.list.queryOptions({}));
   const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
+
+  const toggleTaskMutation = useMutation(
+    trpc.tasks.toggleStatus.mutationOptions({
+      onMutate: async ({ id }) => {
+        await queryClient.cancelQueries({
+          queryKey: trpc.tasks.list.queryKey({}),
+        });
+
+        const previousTasks = queryClient.getQueryData(
+          trpc.tasks.list.queryKey({})
+        );
+
+        queryClient.setQueryData(
+          trpc.tasks.list.queryKey({}),
+          (old: any[] | undefined) => {
+            if (!old) return old;
+            return old.map((task) => {
+              if (task.id === id) {
+                const isCompleted = task.status === "completed";
+                return {
+                  ...task,
+                  status: isCompleted ? "open" : "completed",
+                  completedAt: isCompleted ? null : new Date().toISOString(),
+                };
+              }
+              return task;
+            });
+          }
+        );
+
+        return { previousTasks };
+      },
+      onError: (error, _variables, context) => {
+        if (context?.previousTasks) {
+          queryClient.setQueryData(
+            trpc.tasks.list.queryKey({}),
+            context.previousTasks
+          );
+        }
+        toast({
+          title: "Task update failed",
+          description: error?.message || "Could not update task status.",
+          variant: "destructive",
+        });
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries({
+          queryKey: trpc.tasks.list.queryKey({}),
+        });
+      },
+    })
+  );
+
+  const handleToggleTask = (taskId: string) => {
+    toggleTaskMutation.mutate({ id: taskId });
+  };
 
   // Check verification status
   const hasVerifiedWhatsApp = whatsappNumbers?.some(number => number.isVerified) || false;
@@ -267,6 +326,94 @@ export default function DashboardPage() {
   ];
 
   // Calculate totals and counts
+  const reminderVisualFallback = {
+    background: "bg-[#fdeedc]",
+    accent: "bg-[#f7b267]",
+    labelClass: "text-[#6b3f1d]",
+    metaClass: "text-[#a2643c]",
+  };
+
+  const reminderVisualStyles = [
+    reminderVisualFallback,
+    {
+      background: "bg-[#e6edff]",
+      accent: "bg-[#7aa2ff]",
+      labelClass: "text-[#1f3b73]",
+      metaClass: "text-[#3b5c9a]",
+    },
+  ];
+
+  // Visual styles for tasks
+  const taskVisualStyles = [
+    {
+      background: "bg-[#fdeedc]",
+      accent: "bg-[#f7b267]",
+      labelClass: "text-[#6b3f1d]",
+      metaClass: "text-[#a2643c]",
+    },
+    {
+      background: "bg-[#e6edff]",
+      accent: "bg-[#7aa2ff]",
+      labelClass: "text-[#1f3b73]",
+      metaClass: "text-[#3b5c9a]",
+    },
+  ];
+
+  // Visual styles for events
+  const eventVisualStyles = [
+    {
+      background: "bg-[#fdeedc]",
+      accent: "bg-[#f7b267]",
+      labelClass: "text-[#6b3f1d]",
+      metaClass: "text-[#a2643c]",
+    },
+    {
+      background: "bg-[#e6edff]",
+      accent: "bg-[#7aa2ff]",
+      labelClass: "text-[#1f3b73]",
+      metaClass: "text-[#3b5c9a]",
+    },
+  ];
+
+  // Visual styles for notes
+  const noteVisualStyles = [
+    {
+      background: "bg-[#fdeedc]",
+      accent: "bg-[#f7b267]",
+      labelClass: "text-[#6b3f1d]",
+      metaClass: "text-[#a2643c]",
+    },
+    {
+      background: "bg-[#e6edff]",
+      accent: "bg-[#7aa2ff]",
+      labelClass: "text-[#1f3b73]",
+      metaClass: "text-[#3b5c9a]",
+    },
+  ];
+
+  const formatReminderSubtitle = (reminder: any) => {
+    const details: string[] = [];
+
+    if (reminder.time) {
+      details.push(`at ${reminder.time}`);
+    }
+
+    const frequency =
+      reminder.frequencyLabel ||
+      reminder.scheduleSummary ||
+      reminder.frequency ||
+      reminder.recurrence ||
+      reminder.interval ||
+      reminder.scheduleType ||
+      reminder.schedule;
+
+    if (frequency) {
+      details.push(`(${frequency})`);
+    }
+
+    return details.join(" ");
+  };
+
   const totalItems = reminders.length + allTasks.length + allNotes.length + (calendars?.length || 0);
   const openTasks = allTasks.filter((t) => t.status === "open").length;
   
@@ -849,57 +996,63 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Active Reminders */}
             {shouldShowReminders && (
-            <Card className="flex flex-col h-[420px]">
-              <CardHeader className="flex flex-row bg-primary items-center justify-between space-y-0 pb-3 flex-shrink-0">
-                <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
-                  <BellRing className="h-4 w-4" />
-                  {dateFilter === "today" && "Today "}
-                  {dateFilter === "week" && "This Week "}
-                  {dateFilter === "month" && "This Month "}
+            <Card className="flex flex-col h-[420px] rounded-3xl border border-[#dbe6ff] shadow-[0_10px_40px_rgba(15,82,186,0.12)] overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between bg-[#1c7ed6] px-5 py-4">
+                <div className="flex items-center gap-2 text-white text-base font-semibold">
+                  <BellRing className="h-4 w-4 text-white" />
                   Active Reminders
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="orange">{activeReminders.length}</Badge>
-                  {totalActiveReminders > activeReminders.length && (
-                    <span className="text-xs text-muted-foreground">of {totalActiveReminders}</span>
-                  )}
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#1c7ed6] text-sm font-bold">
+                  {totalActiveReminders}
                 </div>
               </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0">
-                <div className="flex-1 overflow-y-auto mb-4 pr-2 -mr-2">
+              <CardContent className="flex flex-col flex-1 min-h-0 bg-white px-5 py-4">
+                <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-3">
                   {activeReminders.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
                       No active reminders
                     </p>
                   ) : (
-                    <div className="space-y-3">
-                      {activeReminders.map((reminder: any) => (
+                    activeReminders.map((reminder: any, index: number) => {
+                      const visual =
+                        reminderVisualStyles[index % reminderVisualStyles.length] ||
+                        reminderVisualFallback;
+                      const subtitle = formatReminderSubtitle(reminder);
+                      return (
                         <div
                           key={reminder.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                          className={`flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm ${visual.background}`}
                         >
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="text-sm truncate">
-                              {reminder.title}
-                            </span>
+                          <div className={`h-12 w-1.5 rounded-full ${visual.accent}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold leading-tight ${visual.labelClass}`}>
+                              {reminder.title || "Untitled Reminder"}
+                            </p>
+                            {subtitle ? (
+                              <p className={`text-xs font-medium mt-1 ${visual.metaClass}`}>
+                                {subtitle}
+                              </p>
+                            ) : (
+                              reminder.time && (
+                                <p className={`text-xs font-medium mt-1 ${visual.metaClass}`}>
+                                  {reminder.time}
+                                </p>
+                              )
+                            )}
                           </div>
-                          <span className="text-xs text-muted-foreground font-mono ml-2">
-                            {reminder.time}
-                          </span>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })
                   )}
                 </div>
                 {totalActiveReminders > activeReminders.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-border">
+                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-border mt-4">
                     Showing {activeReminders.length} of {totalActiveReminders} reminders
                   </div>
                 )}
                 <Button
                   variant="ghost"
-                  className="w-full justify-center text-xs font-medium hover:bg-muted/50 flex-shrink-0"
+                  className="mt-2 w-full justify-center text-xs font-semibold hover:bg-muted/50 flex-shrink-0 text-[#1c7ed6]"
                   onClick={() => router.push("/reminders")}
                 >
                   View All Reminders
@@ -911,272 +1064,178 @@ export default function DashboardPage() {
 
             {/* Pending Tasks */}
             {shouldShowTasks && (
-            <Card className="flex flex-col h-[420px]">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
-                <CardTitle className="text-base text-white font-semibold flex items-center justify-center gap-2 m-0">
-                  <CheckSquare className="h-4 w-4" />
-                  {dateFilter === "today" && "Today "}
-                  {dateFilter === "week" && "This Week "}
-                  {dateFilter === "month" && "This Month "}
+            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+              <CardHeader className="flex flex-row items-center justify-between bg-[#1976c5] px-4 py-3">
+                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                  <CheckSquare className="h-4 w-4 text-white" />
                   Pending Tasks
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="orange">{pendingTasks.length}</Badge>
-                  {totalPendingTasks > pendingTasks.length && (
-                    <span className="text-xs text-muted-foreground">of {totalPendingTasks}</span>
-                  )}
+                </div>
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1976c5] text-xs font-bold">
+                  {totalPendingTasks}
                 </div>
               </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0">
-                <div className="flex-1 overflow-y-auto mb-4 pr-2 -mr-2">
+              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
                   {pendingTasks.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
                       No pending tasks
                     </p>
                   ) : (
-                    <div className="space-y-3">
-                      {pendingTasks.map((task) => (
-                        <div
-                          key={task.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                        >
-                          <span className="text-sm truncate flex-1">{task.title}</span>
-                          <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
-                            {task.dueDate}
-                          </Badge>
+                    pendingTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={task.status === "completed"}
+                          onChange={() => handleToggleTask(task.id)}
+                          disabled={
+                            toggleTaskMutation.isPending &&
+                            toggleTaskMutation.variables?.id === task.id
+                          }
+                          aria-label={`Mark task ${task.title || "Untitled Task"} as ${
+                            task.status === "completed" ? "open" : "completed"
+                          }`}
+                          className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#1f2933] truncate">
+                            {task.title || "Untitled Task"}
+                          </p>
+                          {task.dueDate && (
+                            <p className="text-xs text-[#6b7a90] mt-0.5">
+                              Due {task.dueDate}
+                            </p>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))
                   )}
                 </div>
-                {totalPendingTasks > pendingTasks.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-border">
-                    Showing {pendingTasks.length} of {totalPendingTasks} tasks
-                  </div>
-                )}
-                <Button
-                  variant="ghost"
-                  className="w-full justify-center text-xs font-medium hover:bg-muted/50 flex-shrink-0"
-                  onClick={() => router.push("/tasks")}
-                >
-                  View All Tasks
-                  <ArrowRight className="h-3 w-3 ml-1" />
-                </Button>
+                <div className="border-t border-[#e2e8f0] px-4 py-3">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                    onClick={() => router.push("/tasks")}
+                  >
+                    View All Tasks
+                    <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
             )}
 
             {/* Scheduled Events */}
             {shouldShowEvents && (
-            <Card className="flex flex-col h-[420px]">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
-                <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
-                  <Calendar className="h-4 w-4" />
-                  {dateFilter === "today" && "Today "}
-                  {dateFilter === "week" && "This Week "}
-                  {dateFilter === "month" && "This Month "}
+            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+              <CardHeader className="flex flex-row items-center justify-between bg-[#1976c5] px-4 py-3">
+                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                  <Calendar className="h-4 w-4 text-white" />
                   Scheduled Events
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="orange">{scheduledEvents.length}</Badge>
-                  {totalScheduledEvents > scheduledEvents.length && (
-                    <span className="text-xs text-muted-foreground">of {totalScheduledEvents}</span>
-                  )}
+                </div>
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1976c5] text-xs font-bold">
+                  {totalScheduledEvents}
                 </div>
               </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0">
-                <div className="flex-1 overflow-y-auto mb-4 pr-2 -mr-2">
+              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
                   {scheduledEvents.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
                       No scheduled events
                     </p>
                   ) : (
-                    <div className="space-y-3">
-                      {scheduledEvents.map((event: any, index: number) => (
+                    scheduledEvents.map((event: any, index: number) => {
+                      const dateLabel =
+                        event.date ||
+                        event.dateLabel ||
+                        event.startDate ||
+                        null;
+                      const timeLabel = event.time || event.startTime || null;
+                      const subtitle = dateLabel
+                        ? `${dateLabel}${timeLabel ? ` at ${timeLabel}` : ""}`
+                        : timeLabel || "No time info";
+
+                      return (
                         <div
                           key={index}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                          className="rounded-2xl border border-[#d5e3ff] bg-[#edf3ff] px-4 py-3"
                         >
-                          <span className="text-sm truncate flex-1">{event.title}</span>
-                          <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
-                            {event.date}
-                          </span>
+                          <p className="text-sm font-semibold text-[#1f3b73] truncate">
+                            {event.title || "Untitled Event"}
+                          </p>
+                          <p className="text-xs text-[#5370a3] mt-1">
+                            {subtitle}
+                          </p>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })
                   )}
                 </div>
-                {totalScheduledEvents > scheduledEvents.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-border">
-                    Showing {scheduledEvents.length} of {totalScheduledEvents} events
-                  </div>
-                )}
-                <Button
-                  variant="ghost"
-                  className="w-full justify-center text-xs font-medium hover:bg-muted/50 flex-shrink-0"
-                  onClick={() => router.push("/settings/calendars")}
-                >
-                  View All Events
-                  <ArrowRight className="h-3 w-3 ml-1" />
-                </Button>
+                <div className="border-t border-[#e2e8f0] px-4 py-3">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                    onClick={() => router.push("/settings/calendars")}
+                  >
+                    View All Events
+                    <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
             )}
 
             {/* Quick Notes */}
             {shouldShowNotes && (
-            <Card className="flex flex-col h-[420px]">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
-                <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
-                  <StickyNote className="h-4 w-4" />
-                  {dateFilter === "today" && "Today "}
-                  {dateFilter === "week" && "This Week "}
-                  {dateFilter === "month" && "This Month "}
+            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+              <CardHeader className="flex flex-row items-center justify-between bg-[#1976c5] px-4 py-3">
+                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                  <StickyNote className="h-4 w-4 text-white" />
                   Quick Notes
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge variant="orange">{quickNotes.length}</Badge>
-                  {totalQuickNotes > quickNotes.length && (
-                    <span className="text-xs text-muted-foreground">of {totalQuickNotes}</span>
-                  )}
+                </div>
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1976c5] text-xs font-bold">
+                  {totalQuickNotes}
                 </div>
               </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0">
-                <div className="flex-1 overflow-y-auto mb-4 pr-2 -mr-2">
+              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                   {quickNotes.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
                       No notes available
                     </p>
                   ) : (
-                    <div className="space-y-3">
-                      {quickNotes.map((note) => (
-                        <div key={note.id} className="p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                          <p className="text-sm font-medium truncate">
-                            {note.title}
+                    quickNotes.map((note) => (
+                      <div key={note.id} className="border-b border-[#e2e8f0] pb-4 last:border-b-0">
+                        <p className="text-sm font-semibold text-[#1f2933]">
+                          {note.title || "Untitled Note"}
+                        </p>
+                        {note.content && (
+                          <p className="text-xs text-[#6b7a90] mt-1 line-clamp-2">
+                            {note.content}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {note.content || "No content"}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Updated{" "}
-                            {new Date(note.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                        )}
+                        <p className="text-xs text-[#94a3b8] mt-1">
+                          Updated {new Date(note.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))
                   )}
                 </div>
-                {totalQuickNotes > quickNotes.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-border">
-                    Showing {quickNotes.length} of {totalQuickNotes} notes
-                  </div>
-                )}
-                <Button
-                  variant="ghost"
-                  className="w-full justify-center text-xs font-medium hover:bg-muted/50 flex-shrink-0"
-                  onClick={() => router.push("/notes")}
-                >
-                  View All Notes
-                  <ArrowRight className="h-3 w-3 ml-1" />
-                </Button>
+                <div className="border-t border-[#e2e8f0] px-4 py-3">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                    onClick={() => router.push("/notes")}
+                  >
+                    View All Notes
+                    <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
             )}
-
-            {/* WhatsApp Integration */}
-            <Card className="md:col-span-2 relative pt-6">
-              {hasVerifiedWhatsApp && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-white border-transparent shadow-sm">
-                  Connected
-                </Badge>
-              )}
-              <CardHeader className="pb-4">
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <MessageSquare className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <CardTitle className="text-base m-0">WhatsApp Integration</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {hasVerifiedWhatsApp
-                          ? "Your WhatsApp account is securely connected and verified."
-                          : "Link your WhatsApp account to manage your workspace through messages and voice notes seamlessly."}
-                      </p>
-                    </div>
-                  </div>
-                  {hasVerifiedWhatsApp ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push("/settings/whatsapp")}
-                      className="whitespace-nowrap"
-                    >
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      Manage Integration
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="blue-primary"
-                      onClick={() =>
-                        router.push("/settings/whatsapp?from=dashboard")
-                      }
-                      className="whitespace-nowrap"
-                    >
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      Connect WhatsApp
-                    </Button>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-sm text-muted-foreground">
-                  Stay connected to receive reminders, share tasks with your team, and sync updates instantly through WhatsApp.
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Calendar Integration */}
-            <Card className="md:col-span-2 relative pt-6">
-              {hasCalendar && (
-                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-500 text-white border-transparent shadow-sm">
-                  Connected
-                </Badge>
-              )}
-              <CardHeader className="pb-4">
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Calendar className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <CardTitle className="text-base m-0">
-                        Calendar Integration
-                      </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {hasCalendar
-                          ? calendars!.length === 1
-                            ? "You have 1 calendar successfully integrated."
-                            : `You have ${calendars!.length} calendars successfully integrated.`
-                          : "Integrate Google or Microsoft calendars to streamline event management through WhatsApp."}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant={hasCalendar ? "outline" : "blue-primary"}
-                    onClick={() => router.push("/settings/calendars")}
-                    className="whitespace-nowrap"
-                  >
-                    <Calendar className="mr-2 h-4 w-4" />
-                    {hasCalendar ? "Manage Integration" : "Connect Calendar"}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-sm text-muted-foreground">
-                  Sync events, automate reminders, and keep your team aligned by connecting your preferred calendar services.
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>
