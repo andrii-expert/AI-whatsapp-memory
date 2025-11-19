@@ -50,7 +50,7 @@ export default function DashboardPage() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "reminders" | "tasks" | "events" | "notes">("all");
-  const [dateFilter, setDateFilter] = useState<"today" | "week" | "month" | "all" | "custom">("today");
+  const [dateFilter, setDateFilter] = useState<"today" | "week" | "month" | "all" | "custom">("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
@@ -115,11 +115,31 @@ export default function DashboardPage() {
     if (!range) return true; // "all" filter
     
     try {
-      const itemDate = new Date(dateStr);
-      if (isNaN(itemDate.getTime())) return false; // Invalid date
-      itemDate.setHours(0, 0, 0, 0);
+      let itemDate: Date;
       
-      return itemDate >= range.start && itemDate <= range.end;
+      // Handle different date formats
+      if (dateStr instanceof Date) {
+        itemDate = new Date(dateStr);
+      } else if (typeof dateStr === 'string') {
+        // Handle date-only strings (YYYY-MM-DD) and ISO timestamps
+        if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          // Date-only string (YYYY-MM-DD)
+          itemDate = new Date(dateStr + 'T00:00:00');
+        } else {
+          // ISO timestamp or other format
+          itemDate = new Date(dateStr);
+        }
+      } else {
+        return false;
+      }
+      
+      if (isNaN(itemDate.getTime())) return false; // Invalid date
+      
+      // Normalize to start of day for comparison
+      const normalizedItemDate = new Date(itemDate);
+      normalizedItemDate.setHours(0, 0, 0, 0);
+      
+      return normalizedItemDate >= range.start && normalizedItemDate <= range.end;
     } catch (error) {
       return false;
     }
@@ -146,25 +166,40 @@ export default function DashboardPage() {
         // Check different date fields based on item type
         let dateToCheck = null;
         
-        // For tasks - check dueDate
-        if (type === "tasks" && item.dueDate) {
-          dateToCheck = item.dueDate;
+        if (type === "tasks") {
+          // Tasks have dueDate (date type, format: YYYY-MM-DD)
+          if (item.dueDate) {
+            dateToCheck = item.dueDate;
+          }
+        } else if (type === "events") {
+          // Events - check date or startDate
+          if (item.date || item.startDate) {
+            dateToCheck = item.date || item.startDate;
+          }
+        } else if (type === "reminders") {
+          // Reminders: 
+          // - For "once" reminders, use targetDate to check if it falls in the date range
+          // - For recurring reminders (daily, weekly, etc.), they don't have a specific date
+          //   so we should show them if they're active (they repeat every day/week/etc.)
+          if (item.frequency === "once" && item.targetDate) {
+            dateToCheck = item.targetDate;
+          } else {
+            // For recurring reminders, always include them (they're active and repeat)
+            // Return true to include them in the filtered results
+            return true;
+          }
+        } else if (type === "notes") {
+          // Notes - prefer updatedAt, fallback to createdAt
+          if (item.updatedAt) {
+            dateToCheck = item.updatedAt;
+          } else if (item.createdAt) {
+            dateToCheck = item.createdAt;
+          }
         }
-        // For events - check date or startDate
-        else if (type === "events" && (item.date || item.startDate)) {
-          dateToCheck = item.date || item.startDate;
-        }
-        // For reminders - check date or scheduleDate
-        else if (type === "reminders" && (item.date || item.scheduleDate)) {
-          dateToCheck = item.date || item.scheduleDate;
-        }
-        // For notes - check updatedAt or createdAt
-        else if (type === "notes" && (item.updatedAt || item.createdAt)) {
-          dateToCheck = item.updatedAt || item.createdAt;
-        }
-        // Fallback to any available date field
-        else {
-          dateToCheck = item.dueDate || item.date || item.startDate || item.scheduleDate || item.updatedAt || item.createdAt;
+        
+        // If no date found, exclude from filtered results (unless "all" filter)
+        if (!dateToCheck) {
+          return false;
         }
         
         return isDateInRange(dateToCheck);
@@ -209,6 +244,52 @@ export default function DashboardPage() {
       case "notes": return <StickyNote className="h-4 w-4" />;
       default: return <Filter className="h-4 w-4" />;
     }
+  };
+
+  // Helper function to get reminder frequency label
+  const getReminderFrequencyLabel = (reminder: any) => {
+    if (reminder.frequency === "daily") {
+      return "(Daily)";
+    } else if (reminder.frequency === "weekly") {
+      return "(Weekly)";
+    } else if (reminder.frequency === "hourly") {
+      if (reminder.intervalMinutes) {
+        const hours = Math.floor(reminder.intervalMinutes / 60);
+        if (hours === 1) return "(Hourly)";
+        return `(Every ${hours} hours)`;
+      }
+      return "(Hourly)";
+    } else if (reminder.frequency === "minutely") {
+      if (reminder.intervalMinutes) {
+        const days = Math.floor(reminder.intervalMinutes / (60 * 24));
+        if (days === 1) return "(Daily)";
+        if (days > 1) return `(Every ${days} days)`;
+        const hours = Math.floor(reminder.intervalMinutes / 60);
+        if (hours === 1) return "(Hourly)";
+        if (hours > 1) return `(Every ${hours} hours)`;
+      }
+      return "(Custom)";
+    }
+    return "";
+  };
+
+  // Helper function to get reminder border color
+  const getReminderBorderColor = (reminder: any) => {
+    if (reminder.frequency === "daily") {
+      return "border-l-4 border-l-orange-500";
+    } else if (reminder.frequency === "minutely" && reminder.intervalMinutes) {
+      const days = Math.floor(reminder.intervalMinutes / (60 * 24));
+      if (days > 1) {
+        return "border-l-4 border-l-blue-500";
+      }
+    }
+    // Default colors based on frequency
+    if (reminder.frequency === "weekly") {
+      return "border-l-4 border-l-purple-500";
+    } else if (reminder.frequency === "monthly") {
+      return "border-l-4 border-l-green-500";
+    }
+    return "border-l-4 border-l-orange-500"; // Default to orange
   };
 
   // Filter active reminders
@@ -372,17 +453,67 @@ export default function DashboardPage() {
     </div>
   );
 
+  const formatShortDate = (date: Date) =>
+    date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  // Format date for display
+  const formatDateRange = () => {
+    const range = getDateRange();
+    const today = new Date();
+
+    switch (dateFilter) {
+      case "today":
+        return formatShortDate(today);
+      case "week":
+      case "month":
+        if (range) {
+          return `${formatShortDate(range.start)} - ${formatShortDate(range.end)}`;
+        }
+        return dateFilter === "week" ? "This Week" : "This Month";
+      case "custom":
+        if (customStartDate && customEndDate) {
+          const start = new Date(customStartDate);
+          const end = new Date(customEndDate);
+          return `${formatShortDate(start)} - ${formatShortDate(end)}`;
+        }
+        return "Custom Range";
+      case "all":
+      default:
+        return "All Time";
+    }
+  };
+
   return (
     <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
       {/* Page Header */}
       <div className="mb-6 flex flex-col md:flex-row items-start justify-between gap-4">
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight text-primary">
             Welcome back, {userName}!
           </h1>
-          <p className="text-muted-foreground mt-2">
-            Here's what's happening with your workspace today
-          </p>
+        </div>
+
+        {/* Connection Status Indicators */}
+        <div className="flex flex-col md:flex-row gap-2 md:gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-50 border border-green-200">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 text-green-600"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
+            </svg>
+            <span className="text-xs font-medium text-green-800">
+              {hasVerifiedWhatsApp ? "CONNECTED" : "LINKS WHATSAPP"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-50 border border-green-200">
+            <Calendar className="h-4 w-4 text-green-600" />
+            <span className="text-xs font-medium text-green-800">
+              {hasCalendar ? "CONNECTED" : "CONNECT YOUR CALENDAR"}
+            </span>
+          </div>
         </div>
 
         {/* Mobile Workspace Menu Button */}
@@ -457,6 +588,114 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
+          
+          {/* Date Range Picker */}
+          <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="justify-between min-w-[180px] font-normal"
+              >
+                <span>{formatDateRange()}</span>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-0" align="end">
+              <div className="p-4 space-y-4">
+                <div>
+                  <h4 className="font-semibold text-sm mb-3">Date Range</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant={dateFilter === "today" ? "blue-primary" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setDateFilter("today");
+                        setIsDatePopoverOpen(false);
+                      }}
+                      className="w-full"
+                    >
+                      Today
+                    </Button>
+                    <Button
+                      variant={dateFilter === "week" ? "blue-primary" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setDateFilter("week");
+                        setIsDatePopoverOpen(false);
+                      }}
+                      className="w-full"
+                    >
+                      This Week
+                    </Button>
+                    <Button
+                      variant={dateFilter === "month" ? "blue-primary" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setDateFilter("month");
+                        setIsDatePopoverOpen(false);
+                      }}
+                      className="w-full"
+                    >
+                      This Month
+                    </Button>
+                    <Button
+                      variant={dateFilter === "all" ? "blue-primary" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setDateFilter("all");
+                        setIsDatePopoverOpen(false);
+                      }}
+                      className="w-full"
+                    >
+                      All Time
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="border-t pt-4">
+                  <h4 className="font-semibold text-sm mb-3">Custom Range</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1.5 block">
+                        Start Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomStartDate(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1.5 block">
+                        End Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomEndDate(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                    <Button
+                      variant="blue-primary"
+                      size="sm"
+                      onClick={() => {
+                        if (customStartDate && customEndDate) {
+                          setDateFilter("custom");
+                          setIsDatePopoverOpen(false);
+                        }
+                      }}
+                      disabled={!customStartDate || !customEndDate}
+                      className="w-full"
+                    >
+                      Apply Custom Range
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
           
           <div className="flex gap-3 justify-between">
             {/* Filter Type - Mobile Popover */}
@@ -536,117 +775,6 @@ export default function DashboardPage() {
                     <StickyNote className="h-4 w-4 mr-2" />
                     Notes
                   </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            
-            {/* Date Filter */}
-            <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="justify-between w-full min-w-[140px] md:min-w-[200px] font-normal"
-                >
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    <span>{getDateFilterLabel()}</span>
-                  </div>
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="end">
-                <div className="p-4 space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-sm mb-3">Date Range</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant={dateFilter === "today" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("today");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        Today
-                      </Button>
-                      <Button
-                        variant={dateFilter === "week" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("week");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        This Week
-                      </Button>
-                      <Button
-                        variant={dateFilter === "month" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("month");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        This Month
-                      </Button>
-                      <Button
-                        variant={dateFilter === "all" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("all");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        All Time
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold text-sm mb-3">Custom Range</h4>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1.5 block">
-                          Start Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={customStartDate}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomStartDate(e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1.5 block">
-                          End Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={customEndDate}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomEndDate(e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <Button
-                        variant="blue-primary"
-                        size="sm"
-                        onClick={() => {
-                          if (customStartDate && customEndDate) {
-                            setDateFilter("custom");
-                            setIsDatePopoverOpen(false);
-                          }
-                        }}
-                        disabled={!customStartDate || !customEndDate}
-                        className="w-full"
-                      >
-                        Apply Custom Range
-                      </Button>
-                    </div>
-                  </div>
                 </div>
               </PopoverContent>
             </Popover>
@@ -800,16 +928,12 @@ export default function DashboardPage() {
               <CardHeader className="flex flex-row bg-primary items-center justify-between space-y-0 pb-3 flex-shrink-0">
                 <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
                   <BellRing className="h-4 w-4" />
-                  {dateFilter === "today" && "Today "}
-                  {dateFilter === "week" && "This Week "}
-                  {dateFilter === "month" && "This Month "}
                   Active Reminders
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="orange">{activeReminders.length}</Badge>
-                  {totalActiveReminders > activeReminders.length && (
-                    <span className="text-xs text-muted-foreground">of {totalActiveReminders}</span>
-                  )}
+                  <Badge variant="orange" className="bg-white/20 text-white border-white/30">
+                    {totalActiveReminders}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0">
@@ -819,31 +943,30 @@ export default function DashboardPage() {
                       No active reminders
                     </p>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {activeReminders.map((reminder: any) => (
                         <div
                           key={reminder.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                          className={cn(
+                            "flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors",
+                            getReminderBorderColor(reminder)
+                          )}
                         >
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="text-sm truncate">
-                              {reminder.title}
+                            <span className="text-sm">
+                              {reminder.title} {getReminderFrequencyLabel(reminder)}
                             </span>
                           </div>
-                          <span className="text-xs text-muted-foreground font-mono ml-2">
-                            {reminder.time}
-                          </span>
+                          {reminder.time && (
+                            <span className="text-xs text-muted-foreground font-mono ml-2 flex-shrink-0">
+                              {reminder.time}
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-                {totalActiveReminders > activeReminders.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-border">
-                    Showing {activeReminders.length} of {totalActiveReminders} reminders
-                  </div>
-                )}
                 <Button
                   variant="ghost"
                   className="w-full justify-center text-xs font-medium hover:bg-muted/50 flex-shrink-0"
@@ -862,16 +985,12 @@ export default function DashboardPage() {
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
                 <CardTitle className="text-base text-white font-semibold flex items-center justify-center gap-2 m-0">
                   <CheckSquare className="h-4 w-4" />
-                  {dateFilter === "today" && "Today "}
-                  {dateFilter === "week" && "This Week "}
-                  {dateFilter === "month" && "This Month "}
                   Pending Tasks
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="orange">{pendingTasks.length}</Badge>
-                  {totalPendingTasks > pendingTasks.length && (
-                    <span className="text-xs text-muted-foreground">of {totalPendingTasks}</span>
-                  )}
+                  <Badge variant="orange" className="bg-white/20 text-white border-white/30">
+                    {totalPendingTasks}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0">
@@ -881,16 +1000,14 @@ export default function DashboardPage() {
                       No pending tasks
                     </p>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {pendingTasks.map((task) => (
                         <div
                           key={task.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                          className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                         >
+                          <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           <span className="text-sm truncate flex-1">{task.title}</span>
-                          <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
-                            {task.dueDate}
-                          </Badge>
                         </div>
                       ))}
                     </div>
@@ -919,16 +1036,12 @@ export default function DashboardPage() {
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
                 <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
                   <Calendar className="h-4 w-4" />
-                  {dateFilter === "today" && "Today "}
-                  {dateFilter === "week" && "This Week "}
-                  {dateFilter === "month" && "This Month "}
                   Scheduled Events
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="orange">{scheduledEvents.length}</Badge>
-                  {totalScheduledEvents > scheduledEvents.length && (
-                    <span className="text-xs text-muted-foreground">of {totalScheduledEvents}</span>
-                  )}
+                  <Badge variant="orange" className="bg-white/20 text-white border-white/30">
+                    {totalScheduledEvents}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0">
@@ -976,16 +1089,12 @@ export default function DashboardPage() {
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 flex-shrink-0 bg-primary">
                 <CardTitle className="text-base font-semibold flex items-center justify-center gap-2 m-0 text-white">
                   <StickyNote className="h-4 w-4" />
-                  {dateFilter === "today" && "Today "}
-                  {dateFilter === "week" && "This Week "}
-                  {dateFilter === "month" && "This Month "}
                   Quick Notes
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Badge variant="orange">{quickNotes.length}</Badge>
-                  {totalQuickNotes > quickNotes.length && (
-                    <span className="text-xs text-muted-foreground">of {totalQuickNotes}</span>
-                  )}
+                  <Badge variant="orange" className="bg-white/20 text-white border-white/30">
+                    {totalQuickNotes}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0">
@@ -998,26 +1107,20 @@ export default function DashboardPage() {
                     <div className="space-y-3">
                       {quickNotes.map((note) => (
                         <div key={note.id} className="p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                          <p className="text-sm font-medium truncate">
+                          <p className="text-sm font-medium mb-1">
                             {note.title}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          <p className="text-xs text-muted-foreground line-clamp-3">
                             {note.content || "No content"}
                           </p>
                           <p className="text-xs text-muted-foreground mt-2">
-                            Updated{" "}
-                            {new Date(note.createdAt).toLocaleDateString()}
+                            Updated {new Date(note.updatedAt || note.createdAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}
                           </p>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-                {totalQuickNotes > quickNotes.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-border">
-                    Showing {quickNotes.length} of {totalQuickNotes} notes
-                  </div>
-                )}
                 <Button
                   variant="ghost"
                   className="w-full justify-center text-xs font-medium hover:bg-muted/50 flex-shrink-0"
@@ -1030,83 +1133,6 @@ export default function DashboardPage() {
             </Card>
             )}
 
-            {/* WhatsApp Integration */}
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center justify-center gap-3">
-                    <MessageSquare className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base m-0">WhatsApp Integration</CardTitle>
-                  </div>
-                  {hasVerifiedWhatsApp && (
-                    <Badge className="bg-green-100 text-green-800 border-green-200">
-                      Connected
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {hasVerifiedWhatsApp
-                    ? "Your WhatsApp account is securely connected and verified."
-                    : "Link your WhatsApp account to manage your workspace through messages and voice notes seamlessly."}
-                </p>
-                {hasVerifiedWhatsApp ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push("/settings/whatsapp")}
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Manage Integration
-                  </Button>
-                ) : (
-                  <Button
-                    variant="blue-primary"
-                    onClick={() =>
-                      router.push("/settings/whatsapp?from=dashboard")
-                    }
-                  >
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Connect WhatsApp
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Calendar Integration */}
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center justify-center gap-3">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base m-0">
-                      Calendar Integration
-                    </CardTitle>
-                  </div>
-                  {hasCalendar && (
-                    <Badge className="bg-green-100 text-green-800 border-green-200">
-                      Connected
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {hasCalendar
-                    ? calendars!.length === 1
-                      ? "You have 1 calendar successfully integrated."
-                      : `You have ${calendars!.length} calendars successfully integrated.`
-                    : "Integrate your Google Calendar or Microsoft Outlook to streamline event management through WhatsApp."}
-                </p>
-                <Button
-                  variant={hasCalendar ? "outline" : "blue-primary"}
-                  onClick={() => router.push("/settings/calendars")}
-                >
-                  <Calendar className="mr-2 h-4 w-4" />
-                  {hasCalendar ? "Manage Integration" : "Connect Calendar"}
-                </Button>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

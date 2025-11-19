@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/nextjs";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
@@ -40,6 +40,7 @@ const profileSchema = z.object({
 export default function ProfilePage() {
   const router = useRouter();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const { user: clerkUser } = useUser();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -116,7 +117,12 @@ export default function ProfilePage() {
     trpc.user.update.mutationOptions({
       onSuccess: async (_, variables) => {
         const phoneChanged = variables.phone !== originalPhone;
-        
+        await queryClient.invalidateQueries({
+          queryKey: trpc.user.me.queryKey(),
+        });
+        if (variables.phone) {
+          setOriginalPhone(variables.phone);
+        }
         if (phoneChanged) {
           // Phone was changed, redirect to verification page
           toast({
@@ -381,7 +387,7 @@ export default function ProfilePage() {
                       mode="single"
                       selected={birthday}
                       defaultMonth={birthday ?? new Date()}
-                      onSelect={(date) => {
+                      onSelect={(date: Date | undefined) => {
                         setValue("birthday", date ?? undefined)
                         setBirthdayPopoverOpen(false)
                       }}
