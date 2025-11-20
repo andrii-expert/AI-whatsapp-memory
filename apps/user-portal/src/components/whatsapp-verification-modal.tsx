@@ -57,7 +57,7 @@ export function WhatsAppVerificationModal({ children }: WhatsAppVerificationModa
       setIsGenerating(true);
 
       // Use the business WhatsApp number from environment variables
-      const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "1234567890";
+      const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
 
       // Create WhatsApp message with verification code
       const message = `Hello! I'd like to connect my WhatsApp to ImagineCalendar for voice-based calendar management. My verification code is: ${code}`;
@@ -92,7 +92,7 @@ export function WhatsAppVerificationModal({ children }: WhatsAppVerificationModa
     if (!verificationCode) return;
 
     // Use the business WhatsApp number from environment variables
-    const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "1234567890";
+    const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
     const message = `Hello! I'd like to connect my WhatsApp to ImagineCalendar for voice-based calendar management. My verification code is: ${verificationCode}`;
     const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
 

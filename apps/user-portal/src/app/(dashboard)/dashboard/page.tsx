@@ -439,7 +439,7 @@ export default function DashboardPage() {
           <LayoutDashboard className="h-4 w-4" />
           <span className="font-medium">Overview</span>
         </div>
-        <Badge variant="secondary" className="bg-primary-foreground/20 text-primary-foreground">
+        <Badge variant="orange">
           {totalItems}
         </Badge>
       </Link>
@@ -469,7 +469,7 @@ export default function DashboardPage() {
       </Link>
       
       <Link
-        href="/settings/calendars"
+        href="/calendars"
         onClick={onClick}
         className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
       >
@@ -539,7 +539,7 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => router.push("/settings/calendars")}
+              onClick={() => router.push("/calendars")}
               className="group relative flex flex-1 items-center justify-center gap-2 rounded-full border border-muted bg-background px-3 py-2 shadow-sm transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {hasCalendar && (
@@ -909,7 +909,7 @@ export default function DashboardPage() {
             {/* Active Reminders */}
             {shouldShowReminders && (
             <Card className="flex flex-col h-[420px] rounded-3xl border border-[#dbe6ff] shadow-[0_10px_40px_rgba(15,82,186,0.12)] overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between bg-[#1976c5] px-4 py-3">
+              <CardHeader className="flex flex-row items-center justify-between bg-primary px-4 py-3">
                 <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <BellRing className="h-4 w-4 text-white" />
                   Active Reminders
@@ -977,7 +977,7 @@ export default function DashboardPage() {
             {/* Pending Tasks */}
             {shouldShowTasks && (
             <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-between bg-[#1976c5] px-4 py-3">
+              <CardHeader className="flex flex-row items-center justify-between bg-primary px-4 py-3">
                 <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <CheckSquare className="h-4 w-4 text-white" />
                   Pending Tasks
@@ -1042,7 +1042,7 @@ export default function DashboardPage() {
             {/* Scheduled Events */}
             {shouldShowEvents && (
             <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-between bg-[#1976c5] px-4 py-3">
+              <CardHeader className="flex flex-row items-center justify-between bg-primary px-4 py-3">
                 <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <Calendar className="h-4 w-4 text-white" />
                   Scheduled Events
@@ -1089,7 +1089,7 @@ export default function DashboardPage() {
                   <Button
                     variant="ghost"
                     className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                    onClick={() => router.push("/settings/calendars")}
+                    onClick={() => router.push("/calendars")}
                   >
                     View All Events
                     <ArrowRight className="h-3 w-3 ml-1" />
@@ -1102,7 +1102,7 @@ export default function DashboardPage() {
             {/* Quick Notes */}
             {shouldShowNotes && (
             <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-between bg-[#1976c5] px-4 py-3">
+              <CardHeader className="flex flex-row items-center justify-between bg-primary px-4 py-3">
                 <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <StickyNote className="h-4 w-4 text-white" />
                   Quick Notes

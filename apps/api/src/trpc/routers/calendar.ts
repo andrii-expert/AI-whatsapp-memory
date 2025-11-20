@@ -509,4 +509,254 @@ export const calendarRouter = createTRPCRouter({
         };
       }
     }),
+
+  createEvent: protectedProcedure
+    .input(z.object({
+      calendarId: z.string(),
+      title: z.string().min(1, "Event title is required"),
+      start: z.string(), // ISO date string
+      end: z.string().optional(), // ISO date string
+      description: z.string().optional(),
+      location: z.string().optional(),
+      allDay: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ ctx: { db, session }, input }) => {
+      const calendar = await getCalendarById(db, input.calendarId);
+
+      if (!calendar || calendar.userId !== session.user.id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Calendar not found",
+        });
+      }
+
+      if (!calendar.accessToken || !calendar.isActive) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Calendar is not connected or active",
+        });
+      }
+
+      try {
+        logger.info({
+          userId: session.user.id,
+          calendarId: input.calendarId,
+          provider: calendar.provider,
+          eventTitle: input.title
+        }, "Creating calendar event");
+
+        const provider = createCalendarProvider(calendar.provider);
+        let accessToken = calendar.accessToken;
+
+        // Parse dates
+        const startDate = new Date(input.start);
+        const endDate = input.end ? new Date(input.end) : new Date(startDate.getTime() + 60 * 60 * 1000); // Default 1 hour duration
+
+        // Try to create event
+        try {
+          const createdEvent = await provider.createEvent(accessToken, {
+            calendarId: calendar.calendarId,
+            title: input.title,
+            start: startDate,
+            end: endDate,
+            description: input.description,
+            location: input.location,
+            allDay: input.allDay || false,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          });
+
+          logger.info({
+            userId: session.user.id,
+            calendarId: input.calendarId,
+            eventId: createdEvent.id
+          }, "Calendar event created successfully");
+
+          return {
+            success: true,
+            event: createdEvent,
+            message: "Event created successfully"
+          };
+        } catch (error: any) {
+          // If authentication fails and we have a refresh token, try refreshing
+          if (calendar.refreshToken && error.message?.includes("authentication")) {
+            logger.info({
+              userId: session.user.id,
+              calendarId: input.calendarId,
+              provider: calendar.provider
+            }, "Access token failed during event creation, attempting refresh");
+
+            const refreshedTokens = await provider.refreshTokens(calendar.refreshToken);
+            accessToken = refreshedTokens.accessToken;
+
+            // Update the calendar with the new tokens
+            await updateCalendarConnection(db, calendar.id, {
+              accessToken: refreshedTokens.accessToken,
+              refreshToken: refreshedTokens.refreshToken,
+              expiresAt: refreshedTokens.expiresAt,
+            });
+
+            // Retry with the new access token
+            const createdEvent = await provider.createEvent(accessToken, {
+              calendarId: calendar.calendarId,
+              title: input.title,
+              start: startDate,
+              end: endDate,
+              description: input.description,
+              location: input.location,
+              allDay: input.allDay || false,
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            });
+
+            logger.info({
+              userId: session.user.id,
+              calendarId: input.calendarId,
+              eventId: createdEvent.id
+            }, "Calendar event created successfully after token refresh");
+
+            return {
+              success: true,
+              event: createdEvent,
+              message: "Event created successfully"
+            };
+          } else {
+            throw error;
+          }
+        }
+      } catch (error: any) {
+        logger.error({
+          userId: session.user.id,
+          calendarId: input.calendarId,
+          error: error.message
+        }, "Failed to create calendar event");
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to create event: ${error.message}`,
+        });
+      }
+    }),
+
+  getEvents: protectedProcedure
+    .input(z.object({
+      calendarId: z.string(),
+      timeMin: z.string().optional(), // ISO date string
+      timeMax: z.string().optional(), // ISO date string
+      maxResults: z.number().optional().default(100),
+    }))
+    .query(async ({ ctx: { db, session }, input }) => {
+      const calendar = await getCalendarById(db, input.calendarId);
+
+      if (!calendar || calendar.userId !== session.user.id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Calendar not found",
+        });
+      }
+
+      if (!calendar.accessToken || !calendar.isActive) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Calendar is not connected or active",
+        });
+      }
+
+      try {
+        logger.info({
+          userId: session.user.id,
+          calendarId: input.calendarId,
+          provider: calendar.provider
+        }, "Fetching calendar events");
+
+        const provider = createCalendarProvider(calendar.provider);
+        let accessToken = calendar.accessToken;
+
+        // Parse dates
+        const timeMin = input.timeMin ? new Date(input.timeMin) : new Date();
+        const timeMax = input.timeMax ? new Date(input.timeMax) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Default 30 days ahead
+
+        // Try to fetch events
+        try {
+          const events = await provider.searchEvents(accessToken, {
+            calendarId: calendar.calendarId,
+            timeMin,
+            timeMax,
+            maxResults: input.maxResults,
+          });
+
+          logger.info({
+            userId: session.user.id,
+            calendarId: input.calendarId,
+            eventCount: events.length
+          }, "Calendar events fetched successfully");
+
+          return events.map(event => ({
+            id: event.id,
+            title: event.title,
+            description: event.description,
+            start: event.start.toISOString(),
+            end: event.end.toISOString(),
+            location: event.location,
+            htmlLink: event.htmlLink,
+            webLink: event.webLink,
+          }));
+        } catch (error: any) {
+          // If authentication fails and we have a refresh token, try refreshing
+          if (calendar.refreshToken && error.message?.includes("authentication")) {
+            logger.info({
+              userId: session.user.id,
+              calendarId: input.calendarId,
+              provider: calendar.provider
+            }, "Access token failed during event fetch, attempting refresh");
+
+            const refreshedTokens = await provider.refreshTokens(calendar.refreshToken);
+            accessToken = refreshedTokens.accessToken;
+
+            // Update the calendar with the new tokens
+            await updateCalendarConnection(db, calendar.id, {
+              accessToken: refreshedTokens.accessToken,
+              refreshToken: refreshedTokens.refreshToken,
+              expiresAt: refreshedTokens.expiresAt,
+            });
+
+            // Retry with the new access token
+            const events = await provider.searchEvents(accessToken, {
+              calendarId: calendar.calendarId,
+              timeMin,
+              timeMax,
+              maxResults: input.maxResults,
+            });
+
+            logger.info({
+              userId: session.user.id,
+              calendarId: input.calendarId,
+              eventCount: events.length
+            }, "Calendar events fetched successfully after token refresh");
+
+            return events.map(event => ({
+              id: event.id,
+              title: event.title,
+              description: event.description,
+              start: event.start.toISOString(),
+              end: event.end.toISOString(),
+              location: event.location,
+              htmlLink: event.htmlLink,
+              webLink: event.webLink,
+            }));
+          } else {
+            throw error;
+          }
+        }
+      } catch (error: any) {
+        logger.error({
+          userId: session.user.id,
+          calendarId: input.calendarId,
+          error: error.message
+        }, "Failed to fetch calendar events");
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to fetch events: ${error.message}`,
+        });
+      }
+    }),
 });

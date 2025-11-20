@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
             <script>
               document.cookie = "oauth_error=${encodeURIComponent(errorData)}; path=/; max-age=60; samesite=lax${process.env.NODE_ENV === 'production' ? '; secure' : ''}";
               setTimeout(() => {
-                window.location.href = "${hostUrl}/settings/calendars";
+                window.location.href = "${hostUrl}/calendars";
               }, 100);
             </script>
           </body>
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
           headers: { 'Content-Type': 'text/html' }
         });
       } else {
-        const response = NextResponse.redirect(`${hostUrl}/settings/calendars`);
+        const response = NextResponse.redirect(`${hostUrl}/calendars`);
         response.cookies.set('oauth_error', JSON.stringify({
           error: error,
           error_description: errorDescription
@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
             <script>
               document.cookie = "oauth_error=${encodeURIComponent(errorData)}; path=/; max-age=60; samesite=lax${process.env.NODE_ENV === 'production' ? '; secure' : ''}";
               setTimeout(() => {
-                window.location.href = "${hostUrl}/settings/calendars";
+                window.location.href = "${hostUrl}/calendars";
               }, 100);
             </script>
           </body>
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
           headers: { 'Content-Type': 'text/html' }
         });
       } else {
-        const response = NextResponse.redirect(`${hostUrl}/settings/calendars`);
+        const response = NextResponse.redirect(`${hostUrl}/calendars`);
         response.cookies.set('oauth_error', JSON.stringify({
           error: 'missing_code'
         }), {
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
         provider
       }, "OAuth callback with invalid provider in state");
 
-      const response = NextResponse.redirect(`${hostUrl}/settings/calendars`);
+      const response = NextResponse.redirect(`${hostUrl}/calendars`);
       response.cookies.set('oauth_error', JSON.stringify({
         error: 'invalid_provider'
       }), {
@@ -222,7 +222,7 @@ export async function GET(request: NextRequest) {
             document.cookie = "oauth_callback=${encodeURIComponent(cookieData)}; path=/; max-age=60; samesite=lax${process.env.NODE_ENV === 'production' ? '; secure' : ''}";
             // Redirect to settings page
             setTimeout(() => {
-              window.location.href = "${hostUrl}/settings/calendars";
+              window.location.href = "${hostUrl}/calendars";
             }, 100);
           </script>
         </body>
@@ -235,7 +235,7 @@ export async function GET(request: NextRequest) {
       });
     } else {
       // For Google and others, use standard redirect
-      response = NextResponse.redirect(`${hostUrl}/settings/calendars`);
+      response = NextResponse.redirect(`${hostUrl}/calendars`);
 
       // Store the OAuth data in a cookie
       response.cookies.set('oauth_callback', JSON.stringify({
@@ -254,7 +254,7 @@ export async function GET(request: NextRequest) {
     // Log response details for debugging
     logger.info({
       provider,
-      redirectingTo: `${hostUrl}/settings/calendars`,
+      redirectingTo: `${hostUrl}/calendars`,
       dataStoredInCookie: true,
       usingClientSideRedirect: isMicrosoft,
       responseType: isMicrosoft ? 'html' : 'redirect'
@@ -267,7 +267,7 @@ export async function GET(request: NextRequest) {
     }, "OAuth callback processing failed");
 
     const hostUrl = getHostUrl(request);
-    const response = NextResponse.redirect(`${hostUrl}/settings/calendars`);
+    const response = NextResponse.redirect(`${hostUrl}/calendars`);
 
     response.cookies.set('oauth_error', JSON.stringify({
       error: 'callback_failed'

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
-import { LogOut, User, CreditCard, FileText, Settings, ChevronDown } from "lucide-react";
+import { LogOut, User, CreditCard, FileText, Settings, ChevronDown, MessageCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,6 +97,18 @@ export function UserAvatarMenu() {
                 <User className="h-5 w-5" />
               </div>
               <span className="text-sm font-medium">Profile</span>
+            </Link>
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem asChild>
+            <Link 
+              href="/settings/whatsapp" 
+              className="flex items-center gap-3 px-3 py-1.5 rounded-md cursor-pointer transition-colors hover:bg-accent"
+            >
+              <div className="flex items-center justify-center w-8 h-8">
+                <MessageCircle className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-medium">WhatsApp</span>
             </Link>
           </DropdownMenuItem>
           

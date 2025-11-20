@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@imaginecalendar/ui/dialog";
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@imaginecalendar/ui/alert-dialog";
 import { Button } from "@imaginecalendar/ui/button";
 import { RadioGroup, RadioGroupItem } from "@imaginecalendar/ui/radio-group";
 import { Label } from "@imaginecalendar/ui/label";
@@ -37,6 +38,13 @@ export function CalendarSelectionDialog({
   const [selectedCalendarId, setSelectedCalendarId] = useState<string | null>(
     currentCalendarId || null
   );
+
+  // Reset selection when dialog opens/closes or currentCalendarId changes
+  useEffect(() => {
+    if (open) {
+      setSelectedCalendarId(currentCalendarId || null);
+    }
+  }, [open, currentCalendarId]);
 
   // Fetch available calendars
   const { data: calendars = [], isLoading } = useQuery({
@@ -89,18 +97,18 @@ export function CalendarSelectionDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="sm:max-w-[500px]">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Select Calendar
-          </DialogTitle>
-          <DialogDescription>
+          </AlertDialogTitle>
+          <AlertDialogDescription>
             Choose which calendar you want to use for creating events via WhatsApp.
             {calendars.length > 0 && ` Found ${calendars.length} calendar(s).`}
-          </DialogDescription>
-        </DialogHeader>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
         <div className="py-4">
           {isLoading ? (
@@ -164,7 +172,7 @@ export function CalendarSelectionDialog({
           )}
         </div>
 
-        <div className="flex justify-end gap-3">
+        <AlertDialogFooter>
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -189,8 +197,8 @@ export function CalendarSelectionDialog({
               "Save Selection"
             )}
           </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

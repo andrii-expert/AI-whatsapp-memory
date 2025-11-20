@@ -18,7 +18,7 @@ const settingsNavItems = [
   },
   {
     title: "Calendars",
-    href: "/settings/calendars",
+    href: "/calendars",
     icon: Calendar,
   },
 ];

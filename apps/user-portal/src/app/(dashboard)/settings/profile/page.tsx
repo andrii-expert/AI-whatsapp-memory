@@ -327,7 +327,14 @@ export default function ProfilePage() {
 
               <div>
                 <Label htmlFor="ageGroup">Age Group *</Label>
-                <Select value={ageGroup || "26-35"} onValueChange={(value) => setValue("ageGroup", value as any)}>
+                <Select 
+                  key={`ageGroup-${ageGroup || 'empty'}`}
+                  value={ageGroup || "26-35"} 
+                  onValueChange={(value) => {
+                    console.log("AgeGroup onValueChange called with:", value);
+                    setValue("ageGroup", value as "18-25" | "26-35" | "36-45" | "46 and over", { shouldValidate: true, shouldDirty: true });
+                  }}
+                >
                   <SelectTrigger className={errors.ageGroup ? "border-red-500" : ""}>
                     <SelectValue placeholder="Select age group" />
                   </SelectTrigger>
