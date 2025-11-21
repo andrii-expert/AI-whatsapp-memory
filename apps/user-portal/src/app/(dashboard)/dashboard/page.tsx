@@ -56,6 +56,10 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNote, setSelectedNote] = useState<any | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any | null>(null);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
   // Fetch all data
   const { data: whatsappNumbers } = useQuery(trpc.whatsapp.getMyNumbers.queryOptions());
@@ -843,7 +847,11 @@ export default function DashboardPage() {
                       return (
                         <div
                           key={reminder.id}
-                          className={`flex items-center gap-3 rounded-xl px-4 py-3 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md`}
+                          onClick={() => {
+                            setSelectedReminder(reminder);
+                            setIsReminderModalOpen(true);
+                          }}
+                          className={`flex items-center gap-3 rounded-xl px-4 py-3 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
                         >
                           <div className={`h-14 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
                           <div className="flex-1 min-w-0">
@@ -905,12 +913,20 @@ export default function DashboardPage() {
                     pendingTasks.map((task) => (
                       <div
                         key={task.id}
-                        className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5"
+                        onClick={() => {
+                          setSelectedTask(task);
+                          setIsTaskModalOpen(true);
+                        }}
+                        className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5 cursor-pointer hover:bg-[#e9ecf3] transition-colors"
                       >
                         <input
                           type="checkbox"
                           checked={task.status === "completed"}
-                          onChange={() => handleToggleTask(task.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleToggleTask(task.id);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
                           disabled={
                             toggleTaskMutation.isPending &&
                             toggleTaskMutation.variables?.id === task.id
@@ -969,9 +985,8 @@ export default function DashboardPage() {
                         <div
                           key={event.id}
                           className={cn(
-                            "rounded-lg px-3 py-2 cursor-pointer hover:opacity-90 transition-opacity",
-                            event.color || "bg-blue-500",
-                            "text-white shadow-sm"
+                            "rounded-lg px-3 py-2 cursor-pointer hover:opacity-90 transition-opacity border-2 shadow-sm",
+                            event.color === "bg-blue-500" ? "border-blue-500 bg-blue-50 text-blue-900" : "border-purple-500 bg-purple-50 text-purple-900"
                           )}
                           title={`${event.title} - ${event.timeLabel}${event.location ? ` - ${event.location}` : ""}`}
                           onClick={() => {
@@ -1116,6 +1131,325 @@ export default function DashboardPage() {
               View in Notes
             </AlertDialogAction>
             <AlertDialogAction onClick={() => setIsNoteModalOpen(false)} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 hover:scale-105 transition-all duration-200 order-1 sm:order-2">
+              <X className="h-4 w-4" />
+              Close
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reminder Detail Modal */}
+      <AlertDialog open={isReminderModalOpen} onOpenChange={setIsReminderModalOpen}>
+        <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <BellRing className="h-5 w-5" />
+              {selectedReminder?.title || "Untitled Reminder"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              Created {selectedReminder?.createdAt ? new Date(selectedReminder.createdAt).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }) : 'Unknown date'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="py-4 space-y-4">
+            {/* Reminder Status */}
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                selectedReminder?.active 
+                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                  : 'bg-gray-100 text-gray-800 border border-gray-200'
+              }`}>
+                {selectedReminder?.active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+
+            {/* Frequency Type */}
+            {selectedReminder?.frequency && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground">Frequency</h4>
+                <p className="text-sm text-muted-foreground capitalize">
+                  {selectedReminder.frequency}
+                </p>
+              </div>
+            )}
+
+            {/* Time */}
+            {selectedReminder?.time && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Time
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  {selectedReminder.time}
+                </p>
+              </div>
+            )}
+
+            {/* Days of Week (for weekly reminders) */}
+            {selectedReminder?.frequency === 'weekly' && selectedReminder?.daysOfWeek && selectedReminder.daysOfWeek.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground">Days of Week</h4>
+                <div className="flex flex-wrap gap-2">
+                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, index) => 
+                    selectedReminder.daysOfWeek.includes(index) && (
+                      <span
+                        key={index}
+                        className="px-3 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                      >
+                        {day}
+                      </span>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Day of Month (for monthly reminders) */}
+            {selectedReminder?.frequency === 'monthly' && selectedReminder?.dayOfMonth && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground">Day of Month</h4>
+                <p className="text-sm text-muted-foreground">
+                  Day {selectedReminder.dayOfMonth}
+                </p>
+              </div>
+            )}
+
+            {/* Month and Day (for yearly reminders) */}
+            {selectedReminder?.frequency === 'yearly' && selectedReminder?.month && selectedReminder?.dayOfMonth && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground">Date</h4>
+                <p className="text-sm text-muted-foreground">
+                  {new Date(2000, selectedReminder.month - 1, selectedReminder.dayOfMonth).toLocaleDateString('en-US', { 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </p>
+              </div>
+            )}
+
+            {/* Hourly - Minute of Hour */}
+            {selectedReminder?.frequency === 'hourly' && selectedReminder?.minuteOfHour !== undefined && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground">Minute of Hour</h4>
+                <p className="text-sm text-muted-foreground">
+                  At {selectedReminder.minuteOfHour} minutes past the hour
+                </p>
+              </div>
+            )}
+
+            {/* Minutely - Interval */}
+            {selectedReminder?.frequency === 'minutely' && selectedReminder?.intervalMinutes && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground">Interval</h4>
+                <p className="text-sm text-muted-foreground">
+                  Every {selectedReminder.intervalMinutes} minute{selectedReminder.intervalMinutes !== 1 ? 's' : ''}
+                </p>
+              </div>
+            )}
+
+            {/* Once - Target Date or Days From Now */}
+            {selectedReminder?.frequency === 'once' && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground">Reminder Date</h4>
+                {selectedReminder?.targetDate ? (
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(selectedReminder.targetDate).toLocaleDateString('en-US', { 
+                      year: 'numeric',
+                      month: 'long', 
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                ) : selectedReminder?.daysFromNow !== undefined ? (
+                  <p className="text-sm text-muted-foreground">
+                    In {selectedReminder.daysFromNow} day{selectedReminder.daysFromNow !== 1 ? 's' : ''}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No date specified</p>
+                )}
+              </div>
+            )}
+
+            {/* Additional Info */}
+            <div className="pt-4 border-t border-border">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-semibold text-foreground">Created:</span>
+                  <p className="text-muted-foreground mt-1">
+                    {selectedReminder?.createdAt ? new Date(selectedReminder.createdAt).toLocaleDateString('en-US', { 
+                      year: 'numeric',
+                      month: 'short', 
+                      day: 'numeric'
+                    }) : 'Unknown'}
+                  </p>
+                </div>
+                {selectedReminder?.updatedAt && (
+                  <div>
+                    <span className="font-semibold text-foreground">Last Updated:</span>
+                    <p className="text-muted-foreground mt-1">
+                      {new Date(selectedReminder.updatedAt).toLocaleDateString('en-US', { 
+                        year: 'numeric',
+                        month: 'short', 
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setIsReminderModalOpen(false);
+                router.push("/reminders");
+              }}
+              className="flex items-center gap-2 bg-primary hover:bg-primary hover:scale-105 transition-all duration-200 order-1 sm:order-2"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View in Reminders
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => setIsReminderModalOpen(false)} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 hover:scale-105 transition-all duration-200 order-1 sm:order-2">
+              <X className="h-4 w-4" />
+              Close
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Task Detail Modal */}
+      <AlertDialog open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
+        <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <CheckSquare className="h-5 w-5" />
+              {selectedTask?.title || "Untitled Task"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              Created {selectedTask?.createdAt ? new Date(selectedTask.createdAt).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }) : 'Unknown date'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="py-4 space-y-4">
+            {/* Task Status */}
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                selectedTask?.status === 'completed'
+                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                  : 'bg-blue-100 text-blue-800 border border-blue-200'
+              }`}>
+                {selectedTask?.status === 'completed' ? 'Completed' : 'Open'}
+              </span>
+            </div>
+
+            {/* Task Description */}
+            {selectedTask?.description && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground">Description</h4>
+                <div className="prose prose-sm max-w-none">
+                  <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                    {selectedTask.description}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Due Date */}
+            {selectedTask?.dueDate && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Due Date
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  {typeof selectedTask.dueDate === 'string' 
+                    ? selectedTask.dueDate 
+                    : new Date(selectedTask.dueDate).toLocaleDateString('en-US', { 
+                        year: 'numeric',
+                        month: 'long', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                </p>
+              </div>
+            )}
+
+            {/* Completed Date */}
+            {selectedTask?.status === 'completed' && selectedTask?.completedAt && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Completed Date
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  {new Date(selectedTask.completedAt).toLocaleDateString('en-US', { 
+                    year: 'numeric',
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </div>
+            )}
+
+            {/* Additional Info */}
+            <div className="pt-4 border-t border-border">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-semibold text-foreground">Created:</span>
+                  <p className="text-muted-foreground mt-1">
+                    {selectedTask?.createdAt ? new Date(selectedTask.createdAt).toLocaleDateString('en-US', { 
+                      year: 'numeric',
+                      month: 'short', 
+                      day: 'numeric'
+                    }) : 'Unknown'}
+                  </p>
+                </div>
+                {selectedTask?.updatedAt && (
+                  <div>
+                    <span className="font-semibold text-foreground">Last Updated:</span>
+                    <p className="text-muted-foreground mt-1">
+                      {new Date(selectedTask.updatedAt).toLocaleDateString('en-US', { 
+                        year: 'numeric',
+                        month: 'short', 
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setIsTaskModalOpen(false);
+                router.push("/tasks");
+              }}
+              className="flex items-center gap-2 bg-primary hover:bg-primary hover:scale-105 transition-all duration-200 order-1 sm:order-2"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View in Tasks
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => setIsTaskModalOpen(false)} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 hover:scale-105 transition-all duration-200 order-1 sm:order-2">
               <X className="h-4 w-4" />
               Close
             </AlertDialogAction>
