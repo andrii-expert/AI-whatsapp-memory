@@ -13,12 +13,15 @@ import {
   SheetTrigger,
 } from "@imaginecalendar/ui/sheet";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@imaginecalendar/ui/popover";
-import { Input } from "@imaginecalendar/ui/input";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogFooter,
+  AlertDialogAction,
+} from "@imaginecalendar/ui/alert-dialog";
+import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
@@ -36,12 +39,12 @@ import {
   Menu,
   X,
   Search,
-  CalendarDays,
-  ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { cn } from "@imaginecalendar/ui/cn";
+import { startOfDay, endOfDay, isSameDay, format } from "date-fns";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -51,10 +54,8 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState<"today" | "week" | "month" | "all" | "custom">("all");
-  const [customStartDate, setCustomStartDate] = useState("");
-  const [customEndDate, setCustomEndDate] = useState("");
-  const [isDatePopoverOpen, setIsDatePopoverOpen] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<any | null>(null);
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
 
   // Fetch all data
   const { data: whatsappNumbers } = useQuery(trpc.whatsapp.getMyNumbers.queryOptions());
@@ -62,6 +63,39 @@ export default function DashboardPage() {
   const { data: allTasks = [] } = useQuery(trpc.tasks.list.queryOptions({}));
   const { data: allNotes = [] } = useQuery(trpc.notes.list.queryOptions({}));
   const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
+
+  // Get all active calendars (like the calendar page does)
+  const activeCalendars = useMemo(() => 
+    calendars?.filter((cal: any) => cal.isActive) || [], 
+    [calendars]
+  );
+
+  // Fetch events from all active calendars (fetch for current month like calendar page does)
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Fetch events for each active calendar using useQueries (like calendar page)
+  const eventQueries = useQueries({
+    queries: activeCalendars.map((cal: any) => ({
+      ...trpc.calendar.getEvents.queryOptions({
+        calendarId: cal.id,
+        timeMin: monthStart.toISOString(),
+        timeMax: monthEnd.toISOString(),
+        maxResults: 100,
+      }),
+      enabled: cal.isActive && !!cal.id,
+    })),
+  });
+
+  // Combine events from all calendars (like calendar page does)
+  const allCalendarEvents = useMemo(() => {
+    return eventQueries
+      .flatMap((query, idx) => {
+        const calendarId = activeCalendars[idx]?.id;
+        return (query.data || []).map((event: any) => ({ ...event, calendarId }));
+      });
+  }, [eventQueries, activeCalendars]);
 
   const toggleTaskMutation = useMutation(
     trpc.tasks.toggleStatus.mutationOptions({
@@ -123,66 +157,8 @@ export default function DashboardPage() {
   const hasVerifiedWhatsApp = whatsappNumbers?.some(number => number.isVerified) || false;
   const hasCalendar = calendars && calendars.length > 0;
 
-  // Date filter helper functions
-  const getDateRange = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    switch (dateFilter) {
-      case "today": {
-        const end = new Date(today);
-        end.setHours(23, 59, 59, 999);
-        return { start: today, end };
-      }
-      case "week": {
-        const start = new Date(today);
-        start.setDate(today.getDate() - today.getDay()); // Start of week
-        const end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        end.setHours(23, 59, 59, 999);
-        return { start, end };
-      }
-      case "month": {
-        const start = new Date(today.getFullYear(), today.getMonth(), 1);
-        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        end.setHours(23, 59, 59, 999);
-        return { start, end };
-      }
-      case "custom": {
-        if (customStartDate && customEndDate) {
-          const start = new Date(customStartDate);
-          start.setHours(0, 0, 0, 0);
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
-          return { start, end };
-        }
-        return null;
-      }
-      case "all":
-      default:
-        return null;
-    }
-  };
-
-  const isDateInRange = (dateStr: string | Date | null | undefined) => {
-    if (!dateStr) return dateFilter === "all"; // If no date, only show in "all" filter
-    
-    const range = getDateRange();
-    if (!range) return true; // "all" filter
-    
-    try {
-      const itemDate = new Date(dateStr);
-      if (isNaN(itemDate.getTime())) return false; // Invalid date
-      itemDate.setHours(0, 0, 0, 0);
-      
-      return itemDate >= range.start && itemDate <= range.end;
-    } catch (error) {
-      return false;
-    }
-  };
-
-  // Search and filter functionality
-  const filterItems = (items: any[], type: string) => {
+  // Search functionality
+  const filterItems = (items: any[]) => {
     let filtered = items;
 
     // Apply search filter
@@ -196,84 +172,153 @@ export default function DashboardPage() {
       });
     }
 
-    // Apply date filter (skip if "all")
-    if (dateFilter !== "all") {
-      filtered = filtered.filter((item: any) => {
-        // Check different date fields based on item type
-        let dateToCheck = null;
-        
-        // For tasks - check dueDate
-        if (type === "tasks" && item.dueDate) {
-          dateToCheck = item.dueDate;
-        }
-        // For events - check date or startDate
-        else if (type === "events" && (item.date || item.startDate)) {
-          dateToCheck = item.date || item.startDate;
-        }
-        // For reminders - check date or scheduleDate
-        else if (type === "reminders" && (item.date || item.scheduleDate)) {
-          dateToCheck = item.date || item.scheduleDate;
-        }
-        // For notes - check updatedAt or createdAt
-        else if (type === "notes" && (item.updatedAt || item.createdAt)) {
-          dateToCheck = item.updatedAt || item.createdAt;
-        }
-        // Fallback to any available date field
-        else {
-          dateToCheck = item.dueDate || item.date || item.startDate || item.scheduleDate || item.updatedAt || item.createdAt;
-        }
-        
-        return isDateInRange(dateToCheck);
-      });
-    }
-
     return filtered;
   };
 
-  const getDateFilterLabel = () => {
-    switch (dateFilter) {
-      case "today": return "Today";
-      case "week": return "This Week";
-      case "month": return "This Month";
-      case "custom": {
-        if (customStartDate && customEndDate) {
-          return `${new Date(customStartDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(customEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-        }
-        return "Custom Range";
-      }
-      case "all": return "All Time";
-      default: return "Select Date";
+  // Helper to check if a date is today
+  const isToday = (dateStr: string | Date | null | undefined) => {
+    if (!dateStr) return false;
+    try {
+      const itemDate = new Date(dateStr);
+      if (isNaN(itemDate.getTime())) return false;
+      const today = new Date();
+      return itemDate.toDateString() === today.toDateString();
+    } catch (error) {
+      return false;
     }
   };
 
-  // Filter active reminders
-  const activeReminders = useMemo(() => {
-    const filtered = reminders.filter((r: any) => r.active);
-    const searched = filterItems(filtered, "reminders");
-    return searched.slice(0, 10); // Show up to 10 reminders
-  }, [reminders, searchQuery, dateFilter, customStartDate, customEndDate]);
+  // Helper to check if reminder time has passed today
+  const isReminderTimePassed = (reminder: any) => {
+    if (!reminder.time) return false;
+    
+    const today = new Date();
+    const timeParts = reminder.time.split(':');
+    const hours = parseInt(timeParts[0], 10);
+    const minutes = parseInt(timeParts[1] || '0', 10);
+    
+    if (isNaN(hours) || isNaN(minutes)) return false;
+    
+    const reminderTime = new Date(today);
+    reminderTime.setHours(hours, minutes, 0, 0);
+    
+    return today > reminderTime;
+  };
 
-  // Filter pending tasks
+  // Filter active reminders - only today's reminders where time hasn't passed
+  const activeReminders = useMemo(() => {
+    const today = new Date();
+    const filtered = reminders.filter((r: any) => {
+      if (!r.active) return false;
+      
+      // Check if reminder is for today
+      const reminderDate = r.date || r.scheduleDate;
+      if (!isToday(reminderDate)) return false;
+      
+      // If reminder has a time, check if it hasn't passed
+      if (r.time && isReminderTimePassed(r)) return false;
+      
+      return true;
+    });
+    const searched = filterItems(filtered);
+    return searched.slice(0, 10); // Show up to 10 reminders
+  }, [reminders, searchQuery]);
+
+  // Filter tasks - show 10 most recent (sorted by createdAt)
   const pendingTasks = useMemo(() => {
     const filtered = allTasks.filter((t) => t.status === "open");
-    const searched = filterItems(filtered, "tasks");
+    const sorted = [...filtered].sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA; // Most recent first
+    });
+    const searched = filterItems(sorted);
     return searched.slice(0, 10); // Show up to 10 tasks
-  }, [allTasks, searchQuery, dateFilter, customStartDate, customEndDate]);
+  }, [allTasks, searchQuery]);
 
-  // Get quick notes
+  // Get quick notes - show latest 10
   const quickNotes = useMemo(() => {
     const sorted = [...allNotes]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const searched = filterItems(sorted, "notes");
-    return searched.slice(0, 15); // Show up to 15 notes (users often have many notes)
-  }, [allNotes, searchQuery, dateFilter, customStartDate, customEndDate]);
+    const searched = filterItems(sorted);
+    return searched.slice(0, 10); // Show up to 10 notes
+  }, [allNotes, searchQuery]);
 
-  // Get scheduled events (placeholder - would need calendar events API)
-  const upcomingEvents: any[] = [];
+  // Process events for display (EXACT same as calendar page)
+  const processedEvents = useMemo(() => {
+    return allCalendarEvents.map((event: any) => {
+      const calendar = calendars?.find((cal: any) => cal.id === event.calendarId);
+      const provider = calendar?.provider || "google";
+      const color = provider === "google" ? "bg-blue-500" : "bg-purple-500";
+      
+      return {
+        id: event.id,
+        title: event.title,
+        start: new Date(event.start),
+        end: new Date(event.end),
+        color,
+        location: event.location,
+        htmlLink: event.htmlLink,
+        webLink: event.webLink,
+      };
+    });
+  }, [allCalendarEvents, calendars]);
+
+  // Get scheduled events - only today's events (using EXACT same logic as calendar page)
   const scheduledEvents = useMemo(() => {
-    const filtered = filterItems(upcomingEvents, "events");
-    return filtered.slice(0, 10); // Show up to 10 events
-  }, [upcomingEvents, searchQuery, dateFilter, customStartDate, customEndDate]);
+    if (!processedEvents || processedEvents.length === 0) return [];
+    
+    // Get current date for filtering
+    const now = new Date();
+    
+    // Filter events for today using EXACT same logic as calendar page's getEventsForDate
+    // This is the exact same function from calendar page
+    const todayEvents = processedEvents.filter(event => {
+      const eventStart = startOfDay(event.start);
+      const eventEnd = endOfDay(event.end);
+      const checkDate = startOfDay(now);
+      // Exact same logic as calendar page: (checkDate >= eventStart && checkDate <= eventEnd) || isSameDay(event.start, now)
+      return (checkDate >= eventStart && checkDate <= eventEnd) || isSameDay(event.start, now);
+    });
+    
+    // Format events for display (same as calendar page)
+    const formattedEvents = todayEvents.map((event: any) => {
+      const startDate = event.start;
+      const endDate = event.end;
+      
+      // Check if it's an all-day event
+      const isAllDay = startDate.getHours() === 0 && 
+                       startDate.getMinutes() === 0 &&
+                       startDate.getSeconds() === 0 &&
+                       (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
+      
+      // Format time like calendar page does
+      const timeLabel = isAllDay 
+        ? "All day" 
+        : format(startDate, "h:mm a");
+      
+      return {
+        id: event.id,
+        title: event.title || "Untitled Event",
+        start: startDate,
+        end: endDate,
+        startDate: startDate,
+        endDate: endDate,
+        timeLabel,
+        location: event.location,
+        description: event.description,
+        htmlLink: event.htmlLink,
+        webLink: event.webLink,
+        color: event.color,
+      };
+    });
+    
+    // Sort by start time
+    formattedEvents.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+    
+    const searched = filterItems(formattedEvents);
+    return searched.slice(0, 10); // Show up to 10 events
+  }, [processedEvents, searchQuery]);
 
   const shouldShowReminders = true;
   const shouldShowTasks = true;
@@ -300,23 +345,85 @@ export default function DashboardPage() {
     },
   ];
 
-  // Calculate totals and counts
-  const reminderVisualFallback = {
-    background: "bg-[#fdeedc]",
-    accent: "bg-[#f7b267]",
-    labelClass: "text-[#6b3f1d]",
-    metaClass: "text-[#a2643c]",
+  // Get reminder color scheme based on frequency type
+  const getReminderColorScheme = (frequency: string | null | undefined) => {
+    const freq = (frequency || "").toLowerCase();
+    
+    switch (freq) {
+      case "daily":
+        return {
+          background: "bg-gradient-to-r from-blue-50 to-indigo-50",
+          accent: "bg-gradient-to-b from-blue-500 to-indigo-600",
+          labelClass: "text-blue-900",
+          metaClass: "text-blue-700",
+          border: "border-blue-200",
+          shadow: "shadow-[0_2px_8px_rgba(59,130,246,0.15)]",
+        };
+      case "weekly":
+        return {
+          background: "bg-gradient-to-r from-purple-50 to-pink-50",
+          accent: "bg-gradient-to-b from-purple-500 to-pink-600",
+          labelClass: "text-purple-900",
+          metaClass: "text-purple-700",
+          border: "border-purple-200",
+          shadow: "shadow-[0_2px_8px_rgba(168,85,247,0.15)]",
+        };
+      case "monthly":
+        return {
+          background: "bg-gradient-to-r from-emerald-50 to-teal-50",
+          accent: "bg-gradient-to-b from-emerald-500 to-teal-600",
+          labelClass: "text-emerald-900",
+          metaClass: "text-emerald-700",
+          border: "border-emerald-200",
+          shadow: "shadow-[0_2px_8px_rgba(16,185,129,0.15)]",
+        };
+      case "yearly":
+        return {
+          background: "bg-gradient-to-r from-amber-50 to-orange-50",
+          accent: "bg-gradient-to-b from-amber-500 to-orange-600",
+          labelClass: "text-amber-900",
+          metaClass: "text-amber-700",
+          border: "border-amber-200",
+          shadow: "shadow-[0_2px_8px_rgba(245,158,11,0.15)]",
+        };
+      case "hourly":
+        return {
+          background: "bg-gradient-to-r from-cyan-50 to-sky-50",
+          accent: "bg-gradient-to-b from-cyan-500 to-sky-600",
+          labelClass: "text-cyan-900",
+          metaClass: "text-cyan-700",
+          border: "border-cyan-200",
+          shadow: "shadow-[0_2px_8px_rgba(6,182,212,0.15)]",
+        };
+      case "minutely":
+        return {
+          background: "bg-gradient-to-r from-violet-50 to-indigo-50",
+          accent: "bg-gradient-to-b from-violet-500 to-indigo-600",
+          labelClass: "text-violet-900",
+          metaClass: "text-violet-700",
+          border: "border-violet-200",
+          shadow: "shadow-[0_2px_8px_rgba(139,92,246,0.15)]",
+        };
+      case "once":
+        return {
+          background: "bg-gradient-to-r from-rose-50 to-pink-50",
+          accent: "bg-gradient-to-b from-rose-500 to-pink-600",
+          labelClass: "text-rose-900",
+          metaClass: "text-rose-700",
+          border: "border-rose-200",
+          shadow: "shadow-[0_2px_8px_rgba(244,63,94,0.15)]",
+        };
+      default:
+        return {
+          background: "bg-gradient-to-r from-slate-50 to-gray-50",
+          accent: "bg-gradient-to-b from-slate-500 to-gray-600",
+          labelClass: "text-slate-900",
+          metaClass: "text-slate-700",
+          border: "border-slate-200",
+          shadow: "shadow-[0_2px_8px_rgba(100,116,139,0.15)]",
+        };
+    }
   };
-
-  const reminderVisualStyles = [
-    reminderVisualFallback,
-    {
-      background: "bg-[#e6edff]",
-      accent: "bg-[#7aa2ff]",
-      labelClass: "text-[#1f3b73]",
-      metaClass: "text-[#3b5c9a]",
-    },
-  ];
 
   // Visual styles for tasks
   const taskVisualStyles = [
@@ -394,24 +501,44 @@ export default function DashboardPage() {
   
   // Total filtered counts for each type (before slicing)
   const totalActiveReminders = useMemo(() => {
-    const filtered = reminders.filter((r: any) => r.active);
-    return filterItems(filtered, "reminders").length;
-  }, [reminders, searchQuery, dateFilter, customStartDate, customEndDate]);
+    const today = new Date();
+    const filtered = reminders.filter((r: any) => {
+      if (!r.active) return false;
+      const reminderDate = r.date || r.scheduleDate;
+      if (!isToday(reminderDate)) return false;
+      if (r.time && isReminderTimePassed(r)) return false;
+      return true;
+    });
+    return filterItems(filtered).length;
+  }, [reminders, searchQuery]);
   
   const totalPendingTasks = useMemo(() => {
     const filtered = allTasks.filter((t) => t.status === "open");
-    return filterItems(filtered, "tasks").length;
-  }, [allTasks, searchQuery, dateFilter, customStartDate, customEndDate]);
+    return filterItems(filtered).length;
+  }, [allTasks, searchQuery]);
   
   const totalScheduledEvents = useMemo(() => {
-    return filterItems(upcomingEvents, "events").length;
-  }, [upcomingEvents, searchQuery, dateFilter, customStartDate, customEndDate]);
+    if (!processedEvents || processedEvents.length === 0) return 0;
+    
+    // Get current date for filtering
+    const now = new Date();
+    const today = startOfDay(now);
+    
+    // Filter events for today using same logic
+    const todayEvents = processedEvents.filter(event => {
+      const eventStart = startOfDay(event.start);
+      const eventEnd = endOfDay(event.end);
+      return (today >= eventStart && today <= eventEnd) || isSameDay(event.start, now);
+    });
+    
+    return filterItems(todayEvents).length;
+  }, [processedEvents, searchQuery]);
   
   const totalQuickNotes = useMemo(() => {
     const sorted = [...allNotes]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return filterItems(sorted, "notes").length;
-  }, [allNotes, searchQuery, dateFilter, customStartDate, customEndDate]);
+    return filterItems(sorted).length;
+  }, [allNotes, searchQuery]);
 
   const userName = user?.firstName || "there";
 
@@ -608,123 +735,10 @@ export default function DashboardPage() {
               </Card>
             </SheetContent>
           </Sheet>
-
-          {/* Mobile Date Range Picker */}
-          <div className="lg:hidden">
-            <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="justify-between min-w-[140px] max-w-[140px] font-normal"
-                >
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    <span>{getDateFilterLabel()}</span>
-                  </div>
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="end">
-                <div className="p-4 space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-sm mb-3">Date Range</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant={dateFilter === "today" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("today");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        Today
-                      </Button>
-                      <Button
-                        variant={dateFilter === "week" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("week");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        This Week
-                      </Button>
-                      <Button
-                        variant={dateFilter === "month" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("month");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        This Month
-                      </Button>
-                      <Button
-                        variant={dateFilter === "all" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("all");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        All Time
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold text-sm mb-3">Custom Range</h4>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1.5 block">
-                          Start Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={customStartDate}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomStartDate(e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1.5 block">
-                          End Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={customEndDate}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomEndDate(e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <Button
-                        variant="blue-primary"
-                        size="sm"
-                        onClick={() => {
-                          if (customStartDate && customEndDate) {
-                            setDateFilter("custom");
-                            setIsDatePopoverOpen(false);
-                          }
-                        }}
-                        disabled={!customStartDate || !customEndDate}
-                        className="w-full"
-                      >
-                        Apply Custom Range
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
         </div>
       </div>
 
-      {/* Search and Filter Bar */}
+      {/* Search Bar */}
       <div className="mb-6 space-y-3">
         <div className="flex flex-col lg:flex-row gap-3 items-center w-full">
           <div className="relative w-full lg:flex-1">
@@ -745,120 +759,7 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
-          
-          <div className="hidden lg:flex lg:w-auto justify-end">
-            <Popover open={isDatePopoverOpen} onOpenChange={setIsDatePopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="justify-between w-full min-w-[140px] max-w-[140px] font-normal"
-                >
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    <span>{getDateFilterLabel()}</span>
-                  </div>
-                  <ChevronDown className="h-4 w-4 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="end">
-                <div className="p-4 space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-sm mb-3">Date Range</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant={dateFilter === "today" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("today");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        Today
-                      </Button>
-                      <Button
-                        variant={dateFilter === "week" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("week");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        This Week
-                      </Button>
-                      <Button
-                        variant={dateFilter === "month" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("month");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        This Month
-                      </Button>
-                      <Button
-                        variant={dateFilter === "all" ? "blue-primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setDateFilter("all");
-                          setIsDatePopoverOpen(false);
-                        }}
-                        className="w-full"
-                      >
-                        All Time
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold text-sm mb-3">Custom Range</h4>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1.5 block">
-                          Start Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={customStartDate}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomStartDate(e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1.5 block">
-                          End Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={customEndDate}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomEndDate(e.target.value)}
-                          className="w-full"
-                        />
-                      </div>
-                      <Button
-                        variant="blue-primary"
-                        size="sm"
-                        onClick={() => {
-                          if (customStartDate && customEndDate) {
-                            setDateFilter("custom");
-                            setIsDatePopoverOpen(false);
-                          }
-                        }}
-                        disabled={!customStartDate || !customEndDate}
-                        className="w-full"
-                      >
-                        Apply Custom Range
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
         </div>
-
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -905,48 +806,87 @@ export default function DashboardPage() {
 
         {/* Main Content Area */}
         <div className="lg:col-span-3">
+          {/* Status Cards Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
+                {totalActiveReminders}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Reminders Today
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
+                {totalPendingTasks}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Total Tasks Pending
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
+                {totalScheduledEvents}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Todays Events
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
+                {allNotes.length}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Notes Created
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Active Reminders */}
             {shouldShowReminders && (
-            <Card className="flex flex-col h-[420px] rounded-3xl border border-[#dbe6ff] shadow-[0_10px_40px_rgba(15,82,186,0.12)] overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between bg-primary px-4 py-3">
+            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
                 <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <BellRing className="h-4 w-4 text-white" />
                   Active Reminders
                 </div>
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1976c5] text-xs font-bold">
-                  {totalActiveReminders}
-                </div>
               </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0 bg-white px-5 py-4">
-                <div className="flex-1 overflow-y-auto pr-2 -mr-2 space-y-3">
+              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
                   {activeReminders.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
                       No active reminders
                     </p>
                   ) : (
-                    activeReminders.map((reminder: any, index: number) => {
-                      const visual =
-                        reminderVisualStyles[index % reminderVisualStyles.length] ||
-                        reminderVisualFallback;
+                    activeReminders.map((reminder: any) => {
+                      const visual = getReminderColorScheme(
+                        reminder.frequency || 
+                        reminder.scheduleType || 
+                        reminder.recurrence ||
+                        reminder.interval
+                      );
                       const subtitle = formatReminderSubtitle(reminder);
                       return (
                         <div
                           key={reminder.id}
-                          className={`flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm ${visual.background}`}
+                          className={`flex items-center gap-3 rounded-xl px-4 py-3 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md`}
                         >
-                          <div className={`h-12 w-1.5 rounded-full ${visual.accent}`} />
+                          <div className={`h-14 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm font-semibold leading-tight ${visual.labelClass}`}>
                               {reminder.title || "Untitled Reminder"}
                             </p>
                             {subtitle ? (
-                              <p className={`text-xs font-medium mt-1 ${visual.metaClass}`}>
+                              <p className={`text-xs font-medium mt-1.5 ${visual.metaClass}`}>
                                 {subtitle}
                               </p>
                             ) : (
                               reminder.time && (
-                                <p className={`text-xs font-medium mt-1 ${visual.metaClass}`}>
+                                <p className={`text-xs font-medium mt-1.5 ${visual.metaClass}`}>
                                   {reminder.time}
                                 </p>
                               )
@@ -958,18 +898,20 @@ export default function DashboardPage() {
                   )}
                 </div>
                 {totalActiveReminders > activeReminders.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-border mt-4">
+                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
                     Showing {activeReminders.length} of {totalActiveReminders} reminders
                   </div>
                 )}
-                <Button
-                  variant="ghost"
-                  className="mt-2 w-full justify-center text-xs font-semibold hover:bg-muted/50 flex-shrink-0 text-[#1c7ed6]"
-                  onClick={() => router.push("/reminders")}
-                >
-                  View All Reminders
-                  <ArrowRight className="h-3 w-3 ml-1" />
-                </Button>
+                <div className="border-t border-[#e2e8f0] px-4 py-3">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                    onClick={() => router.push("/reminders")}
+                  >
+                    View All Reminders
+                    <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
             )}
@@ -977,13 +919,10 @@ export default function DashboardPage() {
             {/* Pending Tasks */}
             {shouldShowTasks && (
             <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-between bg-primary px-4 py-3">
+              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
                 <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <CheckSquare className="h-4 w-4 text-white" />
                   Pending Tasks
-                </div>
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1976c5] text-xs font-bold">
-                  {totalPendingTasks}
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
@@ -1039,47 +978,53 @@ export default function DashboardPage() {
             </Card>
             )}
 
-            {/* Scheduled Events */}
+            {/* Today Events */}
             {shouldShowEvents && (
             <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-between bg-primary px-4 py-3">
+              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
                 <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <Calendar className="h-4 w-4 text-white" />
-                  Scheduled Events
-                </div>
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1976c5] text-xs font-bold">
-                  {totalScheduledEvents}
+                  Today Events
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
                 <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
                   {scheduledEvents.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
-                      No scheduled events
+                      No events today
                     </p>
                   ) : (
-                    scheduledEvents.map((event: any, index: number) => {
-                      const dateLabel =
-                        event.date ||
-                        event.dateLabel ||
-                        event.startDate ||
-                        null;
-                      const timeLabel = event.time || event.startTime || null;
-                      const subtitle = dateLabel
-                        ? `${dateLabel}${timeLabel ? ` at ${timeLabel}` : ""}`
-                        : timeLabel || "No time info";
-
+                    scheduledEvents.map((event: any) => {
                       return (
                         <div
-                          key={index}
-                          className="rounded-2xl border border-[#d5e3ff] bg-[#edf3ff] px-4 py-3"
+                          key={event.id}
+                          className={cn(
+                            "rounded-lg px-3 py-2 cursor-pointer hover:opacity-90 transition-opacity",
+                            event.color || "bg-blue-500",
+                            "text-white shadow-sm"
+                          )}
+                          title={`${event.title} - ${event.timeLabel}${event.location ? ` - ${event.location}` : ""}`}
+                          onClick={() => {
+                            if (event.htmlLink) {
+                              window.open(event.htmlLink, "_blank");
+                            } else if (event.webLink) {
+                              window.open(event.webLink, "_blank");
+                            }
+                          }}
                         >
-                          <p className="text-sm font-semibold text-[#1f3b73] truncate">
-                            {event.title || "Untitled Event"}
+                          <p className="text-sm font-medium truncate">
+                            {event.title}
                           </p>
-                          <p className="text-xs text-[#5370a3] mt-1">
-                            {subtitle}
-                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs opacity-90">
+                              {event.timeLabel}
+                            </p>
+                            {event.location && (
+                              <p className="text-xs opacity-75 truncate">
+                                • {event.location}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       );
                     })
@@ -1102,13 +1047,10 @@ export default function DashboardPage() {
             {/* Quick Notes */}
             {shouldShowNotes && (
             <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-between bg-primary px-4 py-3">
+              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
                 <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                   <StickyNote className="h-4 w-4 text-white" />
                   Quick Notes
-                </div>
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#1976c5] text-xs font-bold">
-                  {totalQuickNotes}
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
@@ -1119,7 +1061,14 @@ export default function DashboardPage() {
                     </p>
                   ) : (
                     quickNotes.map((note) => (
-                      <div key={note.id} className="border-b border-[#e2e8f0] pb-4 last:border-b-0">
+                      <div
+                        key={note.id}
+                        onClick={() => {
+                          setSelectedNote(note);
+                          setIsNoteModalOpen(true);
+                        }}
+                        className="border-b border-[#e2e8f0] pb-4 last:border-b-0 cursor-pointer hover:bg-[#f5f7fb] rounded-lg px-2 py-2 -mx-2 transition-colors"
+                      >
                         <p className="text-sm font-semibold text-[#1f2933]">
                           {note.title || "Untitled Note"}
                         </p>
@@ -1151,6 +1100,58 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Note Detail Modal */}
+      <AlertDialog open={isNoteModalOpen} onOpenChange={setIsNoteModalOpen}>
+        <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <StickyNote className="h-5 w-5" />
+              {selectedNote?.title || "Untitled Note"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              Created {selectedNote?.createdAt ? new Date(selectedNote.createdAt).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }) : 'Unknown date'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="py-4">
+            {selectedNote?.content ? (
+              <div className="prose prose-sm max-w-none">
+                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                  {selectedNote.content}
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                No content available for this note.
+              </p>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setIsNoteModalOpen(false);
+                router.push("/notes");
+              }}
+              className="flex items-center gap-2 bg-primary hover:bg-primary hover:scale-105 transition-all duration-200 order-1 sm:order-2"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View in Notes
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => setIsNoteModalOpen(false)} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 hover:scale-105 transition-all duration-200 order-1 sm:order-2">
+              <X className="h-4 w-4" />
+              Close
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

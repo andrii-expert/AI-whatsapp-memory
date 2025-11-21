@@ -172,7 +172,7 @@ export function CalendarSelectionDialog({
           )}
         </div>
 
-        <AlertDialogFooter>
+        <AlertDialogFooter className="flex justify-end gap-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
