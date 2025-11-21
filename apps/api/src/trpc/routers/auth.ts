@@ -21,7 +21,7 @@ import {
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";
-// import { sendWelcomeEmail } from "@api/utils/email";
+import { sendWelcomeEmail } from "@api/utils/email";
 
 function computeSubscriptionPeriods(plan: PlanRecord) {
   const currentPeriodStart = new Date();
@@ -199,6 +199,27 @@ export const authRouter = createTRPCRouter({
           howHeardAboutUs: input.howHeardAboutUs,
           company: input.company,
         });
+
+        // Send welcome email for new users (async, non-blocking)
+        if (session.user.email && input.firstName && input.lastName) {
+          sendWelcomeEmail({
+            to: session.user.email,
+            firstName: input.firstName,
+            lastName: input.lastName,
+          }).catch(error => {
+            logger.error({ 
+              error, 
+              userId: session.user.id, 
+              email: session.user.email 
+            }, "Failed to send welcome email after sign-up");
+            // Don't fail the onboarding if email fails
+          });
+          
+          logger.info({ 
+            userId: session.user.id, 
+            email: session.user.email 
+          }, "Welcome email sent to new user");
+        }
       } else {
         // Update existing user with onboarding data
         await updateUser(db, session.user.id, {
@@ -305,23 +326,7 @@ export const authRouter = createTRPCRouter({
         });
       }
 
-      // Send welcome email (async, non-blocking)
-      // if (finalUser?.email && finalUser?.firstName && finalUser?.lastName) {
-      //   sendWelcomeEmail({
-      //     to: finalUser.email,
-      //     firstName: finalUser.firstName,
-      //     lastName: finalUser.lastName,
-      //   }).catch(error => {
-      //     logger.error({ error, userId: session.user.id, email: finalUser.email }, 
-      //       "Failed to send welcome email after onboarding");
-      //     // Don't fail the onboarding if email fails
-      //   });
-        
-      //   logger.info({ 
-      //     userId: session.user.id, 
-      //     email: finalUser.email 
-      //   }, "Welcome email queued for new user");
-      // } else {
+ else {
       //   logger.warn({ 
       //     userId: session.user.id,
       //     hasEmail: !!finalUser?.email,
