@@ -830,7 +830,7 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+                <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
                   {activeReminders.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-8 text-center">
                       No active reminders
@@ -851,7 +851,7 @@ export default function DashboardPage() {
                             setSelectedReminder(reminder);
                             setIsReminderModalOpen(true);
                           }}
-                          className={`flex items-center gap-3 rounded-xl px-4 py-3 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
+                          className={`flex items-center gap-3 rounded-xl px-4 py-1 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
                         >
                           <div className={`h-14 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
                           <div className="flex-1 min-w-0">
