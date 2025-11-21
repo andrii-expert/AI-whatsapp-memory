@@ -9,12 +9,10 @@ import {
   createSubscription,
   getPaymentByMPaymentId,
   getPlanById,
-  getUserById,
 } from '@imaginecalendar/database/queries';
 import type { PlanRecord } from '@imaginecalendar/database/queries';
 import { z } from 'zod';
 import { logger } from '@imaginecalendar/logger';
-import { sendSubscriptionEmail } from '@api/utils/email';
 
 function computeSubscriptionPeriods(plan: PlanRecord) {
   const currentPeriodStart = new Date();
@@ -60,32 +58,6 @@ function computeSubscriptionPeriods(plan: PlanRecord) {
 
 function isTrialPlan(plan: PlanRecord) {
   return !plan.payfastConfig.recurring && plan.trialDays > 0;
-}
-
-function getBillingPeriodText(plan: PlanRecord): string {
-  if (!plan.payfastConfig.recurring || !plan.payfastConfig.frequency) {
-    if (plan.trialDays > 0) {
-      return `${plan.trialDays} day trial`;
-    }
-    return 'One-time';
-  }
-
-  switch (plan.payfastConfig.frequency) {
-    case 1:
-      return 'Daily';
-    case 2:
-      return 'Weekly';
-    case 3:
-      return 'Monthly';
-    case 4:
-      return 'Quarterly';
-    case 5:
-      return 'Semi-annually';
-    case 6:
-      return 'Annually';
-    default:
-      return 'Monthly';
-  }
 }
 
 const itnSchema = z.object({
@@ -233,7 +205,6 @@ export async function POST(req: NextRequest) {
 
         // Get or create subscription
         let subscription = await getUserSubscription(db, userId);
-        const isNewSubscription = !subscription;
         
         if (!subscription) {
           // Create new subscription
@@ -258,7 +229,7 @@ export async function POST(req: NextRequest) {
           // Update existing subscription
           const { currentPeriodStart, currentPeriodEnd } = computeSubscriptionPeriods(planRecord);
 
-          subscription = await updateSubscription(db, subscription.id, {
+          await updateSubscription(db, subscription.id, {
             status: 'active',
             payfastSubscriptionId: pf_payment_id,
             payfastToken: token,
@@ -268,11 +239,6 @@ export async function POST(req: NextRequest) {
             // Clear trial end date if upgrading from trial
             trialEndsAt: null,
           });
-
-          if (!subscription) {
-            logger.error({ userId }, 'Failed to update subscription');
-            return new Response('OK', { status: 200 });
-          }
         }
 
         // Create payment record with auto-generated invoice
@@ -304,45 +270,6 @@ export async function POST(req: NextRequest) {
           paymentId: payment.id,
           subscriptionId: subscription.id 
         }, 'Payment processed successfully');
-
-        // Send subscription confirmation email (async, non-blocking)
-        try {
-          const user = await getUserById(db, userId);
-          if (user?.email && user?.firstName && user?.lastName) {
-            const billingPeriod = getBillingPeriodText(planRecord);
-            const amount = parseFloat(amount_gross);
-
-            sendSubscriptionEmail({
-              to: user.email,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              planName: planRecord.name,
-              amount,
-              currency: 'ZAR',
-              billingPeriod,
-              nextBillingDate: subscription.currentPeriodEnd,
-              isNewSubscription,
-            }).catch(error => {
-              logger.error({ 
-                error, 
-                userId, 
-                email: user.email 
-              }, 'Failed to send subscription email');
-            });
-
-            logger.info({ 
-              userId, 
-              email: user.email,
-              isNewSubscription 
-            }, 'Subscription email queued');
-          }
-        } catch (emailError) {
-          logger.error({ 
-            error: emailError, 
-            userId 
-          }, 'Error sending subscription email - non-blocking');
-        }
-
         break;
       }
         

@@ -10,14 +10,10 @@ import {
   checkFolderAccess,
   getSharedResourcesForUser,
   searchUsersForSharing,
-  getFolderById,
-  getUserById,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { sendFolderShareEmail } from "@api/utils/email";
-import { WhatsAppService } from "@imaginecalendar/whatsapp";
 
 // Schemas
 const createShareSchema = z.object({
@@ -103,59 +99,6 @@ export const taskSharingRouter = createTRPCRouter({
         { shareId: share.id, userId: session.user.id },
         "Task/folder share created"
       );
-
-      // Send notifications (email and WhatsApp) for folder shares only
-      if (input.resourceType === "task_folder") {
-        try {
-          // Get folder details
-          const folder = await getFolderById(db, input.resourceId, session.user.id);
-          if (!folder) {
-            logger.warn({ folderId: input.resourceId }, "Folder not found for share notification");
-          } else {
-            // Get recipient and sharer user details
-            const [recipientUser, sharerUser] = await Promise.all([
-              getUserById(db, input.sharedWithUserId),
-              getUserById(db, session.user.id),
-            ]);
-
-            if (recipientUser && sharerUser) {
-              // Send email notification
-              if (recipientUser.email && recipientUser.firstName && recipientUser.lastName && sharerUser.firstName && sharerUser.lastName && sharerUser.email) {
-                sendFolderShareEmail({
-                  to: recipientUser.email,
-                  recipientFirstName: recipientUser.firstName,
-                  recipientLastName: recipientUser.lastName,
-                  sharerFirstName: sharerUser.firstName,
-                  sharerLastName: sharerUser.lastName,
-                  sharerEmail: sharerUser.email,
-                  folderName: folder.name,
-                  folderType: 'task',
-                  permission: input.permission,
-                }).catch(error => {
-                  logger.error({ error, recipientUserId: input.sharedWithUserId }, "Failed to send folder share email");
-                });
-              }
-
-              // Send WhatsApp notification if recipient has verified phone
-              if (recipientUser.phone && recipientUser.phoneVerified) {
-                try {
-                  const whatsappService = new WhatsAppService();
-                  const folderTypeLabel = 'Tasks';
-                  const permissionLabel = input.permission === 'edit' ? 'edit' : 'view';
-                  const message = `📁 *Folder Shared With You*\n\n${sharerUser.firstName || sharerUser.name || 'Someone'} has shared a ${folderTypeLabel} folder "${folder.name}" with you.\n\nYou have *${permissionLabel}* permission.\n\nView it here: ${process.env.NEXT_PUBLIC_APP_URL || 'https://dashboard.crackon.ai'}/tasks`;
-
-                  await whatsappService.sendTextMessage(recipientUser.phone, message);
-                  logger.info({ recipientUserId: input.sharedWithUserId, phone: recipientUser.phone }, "Folder share WhatsApp notification sent");
-                } catch (whatsappError) {
-                  logger.error({ error: whatsappError, recipientUserId: input.sharedWithUserId }, "Failed to send folder share WhatsApp notification");
-                }
-              }
-            }
-          }
-        } catch (notificationError) {
-          logger.error({ error: notificationError, shareId: share.id }, "Error sending folder share notifications - non-blocking");
-        }
-      }
 
       return share;
     }),

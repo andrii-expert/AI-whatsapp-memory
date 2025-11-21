@@ -199,27 +199,6 @@ export const authRouter = createTRPCRouter({
           howHeardAboutUs: input.howHeardAboutUs,
           company: input.company,
         });
-
-        // Send welcome email for new users (async, non-blocking)
-        if (session.user.email && input.firstName && input.lastName) {
-          sendWelcomeEmail({
-            to: session.user.email,
-            firstName: input.firstName,
-            lastName: input.lastName,
-          }).catch(error => {
-            logger.error({ 
-              error, 
-              userId: session.user.id, 
-              email: session.user.email 
-            }, "Failed to send welcome email after sign-up");
-            // Don't fail the onboarding if email fails
-          });
-          
-          logger.info({ 
-            userId: session.user.id, 
-            email: session.user.email 
-          }, "Welcome email sent to new user");
-        }
       } else {
         // Update existing user with onboarding data
         await updateUser(db, session.user.id, {
@@ -326,14 +305,78 @@ export const authRouter = createTRPCRouter({
         });
       }
 
- else {
-      //   logger.warn({ 
-      //     userId: session.user.id,
-      //     hasEmail: !!finalUser?.email,
-      //     hasFirstName: !!finalUser?.firstName,
-      //     hasLastName: !!finalUser?.lastName
-      //   }, "Skipping welcome email - missing required user data");
-      // }
+      // Send welcome email (async, non-blocking)
+      // Use email from database first, fallback to session email
+      const userEmail = finalUser?.email || session.user.email;
+      const userFirstName = finalUser?.firstName || input.firstName;
+      const userLastName = finalUser?.lastName || input.lastName;
+
+      logger.info({
+        userId: session.user.id,
+        dbEmail: finalUser?.email,
+        sessionEmail: session.user.email,
+        finalEmail: userEmail,
+        hasFirstName: !!userFirstName,
+        hasLastName: !!userLastName,
+        resendApiKey: !!process.env.RESEND_API_KEY,
+        resendFromEmail: process.env.RESEND_FROM_EMAIL,
+      }, "[WELCOME_EMAIL] Checking email prerequisites");
+
+      if (userEmail && userFirstName && userLastName) {
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(userEmail)) {
+          logger.error({
+            userId: session.user.id,
+            email: userEmail,
+          }, "[WELCOME_EMAIL] Invalid email format, skipping");
+        } else {
+          // Send email asynchronously
+          sendWelcomeEmail({
+            to: userEmail,
+            firstName: userFirstName,
+            lastName: userLastName,
+          })
+            .then((result) => {
+              if (result) {
+                logger.info({
+                  userId: session.user.id,
+                  email: userEmail,
+                  emailId: result.id,
+                }, "[WELCOME_EMAIL] Welcome email sent successfully");
+              } else {
+                logger.warn({
+                  userId: session.user.id,
+                  email: userEmail,
+                }, "[WELCOME_EMAIL] Welcome email returned null result");
+              }
+            })
+            .catch((error) => {
+              logger.error({
+                error: error instanceof Error ? error.message : String(error),
+                errorStack: error instanceof Error ? error.stack : undefined,
+                userId: session.user.id,
+                email: userEmail,
+                resendApiKey: !!process.env.RESEND_API_KEY,
+              }, "[WELCOME_EMAIL] Failed to send welcome email after onboarding");
+            });
+          
+          logger.info({
+            userId: session.user.id,
+            email: userEmail,
+          }, "[WELCOME_EMAIL] Welcome email request initiated");
+        }
+      } else {
+        logger.warn({
+          userId: session.user.id,
+          hasEmail: !!userEmail,
+          email: userEmail,
+          hasFirstName: !!userFirstName,
+          hasLastName: !!userLastName,
+          firstName: userFirstName,
+          lastName: userLastName,
+        }, "[WELCOME_EMAIL] Skipping welcome email - missing required user data");
+      }
 
       return finalUser;
     }),

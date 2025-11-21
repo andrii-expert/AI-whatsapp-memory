@@ -175,53 +175,26 @@ export default function DashboardPage() {
     return filtered;
   };
 
-  // Helper to check if a date is today
-  const isToday = (dateStr: string | Date | null | undefined) => {
-    if (!dateStr) return false;
-    try {
-      const itemDate = new Date(dateStr);
-      if (isNaN(itemDate.getTime())) return false;
-      const today = new Date();
-      return itemDate.toDateString() === today.toDateString();
-    } catch (error) {
-      return false;
-    }
-  };
-
-  // Helper to check if reminder time has passed today
-  const isReminderTimePassed = (reminder: any) => {
-    if (!reminder.time) return false;
-    
-    const today = new Date();
-    const timeParts = reminder.time.split(':');
-    const hours = parseInt(timeParts[0], 10);
-    const minutes = parseInt(timeParts[1] || '0', 10);
-    
-    if (isNaN(hours) || isNaN(minutes)) return false;
-    
-    const reminderTime = new Date(today);
-    reminderTime.setHours(hours, minutes, 0, 0);
-    
-    return today > reminderTime;
-  };
-
-  // Filter active reminders - only today's reminders where time hasn't passed
+  // Filter active reminders - show all active reminders ordered by created date
   const activeReminders = useMemo(() => {
-    const today = new Date();
+    // Filter only active reminders
     const filtered = reminders.filter((r: any) => {
       if (!r.active) return false;
-      
-      // Check if reminder is for today
-      const reminderDate = r.date || r.scheduleDate;
-      if (!isToday(reminderDate)) return false;
-      
-      // If reminder has a time, check if it hasn't passed
-      if (r.time && isReminderTimePassed(r)) return false;
-      
       return true;
     });
-    const searched = filterItems(filtered);
-    return searched.slice(0, 10); // Show up to 10 reminders
+    
+    // Sort by created date (newest first)
+    const sorted = [...filtered].sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA; // Newest first
+    });
+    
+    // Apply search filter
+    const searched = filterItems(sorted);
+    
+    // Return up to 10 reminders
+    return searched.slice(0, 10);
   }, [reminders, searchQuery]);
 
   // Filter tasks - show 10 most recent (sorted by createdAt)
@@ -501,12 +474,9 @@ export default function DashboardPage() {
   
   // Total filtered counts for each type (before slicing)
   const totalActiveReminders = useMemo(() => {
-    const today = new Date();
+    // Count all active reminders
     const filtered = reminders.filter((r: any) => {
       if (!r.active) return false;
-      const reminderDate = r.date || r.scheduleDate;
-      if (!isToday(reminderDate)) return false;
-      if (r.time && isReminderTimePassed(r)) return false;
       return true;
     });
     return filterItems(filtered).length;
