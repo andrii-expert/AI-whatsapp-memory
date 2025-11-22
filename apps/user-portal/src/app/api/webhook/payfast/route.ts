@@ -207,7 +207,6 @@ export async function POST(req: NextRequest) {
 
         // Get or create subscription
         let subscription = await getUserSubscription(db, userId);
-        const isNewSubscription = !subscription; // Determine if new BEFORE creating/updating
         
         if (!subscription) {
           // Create new subscription
@@ -242,13 +241,6 @@ export async function POST(req: NextRequest) {
             // Clear trial end date if upgrading from trial
             trialEndsAt: null,
           });
-
-          // Refetch subscription to get updated values (currentPeriodStart, currentPeriodEnd)
-          subscription = await getUserSubscription(db, userId);
-          if (!subscription) {
-            logger.error({ userId }, 'Failed to refetch subscription after update');
-            return new Response('OK', { status: 200 });
-          }
         }
 
         // Create payment record with auto-generated invoice
@@ -285,15 +277,7 @@ export async function POST(req: NextRequest) {
         try {
           const user = await getUserById(db, userId);
           if (user && user.email && user.firstName && user.lastName) {
-            logger.info({
-              userId,
-              email: user.email,
-              planName: planRecord.name,
-              isNewSubscription,
-              subscriptionId: subscription.id,
-              currentPeriodStart: subscription.currentPeriodStart,
-              currentPeriodEnd: subscription.currentPeriodEnd,
-            }, '[SUBSCRIPTION_EMAIL] Preparing to send subscription confirmation email');
+            const isNewSubscription = !subscription.payfastToken || subscription.payfastToken === token;
             
             sendSubscriptionEmail({
               to: user.email,
@@ -313,15 +297,13 @@ export async function POST(req: NextRequest) {
                     email: user.email,
                     emailId: result.id,
                     planName: planRecord.name,
-                    isNewSubscription,
                   }, '[SUBSCRIPTION_EMAIL] Subscription confirmation email sent successfully');
                 } else {
                   logger.warn({
                     userId,
                     email: user.email,
                     planName: planRecord.name,
-                    isNewSubscription,
-                  }, '[SUBSCRIPTION_EMAIL] Subscription email returned null result - email may not have been sent');
+                  }, '[SUBSCRIPTION_EMAIL] Subscription email returned null result');
                 }
               })
               .catch((error) => {
@@ -331,7 +313,6 @@ export async function POST(req: NextRequest) {
                   userId,
                   email: user.email,
                   planName: planRecord.name,
-                  isNewSubscription,
                 }, '[SUBSCRIPTION_EMAIL] Failed to send subscription confirmation email');
               });
           } else {
@@ -340,13 +321,11 @@ export async function POST(req: NextRequest) {
               hasEmail: !!user?.email,
               hasFirstName: !!user?.firstName,
               hasLastName: !!user?.lastName,
-              userExists: !!user,
             }, '[SUBSCRIPTION_EMAIL] Skipping subscription email - missing user data');
           }
         } catch (emailError) {
           logger.error({
             error: emailError instanceof Error ? emailError.message : String(emailError),
-            errorStack: emailError instanceof Error ? emailError.stack : undefined,
             userId,
           }, '[SUBSCRIPTION_EMAIL] Error attempting to send subscription email');
         }
