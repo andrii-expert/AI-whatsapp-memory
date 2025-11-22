@@ -869,7 +869,7 @@ export default function DashboardPage() {
                           }}
                           className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
                         >
-                          <div className={`h-12 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
+                          <div className={`h-8 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm font-medium leading-tight ${visual.labelClass}`}>
                               {reminder.title || "Untitled Reminder"}
