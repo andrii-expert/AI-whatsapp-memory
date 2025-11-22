@@ -17,6 +17,8 @@ import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { sendShareNotificationEmail } from "@api/utils/email";
+import { eq, and } from "drizzle-orm";
+import { taskShares } from "@imaginecalendar/database/schema";
 
 // Schemas
 const createShareSchema = z.object({
@@ -93,97 +95,116 @@ export const taskSharingRouter = createTRPCRouter({
         });
       }
 
+      // Check if share already exists (to determine if it's new or update)
+      const existingShare = await db.query.taskShares.findFirst({
+        where: and(
+          eq(taskShares.ownerId, session.user.id),
+          eq(taskShares.sharedWithUserId, input.sharedWithUserId),
+          eq(taskShares.resourceType, input.resourceType),
+          eq(taskShares.resourceId, input.resourceId)
+        ),
+      });
+
+      const isNewShare = !existingShare;
+
       const share = await createTaskShare(db, {
         ownerId: session.user.id,
         ...input,
       });
 
       logger.info(
-        { shareId: share.id, userId: session.user.id },
+        { shareId: share.id, userId: session.user.id, isNewShare },
         "Task/folder share created"
       );
 
-      // Send email notification to the shared user
-      try {
-        // Get recipient user details
-        const recipientUser = await getUserById(db, input.sharedWithUserId);
-        
-        // Get owner user details
-        const ownerUser = await getUserById(db, session.user.id);
-        
-        // Get resource name (task or folder)
-        let resourceName = "Unknown";
-        if (input.resourceType === "task") {
-          const task = await getTaskById(db, input.resourceId, session.user.id);
-          resourceName = task?.title || "Untitled Task";
-        } else {
-          const folder = await getFolderById(db, input.resourceId, session.user.id);
-          resourceName = folder?.name || "Untitled Folder";
-        }
+      // Send email notification ONLY for new shares (not updates)
+      if (isNewShare) {
+        try {
+          // Get recipient user details
+          const recipientUser = await getUserById(db, input.sharedWithUserId);
+          
+          // Get owner user details
+          const ownerUser = await getUserById(db, session.user.id);
+          
+          // Get resource name (task or folder)
+          let resourceName = "Unknown";
+          if (input.resourceType === "task") {
+            const task = await getTaskById(db, input.resourceId, session.user.id);
+            resourceName = task?.title || "Untitled Task";
+          } else {
+            const folder = await getFolderById(db, input.resourceId, session.user.id);
+            resourceName = folder?.name || "Untitled Folder";
+          }
 
-        // Send email if recipient has email and name
-        if (
-          recipientUser?.email &&
-          recipientUser?.firstName &&
-          recipientUser?.lastName &&
-          ownerUser?.firstName &&
-          ownerUser?.lastName
-        ) {
-          sendShareNotificationEmail({
-            to: recipientUser.email,
-            recipientFirstName: recipientUser.firstName,
-            recipientLastName: recipientUser.lastName,
-            ownerFirstName: ownerUser.firstName,
-            ownerLastName: ownerUser.lastName,
-            resourceType: input.resourceType,
-            resourceName,
-            permission: input.permission,
-          })
-            .then((result) => {
-              if (result && result.id) {
-                logger.info({
-                  shareId: share.id,
-                  recipientEmail: recipientUser.email,
-                  emailId: result.id,
-                  resourceType: input.resourceType,
-                  resourceName,
-                }, '[SHARE_NOTIFICATION_EMAIL] Share notification email sent successfully');
-              } else {
-                logger.warn({
-                  shareId: share.id,
-                  recipientEmail: recipientUser.email,
-                  resourceType: input.resourceType,
-                  resourceName,
-                }, '[SHARE_NOTIFICATION_EMAIL] Share notification email returned null result');
-              }
+          // Send email if recipient has email and name
+          if (
+            recipientUser?.email &&
+            recipientUser?.firstName &&
+            recipientUser?.lastName &&
+            ownerUser?.firstName &&
+            ownerUser?.lastName
+          ) {
+            sendShareNotificationEmail({
+              to: recipientUser.email,
+              recipientFirstName: recipientUser.firstName,
+              recipientLastName: recipientUser.lastName,
+              ownerFirstName: ownerUser.firstName,
+              ownerLastName: ownerUser.lastName,
+              resourceType: input.resourceType,
+              resourceName,
+              permission: input.permission,
             })
-            .catch((error) => {
-              logger.error({
-                error: error instanceof Error ? error.message : String(error),
-                errorStack: error instanceof Error ? error.stack : undefined,
-                shareId: share.id,
-                recipientEmail: recipientUser.email,
-                resourceType: input.resourceType,
-                resourceName,
-              }, '[SHARE_NOTIFICATION_EMAIL] Failed to send share notification email');
-            });
-        } else {
-          logger.warn({
+              .then((result) => {
+                if (result && result.id) {
+                  logger.info({
+                    shareId: share.id,
+                    recipientEmail: recipientUser.email,
+                    emailId: result.id,
+                    resourceType: input.resourceType,
+                    resourceName,
+                  }, '[SHARE_NOTIFICATION_EMAIL] Share notification email sent successfully');
+                } else {
+                  logger.warn({
+                    shareId: share.id,
+                    recipientEmail: recipientUser.email,
+                    resourceType: input.resourceType,
+                    resourceName,
+                  }, '[SHARE_NOTIFICATION_EMAIL] Share notification email returned null result');
+                }
+              })
+              .catch((error) => {
+                logger.error({
+                  error: error instanceof Error ? error.message : String(error),
+                  errorStack: error instanceof Error ? error.stack : undefined,
+                  shareId: share.id,
+                  recipientEmail: recipientUser.email,
+                  resourceType: input.resourceType,
+                  resourceName,
+                }, '[SHARE_NOTIFICATION_EMAIL] Failed to send share notification email');
+              });
+          } else {
+            logger.warn({
+              shareId: share.id,
+              hasRecipientEmail: !!recipientUser?.email,
+              hasRecipientFirstName: !!recipientUser?.firstName,
+              hasRecipientLastName: !!recipientUser?.lastName,
+              hasOwnerFirstName: !!ownerUser?.firstName,
+              hasOwnerLastName: !!ownerUser?.lastName,
+            }, '[SHARE_NOTIFICATION_EMAIL] Skipping share notification email - missing user data');
+          }
+        } catch (emailError) {
+          logger.error({
+            error: emailError instanceof Error ? emailError.message : String(emailError),
             shareId: share.id,
-            hasRecipientEmail: !!recipientUser?.email,
-            hasRecipientFirstName: !!recipientUser?.firstName,
-            hasRecipientLastName: !!recipientUser?.lastName,
-            hasOwnerFirstName: !!ownerUser?.firstName,
-            hasOwnerLastName: !!ownerUser?.lastName,
-          }, '[SHARE_NOTIFICATION_EMAIL] Skipping share notification email - missing user data');
+            userId: session.user.id,
+          }, '[SHARE_NOTIFICATION_EMAIL] Error attempting to send share notification email');
+          // Don't fail the share creation if email fails
         }
-      } catch (emailError) {
-        logger.error({
-          error: emailError instanceof Error ? emailError.message : String(emailError),
+      } else {
+        logger.info({
           shareId: share.id,
           userId: session.user.id,
-        }, '[SHARE_NOTIFICATION_EMAIL] Error attempting to send share notification email');
-        // Don't fail the share creation if email fails
+        }, '[SHARE_NOTIFICATION_EMAIL] Skipping email - share already exists (update, not new)');
       }
 
       return share;
