@@ -871,7 +871,7 @@ export default function DashboardPage() {
                         >
                           <div className={`h-8 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium leading-tight ${visual.labelClass}`}>
+                            <p className={`text-sm font-medium ${visual.labelClass}`}>
                               {reminder.title || "Untitled Reminder"}
                             </p>
                             {subtitle ? (
