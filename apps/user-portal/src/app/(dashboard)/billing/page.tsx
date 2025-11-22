@@ -299,87 +299,10 @@ export default function BillingPage() {
   const [selectedPlanForChange, setSelectedPlanForChange] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   
-  // Get default currency based on user's country
-  const getDefaultCurrency = (): Currency => {
-    if (typeof window === "undefined") return "USD";
-    
-    try {
-      // Method 1: Try to get country from browser's locale
-      const locale = navigator.language || (navigator.languages && navigator.languages.length > 0 ? navigator.languages[0] : null) || "en-US";
-      
-      // Extract country code from locale (e.g., "en-ZA" -> "ZA", "en-US" -> "US")
-      const localeParts = locale.split("-");
-      const countryCode = localeParts.length > 1 && localeParts[1] ? localeParts[1].toUpperCase() : null;
-      
-      // Map country codes to currencies (priority order)
-      if (countryCode === "ZA") return "ZAR";
-      if (countryCode === "US") return "USD";
-      if (countryCode === "GB" || countryCode === "UK") return "GBP";
-      if (countryCode === "CA") return "CAD";
-      if (countryCode === "AU") return "AUD";
-      if (countryCode === "DE" || countryCode === "NL" || countryCode === "FR" || 
-          countryCode === "BE" || countryCode === "AT" || countryCode === "IT" || 
-          countryCode === "ES" || countryCode === "PT" || countryCode === "IE" ||
-          countryCode === "FI" || countryCode === "GR" || countryCode === "LU") {
-        return "EUR";
-      }
-      
-      // Method 2: Check timezone for additional hints
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      
-      // South Africa
-      if (timezone.includes("Africa/Johannesburg") || timezone.includes("Africa/Cape_Town")) {
-        return "ZAR";
-      }
-      
-      // United States
-      if (timezone.includes("America/New_York") || timezone.includes("America/Chicago") || 
-          timezone.includes("America/Denver") || timezone.includes("America/Los_Angeles") ||
-          timezone.includes("America/Phoenix") || timezone.includes("America/Anchorage") ||
-          timezone.includes("America/Honolulu")) {
-        return "USD";
-      }
-      
-      // United Kingdom
-      if (timezone.includes("Europe/London")) {
-        return "GBP";
-      }
-      
-      // Canada
-      if (timezone.includes("America/Toronto") || timezone.includes("America/Vancouver") ||
-          timezone.includes("America/Montreal") || timezone.includes("America/Edmonton") ||
-          timezone.includes("America/Winnipeg") || timezone.includes("America/Halifax")) {
-        return "CAD";
-      }
-      
-      // Australia
-      if (timezone.includes("Australia/Sydney") || timezone.includes("Australia/Melbourne") ||
-          timezone.includes("Australia/Brisbane") || timezone.includes("Australia/Perth") ||
-          timezone.includes("Australia/Adelaide") || timezone.includes("Australia/Darwin")) {
-        return "AUD";
-      }
-      
-      // European countries (EUR)
-      if (timezone.includes("Europe/Berlin") || timezone.includes("Europe/Amsterdam") || 
-          timezone.includes("Europe/Paris") || timezone.includes("Europe/Rome") ||
-          timezone.includes("Europe/Madrid") || timezone.includes("Europe/Brussels") ||
-          timezone.includes("Europe/Vienna") || timezone.includes("Europe/Stockholm") ||
-          timezone.includes("Europe/Copenhagen") || timezone.includes("Europe/Helsinki")) {
-        return "EUR";
-      }
-      
-      // Default to USD for most other countries
-      return "USD";
-    } catch (error) {
-      console.error("Error detecting country:", error);
-      return "USD";
-    }
-  };
+  // Currency state - default to ZAR for all users
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>("ZAR");
 
-  // Currency state - will be set based on country detection on mount
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency>("USD");
-
-  // Detect user's country and set currency on page load
+  // Load saved currency preference on mount, otherwise use ZAR as default
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -388,15 +311,11 @@ export default function BillingPage() {
     if (saved && ["ZAR", "USD", "EUR", "GBP", "CAD", "AUD"].includes(saved)) {
       // User has a saved preference, use it
       setSelectedCurrency(saved as Currency);
-      return;
+    } else {
+      // No saved preference - use ZAR as default
+      setSelectedCurrency("ZAR");
+      localStorage.setItem("billing-currency", "ZAR");
     }
-
-    // No saved preference - detect country and set currency automatically
-    const detectedCurrency = getDefaultCurrency();
-    setSelectedCurrency(detectedCurrency);
-    
-    // Save the detected currency so it persists
-    localStorage.setItem("billing-currency", detectedCurrency);
   }, []);
 
   // Exchange rates state - only use real-time rates, no defaults
