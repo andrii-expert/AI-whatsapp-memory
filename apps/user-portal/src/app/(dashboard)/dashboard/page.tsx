@@ -867,20 +867,20 @@ export default function DashboardPage() {
                             setSelectedReminder(reminder);
                             setIsReminderModalOpen(true);
                           }}
-                          className={`flex items-center gap-3 rounded-xl px-4 py-2.5 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
+                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
                         >
                           <div className={`h-12 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-semibold leading-tight ${visual.labelClass}`}>
+                            <p className={`text-sm font-medium leading-tight ${visual.labelClass}`}>
                               {reminder.title || "Untitled Reminder"}
                             </p>
                             {subtitle ? (
-                              <p className={`text-xs font-medium mt-1.5 ${visual.metaClass}`}>
+                              <p className={`text-xs mt-0.5 ${visual.metaClass}`}>
                                 {subtitle}
                               </p>
                             ) : (
                               reminder.time && (
-                                <p className={`text-xs font-medium mt-1.5 ${visual.metaClass}`}>
+                                <p className={`text-xs mt-0.5 ${visual.metaClass}`}>
                                   {reminder.time}
                                 </p>
                               )
