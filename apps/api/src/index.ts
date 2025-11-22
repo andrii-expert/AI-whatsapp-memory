@@ -12,6 +12,15 @@ import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { HonoAdapter } from "@bull-board/hono";
 import { getAllVoiceQueues } from "./lib/queues";
 import { logger } from "@imaginecalendar/logger";
+import { validateEmailConfig } from "./utils/email";
+
+// Validate email configuration at startup
+const emailConfig = validateEmailConfig();
+if (!emailConfig.valid) {
+  logger.warn({ issues: emailConfig.issues }, "Email configuration has issues - welcome emails may not work");
+} else {
+  logger.info({}, "Email configuration is valid");
+}
 
 const app = new Hono<Context>();
 

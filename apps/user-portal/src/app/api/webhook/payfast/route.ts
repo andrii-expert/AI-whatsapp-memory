@@ -9,10 +9,12 @@ import {
   createSubscription,
   getPaymentByMPaymentId,
   getPlanById,
+  getUserById,
 } from '@imaginecalendar/database/queries';
 import type { PlanRecord } from '@imaginecalendar/database/queries';
 import { z } from 'zod';
 import { logger } from '@imaginecalendar/logger';
+import { sendSubscriptionEmail } from '@imaginecalendar/api/utils/email';
 
 function computeSubscriptionPeriods(plan: PlanRecord) {
   const currentPeriodStart = new Date();
@@ -270,6 +272,64 @@ export async function POST(req: NextRequest) {
           paymentId: payment.id,
           subscriptionId: subscription.id 
         }, 'Payment processed successfully');
+
+        // Send subscription confirmation email
+        try {
+          const user = await getUserById(db, userId);
+          if (user && user.email && user.firstName && user.lastName) {
+            const isNewSubscription = !subscription.payfastToken || subscription.payfastToken === token;
+            
+            sendSubscriptionEmail({
+              to: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              planName: planRecord.name,
+              planAmount: planRecord.amountCents,
+              currency: 'ZAR',
+              currentPeriodStart: subscription.currentPeriodStart,
+              currentPeriodEnd: subscription.currentPeriodEnd,
+              isNewSubscription,
+            })
+              .then((result) => {
+                if (result && result.id) {
+                  logger.info({
+                    userId,
+                    email: user.email,
+                    emailId: result.id,
+                    planName: planRecord.name,
+                  }, '[SUBSCRIPTION_EMAIL] Subscription confirmation email sent successfully');
+                } else {
+                  logger.warn({
+                    userId,
+                    email: user.email,
+                    planName: planRecord.name,
+                  }, '[SUBSCRIPTION_EMAIL] Subscription email returned null result');
+                }
+              })
+              .catch((error) => {
+                logger.error({
+                  error: error instanceof Error ? error.message : String(error),
+                  errorStack: error instanceof Error ? error.stack : undefined,
+                  userId,
+                  email: user.email,
+                  planName: planRecord.name,
+                }, '[SUBSCRIPTION_EMAIL] Failed to send subscription confirmation email');
+              });
+          } else {
+            logger.warn({
+              userId,
+              hasEmail: !!user?.email,
+              hasFirstName: !!user?.firstName,
+              hasLastName: !!user?.lastName,
+            }, '[SUBSCRIPTION_EMAIL] Skipping subscription email - missing user data');
+          }
+        } catch (emailError) {
+          logger.error({
+            error: emailError instanceof Error ? emailError.message : String(emailError),
+            userId,
+          }, '[SUBSCRIPTION_EMAIL] Error attempting to send subscription email');
+        }
+
         break;
       }
         

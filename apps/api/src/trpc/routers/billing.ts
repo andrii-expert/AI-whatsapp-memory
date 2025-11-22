@@ -7,11 +7,13 @@ import {
   cancelSubscription,
   reactivateSubscription,
   getPlanById,
+  getUserById,
 } from "@imaginecalendar/database/queries";
 import type { PlanRecord } from "@imaginecalendar/database/queries";
 import { PayFastService } from "@imaginecalendar/payments";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
+import { sendSubscriptionEmail } from "@api/utils/email";
 
 function computeSubscriptionPeriods(plan: PlanRecord) {
   const currentPeriodStart = new Date();
@@ -89,7 +91,7 @@ export const billingRouter = createTRPCRouter({
 
       const { currentPeriodStart, currentPeriodEnd, trialEndsAt } = computeSubscriptionPeriods(planRecord);
 
-      return createSubscription(db, {
+      const subscription = await createSubscription(db, {
         userId: session.user.id,
         plan: planRecord.id,
         status: "active",
@@ -97,6 +99,65 @@ export const billingRouter = createTRPCRouter({
         currentPeriodEnd,
         trialEndsAt: trialEndsAt ?? undefined,
       });
+
+      // Send subscription confirmation email
+      if (subscription) {
+        try {
+          const user = await getUserById(db, session.user.id);
+          if (user && user.email && user.firstName && user.lastName) {
+            sendSubscriptionEmail({
+              to: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              planName: planRecord.name,
+              planAmount: planRecord.amountCents,
+              currency: 'ZAR',
+              currentPeriodStart: subscription.currentPeriodStart,
+              currentPeriodEnd: subscription.currentPeriodEnd,
+              isNewSubscription: true,
+            })
+              .then((result) => {
+                if (result && result.id) {
+                  logger.info({
+                    userId: session.user.id,
+                    email: user.email,
+                    emailId: result.id,
+                    planName: planRecord.name,
+                  }, '[SUBSCRIPTION_EMAIL] Subscription confirmation email sent successfully');
+                } else {
+                  logger.warn({
+                    userId: session.user.id,
+                    email: user.email,
+                    planName: planRecord.name,
+                  }, '[SUBSCRIPTION_EMAIL] Subscription email returned null result');
+                }
+              })
+              .catch((error) => {
+                logger.error({
+                  error: error instanceof Error ? error.message : String(error),
+                  errorStack: error instanceof Error ? error.stack : undefined,
+                  userId: session.user.id,
+                  email: user.email,
+                  planName: planRecord.name,
+                }, '[SUBSCRIPTION_EMAIL] Failed to send subscription confirmation email');
+              });
+          } else {
+            logger.warn({
+              userId: session.user.id,
+              hasEmail: !!user?.email,
+              hasFirstName: !!user?.firstName,
+              hasLastName: !!user?.lastName,
+            }, '[SUBSCRIPTION_EMAIL] Skipping subscription email - missing user data');
+          }
+        } catch (emailError) {
+          logger.error({
+            error: emailError instanceof Error ? emailError.message : String(emailError),
+            userId: session.user.id,
+          }, '[SUBSCRIPTION_EMAIL] Error attempting to send subscription email');
+        }
+      }
+
+      return subscription;
     }),
 
   updateSubscription: protectedProcedure

@@ -45,6 +45,7 @@ import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { startOfDay, endOfDay, isSameDay, format } from "date-fns";
+import { WelcomeModal } from "@/components/welcome-modal";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -60,6 +61,21 @@ export default function DashboardPage() {
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
+
+  // Check if welcome modal should be shown
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const showModal = localStorage.getItem("show-welcome-modal");
+      const hasBeenShown = localStorage.getItem("welcome-modal-shown");
+      
+      if (showModal === "true" && !hasBeenShown) {
+        setIsWelcomeModalOpen(true);
+        // Clear the flag so it doesn't show again
+        localStorage.removeItem("show-welcome-modal");
+      }
+    }
+  }, []);
 
   // Fetch all data
   const { data: whatsappNumbers } = useQuery(trpc.whatsapp.getMyNumbers.queryOptions());
@@ -781,7 +797,7 @@ export default function DashboardPage() {
         {/* Main Content Area */}
         <div className="lg:col-span-3">
           {/* Status Cards Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {totalActiveReminders}
@@ -1456,6 +1472,12 @@ export default function DashboardPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Welcome Modal */}
+      <WelcomeModal 
+        open={isWelcomeModalOpen} 
+        onOpenChange={setIsWelcomeModalOpen} 
+      />
     </div>
   );
 }

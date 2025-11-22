@@ -83,6 +83,12 @@ export default function OnboardingPage() {
         updateClerkOnboardingMetadata().catch(() => {});
 
         setIsSubmitting(false);
+        
+        // Set flag to show welcome modal on dashboard
+        if (typeof window !== 'undefined') {
+          localStorage.setItem("show-welcome-modal", "true");
+        }
+        
         router.push("/dashboard");
       },
       onError: (error) => {

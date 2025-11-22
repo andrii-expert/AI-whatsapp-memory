@@ -311,6 +311,12 @@ export const authRouter = createTRPCRouter({
       const userFirstName = finalUser?.firstName || input.firstName;
       const userLastName = finalUser?.lastName || input.lastName;
 
+      // Validate FROM_EMAIL format for better error reporting
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const fromEmailValid = process.env.RESEND_FROM_EMAIL 
+        ? emailRegex.test(process.env.RESEND_FROM_EMAIL.trim())
+        : false;
+
       logger.info({
         userId: session.user.id,
         dbEmail: finalUser?.email,
@@ -320,6 +326,10 @@ export const authRouter = createTRPCRouter({
         hasLastName: !!userLastName,
         resendApiKey: !!process.env.RESEND_API_KEY,
         resendFromEmail: process.env.RESEND_FROM_EMAIL,
+        fromEmailValid,
+        fromEmailIssue: process.env.RESEND_FROM_EMAIL && !fromEmailValid 
+          ? 'RESEND_FROM_EMAIL must be a full email address (e.g., noreply@mail.crackon.ai), not just a domain'
+          : null,
       }, "[WELCOME_EMAIL] Checking email prerequisites");
 
       if (userEmail && userFirstName && userLastName) {
@@ -331,39 +341,57 @@ export const authRouter = createTRPCRouter({
             email: userEmail,
           }, "[WELCOME_EMAIL] Invalid email format, skipping");
         } else {
-          // Send email asynchronously
+          // Send email asynchronously (fire and forget, but with proper error handling)
           sendWelcomeEmail({
             to: userEmail,
             firstName: userFirstName,
             lastName: userLastName,
           })
             .then((result) => {
-              if (result) {
+              if (result && result.id) {
                 logger.info({
                   userId: session.user.id,
                   email: userEmail,
                   emailId: result.id,
+                  firstName: userFirstName,
+                  lastName: userLastName,
                 }, "[WELCOME_EMAIL] Welcome email sent successfully");
               } else {
                 logger.warn({
                   userId: session.user.id,
                   email: userEmail,
-                }, "[WELCOME_EMAIL] Welcome email returned null result");
+                  firstName: userFirstName,
+                  lastName: userLastName,
+                  result: result,
+                  resendApiKey: !!process.env.RESEND_API_KEY,
+                  resendFromEmail: process.env.RESEND_FROM_EMAIL,
+                }, "[WELCOME_EMAIL] Welcome email returned null or invalid result - check email configuration");
               }
             })
             .catch((error) => {
               logger.error({
                 error: error instanceof Error ? error.message : String(error),
                 errorStack: error instanceof Error ? error.stack : undefined,
+                errorType: error instanceof Error ? error.constructor.name : typeof error,
+                errorDetails: error,
                 userId: session.user.id,
                 email: userEmail,
+                firstName: userFirstName,
+                lastName: userLastName,
                 resendApiKey: !!process.env.RESEND_API_KEY,
+                resendFromEmail: process.env.RESEND_FROM_EMAIL,
+                apiKeyPrefix: process.env.RESEND_API_KEY?.substring(0, 10) || 'NOT_SET',
               }, "[WELCOME_EMAIL] Failed to send welcome email after onboarding");
             });
           
           logger.info({
             userId: session.user.id,
             email: userEmail,
+            firstName: userFirstName,
+            lastName: userLastName,
+            resendApiKey: !!process.env.RESEND_API_KEY,
+            resendFromEmail: process.env.RESEND_FROM_EMAIL,
+            fromEmailValid: fromEmailValid,
           }, "[WELCOME_EMAIL] Welcome email request initiated");
         }
       } else {
