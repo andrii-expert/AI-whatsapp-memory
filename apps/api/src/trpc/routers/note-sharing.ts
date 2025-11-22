@@ -92,18 +92,37 @@ export const noteSharingRouter = createTRPCRouter({
         });
       }
 
+      // Check if share already exists before creating/updating
+      const existingShares = await getNoteResourceShares(
+        db,
+        input.resourceType,
+        input.resourceId,
+        session.user.id
+      );
+      const existingShare = existingShares.find(
+        (s) => s.sharedWithUserId === input.sharedWithUserId
+      );
+      const isNewShare = !existingShare;
+
       const share = await createNoteShare(db, {
         ownerId: session.user.id,
         ...input,
       });
 
       logger.info(
-        { shareId: share.id, userId: session.user.id },
-        "Note/folder share created"
+        { shareId: share.id, userId: session.user.id, isNewShare },
+        isNewShare ? "Note/folder share created" : "Note/folder share updated"
       );
 
-      // Send email notification to the shared user
-      try {
+      // Send email notification only for NEW shares, not updates
+      if (!isNewShare) {
+        logger.info(
+          { shareId: share.id, userId: session.user.id },
+          "[SHARE_NOTIFICATION_EMAIL] Skipping email - share already exists (update, not new)"
+        );
+      } else {
+        // Send email notification to the shared user
+        try {
         // Get recipient user details
         const recipientUser = await getUserById(db, input.sharedWithUserId);
         
@@ -183,6 +202,7 @@ export const noteSharingRouter = createTRPCRouter({
           userId: session.user.id,
         }, '[SHARE_NOTIFICATION_EMAIL] Error attempting to send share notification email');
         // Don't fail the share creation if email fails
+        }
       }
 
       return share;

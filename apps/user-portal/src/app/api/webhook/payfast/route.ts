@@ -208,10 +208,14 @@ export async function POST(req: NextRequest) {
         // Get or create subscription
         let subscription = await getUserSubscription(db, userId);
         
+        // Track if this is a new subscription BEFORE creating/updating
+        const isNewSubscription = !subscription;
+        
+        // Compute subscription periods
+        const { currentPeriodStart, currentPeriodEnd, trialEndsAt } = computeSubscriptionPeriods(planRecord);
+        
         if (!subscription) {
           // Create new subscription
-          const { currentPeriodStart, currentPeriodEnd, trialEndsAt } = computeSubscriptionPeriods(planRecord);
-
           subscription = await createSubscription(db, {
             userId,
             plan: planRecord.id,
@@ -229,8 +233,6 @@ export async function POST(req: NextRequest) {
           }
         } else {
           // Update existing subscription
-          const { currentPeriodStart, currentPeriodEnd } = computeSubscriptionPeriods(planRecord);
-
           await updateSubscription(db, subscription.id, {
             status: 'active',
             payfastSubscriptionId: pf_payment_id,
@@ -241,6 +243,14 @@ export async function POST(req: NextRequest) {
             // Clear trial end date if upgrading from trial
             trialEndsAt: null,
           });
+          
+          // Refresh subscription to get updated values
+          subscription = await getUserSubscription(db, userId);
+        }
+
+        if (!subscription) {
+          logger.error({ userId }, 'Subscription not found after create/update');
+          return new Response('OK', { status: 200 });
         }
 
         // Create payment record with auto-generated invoice
@@ -270,14 +280,22 @@ export async function POST(req: NextRequest) {
         logger.info({ 
           userId, 
           paymentId: payment.id,
-          subscriptionId: subscription.id 
+          subscriptionId: subscription.id,
+          isNewSubscription,
         }, 'Payment processed successfully');
 
         // Send subscription confirmation email
         try {
           const user = await getUserById(db, userId);
           if (user && user.email && user.firstName && user.lastName) {
-            const isNewSubscription = !subscription.payfastToken || subscription.payfastToken === token;
+            logger.info({
+              userId,
+              email: user.email,
+              planName: planRecord.name,
+              isNewSubscription,
+              currentPeriodStart: subscription.currentPeriodStart,
+              currentPeriodEnd: subscription.currentPeriodEnd,
+            }, '[SUBSCRIPTION_EMAIL] Preparing to send subscription confirmation email');
             
             sendSubscriptionEmail({
               to: user.email,
@@ -297,12 +315,14 @@ export async function POST(req: NextRequest) {
                     email: user.email,
                     emailId: result.id,
                     planName: planRecord.name,
+                    isNewSubscription,
                   }, '[SUBSCRIPTION_EMAIL] Subscription confirmation email sent successfully');
                 } else {
                   logger.warn({
                     userId,
                     email: user.email,
                     planName: planRecord.name,
+                    isNewSubscription,
                   }, '[SUBSCRIPTION_EMAIL] Subscription email returned null result');
                 }
               })
@@ -313,6 +333,7 @@ export async function POST(req: NextRequest) {
                   userId,
                   email: user.email,
                   planName: planRecord.name,
+                  isNewSubscription,
                 }, '[SUBSCRIPTION_EMAIL] Failed to send subscription confirmation email');
               });
           } else {
@@ -326,6 +347,7 @@ export async function POST(req: NextRequest) {
         } catch (emailError) {
           logger.error({
             error: emailError instanceof Error ? emailError.message : String(emailError),
+            errorStack: emailError instanceof Error ? emailError.stack : undefined,
             userId,
           }, '[SUBSCRIPTION_EMAIL] Error attempting to send subscription email');
         }
