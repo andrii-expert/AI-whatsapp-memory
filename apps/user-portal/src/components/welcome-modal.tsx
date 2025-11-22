@@ -93,10 +93,10 @@ export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
           
           <AlertDialogAction
             onClick={handleGoToDashboard}
-            className="flex-1 font-semibold py-6 text-base border-2 bg-transparent hover:bg-gray-50 order-2 sm:order-2"
+            className="flex-1 font-semibold py-6 text-blue-600 border-2 bg-transparent hover:bg-gray-50 order-2 sm:order-2"
           >
-            <LayoutDashboard className="h-5 w-5 mr-2" />
-            Go to dashboard
+            <LayoutDashboard className="h-5 w-5 mr-2 text-blue-600" />
+            Go to my dashboard
           </AlertDialogAction>
         </AlertDialogFooter>
 
