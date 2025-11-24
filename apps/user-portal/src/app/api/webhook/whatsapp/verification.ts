@@ -2,6 +2,7 @@ import type { Database } from '@imaginecalendar/database/client';
 import {
   verifyWhatsAppCode,
   logIncomingWhatsAppMessage,
+  getUserById,
 } from '@imaginecalendar/database/queries';
 import type { WhatsAppParsedMessage } from '@imaginecalendar/whatsapp';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -43,13 +44,54 @@ export async function handleVerificationMessage(
       userId: verificationResult.userId,
     });
 
+    // Send verification completed message and welcome message
     try {
       const whatsappService = new WhatsAppService();
-      await whatsappService.sendWelcomeMessage(phoneNumber, contactName, {
+      
+      // Get user details for personalization
+      const user = await getUserById(db, verificationResult.userId);
+      const userName = user?.firstName 
+        ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
+        : contactName || 'there';
+
+      // Send verification completed confirmation message
+      const verificationMessage = `✅ Verification Complete!\n\nHi ${userName}, your WhatsApp number has been successfully verified. You're all set to use CrackOn for managing your calendar, reminders, and notes!\n\n`;
+      
+      try {
+        await whatsappService.sendTextMessage(phoneNumber, verificationMessage);
+        logger.info(
+          {
+            phoneNumber,
+            userId: verificationResult.userId,
+          },
+          'Verification completed message sent successfully'
+        );
+      } catch (verificationMsgError) {
+        logger.error(
+          {
+            error: verificationMsgError,
+            phoneNumber,
+            userId: verificationResult.userId,
+          },
+          'Failed to send verification completed message'
+        );
+        // Continue to send welcome message even if verification message fails
+      }
+
+      // Send welcome message with CTA button
+      await whatsappService.sendWelcomeMessage(phoneNumber, contactName || userName, {
         db,
         whatsappNumberId: verificationResult.whatsappNumberId,
         userId: verificationResult.userId,
       });
+      
+      logger.info(
+        {
+          phoneNumber,
+          userId: verificationResult.userId,
+        },
+        'Welcome message sent successfully after verification'
+      );
     } catch (welcomeError) {
       logger.error(
         {
