@@ -75,23 +75,11 @@ export async function handleVerificationMessage(
         ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
         : contactName || 'there';
 
-      // Send welcome message with reply buttons
+      // Send welcome message as plain text
       try {
         const welcomeMessage = `Hey ${userName} 👋 Welcome to CrackOn!\n\nYou have been successfully verified\n\nNow, just tell me what you need and I'll sort it out. Simply use voice notes or type text commands in this chat\n\n• Meetings ("Meet John at 2pm")\n• Tasks ("Buy Milk")\n• Reminders ("Pick up kids at 5pm")\n• Notes ("John said that...")`;
         
-        const welcomeResponse = await whatsappService.sendReplyButtonMessage(phoneNumber, {
-          bodyText: welcomeMessage,
-          buttons: [
-            {
-              id: 'upgrade_package',
-              title: 'Upgrade your package',
-            },
-            {
-              id: 'view_dashboard',
-              title: 'View Dashboard',
-            },
-          ],
-        });
+        const welcomeResponse = await whatsappService.sendTextMessage(phoneNumber, welcomeMessage);
         
         // Log the outgoing message
         try {
@@ -102,7 +90,7 @@ export async function handleVerificationMessage(
             whatsappNumberId: verificationResult.whatsappNumberId,
             userId: verificationResult.userId,
             messageId: welcomeResponse.messages?.[0]?.id,
-            messageType: 'interactive',
+            messageType: 'text',
             isFreeMessage,
           });
         } catch (logError) {

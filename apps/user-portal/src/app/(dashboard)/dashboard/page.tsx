@@ -6,13 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@imaginecalendar/ui/ca
 import { Badge } from "@imaginecalendar/ui/badge";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@imaginecalendar/ui/sheet";
-import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogDescription,
@@ -28,15 +21,12 @@ import {
   Calendar,
   MessageSquare,
   CheckCircle2,
-  Circle,
   BellRing,
   CheckSquare,
   StickyNote,
   Clock,
-  LayoutDashboard,
   ArrowRight,
   AlertCircle,
-  Menu,
   X,
   Search,
   ExternalLink,
@@ -53,7 +43,6 @@ export default function DashboardPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNote, setSelectedNote] = useState<any | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -318,26 +307,6 @@ export default function DashboardPage() {
   const shouldShowEvents = true;
   const shouldShowNotes = true;
 
-  // Setup steps
-  const setupSteps = [
-    {
-      title: "Create your account",
-      completed: true,
-    },
-    {
-      title: "Link your WhatsApp number",
-      completed: hasVerifiedWhatsApp,
-    },
-    {
-      title: "Connect your calendar (Google or Microsoft)",
-      completed: hasCalendar,
-    },
-    {
-      title: "Send your first voice note or message",
-      completed: hasVerifiedWhatsApp && hasCalendar,
-    },
-  ];
-
   // Get reminder color scheme based on frequency type
   const getReminderColorScheme = (frequency: string | null | undefined) => {
     const freq = (frequency || "").toLowerCase();
@@ -532,85 +501,6 @@ export default function DashboardPage() {
 
   const userName = user?.firstName || "there";
 
-  // Close mobile sidebar on Escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isMobileSidebarOpen) {
-        setIsMobileSidebarOpen(false);
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [isMobileSidebarOpen]);
-
-  // Workspace Navigation Component (reused for mobile/desktop)
-  const WorkspaceNav = ({ onClick }: { onClick?: () => void }) => (
-    <div className="space-y-2">
-      <Link
-        href="/dashboard"
-        onClick={onClick}
-        className="flex items-center justify-between p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <LayoutDashboard className="h-4 w-4" />
-          <span className="font-medium">Overview</span>
-        </div>
-        <Badge variant="orange">
-          {totalItems}
-        </Badge>
-      </Link>
-      
-      <Link
-        href="/notes"
-        onClick={onClick}
-        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <StickyNote className="h-4 w-4" />
-          <span>Notes</span>
-        </div>
-        <Badge variant="orange">{allNotes.length}</Badge>
-      </Link>
-      
-      <Link
-        href="/reminders"
-        onClick={onClick}
-        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <BellRing className="h-4 w-4" />
-          <span>Reminders</span>
-        </div>
-        <Badge variant="orange">{reminders.length}</Badge>
-      </Link>
-      
-      <Link
-        href="/calendars"
-        onClick={onClick}
-        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4" />
-          <span>Calendar</span>
-        </div>
-        <Badge variant="orange">{calendars?.length || 0}</Badge>
-      </Link>
-      
-      <Link
-        href="/tasks"
-        onClick={onClick}
-        className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <CheckSquare className="h-4 w-4" />
-          <span>Tasks</span>
-        </div>
-        <Badge variant="orange">{allTasks.length}</Badge>
-      </Link>
-    </div>
-  );
-
   return (
     <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
       {/* Page Header */}
@@ -625,7 +515,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+          <div className="flex flex-row gap-3 w-full xl:w-auto">
             <button
               onClick={() =>
                 router.push(
@@ -651,7 +541,7 @@ export default function DashboardPage() {
                 <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
               </svg>
               <span className="text-sm font-normal tracking-wide text-foreground whitespace-nowrap">
-                {hasVerifiedWhatsApp ? "Manage WhatsApp" : "Link WhatsApp"}
+                Link WhatsApp
               </span>
             </button>
 
@@ -669,63 +559,12 @@ export default function DashboardPage() {
                 style={{ color: "#0f52ba" }}
               />
               <span className="text-sm font-normal tracking-wide text-foreground whitespace-nowrap">
-                {hasCalendar ? "Manage Your Calendar" : "Connect Your Calendar"}
+                Link Calendar
               </span>
             </button>
           </div>
         </div>
 
-        <div className="flex justify-between xl:justify-end gap-3">
-          {/* Mobile Workspace Menu Button */}
-          <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                className="lg:hidden flex items-center gap-2"
-              >
-                <Menu className="h-4 w-4" />
-                <span className="font-medium">Workspace</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] sm:w-[350px] h-full overflow-y-auto">
-              <SheetHeader className="mb-6">
-                <SheetTitle>My Workspace</SheetTitle>
-              </SheetHeader>
-
-              {/* Workspace Navigation */}
-              <WorkspaceNav onClick={() => setIsMobileSidebarOpen(false)} />
-
-              {/* Getting Started */}
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle className="text-base">Getting Started</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {setupSteps.map((step, index) => (
-                      <div key={index} className="flex items-center gap-3">
-                        {step.completed ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
-                        ) : (
-                          <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                        )}
-                        <span
-                          className={`text-sm ${
-                            step.completed
-                              ? "text-foreground"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {step.title}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </SheetContent>
-          </Sheet>
-        </div>
       </div>
 
       {/* Search Bar */}
@@ -752,50 +591,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Desktop Left Sidebar - My Workspace */}
-        <div className="hidden lg:block lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">My Workspace</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <WorkspaceNav />
-            </CardContent>
-          </Card>
-
-          {/* Getting Started */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="text-base">Getting Started</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {setupSteps.map((step, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    {step.completed ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
-                    ) : (
-                      <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                    )}
-                    <span
-                      className={`text-sm ${
-                        step.completed
-                          ? "text-foreground"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {step.title}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
+      <div className="grid grid-cols-1 gap-6">
         {/* Main Content Area */}
-        <div className="lg:col-span-3">
+        <div>
           {/* Status Cards Row */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 text-center">
             <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
