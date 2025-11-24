@@ -87,31 +87,55 @@ export async function handleTextMessage(
     }
   }
 
-  // Handle "Hello" greeting
+  // Handle "Hello" greeting (case-insensitive, with optional punctuation)
   const normalizedMessage = messageText.toLowerCase().trim();
-  if (normalizedMessage === 'hello') {
+  const cleanMessage = normalizedMessage.replace(/[.,!?;:]+$/, '').trim();
+
+  logger.info(
+    {
+      messageId: message.id,
+      senderPhone: message.from,
+      originalMessage: messageText,
+      normalizedMessage,
+      cleanMessage,
+      isHello: cleanMessage === 'hello',
+    },
+    'Checking for "Hello" greeting'
+  );
+
+  if (cleanMessage === 'hello') {
     try {
-      const whatsappService = new WhatsAppService();
-      await whatsappService.sendTextMessage(message.from, 'Hi, Nice to meet you');
-      
+      const response = await sendWhatsAppTextMessage(message.from, 'Hi, Nice to meet you');
+
       logger.info(
         {
           messageId: message.id,
           senderPhone: message.from,
           userId: whatsappNumber.userId,
+          responseMessageId: response.messages?.[0]?.id,
         },
         'Sent greeting response for "Hello" message'
       );
-      
+
       return; // Exit early, don't process as intent
     } catch (error) {
+      const errorDetails = error instanceof Error
+        ? {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+          }
+        : error;
+
       logger.error(
         {
-          error,
+          error: errorDetails,
           messageId: message.id,
           senderPhone: message.from,
+          userId: whatsappNumber.userId,
+          errorType: error?.constructor?.name,
         },
-        'Failed to send greeting response'
+        'Failed to send greeting response for "Hello" message'
       );
       // Continue with normal processing if greeting fails
     }
@@ -213,6 +237,49 @@ export async function handleTextMessage(
       'Failed to create voice job from text message'
     );
   }
+}
+
+interface WhatsAppMessageResponsePayload {
+  messages?: Array<{ id: string }>;
+  [key: string]: unknown;
+}
+
+async function sendWhatsAppTextMessage(to: string, body: string): Promise<WhatsAppMessageResponsePayload> {
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const apiVersion = process.env.WHATSAPP_API_VERSION || 'v23.0';
+
+  if (!accessToken || !phoneNumberId) {
+    throw new Error('Missing WhatsApp credentials. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID.');
+  }
+
+  const sanitizedTo = to.replace(/\D/g, '');
+
+  const response = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: sanitizedTo,
+      type: 'text',
+      text: {
+        body,
+      },
+    }),
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as WhatsAppMessageResponsePayload;
+
+  if (!response.ok) {
+    throw new Error(
+      `WhatsApp API error (${response.status}): ${JSON.stringify(payload)}`
+    );
+  }
+
+  return payload;
 }
 
 async function recordWebhookTiming(
