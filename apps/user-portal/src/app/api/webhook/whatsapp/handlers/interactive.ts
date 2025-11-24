@@ -83,6 +83,50 @@ export async function handleInteractiveMessage(
       return;
     }
 
+    // Handle welcome message button clicks
+    if (selectionId === 'upgrade_package' || selectionId === 'view_dashboard') {
+      try {
+        const whatsappService = new WhatsAppService();
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dashboard.crackon.ai';
+        
+        let url: string;
+        let messageText: string;
+        
+        if (selectionId === 'upgrade_package') {
+          url = `${appUrl}/billing`;
+          messageText = `Upgrade your package:\n${url}`;
+        } else {
+          url = `${appUrl}/dashboard`;
+          messageText = `View your dashboard:\n${url}`;
+        }
+        
+        await whatsappService.sendTextMessage(message.from, messageText);
+        
+        logger.info(
+          {
+            selectionId,
+            url,
+            senderPhone: message.from,
+            userId: whatsappNumber.userId,
+          },
+          'Welcome message button clicked - sent URL'
+        );
+        
+        return; // Exit early, don't process as intent
+      } catch (error) {
+        logger.error(
+          {
+            error,
+            selectionId,
+            senderPhone: message.from,
+            userId: whatsappNumber.userId,
+          },
+          'Failed to send URL for welcome message button click'
+        );
+        // Continue to normal processing if sending fails
+      }
+    }
+
     const handled = await processInteractiveSelection({
       message,
       interactive,

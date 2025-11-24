@@ -108,13 +108,47 @@ export async function handleVerificationMessage(
         // Continue to send welcome message even if verification message fails
       }
 
-      // Send welcome message with CTA button
+      // Send welcome message with reply buttons
       try {
-        const welcomeResponse = await whatsappService.sendWelcomeMessage(phoneNumber, contactName || userName, {
-          db,
-          whatsappNumberId: verificationResult.whatsappNumberId,
-          userId: verificationResult.userId,
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dashboard.crackon.ai';
+        const welcomeMessage = `Hey ${userName} 👋 Welcome to CrackOn!\n\nYou have been successfully verified\n\nNow, just tell me what you need and I'll sort it out. Simply use voice notes or type text commands in this chat\n\n• Calendar Events ("meeting John at 2pm")\n• Create Tasks ("Add milk to my shopping list")\n• Set reminders ("Feed dogs every day at 5pm")\n• Save notes ("Your meeting minutes")`;
+        
+        const welcomeResponse = await whatsappService.sendReplyButtonMessage(phoneNumber, {
+          bodyText: welcomeMessage,
+          buttons: [
+            {
+              id: 'upgrade_package',
+              title: 'Upgrade Package',
+            },
+            {
+              id: 'view_dashboard',
+              title: 'View Dashboard',
+            },
+          ],
         });
+        
+        // Log the outgoing message
+        try {
+          const { logOutgoingWhatsAppMessage, isWithinFreeMessageWindow } = await import('@imaginecalendar/database/queries');
+          const isFreeMessage = await isWithinFreeMessageWindow(db, verificationResult.whatsappNumberId);
+          
+          await logOutgoingWhatsAppMessage(db, {
+            whatsappNumberId: verificationResult.whatsappNumberId,
+            userId: verificationResult.userId,
+            messageId: welcomeResponse.messages?.[0]?.id,
+            messageType: 'interactive',
+            isFreeMessage,
+          });
+        } catch (logError) {
+          logger.error(
+            {
+              error: logError,
+              phoneNumber,
+              userId: verificationResult.userId,
+            },
+            'Failed to log outgoing welcome message'
+          );
+        }
         
         logger.info(
           {

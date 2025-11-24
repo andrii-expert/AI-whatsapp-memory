@@ -1,7 +1,9 @@
 import { eq, and, ne } from "drizzle-orm";
 import type { Database } from "../client";
-import { users, userPreferences, subscriptions } from "../schema";
+import { users, userPreferences, subscriptions, whatsappNumbers } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
+import { normalizePhoneNumber } from "./whatsapp-verification";
+import { logger } from "@imaginecalendar/logger";
 
 export async function getUserById(db: Database, id: string) {
   return withQueryLogging(
@@ -145,6 +147,126 @@ export async function updateUser(
     'updateUser',
     { userId: id, updates: Object.keys(data) },
     async () => {
+      // If phone is being updated, sync with whatsapp_numbers table
+      if (data.phone !== undefined) {
+        const normalizedPhone = data.phone ? normalizePhoneNumber(data.phone) : null;
+        
+        // Get all existing WhatsApp numbers for this user
+        const existingNumbers = await db.query.whatsappNumbers.findMany({
+          where: eq(whatsappNumbers.userId, id),
+        });
+
+        if (normalizedPhone) {
+          // Find if this phone number already exists for this user
+          const existingNumberForPhone = existingNumbers.find(
+            n => n.phoneNumber === normalizedPhone
+          );
+
+          if (existingNumberForPhone) {
+            // Phone number already exists - make it the only active and primary one
+            // Deactivate all other numbers
+            await db
+              .update(whatsappNumbers)
+              .set({
+                isActive: false,
+                isPrimary: false,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(whatsappNumbers.userId, id),
+                  ne(whatsappNumbers.id, existingNumberForPhone.id)
+                )
+              );
+
+            // Activate and set as primary the existing number, sync verification status
+            await db
+              .update(whatsappNumbers)
+              .set({
+                isActive: true,
+                isPrimary: true,
+                isVerified: data.phoneVerified !== undefined ? data.phoneVerified : existingNumberForPhone.isVerified,
+                updatedAt: new Date(),
+              })
+              .where(eq(whatsappNumbers.id, existingNumberForPhone.id));
+          } else {
+            // New phone number - deactivate all existing numbers and create/update
+            await db
+              .update(whatsappNumbers)
+              .set({
+                isActive: false,
+                isPrimary: false,
+                updatedAt: new Date(),
+              })
+              .where(eq(whatsappNumbers.userId, id));
+
+            // Check if this phone number exists for another user (shouldn't happen, but handle it)
+            const existingNumberForOtherUser = await db.query.whatsappNumbers.findFirst({
+              where: eq(whatsappNumbers.phoneNumber, normalizedPhone),
+            });
+
+            if (existingNumberForOtherUser && existingNumberForOtherUser.userId !== id) {
+              // Phone number belongs to another user - this shouldn't happen in normal flow
+              // But we'll log it and not create a duplicate
+              logger.warn(
+                {
+                  phoneNumber: normalizedPhone,
+                  existingUserId: existingNumberForOtherUser.userId,
+                  newUserId: id,
+                },
+                'Phone number already exists for another user, cannot assign to new user'
+              );
+            } else {
+              // Create new WhatsApp number record
+              await db.insert(whatsappNumbers).values({
+                userId: id,
+                phoneNumber: normalizedPhone,
+                isVerified: data.phoneVerified ?? false,
+                isPrimary: true,
+                isActive: true,
+              });
+              
+              logger.info(
+                {
+                  userId: id,
+                  phoneNumber: normalizedPhone,
+                },
+                'Created new WhatsApp number record for user'
+              );
+            }
+          }
+        } else {
+          // Phone is being cleared - deactivate all WhatsApp numbers for this user
+          await db
+            .update(whatsappNumbers)
+            .set({
+              isActive: false,
+              isPrimary: false,
+              updatedAt: new Date(),
+            })
+            .where(eq(whatsappNumbers.userId, id));
+        }
+      } else if (data.phoneVerified !== undefined) {
+        // If only phoneVerified is being updated (without phone change), sync with active WhatsApp number
+        const activeNumber = await db.query.whatsappNumbers.findFirst({
+          where: and(
+            eq(whatsappNumbers.userId, id),
+            eq(whatsappNumbers.isActive, true),
+            eq(whatsappNumbers.isPrimary, true)
+          ),
+        });
+
+        if (activeNumber) {
+          await db
+            .update(whatsappNumbers)
+            .set({
+              isVerified: data.phoneVerified,
+              updatedAt: new Date(),
+            })
+            .where(eq(whatsappNumbers.id, activeNumber.id));
+        }
+      }
+
       // Convert Date to string for the birthday field (date type in DB)
       const updateData = {
         ...data,
