@@ -610,7 +610,7 @@ export default function DashboardPage() {
                 {totalPendingTasks}
               </div>
               <div className="text-sm text-gray-500 font-normal">
-                Total Tasks Pending
+                Pending Tasks
               </div>
             </div>
 
