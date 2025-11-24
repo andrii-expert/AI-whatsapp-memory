@@ -46,6 +46,27 @@ export async function handleVerificationMessage(
 
     // Send verification completed message and welcome message
     try {
+      // Check WhatsApp configuration before attempting to send
+      const hasAccessToken = !!process.env.WHATSAPP_ACCESS_TOKEN;
+      const hasPhoneNumberId = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+      
+      if (!hasAccessToken || !hasPhoneNumberId) {
+        logger.error(
+          {
+            phoneNumber,
+            userId: verificationResult.userId,
+            hasAccessToken,
+            hasPhoneNumberId,
+            missingVars: {
+              WHATSAPP_ACCESS_TOKEN: !hasAccessToken,
+              WHATSAPP_PHONE_NUMBER_ID: !hasPhoneNumberId,
+            },
+          },
+          'WhatsApp environment variables missing - cannot send verification messages'
+        );
+        throw new Error('WhatsApp service not configured. Missing required environment variables.');
+      }
+
       const whatsappService = new WhatsAppService();
       
       // Get user details for personalization
@@ -58,20 +79,29 @@ export async function handleVerificationMessage(
       const verificationMessage = `✅ Verification Complete!\n\nHi ${userName}, your WhatsApp number has been successfully verified. You're all set to use CrackOn for managing your calendar, reminders, and notes!\n\n`;
       
       try {
-        await whatsappService.sendTextMessage(phoneNumber, verificationMessage);
+        const verificationResponse = await whatsappService.sendTextMessage(phoneNumber, verificationMessage);
         logger.info(
           {
             phoneNumber,
             userId: verificationResult.userId,
+            messageId: verificationResponse.messages?.[0]?.id,
           },
           'Verification completed message sent successfully'
         );
       } catch (verificationMsgError) {
+        const errorDetails = verificationMsgError instanceof Error 
+          ? {
+              message: verificationMsgError.message,
+              stack: verificationMsgError.stack,
+            }
+          : verificationMsgError;
+        
         logger.error(
           {
-            error: verificationMsgError,
+            error: errorDetails,
             phoneNumber,
             userId: verificationResult.userId,
+            errorType: verificationMsgError?.constructor?.name,
           },
           'Failed to send verification completed message'
         );
@@ -79,27 +109,56 @@ export async function handleVerificationMessage(
       }
 
       // Send welcome message with CTA button
-      await whatsappService.sendWelcomeMessage(phoneNumber, contactName || userName, {
-        db,
-        whatsappNumberId: verificationResult.whatsappNumberId,
-        userId: verificationResult.userId,
-      });
-      
-      logger.info(
-        {
-          phoneNumber,
+      try {
+        const welcomeResponse = await whatsappService.sendWelcomeMessage(phoneNumber, contactName || userName, {
+          db,
+          whatsappNumberId: verificationResult.whatsappNumberId,
           userId: verificationResult.userId,
-        },
-        'Welcome message sent successfully after verification'
-      );
+        });
+        
+        logger.info(
+          {
+            phoneNumber,
+            userId: verificationResult.userId,
+            messageId: welcomeResponse.messages?.[0]?.id,
+          },
+          'Welcome message sent successfully after verification'
+        );
+      } catch (welcomeMsgError) {
+        const errorDetails = welcomeMsgError instanceof Error 
+          ? {
+              message: welcomeMsgError.message,
+              stack: welcomeMsgError.stack,
+            }
+          : welcomeMsgError;
+        
+        logger.error(
+          {
+            error: errorDetails,
+            phoneNumber,
+            userId: verificationResult.userId,
+            errorType: welcomeMsgError?.constructor?.name,
+          },
+          'Failed to send welcome message after verification'
+        );
+        throw welcomeMsgError; // Re-throw to be caught by outer catch
+      }
     } catch (welcomeError) {
+      const errorDetails = welcomeError instanceof Error 
+        ? {
+            message: welcomeError.message,
+            stack: welcomeError.stack,
+          }
+        : welcomeError;
+      
       logger.error(
         {
-          error: welcomeError,
+          error: errorDetails,
           phoneNumber,
           userId: verificationResult.userId,
+          errorType: welcomeError?.constructor?.name,
         },
-        'Failed to send welcome message after verification'
+        'Failed to send WhatsApp messages after verification'
       );
     }
 
