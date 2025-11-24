@@ -87,6 +87,36 @@ export async function handleTextMessage(
     }
   }
 
+  // Handle "Hello" greeting
+  const normalizedMessage = messageText.toLowerCase().trim();
+  if (normalizedMessage === 'hello') {
+    try {
+      const whatsappService = new WhatsAppService();
+      await whatsappService.sendTextMessage(message.from, 'Hi, Nice to meet you');
+      
+      logger.info(
+        {
+          messageId: message.id,
+          senderPhone: message.from,
+          userId: whatsappNumber.userId,
+        },
+        'Sent greeting response for "Hello" message'
+      );
+      
+      return; // Exit early, don't process as intent
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          messageId: message.id,
+          senderPhone: message.from,
+        },
+        'Failed to send greeting response'
+      );
+      // Continue with normal processing if greeting fails
+    }
+  }
+
   const clarificationHandled = await processTextClarification({
     db,
     message,
