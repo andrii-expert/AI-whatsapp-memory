@@ -75,50 +75,16 @@ export async function handleVerificationMessage(
         ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
         : contactName || 'there';
 
-      // Send verification completed confirmation message
-      const verificationMessage = `✅ Verification Complete!\n\nHi ${userName}, your WhatsApp number has been successfully verified. You're all set to use CrackOn for managing your calendar, reminders, and notes!\n\n`;
-      
-      try {
-        const verificationResponse = await whatsappService.sendTextMessage(phoneNumber, verificationMessage);
-        logger.info(
-          {
-            phoneNumber,
-            userId: verificationResult.userId,
-            messageId: verificationResponse.messages?.[0]?.id,
-          },
-          'Verification completed message sent successfully'
-        );
-      } catch (verificationMsgError) {
-        const errorDetails = verificationMsgError instanceof Error 
-          ? {
-              message: verificationMsgError.message,
-              stack: verificationMsgError.stack,
-            }
-          : verificationMsgError;
-        
-        logger.error(
-          {
-            error: errorDetails,
-            phoneNumber,
-            userId: verificationResult.userId,
-            errorType: verificationMsgError?.constructor?.name,
-          },
-          'Failed to send verification completed message'
-        );
-        // Continue to send welcome message even if verification message fails
-      }
-
       // Send welcome message with reply buttons
       try {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dashboard.crackon.ai';
-        const welcomeMessage = `Hey ${userName} 👋 Welcome to CrackOn!\n\nYou have been successfully verified\n\nNow, just tell me what you need and I'll sort it out. Simply use voice notes or type text commands in this chat\n\n• Calendar Events ("meeting John at 2pm")\n• Create Tasks ("Add milk to my shopping list")\n• Set reminders ("Feed dogs every day at 5pm")\n• Save notes ("Your meeting minutes")`;
+        const welcomeMessage = `Hey ${userName} 👋 Welcome to CrackOn!\n\nYou have been successfully verified\n\nNow, just tell me what you need and I'll sort it out. Simply use voice notes or type text commands in this chat\n\n• Meetings ("Meet John at 2pm")\n• Tasks ("Buy Milk")\n• Reminders ("Pick up kids at 5pm")\n• Notes ("John said that...")`;
         
         const welcomeResponse = await whatsappService.sendReplyButtonMessage(phoneNumber, {
           bodyText: welcomeMessage,
           buttons: [
             {
               id: 'upgrade_package',
-              title: 'Upgrade Package',
+              title: 'Upgrade your package',
             },
             {
               id: 'view_dashboard',
