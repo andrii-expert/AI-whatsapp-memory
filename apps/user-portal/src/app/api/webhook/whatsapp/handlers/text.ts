@@ -7,6 +7,9 @@ import {
   updateVoiceMessageJobTranscription,
   recordVoiceJobTiming,
   logIncomingWhatsAppMessage,
+  getUserFolders,
+  createFolder,
+  createTask,
 } from '@imaginecalendar/database/queries';
 import { getQueue, QUEUE_NAMES } from '@/lib/queues';
 import { logger } from '@imaginecalendar/logger';
@@ -87,10 +90,110 @@ export async function handleTextMessage(
     }
   }
 
+  // Handle "Create a task: [task name]" pattern
+  const createTaskMatch = messageText.match(/^create\s+a\s+task\s*:\s*(.+)$/i);
+  if (createTaskMatch) {
+    const taskName = createTaskMatch[1].trim();
+    
+    if (taskName) {
+      try {
+        // Get or create "General" folder
+        const folders = await getUserFolders(db, whatsappNumber.userId);
+        let generalFolder = folders.find(f => f.name.toLowerCase() === 'general');
+        
+        if (!generalFolder) {
+          // Create General folder if it doesn't exist
+          logger.info(
+            {
+              userId: whatsappNumber.userId,
+              senderPhone: message.from,
+            },
+            'Creating "General" folder for task creation'
+          );
+          generalFolder = await createFolder(db, {
+            userId: whatsappNumber.userId,
+            name: 'General',
+            color: '#3B82F6', // Blue color
+            icon: 'folder',
+          });
+        }
+        
+        // Create the task
+        const task = await createTask(db, {
+          userId: whatsappNumber.userId,
+          folderId: generalFolder.id,
+          title: taskName,
+          status: 'open',
+        });
+        
+        if (!task) {
+          throw new Error('Failed to create task - no task returned');
+        }
+        
+        logger.info(
+          {
+            taskId: task.id,
+            taskName,
+            folderId: generalFolder.id,
+            userId: whatsappNumber.userId,
+            senderPhone: message.from,
+          },
+          'Task created via WhatsApp message'
+        );
+        
+        // Send confirmation message
+        const whatsappService = new WhatsAppService();
+        await whatsappService.sendTextMessage(
+          message.from,
+          `✅ Task created: "${taskName}"\n\nAdded to your General folder.`
+        );
+        
+        return; // Exit early, don't process as intent
+      } catch (error) {
+        const errorDetails = error instanceof Error 
+          ? {
+              message: error.message,
+              stack: error.stack,
+              name: error.name,
+            }
+          : error;
+        
+        logger.error(
+          {
+            error: errorDetails,
+            messageId: message.id,
+            senderPhone: message.from,
+            userId: whatsappNumber.userId,
+            taskName,
+            errorType: error?.constructor?.name,
+          },
+          'Failed to create task from WhatsApp message'
+        );
+        
+        // Try to send error message to user
+        try {
+          const whatsappService = new WhatsAppService();
+          await whatsappService.sendTextMessage(
+            message.from,
+            '❌ Sorry, I couldn\'t create that task. Please try again.'
+          );
+        } catch (sendError) {
+          logger.error(
+            { error: sendError, senderPhone: message.from },
+            'Failed to send error message for task creation'
+          );
+        }
+        
+        // Continue with normal processing if task creation fails
+      }
+    }
+  }
+
   // Handle "Hello" greeting (case-insensitive, with optional punctuation)
   const normalizedMessage = messageText.toLowerCase().trim();
+  // Remove common punctuation at the end (., !, ?, etc.)
   const cleanMessage = normalizedMessage.replace(/[.,!?;:]+$/, '').trim();
-
+  
   logger.info(
     {
       messageId: message.id,
@@ -102,31 +205,54 @@ export async function handleTextMessage(
     },
     'Checking for "Hello" greeting'
   );
-
+  
   if (cleanMessage === 'hello') {
     try {
-      const response = await sendWhatsAppTextMessage(message.from, 'Hi, Nice to meet you');
-
-      logger.info(
-        {
-          messageId: message.id,
-          senderPhone: message.from,
-          userId: whatsappNumber.userId,
-          responseMessageId: response.messages?.[0]?.id,
-        },
-        'Sent greeting response for "Hello" message'
-      );
-
-      return; // Exit early, don't process as intent
+      // Check WhatsApp configuration before attempting to send
+      const hasAccessToken = !!process.env.WHATSAPP_ACCESS_TOKEN;
+      const hasPhoneNumberId = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+      
+      if (!hasAccessToken || !hasPhoneNumberId) {
+        logger.error(
+          {
+            messageId: message.id,
+            senderPhone: message.from,
+            userId: whatsappNumber.userId,
+            hasAccessToken,
+            hasPhoneNumberId,
+            missingVars: {
+              WHATSAPP_ACCESS_TOKEN: !hasAccessToken,
+              WHATSAPP_PHONE_NUMBER_ID: !hasPhoneNumberId,
+            },
+          },
+          'WhatsApp environment variables missing - cannot send greeting response'
+        );
+        // Continue with normal processing if config is missing
+      } else {
+        const whatsappService = new WhatsAppService();
+        const response = await whatsappService.sendTextMessage(message.from, 'Hi, Nice to meet you');
+        
+        logger.info(
+          {
+            messageId: message.id,
+            senderPhone: message.from,
+            userId: whatsappNumber.userId,
+            responseMessageId: response.messages?.[0]?.id,
+          },
+          'Sent greeting response for "Hello" message'
+        );
+        
+        return; // Exit early, don't process as intent
+      }
     } catch (error) {
-      const errorDetails = error instanceof Error
+      const errorDetails = error instanceof Error 
         ? {
             message: error.message,
             stack: error.stack,
             name: error.name,
           }
         : error;
-
+      
       logger.error(
         {
           error: errorDetails,
@@ -237,49 +363,6 @@ export async function handleTextMessage(
       'Failed to create voice job from text message'
     );
   }
-}
-
-interface WhatsAppMessageResponsePayload {
-  messages?: Array<{ id: string }>;
-  [key: string]: unknown;
-}
-
-async function sendWhatsAppTextMessage(to: string, body: string): Promise<WhatsAppMessageResponsePayload> {
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const apiVersion = process.env.WHATSAPP_API_VERSION || 'v23.0';
-
-  if (!accessToken || !phoneNumberId) {
-    throw new Error('Missing WhatsApp credentials. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID.');
-  }
-
-  const sanitizedTo = to.replace(/\D/g, '');
-
-  const response = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: sanitizedTo,
-      type: 'text',
-      text: {
-        body,
-      },
-    }),
-  });
-
-  const payload = (await response.json().catch(() => ({}))) as WhatsAppMessageResponsePayload;
-
-  if (!response.ok) {
-    throw new Error(
-      `WhatsApp API error (${response.status}): ${JSON.stringify(payload)}`
-    );
-  }
-
-  return payload;
 }
 
 async function recordWebhookTiming(
