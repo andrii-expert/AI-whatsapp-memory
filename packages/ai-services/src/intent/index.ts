@@ -25,6 +25,7 @@ export {
   WhatsappTextAnalysisService,
   type WhatsappTextIntent,
 } from './whatsapp-text';
+export { WhatsappIntentRouterService } from './whatsapp-router';
 import { calendarIntentSchema } from './types';
 import type { CalendarIntent, IntentContext } from './types';
 

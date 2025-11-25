@@ -32,6 +32,7 @@ export {
   type EventPromptOptions,
   WhatsappTextAnalysisService,
   type WhatsappTextIntent,
+  WhatsappIntentRouterService,
 } from './intent';
 
 // Resolution Pipeline
