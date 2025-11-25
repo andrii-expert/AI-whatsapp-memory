@@ -293,11 +293,14 @@ export async function handleTextMessage(
     );
   }
 
-  if (routedIntents.length > 0) {
+  const keywordIntents = detectKeywordIntents(messageText);
+  const combinedIntents = dedupeIntents([...routedIntents, ...keywordIntents]);
+
+  if (combinedIntents.length > 0) {
     const analyzer = new WhatsappTextAnalysisService();
     const responses: string[] = [];
 
-    for (const intent of routedIntents) {
+    for (const intent of combinedIntents) {
       try {
         let structuredResponse: string | null = null;
         switch (intent) {
@@ -341,7 +344,7 @@ export async function handleTextMessage(
           {
             senderPhone: message.from,
             userId: whatsappNumber.userId,
-            intentTypes: routedIntents,
+            intentTypes: combinedIntents,
           },
           'Responded with structured WhatsApp text intent'
         );
@@ -372,6 +375,24 @@ export async function handleTextMessage(
       }
       return;
     }
+  }
+
+  // If no quick intent matched, acknowledge and exit to avoid silent failures
+  try {
+    const whatsappService = new WhatsAppService();
+    await whatsappService.sendTextMessage(
+      message.from,
+      "I'm sorry, I didn't understand. Could you rephrase?"
+    );
+  } catch (error) {
+    logger.error(
+      {
+        error,
+        senderPhone: message.from,
+        userId: whatsappNumber.userId,
+      },
+      'Failed to send fallback response when no intents detected'
+    );
   }
 
   const intentJobId = randomUUID();
@@ -461,6 +482,53 @@ export async function handleTextMessage(
 }
 
 type QuickIntent = 'task' | 'reminder' | 'note' | 'event';
+
+function dedupeIntents(intents: QuickIntent[]): QuickIntent[] {
+  const seen = new Set<QuickIntent>();
+  const ordered: QuickIntent[] = [];
+  for (const intent of intents) {
+    if (!seen.has(intent)) {
+      seen.add(intent);
+      ordered.push(intent);
+    }
+  }
+  return ordered;
+}
+
+const QUICK_INTENT_KEYWORDS: Record<QuickIntent, string[]> = {
+  task: ['task', 'tasks', 'todo', 'to-do', 'action item', 'follow up', 'follow-up'],
+  reminder: ['reminder', 'remind', 'alarm', 'ping me', 'alert me', 'remind me'],
+  note: ['note', 'notes', 'notebook', 'jot down', 'write this down', 'write a note'],
+  event: ['event', 'events', 'meeting', 'meet', 'calendar', 'schedule', 'appointment'],
+};
+
+function detectKeywordIntents(text: string): QuickIntent[] {
+  const normalized = text.toLowerCase();
+  const detected: QuickIntent[] = [];
+
+  if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.task)) {
+    detected.push('task');
+  }
+  if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.reminder)) {
+    detected.push('reminder');
+  }
+  if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.note)) {
+    detected.push('note');
+  }
+  if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.event)) {
+    detected.push('event');
+  }
+
+  return detected;
+}
+
+function containsKeyword(source: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => {
+    const escaped = keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+    return regex.test(source);
+  });
+}
 
 async function recordWebhookTiming(
   db: Database,
