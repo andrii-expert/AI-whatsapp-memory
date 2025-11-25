@@ -21,6 +21,7 @@ export {
   type NormalizedIntentSnapshot,
   type IntentPromptContext,
 } from './intent';
+export { buildWhatsappTaskPrompt, type TaskPromptOptions } from './intent';
 
 // Resolution Pipeline
 export { ResolutionPipeline, ContactResolver } from './resolvers';

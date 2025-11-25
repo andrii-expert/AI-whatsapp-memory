@@ -5,6 +5,7 @@ import { generateObject } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { logger } from '@imaginecalendar/logger';
 import { calendarIntentPrompt, type IntentPromptContext } from './prompts';
+export { buildWhatsappTaskPrompt, type TaskPromptOptions } from './task-prompts';
 import { calendarIntentSchema } from './types';
 import type { CalendarIntent, IntentContext } from './types';
 
