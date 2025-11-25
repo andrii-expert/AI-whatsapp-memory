@@ -6,7 +6,6 @@ import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
 
 const ANALYSIS_ORDER = ['task', 'reminder', 'note', 'event'] as const;
-const GLOBAL_FALLBACK = "I’m sorry, I couldn’t interpret that request. Could you rephrase with more detail?";
 
 type AnalysisIntent = (typeof ANALYSIS_ORDER)[number];
 
@@ -33,6 +32,56 @@ const INTENT_ANALYZERS: IntentAnalyzer[] = [
     handler: (svc, text) => svc.analyzeEvent(text),
   },
 ];
+
+function isErrorOrFallbackResponse(text: string): boolean {
+  const normalized = text.toLowerCase().trim();
+  return (
+    normalized.includes("i'm sorry") ||
+    normalized.includes("i didn't understand") ||
+    normalized.includes("couldn't interpret") ||
+    normalized.includes("could you rephrase") ||
+    normalized.includes("please rephrase") ||
+    normalized.length === 0
+  );
+}
+
+function isValidTemplateResponse(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed || isErrorOrFallbackResponse(trimmed)) {
+    return false;
+  }
+  
+  const templatePatterns = [
+    /^Create a task:/i,
+    /^Edit a task:/i,
+    /^Delete a task:/i,
+    /^Complete a task:/i,
+    /^Move a task:/i,
+    /^Share a task:/i,
+    /^Create a task folder:/i,
+    /^Edit a task folder:/i,
+    /^Delete a task folder:/i,
+    /^Share a task folder:/i,
+    /^Create a task sub-folder:/i,
+    /^Create a reminder:/i,
+    /^Update a reminder:/i,
+    /^Delete a reminder:/i,
+    /^Pause a reminder:/i,
+    /^Resume a reminder:/i,
+    /^Create a note:/i,
+    /^Update a note:/i,
+    /^Delete a note:/i,
+    /^Move a note:/i,
+    /^Share a note:/i,
+    /^Create a note folder:/i,
+    /^Create a note sub-folder:/i,
+    /^Edit a note folder:/i,
+    /^Delete a note folder:/i,
+    /^Share a note folder:/i,
+  ];
+  
+  return templatePatterns.some(pattern => pattern.test(trimmed));
+}
 
 export async function handleTextMessage(
   message: any,
@@ -99,22 +148,54 @@ export async function handleTextMessage(
         error,
         senderPhone: message.from,
         userId: whatsappNumber.userId,
+        messageText,
       },
       'Failed to send AI response for WhatsApp text'
     );
+    
+    try {
+      const whatsappService = new WhatsAppService();
+      await whatsappService.sendTextMessage(
+        message.from,
+        "I'm sorry, I encountered an error processing your message. Please try again."
+      );
+    } catch (sendError) {
+      logger.error({ error: sendError, senderPhone: message.from }, 'Failed to send error response');
+    }
   }
 }
 
 async function analyzeAndRespond(text: string, recipient: string, userId: string): Promise<void> {
   const analyzer = new WhatsappTextAnalysisService();
   const whatsappService = new WhatsAppService();
-  const responses: string[] = [];
+  const validResponses: string[] = [];
+  const allResponses: Record<string, string> = {};
 
   for (const item of INTENT_ANALYZERS) {
     try {
       const result = (await item.handler(analyzer, text)).trim();
-      if (result) {
-        responses.push(result);
+      allResponses[item.intent] = result;
+      
+      if (result && isValidTemplateResponse(result)) {
+        validResponses.push(result);
+        logger.info(
+          {
+            intent: item.intent,
+            responseLength: result.length,
+            userId,
+          },
+          'Got valid template response from AI'
+        );
+      } else {
+        logger.debug(
+          {
+            intent: item.intent,
+            response: result,
+            isError: isErrorOrFallbackResponse(result),
+            userId,
+          },
+          'AI response was empty or fallback'
+        );
       }
     } catch (error) {
       logger.error(
@@ -122,14 +203,45 @@ async function analyzeAndRespond(text: string, recipient: string, userId: string
           error,
           intent: item.intent,
           userId,
+          messageText: text,
         },
         'AI analysis failed for WhatsApp text'
       );
+      allResponses[item.intent] = `[ERROR: ${error instanceof Error ? error.message : String(error)}]`;
     }
   }
 
-  const reply = responses.length > 0 ? responses.join('\n\n') : GLOBAL_FALLBACK;
-  await whatsappService.sendTextMessage(recipient, reply);
+  if (validResponses.length > 0) {
+    const reply = validResponses.join('\n\n');
+    await whatsappService.sendTextMessage(recipient, reply);
+    const validIntents = Object.keys(allResponses).filter(k => {
+      const response = allResponses[k];
+      return response && isValidTemplateResponse(response);
+    });
+    
+    logger.info(
+      {
+        recipient,
+        userId,
+        responseCount: validResponses.length,
+        intents: validIntents,
+      },
+      'Sent valid AI responses to user'
+    );
+  } else {
+    logger.warn(
+      {
+        recipient,
+        userId,
+        allResponses,
+        messageText: text,
+      },
+      'No valid template responses from any AI analyzer'
+    );
+    
+    const fallbackMessage = "I'm sorry, I couldn't interpret that request. Could you rephrase with more detail?";
+    await whatsappService.sendTextMessage(recipient, fallbackMessage);
+  }
 }
 
 async function sendTypingIndicatorSafely(recipient: string, messageId: string | undefined): Promise<void> {
