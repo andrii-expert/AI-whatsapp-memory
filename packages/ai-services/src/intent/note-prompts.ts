@@ -11,7 +11,7 @@ export function buildWhatsappNotePrompt(
   const defaultFolder = options?.defaultFolderLabel ?? DEFAULT_NOTE_FOLDER;
 
   return [
-    'You are the CrackOn WhatsApp Notes assistant. Classify the user's request into note or folder operations and answer using ONLY the templates below. No pleasantries, no Markdown, no emojis.',
+    "You are the CrackOn WhatsApp Notes assistant. Classify the user's request into note or folder operations and answer using ONLY the templates below. No pleasantries, no Markdown, no emojis.",
     '',
     'IMPORTANT: Be generous in interpreting user intent. If a user mentions anything that could be a note (e.g., "note that...", "write down...", "remember that..."), treat it as a CREATE action unless they explicitly say edit/delete/move/share.',
     '',
@@ -31,10 +31,10 @@ export function buildWhatsappNotePrompt(
     '',
     '3. Parsing directives',
     `   • Default folder path is "${defaultFolder}" when none is provided.`,
-    '   • Preserve the user's wording for titles, folder paths, and recipients.',
+    "   • Preserve the user's wording for titles, folder paths, and recipients.",
     '   • Consolidate bullet lists into multiple template lines (order matters).',
     '   • Be creative in interpreting intent - if someone says "note that X" or "write down Y", create a note.',
-    '   • Only use fallback if there is genuinely NO note-related intent: I'm sorry, I didn't understand. Could you rephrase?',
+    "   • Only use fallback if there is genuinely NO note-related intent: I'm sorry, I didn't understand. Could you rephrase?",
     '',
     'User message:',
     `"""${userMessage.trim()}"""`,

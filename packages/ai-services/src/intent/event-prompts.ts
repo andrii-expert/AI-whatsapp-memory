@@ -33,7 +33,7 @@ export function buildWhatsappEventPrompt(
     '   • Normalise dates to YYYY-MM-DD and times to HH:MM (24h) when supplied.',
     '   • Convert multi-step requests into multiple template lines in the original order.',
     '   • Be creative in interpreting intent - if someone mentions a meeting, appointment, call, or any scheduled activity, create an event.',
-    '   • Only use fallback if there is genuinely NO event-related intent: I'm sorry, I didn't understand. Could you rephrase?',
+    "   • Only use fallback if there is genuinely NO event-related intent: I'm sorry, I didn't understand. Could you rephrase?",
     '',
     'User message:',
     `"""${userMessage.trim()}"""`,
