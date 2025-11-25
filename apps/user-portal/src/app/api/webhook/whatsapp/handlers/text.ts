@@ -2,36 +2,10 @@ import type { Database } from '@imaginecalendar/database/client';
 import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
-import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
+import { WhatsappTextAnalysisService, WhatsappIntentRouterService } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
 
-const ANALYSIS_ORDER = ['task', 'reminder', 'note', 'event'] as const;
-
-type AnalysisIntent = (typeof ANALYSIS_ORDER)[number];
-
-type IntentAnalyzer = {
-  intent: AnalysisIntent;
-  handler: (service: WhatsappTextAnalysisService, text: string) => Promise<string>;
-};
-
-const INTENT_ANALYZERS: IntentAnalyzer[] = [
-  {
-    intent: 'task',
-    handler: (svc, text) => svc.analyzeTask(text),
-  },
-  {
-    intent: 'reminder',
-    handler: (svc, text) => svc.analyzeReminder(text),
-  },
-  {
-    intent: 'note',
-    handler: (svc, text) => svc.analyzeNote(text),
-  },
-  {
-    intent: 'event',
-    handler: (svc, text) => svc.analyzeEvent(text),
-  },
-];
+type AnalysisIntent = 'task' | 'reminder' | 'note' | 'event';
 
 function isErrorOrFallbackResponse(text: string): boolean {
   const normalized = text.toLowerCase().trim();
@@ -166,81 +140,127 @@ export async function handleTextMessage(
 }
 
 async function analyzeAndRespond(text: string, recipient: string, userId: string): Promise<void> {
+  const router = new WhatsappIntentRouterService();
   const analyzer = new WhatsappTextAnalysisService();
   const whatsappService = new WhatsAppService();
-  const validResponses: string[] = [];
-  const allResponses: Record<string, string> = {};
 
-  for (const item of INTENT_ANALYZERS) {
-    try {
-      const result = (await item.handler(analyzer, text)).trim();
-      allResponses[item.intent] = result;
-      
-      if (result && isValidTemplateResponse(result)) {
-        validResponses.push(result);
-        logger.info(
-          {
-            intent: item.intent,
-            responseLength: result.length,
-            userId,
-          },
-          'Got valid template response from AI'
-        );
-      } else {
-        logger.debug(
-          {
-            intent: item.intent,
-            response: result,
-            isError: isErrorOrFallbackResponse(result),
-            userId,
-          },
-          'AI response was empty or fallback'
-        );
-      }
-    } catch (error) {
-      logger.error(
-        {
-          error,
-          intent: item.intent,
-          userId,
-          messageText: text,
-        },
-        'AI analysis failed for WhatsApp text'
-      );
-      allResponses[item.intent] = `[ERROR: ${error instanceof Error ? error.message : String(error)}]`;
-    }
-  }
+  // Step 1: Detect which intent(s) are present in the message
+  logger.debug({ textLength: text.length, userId }, 'Detecting intent with router');
+  const detectedIntents = await router.detectIntents(text);
+  const primaryIntent = router.getPrimaryIntent(detectedIntents);
 
-  if (validResponses.length > 0) {
-    const reply = validResponses.join('\n\n');
-    await whatsappService.sendTextMessage(recipient, reply);
-    const validIntents = Object.keys(allResponses).filter(k => {
-      const response = allResponses[k];
-      return response && isValidTemplateResponse(response);
-    });
-    
-    logger.info(
-      {
-        recipient,
-        userId,
-        responseCount: validResponses.length,
-        intents: validIntents,
-      },
-      'Sent valid AI responses to user'
-    );
-  } else {
+  logger.info(
+    {
+      detectedIntents,
+      primaryIntent,
+      userId,
+      messageText: text.substring(0, 100),
+    },
+    'Intent detection completed'
+  );
+
+  // Step 2: Only analyze with the primary intent (priority: task > note > reminder > event)
+  if (!primaryIntent) {
     logger.warn(
       {
         recipient,
         userId,
-        allResponses,
         messageText: text,
+        detectedIntents,
       },
-      'No valid template responses from any AI analyzer'
+      'No intent detected, sending fallback message'
     );
     
     const fallbackMessage = "I'm sorry, I couldn't interpret that request. Could you rephrase with more detail?";
     await whatsappService.sendTextMessage(recipient, fallbackMessage);
+    return;
+  }
+
+  // Step 3: Analyze only the primary intent
+  let response: string;
+  try {
+    logger.info(
+      {
+        intent: primaryIntent,
+        userId,
+        messageText: text.substring(0, 100),
+      },
+      `Analyzing message with ${primaryIntent} intent only`
+    );
+
+    switch (primaryIntent) {
+      case 'task':
+        response = (await analyzer.analyzeTask(text)).trim();
+        break;
+      case 'note':
+        response = (await analyzer.analyzeNote(text)).trim();
+        break;
+      case 'reminder':
+        response = (await analyzer.analyzeReminder(text)).trim();
+        break;
+      case 'event':
+        response = (await analyzer.analyzeEvent(text)).trim();
+        break;
+      default:
+        throw new Error(`Unknown intent: ${primaryIntent}`);
+    }
+
+    logger.debug(
+      {
+        intent: primaryIntent,
+        responseLength: response.length,
+        responsePreview: response.substring(0, 200),
+        userId,
+      },
+      'Got response from AI analyzer'
+    );
+
+    // Step 4: Validate and send response
+    if (response && isValidTemplateResponse(response)) {
+      await whatsappService.sendTextMessage(recipient, response);
+      logger.info(
+        {
+          recipient,
+          userId,
+          intent: primaryIntent,
+          responseLength: response.length,
+        },
+        'Sent valid AI response to user'
+      );
+    } else {
+      logger.warn(
+        {
+          recipient,
+          userId,
+          intent: primaryIntent,
+          response,
+          isError: isErrorOrFallbackResponse(response),
+        },
+        'AI response was invalid or fallback'
+      );
+      
+      const fallbackMessage = "I'm sorry, I couldn't interpret that request. Could you rephrase with more detail?";
+      await whatsappService.sendTextMessage(recipient, fallbackMessage);
+    }
+  } catch (error) {
+    logger.error(
+      {
+        error,
+        intent: primaryIntent,
+        userId,
+        messageText: text,
+      },
+      'AI analysis failed for WhatsApp text'
+    );
+    
+    try {
+      await whatsappService.sendTextMessage(
+        recipient,
+        "I'm sorry, I encountered an error processing your message. Please try again."
+      );
+    } catch (sendError) {
+      logger.error({ error: sendError, senderPhone: recipient }, 'Failed to send error response');
+    }
   }
 }
 
