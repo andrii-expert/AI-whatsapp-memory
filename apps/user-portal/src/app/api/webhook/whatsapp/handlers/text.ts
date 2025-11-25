@@ -13,12 +13,11 @@ import {
 } from '@imaginecalendar/database/queries';
 import { getQueue, QUEUE_NAMES } from '@/lib/queues';
 import { logger } from '@imaginecalendar/logger';
-import { WhatsAppService } from '@imaginecalendar/whatsapp';
+import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
+import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
 import { processTextClarification } from '../clarifications';
 import { VOICE_STAGE_SEQUENCE } from '@imaginecalendar/database/constants/voice-timing';
-
-const verificationCodePattern = /\b\d{6}\b/;
 
 export async function handleTextMessage(
   message: any,
@@ -31,7 +30,7 @@ export async function handleTextMessage(
     return;
   }
 
-  if (verificationCodePattern.test(messageText)) {
+  if (matchesVerificationPhrase(messageText)) {
     logger.info(
       {
         messageId: message.id,
@@ -279,6 +278,54 @@ export async function handleTextMessage(
     return;
   }
 
+  const quickIntent = detectWhatsappTextIntent(messageText);
+  if (quickIntent) {
+    const analyzer = new WhatsappTextAnalysisService();
+    try {
+      let structuredResponse: string | null = null;
+      switch (quickIntent) {
+        case 'task':
+          structuredResponse = await analyzer.analyzeTask(messageText);
+          break;
+        case 'reminder':
+          structuredResponse = await analyzer.analyzeReminder(messageText);
+          break;
+        case 'note':
+          structuredResponse = await analyzer.analyzeNote(messageText);
+          break;
+        case 'event':
+          structuredResponse = await analyzer.analyzeEvent(messageText);
+          break;
+        default:
+          structuredResponse = null;
+      }
+
+      if (structuredResponse) {
+        const whatsappService = new WhatsAppService();
+        await whatsappService.sendTextMessage(message.from, structuredResponse);
+        logger.info(
+          {
+            senderPhone: message.from,
+            userId: whatsappNumber.userId,
+            intentType: quickIntent,
+          },
+          'Responded with structured WhatsApp text intent'
+        );
+        return;
+      }
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          senderPhone: message.from,
+          userId: whatsappNumber.userId,
+          quickIntent,
+        },
+        'Failed to analyze quick WhatsApp text intent'
+      );
+    }
+  }
+
   const intentJobId = randomUUID();
 
   try {
@@ -363,6 +410,42 @@ export async function handleTextMessage(
       'Failed to create voice job from text message'
     );
   }
+}
+
+type QuickIntent = 'task' | 'reminder' | 'note' | 'event';
+
+const QUICK_INTENT_KEYWORDS: Record<QuickIntent, string[]> = {
+  task: ['task', 'tasks', 'todo', 'to-do', 'action item', 'follow up'],
+  reminder: ['reminder', 'remind', 'alarm', 'ping me', 'alert me'],
+  note: ['note', 'notes', 'notebook', 'jot down', 'write this down'],
+  event: ['event', 'events', 'meeting', 'meet', 'calendar', 'schedule', 'appointment'],
+};
+
+function detectWhatsappTextIntent(text: string): QuickIntent | null {
+  const normalized = text.toLowerCase();
+
+  if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.task)) {
+    return 'task';
+  }
+  if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.reminder)) {
+    return 'reminder';
+  }
+  if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.note)) {
+    return 'note';
+  }
+  if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.event)) {
+    return 'event';
+  }
+
+  return null;
+}
+
+function containsKeyword(source: string, keywords: string[]): boolean {
+  return keywords.some((keyword) => {
+    const escaped = keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+    return regex.test(source);
+  });
 }
 
 async function recordWebhookTiming(

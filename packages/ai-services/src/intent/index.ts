@@ -5,7 +5,26 @@ import { generateObject } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { logger } from '@imaginecalendar/logger';
 import { calendarIntentPrompt, type IntentPromptContext } from './prompts';
-export { buildWhatsappTaskPrompt, type TaskPromptOptions } from './task-prompts';
+export {
+  buildWhatsappTaskPrompt,
+  type TaskPromptOptions,
+} from './task-prompts';
+export {
+  buildWhatsappReminderPrompt,
+  type ReminderPromptOptions,
+} from './reminder-prompts';
+export {
+  buildWhatsappNotePrompt,
+  type NotePromptOptions,
+} from './note-prompts';
+export {
+  buildWhatsappEventPrompt,
+  type EventPromptOptions,
+} from './event-prompts';
+export {
+  WhatsappTextAnalysisService,
+  type WhatsappTextIntent,
+} from './whatsapp-text';
 import { calendarIntentSchema } from './types';
 import type { CalendarIntent, IntentContext } from './types';
 

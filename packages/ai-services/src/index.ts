@@ -21,7 +21,18 @@ export {
   type NormalizedIntentSnapshot,
   type IntentPromptContext,
 } from './intent';
-export { buildWhatsappTaskPrompt, type TaskPromptOptions } from './intent';
+export {
+  buildWhatsappTaskPrompt,
+  type TaskPromptOptions,
+  buildWhatsappReminderPrompt,
+  type ReminderPromptOptions,
+  buildWhatsappNotePrompt,
+  type NotePromptOptions,
+  buildWhatsappEventPrompt,
+  type EventPromptOptions,
+  WhatsappTextAnalysisService,
+  type WhatsappTextIntent,
+} from './intent';
 
 // Resolution Pipeline
 export { ResolutionPipeline, ContactResolver } from './resolvers';
