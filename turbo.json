@@ -17,6 +17,9 @@
         "build/**",
         "lib/**"
       ],
+      "env": [
+        "NODE_OPTIONS"
+      ],
       "passThroughEnv": [
         "DATABASE_URL",
         "DATABASE_POOL_MAX",

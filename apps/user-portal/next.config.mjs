@@ -4,7 +4,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 const config = {
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ["@imaginecalendar/ui"],
+  transpilePackages: ["@imaginecalendar/ui", "@imaginecalendar/ai-services"],
   eslint: {
     ignoreDuringBuilds: true,
   },
