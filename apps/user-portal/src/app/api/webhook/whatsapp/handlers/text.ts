@@ -8,12 +8,14 @@ import {
   recordVoiceJobTiming,
   logIncomingWhatsAppMessage,
   getUserFolders,
-  createFolder,
-  createTask,
+  getUserTasks,
 } from '@imaginecalendar/database/queries';
 import { getQueue, QUEUE_NAMES } from '@/lib/queues';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
+import { isVerificationMessage } from '@imaginecalendar/whatsapp';
+import { TaskIntentAnalysisService } from '@imaginecalendar/ai-services';
+import { processTaskIntent } from '../processors/task-processor';
 import type { WebhookProcessingSummary } from '../types';
 import { processTextClarification } from '../clarifications';
 import { VOICE_STAGE_SEQUENCE } from '@imaginecalendar/database/constants/voice-timing';
@@ -31,7 +33,8 @@ export async function handleTextMessage(
     return;
   }
 
-  if (verificationCodePattern.test(messageText)) {
+  // Check if this is a verification message (full format or just code)
+  if (isVerificationMessage(messageText) || verificationCodePattern.test(messageText)) {
     logger.info(
       {
         messageId: message.id,
@@ -90,183 +93,40 @@ export async function handleTextMessage(
     }
   }
 
-  // Handle "Create a task: [task name]" pattern
-  const createTaskMatch = messageText.match(/^create\s+a\s+task\s*:\s*(.+)$/i);
-  if (createTaskMatch) {
-    const taskName = createTaskMatch[1].trim();
-    
-    if (taskName) {
-      try {
-        // Get or create "General" folder
-        const folders = await getUserFolders(db, whatsappNumber.userId);
-        let generalFolder = folders.find(f => f.name.toLowerCase() === 'general');
-        
-        if (!generalFolder) {
-          // Create General folder if it doesn't exist
-          logger.info(
-            {
-              userId: whatsappNumber.userId,
-              senderPhone: message.from,
-            },
-            'Creating "General" folder for task creation'
-          );
-          generalFolder = await createFolder(db, {
-            userId: whatsappNumber.userId,
-            name: 'General',
-            color: '#3B82F6', // Blue color
-            icon: 'folder',
-          });
-        }
-        
-        // Create the task
-        const task = await createTask(db, {
-          userId: whatsappNumber.userId,
-          folderId: generalFolder.id,
-          title: taskName,
-          status: 'open',
-        });
-        
-        if (!task) {
-          throw new Error('Failed to create task - no task returned');
-        }
-        
-        logger.info(
-          {
-            taskId: task.id,
-            taskName,
-            folderId: generalFolder.id,
-            userId: whatsappNumber.userId,
-            senderPhone: message.from,
-          },
-          'Task created via WhatsApp message'
-        );
-        
-        // Send confirmation message
-        const whatsappService = new WhatsAppService();
-        await whatsappService.sendTextMessage(
-          message.from,
-          `✅ Task created: "${taskName}"\n\nAdded to your General folder.`
-        );
-        
-        return; // Exit early, don't process as intent
-      } catch (error) {
-        const errorDetails = error instanceof Error 
-          ? {
-              message: error.message,
-              stack: error.stack,
-              name: error.name,
-            }
-          : error;
-        
-        logger.error(
-          {
-            error: errorDetails,
-            messageId: message.id,
-            senderPhone: message.from,
-            userId: whatsappNumber.userId,
-            taskName,
-            errorType: error?.constructor?.name,
-          },
-          'Failed to create task from WhatsApp message'
-        );
-        
-        // Try to send error message to user
-        try {
-          const whatsappService = new WhatsAppService();
-          await whatsappService.sendTextMessage(
-            message.from,
-            '❌ Sorry, I couldn\'t create that task. Please try again.'
-          );
-        } catch (sendError) {
-          logger.error(
-            { error: sendError, senderPhone: message.from },
-            'Failed to send error message for task creation'
-          );
-        }
-        
-        // Continue with normal processing if task creation fails
-      }
-    }
-  }
-
-  // Handle "Hello" greeting (case-insensitive, with optional punctuation)
+  // Handle "Hello" greeting
   const normalizedMessage = messageText.toLowerCase().trim();
-  // Remove common punctuation at the end (., !, ?, etc.)
   const cleanMessage = normalizedMessage.replace(/[.,!?;:]+$/, '').trim();
   
-  logger.info(
-    {
-      messageId: message.id,
-      senderPhone: message.from,
-      originalMessage: messageText,
-      normalizedMessage,
-      cleanMessage,
-      isHello: cleanMessage === 'hello',
-    },
-    'Checking for "Hello" greeting'
-  );
-  
-  if (cleanMessage === 'hello') {
+  if (cleanMessage === 'hello' || cleanMessage === 'hi' || cleanMessage === 'hey') {
     try {
-      // Check WhatsApp configuration before attempting to send
-      const hasAccessToken = !!process.env.WHATSAPP_ACCESS_TOKEN;
-      const hasPhoneNumberId = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+      const whatsappService = new WhatsAppService();
+      const response = await whatsappService.sendTextMessage(message.from, 'Hi! 👋 How can I help you today?');
       
-      if (!hasAccessToken || !hasPhoneNumberId) {
-        logger.error(
-          {
-            messageId: message.id,
-            senderPhone: message.from,
-            userId: whatsappNumber.userId,
-            hasAccessToken,
-            hasPhoneNumberId,
-            missingVars: {
-              WHATSAPP_ACCESS_TOKEN: !hasAccessToken,
-              WHATSAPP_PHONE_NUMBER_ID: !hasPhoneNumberId,
-            },
-          },
-          'WhatsApp environment variables missing - cannot send greeting response'
-        );
-        // Continue with normal processing if config is missing
-      } else {
-        const whatsappService = new WhatsAppService();
-        const response = await whatsappService.sendTextMessage(message.from, 'Hi, Nice to meet you');
-        
-        logger.info(
-          {
-            messageId: message.id,
-            senderPhone: message.from,
-            userId: whatsappNumber.userId,
-            responseMessageId: response.messages?.[0]?.id,
-          },
-          'Sent greeting response for "Hello" message'
-        );
-        
-        return; // Exit early, don't process as intent
-      }
-    } catch (error) {
-      const errorDetails = error instanceof Error 
-        ? {
-            message: error.message,
-            stack: error.stack,
-            name: error.name,
-          }
-        : error;
-      
-      logger.error(
+      logger.info(
         {
-          error: errorDetails,
           messageId: message.id,
           senderPhone: message.from,
           userId: whatsappNumber.userId,
-          errorType: error?.constructor?.name,
+          responseMessageId: response.messages?.[0]?.id,
         },
-        'Failed to send greeting response for "Hello" message'
+        'Sent greeting response'
+      );
+      
+      return; // Exit early, don't process as intent
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          messageId: message.id,
+          senderPhone: message.from,
+        },
+        'Failed to send greeting response'
       );
       // Continue with normal processing if greeting fails
     }
   }
 
+  // Check for pending clarifications first
   const clarificationHandled = await processTextClarification({
     db,
     message,
@@ -279,6 +139,113 @@ export async function handleTextMessage(
     return;
   }
 
+  // Analyze intent using task intent service
+  try {
+    // Get user context for intent analysis
+    const [folders, tasks] = await Promise.all([
+      getUserFolders(db, whatsappNumber.userId).catch(() => []),
+      getUserTasks(db, whatsappNumber.userId, { status: 'open' }).catch(() => []),
+    ]);
+
+    const taskIntentService = new TaskIntentAnalysisService();
+    const intent = await taskIntentService.analyzeTaskIntent(messageText, {
+      timezone: 'Africa/Johannesburg',
+      currentTime: new Date(),
+      userFolders: folders.map(f => ({
+        name: f.name,
+        id: f.id,
+        parentId: f.parentId,
+      })),
+      recentTasks: tasks.slice(0, 10).map(t => ({
+        title: t.title,
+        folderName: t.folder?.name || null,
+        status: t.status,
+      })),
+    });
+
+    logger.info(
+      {
+        messageId: message.id,
+        intentType: intent.intentType,
+        action: intent.action,
+        confidence: intent.confidence,
+        userId: whatsappNumber.userId,
+      },
+      'Task intent analyzed'
+    );
+
+    // Handle based on intent type
+    if (intent.intentType === 'task' && intent.confidence >= 0.5) {
+      // Process task intent
+      const result = await processTaskIntent(
+        intent,
+        db,
+        whatsappNumber.userId,
+        whatsappNumber.id,
+        message.from
+      );
+
+      if (result.success) {
+        logger.info(
+          {
+            messageId: message.id,
+            action: intent.action,
+            userId: whatsappNumber.userId,
+          },
+          'Task intent processed successfully'
+        );
+        return; // Exit early, task handled
+      } else {
+        // If task processing failed, send error message
+        const whatsappService = new WhatsAppService();
+        await whatsappService.sendTextMessage(message.from, result.message || 'Sorry, I couldn\'t process that request.');
+        return;
+      }
+    } else if (intent.intentType === 'calendar' || intent.intentType === 'reminder' || intent.intentType === 'note') {
+      // Route to calendar intent pipeline (existing system)
+      await routeToCalendarIntent(message, messageText, db, whatsappNumber, summary);
+      return;
+    } else if (intent.intentType === 'unknown' || intent.confidence < 0.5) {
+      // Return user message or route to calendar intent as fallback
+      logger.info(
+        {
+          messageId: message.id,
+          intentType: intent.intentType,
+          confidence: intent.confidence,
+        },
+        'Intent unclear, routing to calendar intent as fallback'
+      );
+      await routeToCalendarIntent(message, messageText, db, whatsappNumber, summary);
+      return;
+    } else {
+      // Unknown intent type, route to calendar intent
+      await routeToCalendarIntent(message, messageText, db, whatsappNumber, summary);
+      return;
+    }
+  } catch (error) {
+    logger.error(
+      {
+        error,
+        messageId: message.id,
+        senderPhone: message.from,
+        userId: whatsappNumber.userId,
+      },
+      'Error analyzing task intent, falling back to calendar intent'
+    );
+    
+    // Fallback to calendar intent processing
+    await routeToCalendarIntent(message, messageText, db, whatsappNumber, summary);
+  }
+}
+
+async function routeToCalendarIntent(
+  message: any,
+  messageText: string,
+  db: Database,
+  whatsappNumber: { id: string; userId: string },
+  summary: WebhookProcessingSummary
+): Promise<void> {
+  // Create voice job for calendar intent processing (existing system)
   const intentJobId = randomUUID();
 
   try {
@@ -336,10 +303,9 @@ export async function handleTextMessage(
           intentJobId,
           userId: whatsappNumber.userId,
           senderPhone: message.from,
-          timezone: 'GMT+2',
           textLength: messageText.length,
         },
-        'Enqueued text intent for processing'
+        'Enqueued text intent for calendar processing'
       );
     } catch (queueError) {
       logger.error(

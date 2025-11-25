@@ -3,11 +3,37 @@ import type { WhatsAppWebhookPayload, WhatsAppParsedMessage } from '../schemas/w
 /**
  * Extract verification code from message text
  * Looks for 6-digit numbers in the message
+ * Also handles full verification message format:
+ * "Hello! I'd like to connect my WhatsApp to CrackOn for voice‑based calendar management. My verification code is: 169753"
  */
 export function extractVerificationCode(messageText: string): string | null {
-  // Look for 6-digit numbers in the message
+  // First, try to match the full verification message format
+  const fullFormatMatch = messageText.match(/verification\s+code\s+is\s*:\s*(\d{6})/i);
+  if (fullFormatMatch) {
+    return fullFormatMatch[1];
+  }
+  
+  // Also look for 6-digit numbers in the message (fallback)
   const codeMatch = messageText.match(/\b\d{6}\b/);
   return codeMatch ? codeMatch[0] : null;
+}
+
+/**
+ * Check if message is a verification message
+ * Detects the full verification message format
+ */
+export function isVerificationMessage(messageText: string): boolean {
+  const normalized = messageText.toLowerCase();
+  // Check for verification message keywords
+  const hasVerificationKeywords = 
+    normalized.includes('verification code') ||
+    normalized.includes('connect my whatsapp') ||
+    normalized.includes('crackon');
+  
+  // Check for 6-digit code
+  const hasCode = /\b\d{6}\b/.test(messageText);
+  
+  return hasVerificationKeywords && hasCode;
 }
 
 /**
