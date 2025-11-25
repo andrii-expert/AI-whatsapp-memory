@@ -278,36 +278,56 @@ export async function handleTextMessage(
     return;
   }
 
-  const quickIntent = detectWhatsappTextIntent(messageText);
-  if (quickIntent) {
+  const quickIntents = detectWhatsappTextIntents(messageText);
+  if (quickIntents.length > 0) {
     const analyzer = new WhatsappTextAnalysisService();
     try {
-      let structuredResponse: string | null = null;
-      switch (quickIntent) {
-        case 'task':
-          structuredResponse = await analyzer.analyzeTask(messageText);
-          break;
-        case 'reminder':
-          structuredResponse = await analyzer.analyzeReminder(messageText);
-          break;
-        case 'note':
-          structuredResponse = await analyzer.analyzeNote(messageText);
-          break;
-        case 'event':
-          structuredResponse = await analyzer.analyzeEvent(messageText);
-          break;
-        default:
-          structuredResponse = null;
+      const responses: string[] = [];
+
+      for (const intent of quickIntents) {
+        try {
+          let structuredResponse: string | null = null;
+          switch (intent) {
+            case 'task':
+              structuredResponse = await analyzer.analyzeTask(messageText);
+              break;
+            case 'reminder':
+              structuredResponse = await analyzer.analyzeReminder(messageText);
+              break;
+            case 'note':
+              structuredResponse = await analyzer.analyzeNote(messageText);
+              break;
+            case 'event':
+              structuredResponse = await analyzer.analyzeEvent(messageText);
+              break;
+            default:
+              structuredResponse = null;
+          }
+
+          if (structuredResponse) {
+            responses.push(structuredResponse);
+          }
+        } catch (intentError) {
+          logger.error(
+            {
+              error: intentError,
+              senderPhone: message.from,
+              userId: whatsappNumber.userId,
+              quickIntent: intent,
+            },
+            'Failed to analyze structured WhatsApp text intent'
+          );
+        }
       }
 
-      if (structuredResponse) {
+      if (responses.length > 0) {
         const whatsappService = new WhatsAppService();
-        await whatsappService.sendTextMessage(message.from, structuredResponse);
+        await whatsappService.sendTextMessage(message.from, responses.join('\n\n'));
         logger.info(
           {
             senderPhone: message.from,
             userId: whatsappNumber.userId,
-            intentType: quickIntent,
+            intentTypes: quickIntents,
           },
           'Responded with structured WhatsApp text intent'
         );
@@ -319,7 +339,7 @@ export async function handleTextMessage(
           error,
           senderPhone: message.from,
           userId: whatsappNumber.userId,
-          quickIntent,
+          quickIntents,
         },
         'Failed to analyze quick WhatsApp text intent'
       );
@@ -421,23 +441,24 @@ const QUICK_INTENT_KEYWORDS: Record<QuickIntent, string[]> = {
   event: ['event', 'events', 'meeting', 'meet', 'calendar', 'schedule', 'appointment'],
 };
 
-function detectWhatsappTextIntent(text: string): QuickIntent | null {
+function detectWhatsappTextIntents(text: string): QuickIntent[] {
   const normalized = text.toLowerCase();
+  const detected: QuickIntent[] = [];
 
   if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.task)) {
-    return 'task';
+    detected.push('task');
   }
   if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.reminder)) {
-    return 'reminder';
+    detected.push('reminder');
   }
   if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.note)) {
-    return 'note';
+    detected.push('note');
   }
   if (containsKeyword(normalized, QUICK_INTENT_KEYWORDS.event)) {
-    return 'event';
+    detected.push('event');
   }
 
-  return null;
+  return detected;
 }
 
 function containsKeyword(source: string, keywords: string[]): boolean {
