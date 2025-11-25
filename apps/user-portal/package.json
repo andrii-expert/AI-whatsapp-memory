@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "(cd ../.. && cp .env apps/user-portal/.env.local) && NODE_OPTIONS=--max-old-space-size=4096 NODE_ENV=production next build",
+    "build": "(cd ../.. && cp .env apps/user-portal/.env.local) && NODE_ENV=production next build",
     "clean": "git clean -xdf .next .turbo node_modules",
     "dev": "(cd ../.. && cp .env apps/user-portal/.env.local) && next dev -p 3000",
     "lint": "biome check .",
@@ -17,7 +17,6 @@
   "dependencies": {
     "@clerk/nextjs": "^6.31.6",
     "@hookform/resolvers": "^5.1.1",
-    "@imaginecalendar/ai-services": "workspace:*",
     "@imaginecalendar/api": "workspace:*",
     "@imaginecalendar/calendar-integrations": "workspace:*",
     "@imaginecalendar/database": "workspace:*",

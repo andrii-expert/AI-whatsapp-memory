@@ -22,11 +22,6 @@ export {
   type IntentPromptContext,
 } from './intent';
 
-// Task Intent Analysis
-export { TaskIntentAnalysisService } from './intent/task-service';
-export type { TaskIntent, IntentType, TaskAction, TaskIntentPromptContext } from './intent/task-types';
-export { taskIntentSchema, intentTypeEnum, taskActionEnum } from './intent/task-types';
-
 // Resolution Pipeline
 export { ResolutionPipeline, ContactResolver } from './resolvers';
 export type {

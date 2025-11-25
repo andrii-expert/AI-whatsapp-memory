@@ -6,7 +6,7 @@ import {
 } from '@imaginecalendar/database/queries';
 import type { WhatsAppParsedMessage } from '@imaginecalendar/whatsapp';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
-import { extractVerificationCode, isVerificationMessage } from '@imaginecalendar/whatsapp';
+import { extractVerificationCode } from '@imaginecalendar/whatsapp';
 import { metrics } from '@/lib/metrics';
 import { logger } from '@imaginecalendar/logger';
 import type { WebhookProcessingSummary } from './types';
@@ -17,11 +17,6 @@ export async function handleVerificationMessage(
   summary: WebhookProcessingSummary
 ): Promise<boolean> {
   const { phoneNumber, messageText, contactName, messageId } = parsedMessage;
-
-  // Check if this is a verification message format
-  if (!isVerificationMessage(messageText)) {
-    return false;
-  }
 
   const verificationCode = extractVerificationCode(messageText);
 
