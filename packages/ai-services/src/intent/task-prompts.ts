@@ -106,4 +106,4 @@ ${recentTasksSection}
    - For folder operations, folder names are REQUIRED
 
 Return only the JSON object that matches the taskIntentSchema.`;
-
+}
