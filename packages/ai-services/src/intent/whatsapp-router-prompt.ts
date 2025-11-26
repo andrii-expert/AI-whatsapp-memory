@@ -13,7 +13,7 @@ export function buildWhatsappIntentRouterPrompt(userMessage: string): string {
     .join('\n');
 
   return [
-    'You are CrackOn's WhatsApp intent router.',
+    'You are CrackOn\'s WhatsApp intent router.',
     'Determine which of the supported intent categories the user message belongs to.',
     '',
     'Supported categories:',
