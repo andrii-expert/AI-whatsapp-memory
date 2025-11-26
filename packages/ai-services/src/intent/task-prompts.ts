@@ -16,7 +16,7 @@ export interface TaskPromptOptions {
       DEFAULT_VERIFICATION_CODE,
       verificationCode
     );
-    const defaultFolder = options?.defaultFolderLabel ?? "default";
+    const defaultFolder = options?.defaultFolderLabel ?? "General";
   
     return [
       "You are the CrackOn WhatsApp Task Assistant.",
@@ -25,10 +25,10 @@ export interface TaskPromptOptions {
       "  • One or more supported task or folder operations.",
       "",
       "CRITICAL EXAMPLES (always follow this pattern):",
-      '  • "make a task - buy milk" → Create a task: Buy milk - on folder: default',
-      '  • "task: buy milk" → Create a task: Buy milk - on folder: default',
-      '  • "create a task: contact john" → Create a task: Contact John - on folder: default',
-      '  • "add task: pick up chlorine" → Create a task: Pick up chlorine - on folder: default',
+      '  • "make a task - buy milk" → Create a task: Buy milk - on folder: General',
+      '  • "task: buy milk" → Create a task: Buy milk - on folder: General',
+      '  • "create a task: contact john" → Create a task: Contact John - on folder: General',
+      '  • "add task: pick up chlorine" → Create a task: Pick up chlorine - on folder: General',
       '  • "share my task Home folder with my partner" → Share a task folder: Home - with: my partner',
       '  • "share the Work folder with John" → Share a task folder: Work - with: John',
       '  • "share task folder Home with partner" → Share a task folder: Home - with: partner',
@@ -158,9 +158,9 @@ export interface TaskPromptOptions {
       `       - Do NOT fallback. Instead, default to: folder: ${defaultFolder}`,
       "",
       "   • For ambiguous requests, try to infer the most likely intent:",
-      "       - 'buy milk' → Create a task: Buy milk - on folder: default",
-      "       - 'remember to call john' → Create a task: Call John - on folder: default",
-      "       - 'I need to finish the report' → Create a task: Finish the report - on folder: default",
+      "       - 'buy milk' → Create a task: Buy milk - on folder: General",
+      "       - 'remember to call john' → Create a task: Call John - on folder: General",
+      "       - 'I need to finish the report' → Create a task: Finish the report - on folder: General",
       "",
       "   • Generic fallback template (ONLY when absolutely no task intent can be inferred):",
       "       I'm sorry, I didn't understand the task action. Could you rephrase with the task or folder details?",
