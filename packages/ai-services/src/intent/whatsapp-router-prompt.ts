@@ -1,7 +1,7 @@
 import type { WhatsappTextIntent } from './whatsapp-text';
 
 const intentDescriptions: Record<WhatsappTextIntent, string> = {
-  task: 'Task management requests such as creating, editing, completing, moving, sharing, or deleting tasks/folders.',
+  task: 'Task management requests including: creating tasks/folders, editing tasks/folders, completing tasks, moving tasks, SHARING tasks or folders (e.g., "share task X with Y", "share folder Z with Y"), deleting tasks/folders. ANY mention of sharing a task or folder is a TASK intent.',
   reminder: 'Reminder or alarm style requests such as creating, updating, pausing, resuming, or deleting reminders/alerts.',
   note: 'Notes workspace requests such as creating, editing, moving, sharing, or deleting notes/note folders.',
   event: 'Calendar or meeting scheduling such as creating, updating, moving, cancelling events or referencing calendars.',
@@ -13,16 +13,25 @@ export function buildWhatsappIntentRouterPrompt(userMessage: string): string {
     .join('\n');
 
   return [
-    'You are CrackOn’s WhatsApp intent router.',
+    'You are CrackOn's WhatsApp intent router.',
     'Determine which of the supported intent categories the user message belongs to.',
     '',
     'Supported categories:',
     intentList,
     '',
+    'CRITICAL: Sharing Recognition',
+    '• If the user mentions SHARING a task or folder (e.g., "share task X", "share folder Y", "send task to", "give access to folder"), this is ALWAYS a TASK intent.',
+    '• Examples that are TASK intent:',
+    '  - "Share the Task Buy milk with Sarah" → task',
+    '  - "Share my Home folder with my partner" → task',
+    '  - "Send the task Contact John to Michael" → task',
+    '  - "Give Tom access to the Projects folder" → task',
+    '',
     'Rules:',
     '1. Return intents ONLY when the user clearly requests that type of action.',
     '2. Multiple categories are allowed if the user mentions several things (e.g., a task and a reminder).',
     '3. If nothing matches, return an empty list.',
+    '4. SHARING tasks or folders = TASK intent (always).',
     '',
     'Respond strictly as JSON using this schema:',
     '{ "intents": ["task" | "reminder" | "note" | "event"] }',
