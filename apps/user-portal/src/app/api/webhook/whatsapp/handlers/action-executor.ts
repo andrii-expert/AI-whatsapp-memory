@@ -14,6 +14,9 @@ import {
   createTaskShare,
   searchUsersForSharing,
   getUserById,
+  getUserByEmail,
+  getUserByPhone,
+  normalizePhoneNumber,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -356,10 +359,27 @@ export class ActionExecutor {
 
     const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
     if (!sharedWithUserId) {
-      return {
-        success: false,
-        message: `I couldn't find a user named "${parsed.recipient}". Please make sure you've spelled the name correctly or they have an account.`,
-      };
+      // Check if recipient looks like email or phone
+      const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
+      const hasDigits = /\d/.test(parsed.recipient);
+      const isPhone = hasDigits && (parsed.recipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(parsed.recipient.replace(/\+/g, '')));
+      
+      if (isEmail) {
+        return {
+          success: false,
+          message: `I couldn't find a user with the email address "${parsed.recipient}". Please check the email address and make sure the person has a CrackOn account.`,
+        };
+      } else if (isPhone) {
+        return {
+          success: false,
+          message: `I couldn't find a user with the phone number "${parsed.recipient}". Please check the phone number and make sure the person has a CrackOn account.`,
+        };
+      } else {
+        return {
+          success: false,
+          message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+        };
+      }
     }
 
     try {
@@ -420,10 +440,27 @@ export class ActionExecutor {
 
     const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
     if (!sharedWithUserId) {
-      return {
-        success: false,
-        message: `I couldn't find a user named "${parsed.recipient}". Please make sure you've spelled the name correctly or they have an account.`,
-      };
+      // Check if recipient looks like email or phone
+      const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
+      const hasDigits = /\d/.test(parsed.recipient);
+      const isPhone = hasDigits && (parsed.recipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(parsed.recipient.replace(/\+/g, '')));
+      
+      if (isEmail) {
+        return {
+          success: false,
+          message: `I couldn't find a user with the email address "${parsed.recipient}". Please check the email address and make sure the person has a CrackOn account.`,
+        };
+      } else if (isPhone) {
+        return {
+          success: false,
+          message: `I couldn't find a user with the phone number "${parsed.recipient}". Please check the phone number and make sure the person has a CrackOn account.`,
+        };
+      } else {
+        return {
+          success: false,
+          message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+        };
+      }
     }
 
     try {
@@ -760,14 +797,61 @@ export class ActionExecutor {
   }
 
   /**
-   * Resolve recipient name to user ID
+   * Resolve recipient email or phone number to user ID
+   * Returns null if user not found (caller should ask for correct email/phone)
    */
   private async resolveRecipient(recipient: string): Promise<string | null> {
-    // Try to find user by searching
-    const users = await searchUsersForSharing(this.db, this.userId, recipient);
-    if (users.length > 0) {
-      return users[0].id;
+    const trimmedRecipient = recipient.trim();
+    
+    // Check if recipient looks like an email address
+    const isEmail = trimmedRecipient.includes('@') && trimmedRecipient.includes('.');
+    
+    // Check if recipient looks like a phone number (contains digits)
+    const hasDigits = /\d/.test(trimmedRecipient);
+    const isPhone = hasDigits && (trimmedRecipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(trimmedRecipient.replace(/\+/g, '')));
+    
+    // Try to find user by email
+    if (isEmail) {
+      try {
+        const user = await getUserByEmail(this.db, trimmedRecipient.toLowerCase());
+        if (user && user.id !== this.userId) {
+          return user.id;
+        }
+      } catch (error) {
+        logger.error(
+          { error, recipient: trimmedRecipient, userId: this.userId },
+          'Error looking up user by email'
+        );
+      }
     }
+    
+    // Try to find user by phone number
+    if (isPhone) {
+      try {
+        // Normalize phone number
+        const normalizedPhone = normalizePhoneNumber(trimmedRecipient);
+        const user = await getUserByPhone(this.db, normalizedPhone, this.userId);
+        if (user) {
+          return user.id;
+        }
+      } catch (error) {
+        logger.error(
+          { error, recipient: trimmedRecipient, userId: this.userId },
+          'Error looking up user by phone'
+        );
+      }
+    }
+    
+    // If recipient doesn't look like email or phone, try searching by name/partial match
+    // This handles cases where user provided a name instead of email/phone
+    if (!isEmail && !isPhone) {
+      const users = await searchUsersForSharing(this.db, this.userId, trimmedRecipient);
+      if (users.length > 0) {
+        return users[0].id;
+      }
+    }
+    
+    // User not found
     return null;
   }
 
