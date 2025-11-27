@@ -4,6 +4,7 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
 import { WhatsappTextAnalysisService, WhatsappIntentRouterService } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
+import { ActionExecutor } from './action-executor';
 
 type AnalysisIntent = 'task' | 'reminder' | 'note' | 'event';
 
@@ -114,7 +115,7 @@ export async function handleTextMessage(
   await sendTypingIndicatorSafely(message.from, message.id);
 
   try {
-    await analyzeAndRespond(messageText, message.from, whatsappNumber.userId);
+    await analyzeAndRespond(messageText, message.from, whatsappNumber.userId, db);
     summary.textJobIds.push(message.id);
   } catch (error) {
     logger.error(
@@ -139,7 +140,12 @@ export async function handleTextMessage(
   }
 }
 
-async function analyzeAndRespond(text: string, recipient: string, userId: string): Promise<void> {
+async function analyzeAndRespond(
+  text: string,
+  recipient: string,
+  userId: string,
+  db: Database
+): Promise<void> {
   const router = new WhatsappIntentRouterService();
   const analyzer = new WhatsappTextAnalysisService();
   const whatsappService = new WhatsAppService();
@@ -177,7 +183,7 @@ async function analyzeAndRespond(text: string, recipient: string, userId: string
   }
 
   // Step 3: Analyze only the primary intent
-  let response: string;
+  let aiResponse: string;
   try {
     logger.info(
       {
@@ -190,16 +196,16 @@ async function analyzeAndRespond(text: string, recipient: string, userId: string
 
     switch (primaryIntent) {
       case 'task':
-        response = (await analyzer.analyzeTask(text)).trim();
+        aiResponse = (await analyzer.analyzeTask(text)).trim();
         break;
       case 'note':
-        response = (await analyzer.analyzeNote(text)).trim();
+        aiResponse = (await analyzer.analyzeNote(text)).trim();
         break;
       case 'reminder':
-        response = (await analyzer.analyzeReminder(text)).trim();
+        aiResponse = (await analyzer.analyzeReminder(text)).trim();
         break;
       case 'event':
-        response = (await analyzer.analyzeEvent(text)).trim();
+        aiResponse = (await analyzer.analyzeEvent(text)).trim();
         break;
       default:
         throw new Error(`Unknown intent: ${primaryIntent}`);
@@ -208,24 +214,55 @@ async function analyzeAndRespond(text: string, recipient: string, userId: string
     logger.debug(
       {
         intent: primaryIntent,
-        responseLength: response.length,
-        responsePreview: response.substring(0, 200),
+        responseLength: aiResponse.length,
+        responsePreview: aiResponse.substring(0, 200),
         userId,
       },
       'Got response from AI analyzer'
     );
 
-    // Step 4: Validate and send response
-    if (response && isValidTemplateResponse(response)) {
-      await whatsappService.sendTextMessage(recipient, response);
+    // Step 4: Parse and execute the action (only for task operations for now)
+    if (primaryIntent === 'task' && isValidTemplateResponse(aiResponse)) {
+      const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+      const parsed = executor.parseAction(aiResponse);
+      
+      if (parsed) {
+        logger.info(
+          {
+            action: parsed.action,
+            resourceType: parsed.resourceType,
+            userId,
+          },
+          'Executing parsed action'
+        );
+
+        const result = await executor.executeAction(parsed);
+        await whatsappService.sendTextMessage(recipient, result.message);
+        
+        logger.info(
+          {
+            success: result.success,
+            action: parsed.action,
+            userId,
+          },
+          'Action execution completed'
+        );
+      } else {
+        // AI returned an error/fallback response
+        await whatsappService.sendTextMessage(recipient, aiResponse);
+      }
+    } else if (isValidTemplateResponse(aiResponse)) {
+      // For non-task intents, just send the AI response for now
+      // TODO: Implement executors for note, reminder, event
+      await whatsappService.sendTextMessage(recipient, aiResponse);
       logger.info(
         {
           recipient,
           userId,
           intent: primaryIntent,
-          responseLength: response.length,
+          responseLength: aiResponse.length,
         },
-        'Sent valid AI response to user'
+        'Sent AI response to user (not executed yet)'
       );
     } else {
       logger.warn(
@@ -233,8 +270,8 @@ async function analyzeAndRespond(text: string, recipient: string, userId: string
           recipient,
           userId,
           intent: primaryIntent,
-          response,
-          isError: isErrorOrFallbackResponse(response),
+          response: aiResponse,
+          isError: isErrorOrFallbackResponse(aiResponse),
         },
         'AI response was invalid or fallback'
       );
@@ -250,7 +287,7 @@ async function analyzeAndRespond(text: string, recipient: string, userId: string
         userId,
         messageText: text,
       },
-      'AI analysis failed for WhatsApp text'
+      'AI analysis or action execution failed'
     );
     
     try {
