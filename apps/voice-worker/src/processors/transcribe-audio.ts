@@ -108,21 +108,12 @@ export async function processTranscribeAudio(
       await fileManager.cleanup(audioFilePath);
     }
 
-    // Enqueue next job: analyze intent
+    // Enqueue next job: process WhatsApp voice message (use same analysis as text messages)
     await updateVoiceMessageJobStatus(db, voiceJobId, 'transcribed');
 
-    const intentJobId = updatedVoiceJob.intentJobId ?? randomUUID();
-
-    if (!updatedVoiceJob.intentJobId) {
-      await updateVoiceMessageJobSnapshot(db, voiceJobId, {
-        intentJobId,
-      });
-    }
-
-    await queueManager.enqueueProcessIntent({
-      jobId: voiceJobId,
+    // Route to WhatsApp voice processing instead of calendar intent processing
+    await queueManager.enqueueProcessWhatsAppVoice({
       voiceJobId,
-      intentJobId,
       userId: updatedVoiceJob.userId,
       whatsappNumberId: updatedVoiceJob.whatsappNumberId,
       transcribedText: transcription.text,

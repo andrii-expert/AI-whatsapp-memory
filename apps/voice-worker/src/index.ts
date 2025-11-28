@@ -11,6 +11,7 @@ import {
   processTranscribeAudio,
   processAnalyzeIntent,
   processProcessIntent,
+  processWhatsAppVoice,
   processCreateEvent,
   processUpdateEvent,
   processDeleteEvent,
@@ -78,6 +79,17 @@ async function main() {
       }
     );
     workers.push(processIntentWorker);
+
+    // 4b. Process WhatsApp Voice Worker (uses same analysis as text messages)
+    const processWhatsAppVoiceWorker = new Worker(
+      QUEUE_NAMES.PROCESS_WHATSAPP_VOICE,
+      async (job) => processWhatsAppVoice(job, db, queueManager),
+      {
+        connection,
+        concurrency: WORKER_CONCURRENCY[QUEUE_NAMES.PROCESS_WHATSAPP_VOICE],
+      }
+    );
+    workers.push(processWhatsAppVoiceWorker);
 
     // 5. Create Event Worker
     const createEventWorker = new Worker(

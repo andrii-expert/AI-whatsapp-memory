@@ -10,6 +10,7 @@ import {
   type TranscribeAudioJobData,
   type AnalyzeIntentJobData,
   type ProcessIntentJobData,
+  type ProcessWhatsAppVoiceJobData,
   type CreateEventJobData,
   type UpdateEventJobData,
   type DeleteEventJobData,
@@ -95,6 +96,17 @@ export class QueueManager {
       jobId: `process-${data.voiceJobId}`,
     });
     logger.info({ voiceJobId: data.voiceJobId, intentJobId: data.intentJobId }, 'Enqueued process intent job');
+  }
+
+  /**
+   * Enqueue WhatsApp voice processing job
+   */
+  async enqueueProcessWhatsAppVoice(data: ProcessWhatsAppVoiceJobData): Promise<void> {
+    const queue = this.getQueue(QUEUE_NAMES.PROCESS_WHATSAPP_VOICE);
+    await queue.add('process-whatsapp-voice', data, {
+      jobId: `whatsapp-voice-${data.voiceJobId}`,
+    });
+    logger.info({ voiceJobId: data.voiceJobId, userId: data.userId }, 'Enqueued WhatsApp voice processing job');
   }
 
   /**

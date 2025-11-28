@@ -4,7 +4,7 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
 import { WhatsappTextAnalysisService, WhatsappIntentRouterService } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
-import { ActionExecutor } from './action-executor';
+import { ActionExecutor } from '@imaginecalendar/whatsapp';
 
 type AnalysisIntent = 'task' | 'reminder' | 'note' | 'event';
 

@@ -9,6 +9,7 @@ export const QUEUE_NAMES = {
   TRANSCRIBE_AUDIO: 'voice-transcribe-audio',
   ANALYZE_INTENT: 'voice-analyze-intent',
   PROCESS_INTENT: 'voice-process-intent',
+  PROCESS_WHATSAPP_VOICE: 'voice-process-whatsapp',
   CREATE_EVENT: 'voice-create-event',
   UPDATE_EVENT: 'voice-update-event',
   DELETE_EVENT: 'voice-delete-event',
@@ -39,6 +40,14 @@ export interface ProcessIntentJobData {
   jobId: string;
   voiceJobId: string;
   intentJobId: string;
+  userId: string;
+  whatsappNumberId: string;
+  transcribedText: string;
+  senderPhone: string;
+}
+
+export interface ProcessWhatsAppVoiceJobData {
+  voiceJobId: string;
   userId: string;
   whatsappNumberId: string;
   transcribedText: string;
@@ -98,6 +107,12 @@ export const JOB_OPTIONS = {
     removeOnComplete: { age: 3600, count: 100 },
     removeOnFail: false,
   },
+  [QUEUE_NAMES.PROCESS_WHATSAPP_VOICE]: {
+    attempts: 3,
+    backoff: { type: 'exponential' as const, delay: 3000 },
+    removeOnComplete: { age: 3600, count: 100 },
+    removeOnFail: false,
+  },
   [QUEUE_NAMES.CREATE_EVENT]: {
     attempts: 3,
     backoff: { type: 'exponential' as const, delay: 5000 },
@@ -135,6 +150,7 @@ export const WORKER_CONCURRENCY = {
   [QUEUE_NAMES.TRANSCRIBE_AUDIO]: 3,
   [QUEUE_NAMES.ANALYZE_INTENT]: 3,
   [QUEUE_NAMES.PROCESS_INTENT]: 3,
+  [QUEUE_NAMES.PROCESS_WHATSAPP_VOICE]: 3,
   [QUEUE_NAMES.CREATE_EVENT]: 3,
   [QUEUE_NAMES.UPDATE_EVENT]: 3,
   [QUEUE_NAMES.DELETE_EVENT]: 3,
