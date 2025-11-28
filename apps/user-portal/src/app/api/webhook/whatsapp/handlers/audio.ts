@@ -110,31 +110,8 @@ export async function handleAudioMessage(
       'Audio transcribed successfully'
     );
 
-    // Step 3: Send transcribed text back to user
-    if (transcribedText) {
-      try {
-        await whatsappService.sendTextMessage(
-          message.from,
-          `📝 *Transcription:*\n${transcribedText}`
-        );
-        logger.info(
-          {
-            messageId: message.id,
-            textLength: transcribedText.length,
-          },
-          'Sent transcription to user'
-        );
-      } catch (sendError) {
-        logger.error(
-          {
-            error: sendError,
-            messageId: message.id,
-            senderPhone: message.from,
-          },
-          'Failed to send transcription to user'
-        );
-      }
-    } else {
+    // Step 3: Check if transcription is valid
+    if (!transcribedText) {
       logger.warn(
         {
           messageId: message.id,
