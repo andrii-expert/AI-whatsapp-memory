@@ -28,6 +28,17 @@ export async function processTranscribeAudio(
 ): Promise<void> {
   const { voiceJobId, audioFilePath, mimeType } = job.data;
 
+  logger.info(
+    { 
+      voiceJobId, 
+      audioFilePath, 
+      jobId: job.id,
+      attemptsMade: job.attemptsMade,
+      timestamp: new Date().toISOString()
+    }, 
+    '=== PROCESSING TRANSCRIBE AUDIO JOB ==='
+  );
+
   try {
     logger.info({ voiceJobId, audioFilePath }, 'Starting audio transcription');
 
@@ -115,6 +126,16 @@ export async function processTranscribeAudio(
     // Send transcribed text directly back to user via WhatsApp
     const whatsappService = new WhatsAppService();
     const senderPhone = updatedVoiceJob.senderPhone;
+    
+    logger.info(
+      { 
+        voiceJobId, 
+        senderPhone, 
+        hasTranscription: !!transcription.text,
+        transcriptionLength: transcription.text?.length || 0
+      },
+      'Preparing to send transcribed text to user'
+    );
     
     if (!senderPhone) {
       logger.error({ voiceJobId }, 'Sender phone number is missing, cannot send response');

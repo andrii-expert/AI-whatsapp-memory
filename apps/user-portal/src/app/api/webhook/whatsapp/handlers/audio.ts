@@ -60,6 +60,20 @@ export async function handleAudioMessage(
     try {
       const whatsappService = new WhatsAppService();
       await whatsappService.sendTypingIndicator(message.from, message.id, 'audio');
+      
+      // Send immediate acknowledgment
+      try {
+        await whatsappService.sendTextMessage(
+          message.from,
+          "🎤 I received your voice message! I'm processing it now and will send you the transcription shortly..."
+        );
+        logger.info({ messageId: message.id, senderPhone: message.from }, 'Sent acknowledgment message for voice');
+      } catch (ackError) {
+        logger.warn(
+          { error: ackError, messageId: message.id, senderPhone: message.from },
+          'Failed to send acknowledgment message, but continuing with processing'
+        );
+      }
     } catch (error) {
       logger.warn(
         {

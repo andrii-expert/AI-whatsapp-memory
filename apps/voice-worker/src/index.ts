@@ -21,14 +21,20 @@ import {
 
 async function main() {
   try {
+    logger.info({}, 'Starting voice worker...');
+    
     // Connect to database
+    logger.info({}, 'Connecting to database...');
     const db = await connectDb();
     logger.info({}, 'Database connected');
 
     // Connect to Redis
+    logger.info({}, 'Connecting to Redis...');
     const connection = getRedisConnection();
+    logger.info({}, 'Redis connected');
 
     // Initialize queue manager
+    logger.info({}, 'Initializing queue manager...');
     const queueManager = new QueueManager(connection);
     await queueManager.initialize();
     logger.info({}, 'Queue manager initialized');
@@ -147,9 +153,21 @@ async function main() {
     workers.push(notificationWorker);
 
     // Set up event handlers for all workers
-    workers.forEach((worker, index) => {
-      const queueName = Object.values(QUEUE_NAMES)[index];
+    // Map workers to their queue names explicitly
+    const workerQueueMap = [
+      { worker: downloadWorker, queueName: QUEUE_NAMES.DOWNLOAD_AUDIO },
+      { worker: transcribeWorker, queueName: QUEUE_NAMES.TRANSCRIBE_AUDIO },
+      { worker: analyzeWorker, queueName: QUEUE_NAMES.ANALYZE_INTENT },
+      { worker: processIntentWorker, queueName: QUEUE_NAMES.PROCESS_INTENT },
+      { worker: processWhatsAppVoiceWorker, queueName: QUEUE_NAMES.PROCESS_WHATSAPP_VOICE },
+      { worker: createEventWorker, queueName: QUEUE_NAMES.CREATE_EVENT },
+      { worker: updateEventWorker, queueName: QUEUE_NAMES.UPDATE_EVENT },
+      { worker: deleteEventWorker, queueName: QUEUE_NAMES.DELETE_EVENT },
+      { worker: clarificationWorker, queueName: QUEUE_NAMES.CLARIFICATION_WATCHDOG },
+      { worker: notificationWorker, queueName: QUEUE_NAMES.SEND_NOTIFICATION },
+    ];
 
+    workerQueueMap.forEach(({ worker, queueName }) => {
       worker.on('completed', (job) => {
         logger.info(
           { queueName, jobId: job.id, duration: Date.now() - job.timestamp },
@@ -198,7 +216,23 @@ async function main() {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (error) {
-    logger.error({ error }, 'Failed to start voice worker');
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    logger.error(
+      { 
+        error: errorMessage,
+        errorStack,
+        errorType: error instanceof Error ? error.constructor.name : typeof error
+      }, 
+      'Failed to start voice worker'
+    );
+    
+    console.error('Voice worker startup error:', errorMessage);
+    if (errorStack) {
+      console.error('Stack trace:', errorStack);
+    }
+    
     process.exit(1);
   }
 }
