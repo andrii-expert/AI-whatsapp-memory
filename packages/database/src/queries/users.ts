@@ -190,49 +190,86 @@ export async function updateUser(
               })
               .where(eq(whatsappNumbers.id, existingNumberForPhone.id));
           } else {
-            // New phone number - deactivate all existing numbers and create/update
-            await db
-              .update(whatsappNumbers)
-              .set({
-                isActive: false,
-                isPrimary: false,
-                updatedAt: new Date(),
-              })
-              .where(eq(whatsappNumbers.userId, id));
+            // New phone number - update the existing primary/active number or create new one
+            const primaryNumber = existingNumbers.find(
+              n => n.isPrimary && n.isActive
+            ) || existingNumbers[0]; // Fallback to first number if no primary exists
 
-            // Check if this phone number exists for another user (shouldn't happen, but handle it)
-            const existingNumberForOtherUser = await db.query.whatsappNumbers.findFirst({
-              where: eq(whatsappNumbers.phoneNumber, normalizedPhone),
-            });
-
-            if (existingNumberForOtherUser && existingNumberForOtherUser.userId !== id) {
-              // Phone number belongs to another user - this shouldn't happen in normal flow
-              // But we'll log it and not create a duplicate
-              logger.warn(
-                {
+            if (primaryNumber) {
+              // Update the existing primary number with the new phone number
+              // This handles the case when user edits their phone number
+              await db
+                .update(whatsappNumbers)
+                .set({
                   phoneNumber: normalizedPhone,
-                  existingUserId: existingNumberForOtherUser.userId,
-                  newUserId: id,
-                },
-                'Phone number already exists for another user, cannot assign to new user'
-              );
-            } else {
-              // Create new WhatsApp number record
-              await db.insert(whatsappNumbers).values({
-                userId: id,
-                phoneNumber: normalizedPhone,
-                isVerified: data.phoneVerified ?? false,
-                isPrimary: true,
-                isActive: true,
-              });
-              
+                  isVerified: data.phoneVerified ?? false, // Reset verification when phone changes
+                  isActive: true,
+                  isPrimary: true,
+                  updatedAt: new Date(),
+                })
+                .where(eq(whatsappNumbers.id, primaryNumber.id));
+
+              // Deactivate all other numbers
+              if (existingNumbers.length > 1) {
+                await db
+                  .update(whatsappNumbers)
+                  .set({
+                    isActive: false,
+                    isPrimary: false,
+                    updatedAt: new Date(),
+                  })
+                  .where(
+                    and(
+                      eq(whatsappNumbers.userId, id),
+                      ne(whatsappNumbers.id, primaryNumber.id)
+                    )
+                  );
+              }
+
               logger.info(
                 {
                   userId: id,
-                  phoneNumber: normalizedPhone,
+                  oldPhoneNumber: primaryNumber.phoneNumber,
+                  newPhoneNumber: normalizedPhone,
                 },
-                'Created new WhatsApp number record for user'
+                'Updated existing WhatsApp number record with new phone number'
               );
+            } else {
+              // No existing numbers - create a new one
+              // Check if this phone number exists for another user (shouldn't happen, but handle it)
+              const existingNumberForOtherUser = await db.query.whatsappNumbers.findFirst({
+                where: eq(whatsappNumbers.phoneNumber, normalizedPhone),
+              });
+
+              if (existingNumberForOtherUser && existingNumberForOtherUser.userId !== id) {
+                // Phone number belongs to another user - this shouldn't happen in normal flow
+                // But we'll log it and not create a duplicate
+                logger.warn(
+                  {
+                    phoneNumber: normalizedPhone,
+                    existingUserId: existingNumberForOtherUser.userId,
+                    newUserId: id,
+                  },
+                  'Phone number already exists for another user, cannot assign to new user'
+                );
+              } else {
+                // Create new WhatsApp number record
+                await db.insert(whatsappNumbers).values({
+                  userId: id,
+                  phoneNumber: normalizedPhone,
+                  isVerified: data.phoneVerified ?? false,
+                  isPrimary: true,
+                  isActive: true,
+                });
+                
+                logger.info(
+                  {
+                    userId: id,
+                    phoneNumber: normalizedPhone,
+                  },
+                  'Created new WhatsApp number record for user'
+                );
+              }
             }
           }
         } else {
