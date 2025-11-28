@@ -2,7 +2,7 @@ import type { Database } from '@imaginecalendar/database/client';
 import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
-import { WhatsappTextAnalysisService, WhatsappIntentRouterService } from '@imaginecalendar/ai-services';
+import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
 import { ActionExecutor } from './action-executor';
 
@@ -147,16 +147,16 @@ async function analyzeAndRespond(
   userId: string,
   db: Database
 ): Promise<void> {
-  const router = new WhatsappIntentRouterService();
   const analyzer = new WhatsappTextAnalysisService();
   const whatsappService = new WhatsAppService();
 
-  // Get recent message history for context
+  // Get last 10 message history for context
   let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
   try {
-    const history = await getRecentMessageHistory(db, userId, 20);
+    const history = await getRecentMessageHistory(db, userId, 10);
     messageHistory = history
       .filter(msg => msg.content && msg.content.trim().length > 0)
+      .slice(0, 10) // Ensure we only use last 10
       .map(msg => ({
         direction: msg.direction,
         content: msg.content,
@@ -165,70 +165,22 @@ async function analyzeAndRespond(
     logger.warn({ error, userId }, 'Failed to retrieve message history, continuing without history');
   }
 
-  // Step 1: Detect which intent(s) are present in the message
-  logger.debug({ textLength: text.length, userId }, 'Detecting intent with router');
-  const detectedIntents = await router.detectIntents(text);
-  const primaryIntent = router.getPrimaryIntent(detectedIntents);
-
-  logger.info(
-    {
-      detectedIntents,
-      primaryIntent,
-      userId,
-      messageText: text.substring(0, 100),
-    },
-    'Intent detection completed'
-  );
-
-  // Step 2: Only analyze with the primary intent (priority: task > note > reminder > event)
-  if (!primaryIntent) {
-    logger.warn(
-      {
-        recipient,
-        userId,
-        messageText: text,
-        detectedIntents,
-      },
-      'No intent detected, sending fallback message'
-    );
-    
-    const fallbackMessage = "I'm sorry, I couldn't interpret that request. Could you rephrase with more detail?";
-    await whatsappService.sendTextMessage(recipient, fallbackMessage);
-    return;
-  }
-
-  // Step 3: Analyze only the primary intent
+  // Step 1: Analyze message with merged prompt
   let aiResponse: string;
   try {
     logger.info(
       {
-        intent: primaryIntent,
         userId,
         messageText: text.substring(0, 100),
+        historyCount: messageHistory.length,
       },
-      `Analyzing message with ${primaryIntent} intent only`
+      'Analyzing message with merged prompt'
     );
 
-    switch (primaryIntent) {
-      case 'task':
-        aiResponse = (await analyzer.analyzeTask(text, { messageHistory })).trim();
-        break;
-      case 'note':
-        aiResponse = (await analyzer.analyzeNote(text, { messageHistory })).trim();
-        break;
-      case 'reminder':
-        aiResponse = (await analyzer.analyzeReminder(text, { messageHistory })).trim();
-        break;
-      case 'event':
-        aiResponse = (await analyzer.analyzeEvent(text, { messageHistory })).trim();
-        break;
-      default:
-        throw new Error(`Unknown intent: ${primaryIntent}`);
-    }
+    aiResponse = (await analyzer.analyzeMessage(text, { messageHistory })).trim();
 
     logger.debug(
       {
-        intent: primaryIntent,
         responseLength: aiResponse.length,
         responsePreview: aiResponse.substring(0, 200),
         userId,
@@ -236,25 +188,118 @@ async function analyzeAndRespond(
       'Got response from AI analyzer'
     );
 
-    // Step 4: Parse and execute the action (only for task operations for now)
-    if (primaryIntent === 'task' && isValidTemplateResponse(aiResponse)) {
-      const executor = new ActionExecutor(db, userId, whatsappService, recipient);
-      const parsed = executor.parseAction(aiResponse);
-      
-      if (parsed) {
-        logger.info(
-          {
-            action: parsed.action,
-            resourceType: parsed.resourceType,
-            userId,
-          },
-          'Executing parsed action'
-        );
+    // Step 2: Send AI response to user immediately
+    const responseToUser = extractUserFriendlyResponse(aiResponse);
+    await whatsappService.sendTextMessage(recipient, responseToUser);
+    
+    // Store outgoing message in history (free message since it's a response to incoming)
+    try {
+      const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+      if (whatsappNumber) {
+        await logOutgoingWhatsAppMessage(db, {
+          whatsappNumberId: whatsappNumber.id,
+          userId,
+          messageType: 'text',
+          messageContent: responseToUser,
+          isFreeMessage: true, // Response to incoming message, within 24-hour window
+        });
+      }
+    } catch (error) {
+      logger.warn({ error, userId }, 'Failed to log outgoing message');
+    }
 
+    // Step 3: Process the AI response in main workflow
+    await processAIResponse(aiResponse, recipient, userId, db, whatsappService);
+
+  } catch (error) {
+    logger.error(
+      {
+        error,
+        userId,
+        messageText: text,
+      },
+      'AI analysis failed'
+    );
+    
+    try {
+      await whatsappService.sendTextMessage(
+        recipient,
+        "I'm sorry, I encountered an error processing your message. Please try again."
+      );
+    } catch (sendError) {
+      logger.error({ error: sendError, senderPhone: recipient }, 'Failed to send error response');
+    }
+  }
+}
+
+/**
+ * Extract user-friendly response from AI response (removes Title: prefix for user display)
+ */
+function extractUserFriendlyResponse(aiResponse: string): string {
+  const lines = aiResponse.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  
+  // If response starts with "Title:", remove it and return the rest
+  if (lines[0]?.startsWith('Title:')) {
+    return lines.slice(1).join('\n') || lines[0]; // If only title, return it
+  }
+  
+  return aiResponse;
+}
+
+/**
+ * Process AI response in main workflow - parse Title and route to appropriate executor
+ */
+async function processAIResponse(
+  aiResponse: string,
+  recipient: string,
+  userId: string,
+  db: Database,
+  whatsappService: WhatsAppService
+): Promise<void> {
+  try {
+    // Parse the Title from response
+    const titleMatch = aiResponse.match(/^Title:\s*(task|note|reminder|event|verification)/i);
+    if (!titleMatch || !titleMatch[1]) {
+      logger.warn(
+        {
+          userId,
+          responsePreview: aiResponse.substring(0, 200),
+        },
+        'AI response missing Title, skipping workflow processing'
+      );
+      return;
+    }
+
+    const titleType = titleMatch[1].toLowerCase();
+    
+    // Extract the action template (everything after Title line)
+    const actionLines = aiResponse
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.startsWith('Title:'));
+    
+    const actionTemplate = actionLines.join('\n');
+
+    logger.info(
+      {
+        titleType,
+        actionTemplate: actionTemplate.substring(0, 200),
+        userId,
+      },
+      'Processing AI response in main workflow'
+    );
+
+    // Route to appropriate executor based on Title
+    const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+    
+    if (titleType === 'task') {
+      const parsed = executor.parseAction(actionTemplate);
+      if (parsed) {
         const result = await executor.executeAction(parsed);
+        // Send success/error message to user
         await whatsappService.sendTextMessage(recipient, result.message);
         
-        // Store outgoing message in history (free message since it's a response to incoming)
+        // Log outgoing message
         try {
           const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
           if (whatsappNumber) {
@@ -263,98 +308,44 @@ async function analyzeAndRespond(
               userId,
               messageType: 'text',
               messageContent: result.message,
-              isFreeMessage: true, // Response to incoming message, within 24-hour window
+              isFreeMessage: true,
             });
           }
         } catch (error) {
           logger.warn({ error, userId }, 'Failed to log outgoing message');
         }
-        
-        logger.info(
-          {
-            success: result.success,
-            action: parsed.action,
-            userId,
-          },
-          'Action execution completed'
-        );
       } else {
-        // AI returned an error/fallback response
-        await whatsappService.sendTextMessage(recipient, aiResponse);
-        // Store outgoing message (free message since it's a response to incoming)
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: aiResponse,
-              isFreeMessage: true, // Response to incoming message, within 24-hour window
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing message');
-        }
+        // Already sent AI response, no need to send again
+        logger.info({ userId, titleType }, 'Action parsing failed, user already received AI response');
       }
-    } else if (isValidTemplateResponse(aiResponse)) {
-      // For non-task intents, just send the AI response for now
-      // TODO: Implement executors for note, reminder, event
-      await whatsappService.sendTextMessage(recipient, aiResponse);
-      // Store outgoing message (free message since it's a response to incoming)
-      try {
-        const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-        if (whatsappNumber) {
-          await logOutgoingWhatsAppMessage(db, {
-            whatsappNumberId: whatsappNumber.id,
-            userId,
-            messageType: 'text',
-            messageContent: aiResponse,
-            isFreeMessage: true, // Response to incoming message, within 24-hour window
-          });
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to log outgoing message');
-      }
-      logger.info(
-        {
-          recipient,
-          userId,
-          intent: primaryIntent,
-          responseLength: aiResponse.length,
-        },
-        'Sent AI response to user (not executed yet)'
-      );
-    } else {
-      logger.warn(
-        {
-          recipient,
-          userId,
-          intent: primaryIntent,
-          response: aiResponse,
-          isError: isErrorOrFallbackResponse(aiResponse),
-        },
-        'AI response was invalid or fallback'
-      );
-      
-      const fallbackMessage = "I'm sorry, I couldn't interpret that request. Could you rephrase with more detail?";
-      await whatsappService.sendTextMessage(recipient, fallbackMessage);
+    } else if (titleType === 'note') {
+      // TODO: Implement note executor
+      logger.info({ userId, titleType }, 'Note executor not yet implemented');
+    } else if (titleType === 'reminder') {
+      // TODO: Implement reminder executor
+      logger.info({ userId, titleType }, 'Reminder executor not yet implemented');
+    } else if (titleType === 'event') {
+      // TODO: Implement event executor
+      logger.info({ userId, titleType }, 'Event executor not yet implemented');
+    } else if (titleType === 'verification') {
+      // Verification is handled separately, no need to process here
+      logger.info({ userId }, 'Verification handled separately');
     }
   } catch (error) {
     logger.error(
       {
         error,
-        intent: primaryIntent,
         userId,
-        messageText: text,
+        responsePreview: aiResponse.substring(0, 200),
       },
-      'AI analysis or action execution failed'
+      'Failed to process AI response in main workflow'
     );
     
+    // Send error message to user
     try {
       await whatsappService.sendTextMessage(
         recipient,
-        "I'm sorry, I encountered an error processing your message. Please try again."
+        "I encountered an error while processing your request. Please try again."
       );
     } catch (sendError) {
       logger.error({ error: sendError, senderPhone: recipient }, 'Failed to send error response');

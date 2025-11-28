@@ -5,6 +5,7 @@ import { buildWhatsappTaskPrompt, type TaskPromptOptions } from './task-prompts'
 import { buildWhatsappReminderPrompt, type ReminderPromptOptions } from './reminder-prompts';
 import { buildWhatsappNotePrompt, type NotePromptOptions } from './note-prompts';
 import { buildWhatsappEventPrompt, type EventPromptOptions } from './event-prompts';
+import { buildMergedWhatsappPrompt, type MergedPromptOptions } from './merged-prompts';
 
 export type WhatsappTextIntent = 'task' | 'reminder' | 'note' | 'event';
 
@@ -26,6 +27,14 @@ export class WhatsappTextAnalysisService {
     this.model = openaiClient('gpt-4o-mini');
     
     logger.debug({}, 'WhatsappTextAnalysisService initialized with OpenAI API key');
+  }
+
+  /**
+   * Analyze message using merged prompt (recommended - handles all types)
+   */
+  async analyzeMessage(text: string, options?: MergedPromptOptions): Promise<string> {
+    const prompt = buildMergedWhatsappPrompt(text, options);
+    return this.generate(prompt, 'merged');
   }
 
   async analyzeTask(text: string, options?: TaskPromptOptions & { messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }> }): Promise<string> {

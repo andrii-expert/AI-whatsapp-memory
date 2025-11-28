@@ -22,6 +22,10 @@ export {
   type EventPromptOptions,
 } from './event-prompts';
 export {
+  buildMergedWhatsappPrompt,
+  type MergedPromptOptions,
+} from './merged-prompts';
+export {
   WhatsappTextAnalysisService,
   type WhatsappTextIntent,
 } from './whatsapp-text';
