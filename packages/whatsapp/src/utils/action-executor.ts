@@ -19,7 +19,7 @@ import {
   normalizePhoneNumber,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
-import { WhatsAppService } from '../service/whatsapp';
+import { WhatsAppService } from '@imaginecalendar/whatsapp';
 
 export interface ParsedAction {
   action: string;
