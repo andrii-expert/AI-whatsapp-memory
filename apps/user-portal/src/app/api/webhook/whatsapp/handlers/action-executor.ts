@@ -763,11 +763,32 @@ export class ActionExecutor {
 
   /**
    * Resolve folder route (e.g., "Home" or "Work/Clients") to folder ID
+   * If only one part is provided, searches all subfolders across all parent folders
    */
   private async resolveFolderRoute(folderRoute: string): Promise<string | null> {
     const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
     const folders = await getUserFolders(this.db, this.userId);
     
+    // If only one part is provided, search all subfolders recursively
+    if (parts.length === 1) {
+      const folderName = parts[0].toLowerCase();
+      
+      // First check if it's a root folder
+      const rootFolder = folders.find(f => f.name.toLowerCase() === folderName);
+      if (rootFolder) {
+        return rootFolder.id;
+      }
+      
+      // If not found as root folder, search all subfolders recursively
+      const foundSubfolder = this.findSubfolderByName(folders, folderName);
+      if (foundSubfolder) {
+        return foundSubfolder.id;
+      }
+      
+      return null;
+    }
+    
+    // Multiple parts: use the original path-based approach
     // Find root folder
     let currentFolder = folders.find(f => f.name.toLowerCase() === parts[0].toLowerCase());
     if (!currentFolder) {
@@ -786,6 +807,32 @@ export class ActionExecutor {
     }
 
     return currentFolder.id;
+  }
+
+  /**
+   * Recursively search for a subfolder by name across all folders and subfolders
+   */
+  private findSubfolderByName(folders: any[], folderName: string): any | null {
+    for (const folder of folders) {
+      // Check subfolders at this level
+      if (folder.subfolders && folder.subfolders.length > 0) {
+        const found = folder.subfolders.find(
+          (sf: any) => sf.name.toLowerCase() === folderName
+        );
+        if (found) {
+          return found;
+        }
+        
+        // Recursively search deeper subfolders
+        for (const subfolder of folder.subfolders) {
+          const deeperFound = this.findSubfolderByName([subfolder], folderName);
+          if (deeperFound) {
+            return deeperFound;
+          }
+        }
+      }
+    }
+    return null;
   }
 
   /**
