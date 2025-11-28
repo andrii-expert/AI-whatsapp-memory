@@ -112,12 +112,22 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('Move a task:')) {
       action = 'move';
       resourceType = 'task';
-      const match = trimmed.match(/^Move a task:\s*(.+?)\s*-\s*to folder:\s*(.+)$/i);
+      // Match: "Move a task: {task_name} - from folder: {existing_folder_route} - to folder: {target_folder_route}"
+      const match = trimmed.match(/^Move a task:\s*(.+?)\s*-\s*from folder:\s*(.+?)\s*-\s*to folder:\s*(.+)$/i);
       if (match) {
         taskName = match[1].trim();
-        targetFolderRoute = match[2].trim();
+        folderRoute = match[2].trim(); // existing folder route
+        targetFolderRoute = match[3].trim();
       } else {
-        missingFields.push('task name or target folder');
+        // Fallback: try without "from folder" for backward compatibility
+        const fallbackMatch = trimmed.match(/^Move a task:\s*(.+?)\s*-\s*to folder:\s*(.+)$/i);
+        if (fallbackMatch) {
+          taskName = fallbackMatch[1].trim();
+          targetFolderRoute = fallbackMatch[2].trim();
+          // folderRoute will be undefined, and we'll search all folders
+        } else {
+          missingFields.push('task name, existing folder, or target folder');
+        }
       }
     } else if (trimmed.startsWith('Share a task:')) {
       action = 'share';
@@ -699,21 +709,48 @@ export class ActionExecutor {
       };
     }
 
-    // Find task in any folder (we'll search all folders)
-    const allFolders = await getUserFolders(this.db, this.userId);
+    // If existing folder route is provided, use it to find the task
     let task = null;
-    for (const folder of allFolders) {
-      const found = await this.findTaskByName(parsed.taskName, folder.id);
-      if (found) {
-        task = found;
-        break;
+    if (parsed.folderRoute) {
+      const existingFolderId = await this.resolveFolderRoute(parsed.folderRoute);
+      if (!existingFolderId) {
+        return {
+          success: false,
+          message: `I couldn't find the source folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      task = await this.findTaskByName(parsed.taskName, existingFolderId);
+      if (!task) {
+        return {
+          success: false,
+          message: `I couldn't find the task "${parsed.taskName}" in the "${parsed.folderRoute}" folder. Please make sure the task exists.`,
+        };
+      }
+    } else {
+      // Fallback: search all folders if existing folder route not provided
+      const allFolders = await getUserFolders(this.db, this.userId);
+      for (const folder of allFolders) {
+        const found = await this.findTaskByName(parsed.taskName, folder.id);
+        if (found) {
+          task = found;
+          break;
+        }
+      }
+
+      if (!task) {
+        return {
+          success: false,
+          message: `I couldn't find the task "${parsed.taskName}". Please make sure the task exists.`,
+        };
       }
     }
 
-    if (!task) {
+    // Check if task is already in the target folder
+    if (task.folderId === targetFolderId) {
       return {
         success: false,
-        message: `I couldn't find the task "${parsed.taskName}". Please make sure the task exists.`,
+        message: `The task "${parsed.taskName}" is already in the "${parsed.targetFolderRoute}" folder.`,
       };
     }
 
@@ -722,9 +759,10 @@ export class ActionExecutor {
         folderId: targetFolderId,
       });
 
+      const sourceFolderText = parsed.folderRoute ? ` from "${parsed.folderRoute}"` : '';
       return {
         success: true,
-        message: `✅ Task "${parsed.taskName}" has been moved to the "${parsed.targetFolderRoute}" folder.`,
+        message: `✅ Task "${parsed.taskName}" has been moved${sourceFolderText} to the "${parsed.targetFolderRoute}" folder.`,
       };
     } catch (error) {
       logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to move task');
