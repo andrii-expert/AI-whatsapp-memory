@@ -1,27 +1,35 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useTRPC } from "@/trpc/client";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { MessageSquare, Copy, Smartphone, RefreshCw } from "lucide-react";
 
 interface WhatsAppVerificationSectionProps {
   phoneNumber: string;
   redirectFrom?: string;
+  shouldGenerateCode?: boolean; // Only generate code when explicitly requested (e.g., after editing phone)
 }
 
-export function WhatsAppVerificationSection({ phoneNumber, redirectFrom }: WhatsAppVerificationSectionProps) {
+export function WhatsAppVerificationSection({ phoneNumber, redirectFrom, shouldGenerateCode = false }: WhatsAppVerificationSectionProps) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [verificationCode, setVerificationCode] = useState<string>("");
+  const previousPhoneRef = useRef<string>("");
+  const hasCheckedPendingRef = useRef<boolean>(false);
   const { toast } = useToast();
   const trpc = useTRPC();
   const router = useRouter();
+
+  // Check for pending verification code
+  const { data: pendingVerification, isLoading: pendingLoading } = useQuery(
+    trpc.whatsapp.getPendingVerification.queryOptions()
+  );
 
   // Generate verification code mutation
   const generateCodeMutation = useMutation(
@@ -48,12 +56,63 @@ export function WhatsAppVerificationSection({ phoneNumber, redirectFrom }: Whats
     })
   );
 
-  // Auto-generate code when component mounts
+  // Load existing pending verification code if available and matches current phone
+  // OR generate a new code if no pending verification exists (user came without verification)
+  // Skip this if shouldGenerateCode is true (will be handled by the other useEffect)
   useEffect(() => {
-    if (phoneNumber && !verificationCode) {
+    if (pendingLoading || !phoneNumber || shouldGenerateCode) return; // Wait for pending verification to load, skip if shouldGenerateCode
+    
+    // If we already have a verification code, don't do anything
+    if (verificationCode) return;
+    
+    // If we've already checked, don't check again
+    if (hasCheckedPendingRef.current) return;
+    
+    hasCheckedPendingRef.current = true;
+    
+    if (pendingVerification?.verificationCode && 
+        pendingVerification.phoneNumber === phoneNumber) {
+      // Load existing pending verification code
+      setVerificationCode(pendingVerification.verificationCode);
+      generateQRCode(pendingVerification.verificationCode);
+    } else if (!pendingVerification) {
+      // No pending verification exists - generate a new code
+      // This handles the case when user comes to page without verification
       handleGenerateCode();
     }
-  }, [phoneNumber]);
+  }, [pendingVerification, pendingLoading, phoneNumber, verificationCode, shouldGenerateCode]);
+
+  // Generate NEW code when explicitly requested via shouldGenerateCode prop
+  // This happens when user edits and saves a new phone number
+  useEffect(() => {
+    if (!phoneNumber || !shouldGenerateCode) {
+      // Reset previous phone ref when shouldGenerateCode is false
+      if (!shouldGenerateCode && previousPhoneRef.current !== phoneNumber) {
+        previousPhoneRef.current = phoneNumber;
+        // Reset the checked flag so we can check pending verification again for new phone
+        hasCheckedPendingRef.current = false;
+      }
+      return;
+    }
+    
+    const phoneChanged = previousPhoneRef.current !== phoneNumber;
+    
+    // Only generate if:
+    // 1. Phone changed (user edited phone number)
+    // 2. shouldGenerateCode is true (explicitly requested)
+    if (phoneChanged) {
+      previousPhoneRef.current = phoneNumber;
+      // Clear existing code and generate new one
+      setVerificationCode("");
+      setQrCodeUrl("");
+      hasCheckedPendingRef.current = false; // Reset to allow checking pending verification
+      handleGenerateCode();
+    } else {
+      // Update ref even if we don't generate
+      previousPhoneRef.current = phoneNumber;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phoneNumber, shouldGenerateCode]);
 
   const generateQRCode = async (code: string) => {
     try {
@@ -131,6 +190,14 @@ export function WhatsAppVerificationSection({ phoneNumber, redirectFrom }: Whats
   };
 
   const handleGenerateCode = () => {
+    if (!phoneNumber) {
+      toast({
+        title: "Phone number required",
+        description: "Please provide a phone number to generate a verification code.",
+        variant: "error",
+      });
+      return;
+    }
     setIsGenerating(true);
     generateCodeMutation.mutate({ phoneNumber });
   };

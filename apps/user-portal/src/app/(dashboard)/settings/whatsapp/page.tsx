@@ -309,12 +309,14 @@ export default function WhatsAppVerificationPage() {
         </Card>
       )}
 
-      {/* WhatsApp Verification Section */}
-      <WhatsAppVerificationSection 
-        phoneNumber={phoneForVerification || (verifiedNumber?.phoneNumber || user?.phone || "")} 
-        redirectFrom={redirectFrom || "dashboard"} 
-        key={phoneForVerification || verifiedNumber?.phoneNumber || user?.phone} // Force re-render when phone changes
-      />
+      {/* WhatsApp Verification Section - Only show if not verified */}
+      {!verifiedNumber?.isVerified && (
+        <WhatsAppVerificationSection 
+          phoneNumber={phoneForVerification || (verifiedNumber?.phoneNumber || user?.phone || "")} 
+          redirectFrom={redirectFrom || "dashboard"}
+          shouldGenerateCode={!!phoneForVerification} // Only generate new code when phone was explicitly edited
+        />
+      )}
     </div>
   );
 }
