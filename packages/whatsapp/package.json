@@ -9,6 +9,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@imaginecalendar/database": "workspace:*",
     "@imaginecalendar/logger": "workspace:*",
     "axios": "^1.7.7",
     "zod": "4.1.6"
