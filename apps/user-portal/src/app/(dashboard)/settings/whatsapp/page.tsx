@@ -27,16 +27,17 @@ export default function WhatsAppVerificationPage() {
   const [phoneForVerification, setPhoneForVerification] = useState<string | null>(null);
 
   // Fetch current user data to get phone number
-  const { data: user, isLoading: userLoading } = useQuery(
+  const { data: user, isLoading: userLoading, error: userError } = useQuery(
     trpc.user.me.queryOptions()
   );
 
   // Fetch connected WhatsApp numbers
-  const { data: whatsappNumbers = [], isLoading: numbersLoading, refetch: refetchNumbers } = useQuery(
+  const { data: whatsappNumbers = [], isLoading: numbersLoading, error: numbersError, refetch: refetchNumbers } = useQuery(
     trpc.whatsapp.getMyNumbers.queryOptions()
   );
 
   const isLoading = userLoading || numbersLoading;
+  const hasError = userError || numbersError;
 
   // Find verified WhatsApp number
   const verifiedNumber = whatsappNumbers?.find((num: any) => num.isVerified) || whatsappNumbers?.[0];
@@ -58,6 +59,55 @@ export default function WhatsAppVerificationPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-pulse">Loading...</div>
+      </div>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <div className="space-y-6">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-sm">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Home className="h-4 w-4" />
+            Dashboard
+          </Link>
+          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+          <span className="font-medium">WhatsApp Verification</span>
+        </div>
+
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-primary">WhatsApp Settings</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage your WhatsApp connection and verify your number
+          </p>
+        </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-8">
+              <p className="text-destructive mb-4">
+                {userError ? "Failed to load user data." : "Failed to load WhatsApp numbers."}
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (userError) {
+                    queryClient.invalidateQueries({ queryKey: trpc.user.me.queryKey() });
+                  }
+                  if (numbersError) {
+                    refetchNumbers();
+                  }
+                }}
+              >
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

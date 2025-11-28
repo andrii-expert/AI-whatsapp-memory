@@ -1,4 +1,4 @@
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, desc, asc } from "drizzle-orm";
 import type { Database } from "../client";
 import { whatsappNumbers, users } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
@@ -166,7 +166,7 @@ export async function getUserWhatsAppNumbers(db: Database, userId: string) {
     () =>
       db.query.whatsappNumbers.findMany({
         where: eq(whatsappNumbers.userId, userId),
-        orderBy: (whatsappNumbers, { desc }) => [
+        orderBy: [
           desc(whatsappNumbers.isPrimary),
           desc(whatsappNumbers.isVerified),
           desc(whatsappNumbers.createdAt),
