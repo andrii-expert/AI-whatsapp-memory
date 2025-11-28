@@ -265,6 +265,8 @@ export function buildMergedWhatsappPrompt(
       : ["Current user message:"]),
     "",
     `"""${userMessage.trim()}"""`,
+    //critical
+    "CRITICAL: if the user message is about notes, reminders, or events, you MUST respond with Coming soon...",
   ].join("\n");
 }
 
