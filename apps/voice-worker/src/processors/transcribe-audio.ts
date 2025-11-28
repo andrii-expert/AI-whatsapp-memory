@@ -113,24 +113,69 @@ export async function processTranscribeAudio(
     await updateVoiceMessageJobStatus(db, voiceJobId, 'transcribed');
 
     // Send transcribed text directly back to user via WhatsApp
+    const whatsappService = new WhatsAppService();
+    const senderPhone = updatedVoiceJob.senderPhone;
+    
+    if (!senderPhone) {
+      logger.error({ voiceJobId }, 'Sender phone number is missing, cannot send response');
+      throw new Error('Sender phone number is missing');
+    }
+    
     if (transcription.text && transcription.text.trim().length > 0) {
       try {
-        const whatsappService = new WhatsAppService();
-        
         logger.info(
-          { voiceJobId, senderPhone: updatedVoiceJob.senderPhone, textLength: transcription.text.length },
+          { voiceJobId, senderPhone, textLength: transcription.text.length, textPreview: transcription.text.substring(0, 50) },
           'Sending transcribed text to user'
         );
         
-        await whatsappService.sendTextMessage(
-          updatedVoiceJob.senderPhone,
-          transcription.text
-        );
-        
-        logger.info(
-          { voiceJobId, senderPhone: updatedVoiceJob.senderPhone },
-          'Transcribed text sent to user successfully'
-        );
+        let response;
+        try {
+          // Try sending as regular text message first (within 24-hour window)
+          response = await whatsappService.sendTextMessage(
+            senderPhone,
+            transcription.text
+          );
+          
+          logger.info(
+            { voiceJobId, senderPhone, messageId: response?.messages?.[0]?.id },
+            'Transcribed text sent to user successfully via regular message'
+          );
+        } catch (regularMessageError) {
+          // If regular message fails (e.g., outside 24-hour window), try template message
+          logger.warn(
+            { 
+              error: regularMessageError instanceof Error ? regularMessageError.message : String(regularMessageError),
+              voiceJobId, 
+              senderPhone 
+            },
+            'Regular message failed, trying template message as fallback'
+          );
+          
+          try {
+            // Use template message as fallback (works outside 24-hour window)
+            response = await whatsappService.sendMessage(
+              senderPhone,
+              transcription.text,
+              'cc_me' // Template name
+            );
+            
+            logger.info(
+              { voiceJobId, senderPhone, messageId: response?.messages?.[0]?.id },
+              'Transcribed text sent to user successfully via template message'
+            );
+          } catch (templateError) {
+            // If template also fails, throw the original error
+            logger.error(
+              { 
+                error: templateError instanceof Error ? templateError.message : String(templateError),
+                voiceJobId, 
+                senderPhone 
+              },
+              'Both regular and template message failed'
+            );
+            throw regularMessageError; // Throw original error
+          }
+        }
         
         // Mark as completed
         await updateVoiceMessageJobStatus(db, voiceJobId, 'completed');
@@ -138,40 +183,110 @@ export async function processTranscribeAudio(
         // Send notification
         await queueManager.enqueueSendNotification({
           voiceJobId,
-          senderPhone: updatedVoiceJob.senderPhone,
+          senderPhone,
           success: true,
         });
       } catch (sendError) {
+        const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
         logger.error(
-          { error: sendError, voiceJobId, senderPhone: updatedVoiceJob.senderPhone },
-          'Failed to send transcribed text to user'
+          { 
+            error: errorMessage,
+            errorStack: sendError instanceof Error ? sendError.stack : undefined,
+            voiceJobId, 
+            senderPhone,
+            transcribedText: transcription.text.substring(0, 100)
+          },
+          'Failed to send transcribed text to user - attempting to send error message'
         );
         
-        // Still mark as completed but with error
+        // Try to send an error message to the user
+        try {
+          await whatsappService.sendTextMessage(
+            senderPhone,
+            `I transcribed your voice message, but encountered an error sending it back. Here's what I heard: "${transcription.text.substring(0, 200)}${transcription.text.length > 200 ? '...' : ''}"`
+          );
+          logger.info({ voiceJobId, senderPhone }, 'Sent error message with transcribed text to user');
+        } catch (errorMessageError) {
+          logger.error(
+            { 
+              error: errorMessageError instanceof Error ? errorMessageError.message : String(errorMessageError),
+              voiceJobId, 
+              senderPhone 
+            },
+            'Failed to send error message to user'
+          );
+        }
+        
+        // Mark as failed
         await updateVoiceMessageJobStatus(db, voiceJobId, 'failed');
         
         await queueManager.enqueueSendNotification({
           voiceJobId,
-          senderPhone: updatedVoiceJob.senderPhone,
+          senderPhone,
           success: false,
-          errorMessage: 'Failed to send transcribed text',
+          errorMessage: `Failed to send transcribed text: ${errorMessage}`,
         });
       }
     } else {
-      logger.warn({ voiceJobId }, 'Transcribed text is empty, cannot send to user');
+      logger.warn({ voiceJobId, senderPhone }, 'Transcribed text is empty, sending message to user');
+      
+      // Still try to send a message to the user
+      try {
+        await whatsappService.sendTextMessage(
+          senderPhone,
+          "I received your voice message, but I couldn't transcribe any text from it. Please try speaking more clearly or send a text message instead."
+        );
+        logger.info({ voiceJobId, senderPhone }, 'Sent empty transcription message to user');
+      } catch (sendError) {
+        logger.error(
+          { 
+            error: sendError instanceof Error ? sendError.message : String(sendError),
+            voiceJobId, 
+            senderPhone 
+          },
+          'Failed to send empty transcription message to user'
+        );
+      }
       
       await updateVoiceMessageJobStatus(db, voiceJobId, 'failed');
       
       await queueManager.enqueueSendNotification({
         voiceJobId,
-        senderPhone: updatedVoiceJob.senderPhone,
+        senderPhone,
         success: false,
         errorMessage: 'No text was transcribed from the voice message',
       });
     }
   } catch (error) {
     const classifiedError = ErrorHandler.classify(error);
-    ErrorHandler.log(classifiedError, { voiceJobId, audioFilePath });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    ErrorHandler.log(classifiedError, { voiceJobId, audioFilePath, errorMessage });
+
+    // Try to get voice job to send error message
+    const voiceJob = await getVoiceMessageJob(db, voiceJobId);
+    const senderPhone = voiceJob?.senderPhone;
+
+    // Try to send error message to user
+    if (senderPhone) {
+      try {
+        const whatsappService = new WhatsAppService();
+        const userMessage = ErrorHandler.getUserMessage(classifiedError) || 
+          "I'm sorry, I encountered an error processing your voice message. Please try again or send a text message.";
+        await whatsappService.sendTextMessage(senderPhone, userMessage);
+        logger.info({ voiceJobId, senderPhone }, 'Sent error message to user');
+      } catch (sendError) {
+        logger.error(
+          { 
+            error: sendError instanceof Error ? sendError.message : String(sendError),
+            voiceJobId, 
+            senderPhone 
+          },
+          'Failed to send error message to user'
+        );
+      }
+    } else {
+      logger.error({ voiceJobId }, 'Cannot send error message - sender phone number is missing');
+    }
 
     // Update database with error
     await updateVoiceMessageJobError(db, voiceJobId, {
@@ -179,6 +294,9 @@ export async function processTranscribeAudio(
       errorStage: 'transcribing',
       retryCount: job.attemptsMade,
     });
+
+    // Update status to failed
+    await updateVoiceMessageJobStatus(db, voiceJobId, 'failed');
 
     // Cleanup audio file
     const fileManager = new FileManager();
@@ -190,12 +308,10 @@ export async function processTranscribeAudio(
     }
 
     // Otherwise, skip to notification
-    const voiceJob = await getVoiceMessageJob(db, voiceJobId);
-
-    if (voiceJob) {
+    if (voiceJob && senderPhone) {
       await queueManager.enqueueSendNotification({
         voiceJobId,
-        senderPhone: voiceJob.senderPhone,
+        senderPhone,
         success: false,
         errorMessage: ErrorHandler.getUserMessage(classifiedError),
       });
