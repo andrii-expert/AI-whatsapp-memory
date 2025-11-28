@@ -161,14 +161,21 @@ export default function WhatsAppVerificationPage() {
   };
 
   const handleSave = async () => {
-    if (!editedPhone || editedPhone === verifiedNumber?.phoneNumber) {
+    if (!editedPhone) {
+      setIsEditing(false);
+      return;
+    }
+
+    // Normalize the phone number for comparison
+    const normalizedPhone = normalizePhoneNumber(editedPhone);
+    
+    // Check if the phone number actually changed (compare normalized values)
+    if (normalizedPhone === (verifiedNumber?.phoneNumber || user?.phone || "")) {
       setIsEditing(false);
       return;
     }
 
     try {
-      // Normalize the phone number
-      const normalizedPhone = normalizePhoneNumber(editedPhone);
       
       // Update user profile phone number
       await updateUserMutation.mutateAsync({

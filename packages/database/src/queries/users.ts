@@ -147,9 +147,11 @@ export async function updateUser(
     'updateUser',
     { userId: id, updates: Object.keys(data) },
     async () => {
+      // Normalize phone number if provided (used for both users and whatsapp_numbers tables)
+      const normalizedPhone = data.phone !== undefined && data.phone ? normalizePhoneNumber(data.phone) : null;
+      
       // If phone is being updated, sync with whatsapp_numbers table
       if (data.phone !== undefined) {
-        const normalizedPhone = data.phone ? normalizePhoneNumber(data.phone) : null;
         
         // Get all existing WhatsApp numbers for this user
         const existingNumbers = await db.query.whatsappNumbers.findMany({
@@ -305,8 +307,10 @@ export async function updateUser(
       }
 
       // Convert Date to string for the birthday field (date type in DB)
+      // Use normalized phone number if phone was updated (normalizedPhone can be null to clear phone)
       const updateData = {
         ...data,
+        ...(data.phone !== undefined ? { phone: normalizedPhone } : {}),
         birthday: data.birthday ? data.birthday.toISOString().split('T')[0] : undefined,
         updatedAt: new Date(),
       };
