@@ -1,5 +1,6 @@
 export interface ReminderPromptOptions {
   defaultStatusLabel?: string;
+  messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }>;
 }
 
 const DEFAULT_STATUS = 'active';
@@ -36,7 +37,23 @@ export function buildWhatsappReminderPrompt(
     // '   • Be creative in interpreting intent - if someone says "remind me about X" or "don\'t forget Y", create a reminder.',
     // '   • Only use fallback if there is genuinely NO reminder-related intent: I\'m sorry, I didn\'t understand. Could you rephrase?',
     // '',
-    'User message:',
+    '═══════════════════════════════════════════════════════════════',
+    'CONVERSATION HISTORY (for context)',
+    '═══════════════════════════════════════════════════════════════',
+    '',
+    ...(options?.messageHistory && options.messageHistory.length > 0
+      ? [
+          'The following is the recent conversation history. Use this to understand context and references:',
+          '',
+          ...options.messageHistory.map((msg) => {
+            const role = msg.direction === 'incoming' ? 'User' : 'Assistant';
+            return `${role}: ${msg.content}`;
+          }),
+          '',
+          'Current user message:',
+        ]
+      : ['Current user message:']),
+    '',
     `"""${userMessage.trim()}"""`,
   ].join('\n');
 }

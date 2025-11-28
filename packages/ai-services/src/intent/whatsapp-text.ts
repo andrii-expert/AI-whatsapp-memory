@@ -28,22 +28,22 @@ export class WhatsappTextAnalysisService {
     logger.debug({}, 'WhatsappTextAnalysisService initialized with OpenAI API key');
   }
 
-  async analyzeTask(text: string, options?: TaskPromptOptions): Promise<string> {
+  async analyzeTask(text: string, options?: TaskPromptOptions & { messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }> }): Promise<string> {
     const prompt = buildWhatsappTaskPrompt(text, options);
     return this.generate(prompt, 'task');
   }
 
-  async analyzeReminder(text: string, options?: ReminderPromptOptions): Promise<string> {
+  async analyzeReminder(text: string, options?: ReminderPromptOptions & { messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }> }): Promise<string> {
     const prompt = buildWhatsappReminderPrompt(text, options);
     return this.generate(prompt, 'reminder');
   }
 
-  async analyzeNote(text: string, options?: NotePromptOptions): Promise<string> {
+  async analyzeNote(text: string, options?: NotePromptOptions & { messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }> }): Promise<string> {
     const prompt = buildWhatsappNotePrompt(text, options);
     return this.generate(prompt, 'note');
   }
 
-  async analyzeEvent(text: string, options?: EventPromptOptions): Promise<string> {
+  async analyzeEvent(text: string, options?: EventPromptOptions & { messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }> }): Promise<string> {
     const prompt = buildWhatsappEventPrompt(text, options);
     return this.generate(prompt, 'event');
   }

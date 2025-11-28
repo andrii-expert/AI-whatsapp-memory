@@ -1,6 +1,7 @@
 export interface TaskPromptOptions {
     verificationCode?: string;
     defaultFolderLabel?: string;
+    messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }>;
   }
   
   const DEFAULT_VERIFICATION_CODE = "169753";
@@ -289,7 +290,23 @@ export interface TaskPromptOptions {
       "",
       "REMEMBER: Sharing recognition happens FIRST, before any other operation!",
       "",
-      "User message:",
+      "═══════════════════════════════════════════════════════════════",
+      "CONVERSATION HISTORY (for context)",
+      "═══════════════════════════════════════════════════════════════",
+      "",
+      ...(options?.messageHistory && options.messageHistory.length > 0
+        ? [
+            "The following is the recent conversation history. Use this to understand context and references:",
+            "",
+            ...options.messageHistory.map((msg, idx) => {
+              const role = msg.direction === 'incoming' ? 'User' : 'Assistant';
+              return `${role}: ${msg.content}`;
+            }),
+            "",
+            "Current user message:",
+          ]
+        : ["Current user message:"]),
+      "",
       `"""${userMessage.trim()}"""`,
     ].join("\n");
   }

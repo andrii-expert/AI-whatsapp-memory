@@ -2,6 +2,7 @@ import type { Database } from '@imaginecalendar/database/client';
 import {
   getVerifiedWhatsappNumberByPhone,
   logIncomingWhatsAppMessage,
+  logOutgoingWhatsAppMessage,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, getWhatsAppConfig, getWhatsAppApiUrl } from '@imaginecalendar/whatsapp';

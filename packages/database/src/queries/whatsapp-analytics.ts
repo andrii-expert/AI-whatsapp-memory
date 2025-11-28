@@ -452,6 +452,7 @@ export async function logIncomingWhatsAppMessage(
     userId: string;
     messageId?: string;
     messageType: 'text' | 'voice' | 'image' | 'document' | 'interactive';
+    messageContent?: string; // Store message content for history
   }
 ) {
   return withMutationLogging(
@@ -467,6 +468,8 @@ export async function logIncomingWhatsAppMessage(
         messageType: data.messageType,
         costCents: 0, // Incoming messages are free
         processed: true,
+        // Store message content in errorMessage field as JSON (temporary until we add content field)
+        errorMessage: data.messageContent ? JSON.stringify({ content: data.messageContent }) : null,
       });
 
       // Update the WhatsApp number message count
@@ -484,6 +487,82 @@ export async function logIncomingWhatsAppMessage(
         costCents: 0,
         direction: 'incoming',
       };
+    }
+  );
+}
+
+/**
+ * Store outgoing message content for history
+ */
+export async function logOutgoingWhatsAppMessage(
+  db: Database,
+  data: {
+    whatsappNumberId: string;
+    userId: string;
+    messageId?: string;
+    messageType: 'text' | 'voice' | 'image' | 'document' | 'interactive';
+    messageContent?: string;
+    costCents?: number;
+  }
+) {
+  return withMutationLogging(
+    'logOutgoingWhatsAppMessage',
+    { userId: data.userId, messageType: data.messageType },
+    async () => {
+      await db.insert(whatsappMessageLogs).values({
+        whatsappNumberId: data.whatsappNumberId,
+        userId: data.userId,
+        messageId: data.messageId,
+        direction: 'outgoing',
+        messageType: data.messageType,
+        costCents: data.costCents || 0,
+        processed: true,
+        // Store message content in errorMessage field as JSON (temporary until we add content field)
+        errorMessage: data.messageContent ? JSON.stringify({ content: data.messageContent }) : null,
+      });
+    }
+  );
+}
+
+/**
+ * Get recent message history for a user (last N messages)
+ */
+export async function getRecentMessageHistory(
+  db: Database,
+  userId: string,
+  limit: number = 20
+) {
+  return withQueryLogging(
+    'getRecentMessageHistory',
+    { userId, limit },
+    async () => {
+      const messages = await db.query.whatsappMessageLogs.findMany({
+        where: eq(whatsappMessageLogs.userId, userId),
+        orderBy: [desc(whatsappMessageLogs.createdAt)],
+        limit,
+      });
+
+      // Parse message content from errorMessage field (temporary)
+      return messages.map(msg => {
+        let content = '';
+        if (msg.errorMessage) {
+          try {
+            const parsed = JSON.parse(msg.errorMessage) as { content?: string };
+            content = parsed.content || '';
+          } catch {
+            // If parsing fails, ignore
+          }
+        }
+
+        return {
+          id: msg.id,
+          messageId: msg.messageId,
+          direction: msg.direction as 'incoming' | 'outgoing',
+          messageType: msg.messageType,
+          content,
+          createdAt: msg.createdAt,
+        };
+      }).reverse(); // Reverse to get chronological order (oldest first)
     }
   );
 }

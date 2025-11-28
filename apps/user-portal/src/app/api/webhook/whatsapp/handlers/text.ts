@@ -1,5 +1,5 @@
 import type { Database } from '@imaginecalendar/database/client';
-import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage } from '@imaginecalendar/database/queries';
+import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
 import { WhatsappTextAnalysisService, WhatsappIntentRouterService } from '@imaginecalendar/ai-services';
@@ -100,6 +100,7 @@ export async function handleTextMessage(
       userId: whatsappNumber.userId,
       messageId: message.id,
       messageType: 'text',
+      messageContent: messageText, // Store message content for history
     });
   } catch (error) {
     logger.error(
@@ -150,6 +151,20 @@ async function analyzeAndRespond(
   const analyzer = new WhatsappTextAnalysisService();
   const whatsappService = new WhatsAppService();
 
+  // Get recent message history for context
+  let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+  try {
+    const history = await getRecentMessageHistory(db, userId, 20);
+    messageHistory = history
+      .filter(msg => msg.content && msg.content.trim().length > 0)
+      .map(msg => ({
+        direction: msg.direction,
+        content: msg.content,
+      }));
+  } catch (error) {
+    logger.warn({ error, userId }, 'Failed to retrieve message history, continuing without history');
+  }
+
   // Step 1: Detect which intent(s) are present in the message
   logger.debug({ textLength: text.length, userId }, 'Detecting intent with router');
   const detectedIntents = await router.detectIntents(text);
@@ -196,16 +211,16 @@ async function analyzeAndRespond(
 
     switch (primaryIntent) {
       case 'task':
-        aiResponse = (await analyzer.analyzeTask(text)).trim();
+        aiResponse = (await analyzer.analyzeTask(text, { messageHistory })).trim();
         break;
       case 'note':
-        aiResponse = (await analyzer.analyzeNote(text)).trim();
+        aiResponse = (await analyzer.analyzeNote(text, { messageHistory })).trim();
         break;
       case 'reminder':
-        aiResponse = (await analyzer.analyzeReminder(text)).trim();
+        aiResponse = (await analyzer.analyzeReminder(text, { messageHistory })).trim();
         break;
       case 'event':
-        aiResponse = (await analyzer.analyzeEvent(text)).trim();
+        aiResponse = (await analyzer.analyzeEvent(text, { messageHistory })).trim();
         break;
       default:
         throw new Error(`Unknown intent: ${primaryIntent}`);
@@ -239,6 +254,21 @@ async function analyzeAndRespond(
         const result = await executor.executeAction(parsed);
         await whatsappService.sendTextMessage(recipient, result.message);
         
+        // Store outgoing message in history
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: result.message,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing message');
+        }
+        
         logger.info(
           {
             success: result.success,
@@ -250,11 +280,39 @@ async function analyzeAndRespond(
       } else {
         // AI returned an error/fallback response
         await whatsappService.sendTextMessage(recipient, aiResponse);
+        // Store outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: aiResponse,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing message');
+        }
       }
     } else if (isValidTemplateResponse(aiResponse)) {
       // For non-task intents, just send the AI response for now
       // TODO: Implement executors for note, reminder, event
       await whatsappService.sendTextMessage(recipient, aiResponse);
+      // Store outgoing message
+      try {
+        const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+        if (whatsappNumber) {
+          await logOutgoingWhatsAppMessage(db, {
+            whatsappNumberId: whatsappNumber.id,
+            userId,
+            messageType: 'text',
+            messageContent: aiResponse,
+          });
+        }
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to log outgoing message');
+      }
       logger.info(
         {
           recipient,

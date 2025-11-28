@@ -1,5 +1,6 @@
 export interface EventPromptOptions {
   defaultCalendarLabel?: string;
+  messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }>;
 }
 
 const DEFAULT_CALENDAR = 'primary';
@@ -35,7 +36,23 @@ export function buildWhatsappEventPrompt(
     // '   • Be creative in interpreting intent - if someone mentions a meeting, appointment, call, or any scheduled activity, create an event.',
     // "   • Only use fallback if there is genuinely NO event-related intent: I'm sorry, I didn't understand. Could you rephrase?",
     // '',
-    'User message:',
+    '═══════════════════════════════════════════════════════════════',
+    'CONVERSATION HISTORY (for context)',
+    '═══════════════════════════════════════════════════════════════',
+    '',
+    ...(options?.messageHistory && options.messageHistory.length > 0
+      ? [
+          'The following is the recent conversation history. Use this to understand context and references:',
+          '',
+          ...options.messageHistory.map((msg) => {
+            const role = msg.direction === 'incoming' ? 'User' : 'Assistant';
+            return `${role}: ${msg.content}`;
+          }),
+          '',
+          'Current user message:',
+        ]
+      : ['Current user message:']),
+    '',
     `"""${userMessage.trim()}"""`,
   ].join('\n');
 }
