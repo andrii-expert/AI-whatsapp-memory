@@ -9,7 +9,7 @@ import {
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsappTextAnalysisService, WhatsappIntentRouterService } from '@imaginecalendar/ai-services';
-import { WhatsAppService } from '@imaginecalendar/whatsapp';
+import { WhatsAppService, ActionExecutor } from '@imaginecalendar/whatsapp';
 import { ErrorHandler } from '../utils/error-handler';
 import type { QueueManager } from '../utils/queue-manager';
 import type { ProcessWhatsAppVoiceJobData } from '../config/queues';
@@ -71,17 +71,32 @@ export async function processWhatsAppVoice(
   db: Database,
   queueManager: QueueManager
 ): Promise<void> {
-  const { voiceJobId, userId, whatsappNumberId, transcribedText, senderPhone } = job.data;
+  const { voiceJobId, userId, whatsappNumberId, transcribedText: jobTranscribedText, senderPhone } = job.data;
 
   try {
+    // Get transcribed text from job data or fetch from database
+    let transcribedText = jobTranscribedText;
+    if (!transcribedText || transcribedText.trim().length === 0) {
+      logger.warn({ voiceJobId, userId }, 'No transcribed text in job data, fetching from database');
+      const voiceJob = await getVoiceMessageJob(db, voiceJobId);
+      if (!voiceJob?.transcribedText) {
+        throw new Error('No transcribed text available for WhatsApp voice processing');
+      }
+      transcribedText = voiceJob.transcribedText;
+    }
+
     logger.info(
-      { voiceJobId, userId, textLength: transcribedText.length },
+      { voiceJobId, userId, textLength: transcribedText.length, transcribedText: transcribedText.substring(0, 100) },
       'Starting WhatsApp voice message processing'
     );
 
     // Check if job is paused (for testing)
     const voiceJob = await getVoiceMessageJob(db, voiceJobId);
-    if (voiceJob?.pausedAtStage) {
+    if (!voiceJob) {
+      throw new Error(`Voice job ${voiceJobId} not found`);
+    }
+    
+    if (voiceJob.pausedAtStage) {
       logger.info({ voiceJobId, pausedAtStage: voiceJob.pausedAtStage }, 'Job is paused, re-queuing');
       await job.moveToDelayed(Date.now() + 5000, job.token);
       return;
@@ -89,6 +104,11 @@ export async function processWhatsAppVoice(
 
     // Update status
     await updateVoiceMessageJobStatus(db, voiceJobId, 'processing_whatsapp');
+    
+    logger.info(
+      { voiceJobId, userId, senderPhone, transcribedTextLength: transcribedText.length },
+      'Processing WhatsApp voice message'
+    );
 
     // Use the same analysis flow as text messages
     const router = new WhatsappIntentRouterService();
@@ -199,7 +219,6 @@ export async function processWhatsAppVoice(
 
       // Step 4: Parse and execute the action (only for task operations for now)
       if (primaryIntent === 'task' && isValidTemplateResponse(aiResponse)) {
-        const { ActionExecutor } = await import('@imaginecalendar/whatsapp');
         const executor = new ActionExecutor(db, userId, whatsappService, senderPhone);
         const parsed = executor.parseAction(aiResponse);
         
@@ -258,6 +277,12 @@ export async function processWhatsAppVoice(
 
       // Mark as completed
       await updateVoiceMessageJobStatus(db, voiceJobId, 'completed');
+      
+      logger.info(
+        { voiceJobId, userId, senderPhone, intent: primaryIntent },
+        'WhatsApp voice message processing completed successfully'
+      );
+      
       await queueManager.enqueueSendNotification({
         voiceJobId,
         senderPhone,
@@ -287,7 +312,21 @@ export async function processWhatsAppVoice(
     }
   } catch (error) {
     const classifiedError = ErrorHandler.classify(error);
-    ErrorHandler.log(classifiedError, { voiceJobId, userId });
+    ErrorHandler.log(classifiedError, { voiceJobId, userId, senderPhone });
+
+    // Try to send error message to user
+    try {
+      const whatsappService = new WhatsAppService();
+      const errorMessage = ErrorHandler.getUserMessage(classifiedError) || 
+        "I'm sorry, I encountered an error processing your voice message. Please try again.";
+      await whatsappService.sendTextMessage(senderPhone, errorMessage);
+      logger.info({ voiceJobId, senderPhone }, 'Sent error message to user');
+    } catch (sendError) {
+      logger.error(
+        { error: sendError, voiceJobId, senderPhone },
+        'Failed to send error message to user'
+      );
+    }
 
     // Update database with error
     await updateVoiceMessageJobError(db, voiceJobId, {
@@ -295,6 +334,9 @@ export async function processWhatsAppVoice(
       errorStage: 'processing_whatsapp',
       retryCount: job.attemptsMade,
     });
+
+    // Update status to failed
+    await updateVoiceMessageJobStatus(db, voiceJobId, 'failed');
 
     // Rethrow if retryable
     if (classifiedError.isRetryable) {
