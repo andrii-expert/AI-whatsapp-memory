@@ -254,7 +254,7 @@ async function analyzeAndRespond(
         const result = await executor.executeAction(parsed);
         await whatsappService.sendTextMessage(recipient, result.message);
         
-        // Store outgoing message in history
+        // Store outgoing message in history (free message since it's a response to incoming)
         try {
           const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
           if (whatsappNumber) {
@@ -263,6 +263,7 @@ async function analyzeAndRespond(
               userId,
               messageType: 'text',
               messageContent: result.message,
+              isFreeMessage: true, // Response to incoming message, within 24-hour window
             });
           }
         } catch (error) {
@@ -280,7 +281,7 @@ async function analyzeAndRespond(
       } else {
         // AI returned an error/fallback response
         await whatsappService.sendTextMessage(recipient, aiResponse);
-        // Store outgoing message
+        // Store outgoing message (free message since it's a response to incoming)
         try {
           const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
           if (whatsappNumber) {
@@ -289,6 +290,7 @@ async function analyzeAndRespond(
               userId,
               messageType: 'text',
               messageContent: aiResponse,
+              isFreeMessage: true, // Response to incoming message, within 24-hour window
             });
           }
         } catch (error) {
@@ -299,7 +301,7 @@ async function analyzeAndRespond(
       // For non-task intents, just send the AI response for now
       // TODO: Implement executors for note, reminder, event
       await whatsappService.sendTextMessage(recipient, aiResponse);
-      // Store outgoing message
+      // Store outgoing message (free message since it's a response to incoming)
       try {
         const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
         if (whatsappNumber) {
@@ -308,6 +310,7 @@ async function analyzeAndRespond(
             userId,
             messageType: 'text',
             messageContent: aiResponse,
+            isFreeMessage: true, // Response to incoming message, within 24-hour window
           });
         }
       } catch (error) {

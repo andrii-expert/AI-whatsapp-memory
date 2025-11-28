@@ -375,6 +375,7 @@ export async function logOutgoingWhatsAppMessage(
     messageId?: string;
     messageType: 'text' | 'voice' | 'image' | 'document' | 'interactive';
     isFreeMessage?: boolean; // If true, cost = 0 (within 24-hour window)
+    messageContent?: string; // Store message content for history
   }
 ) {
   return withMutationLogging(
@@ -397,6 +398,8 @@ export async function logOutgoingWhatsAppMessage(
         costCents,
         exchangeRateUsdToZar: DEFAULT_USD_TO_ZAR_RATE.toString(),
         processed: true,
+        // Store message content in errorMessage field as JSON (temporary until we add content field)
+        errorMessage: data.messageContent ? JSON.stringify({ content: data.messageContent }) : null,
       });
 
       // Update the WhatsApp number totals
@@ -487,39 +490,6 @@ export async function logIncomingWhatsAppMessage(
         costCents: 0,
         direction: 'incoming',
       };
-    }
-  );
-}
-
-/**
- * Store outgoing message content for history
- */
-export async function logOutgoingWhatsAppMessage(
-  db: Database,
-  data: {
-    whatsappNumberId: string;
-    userId: string;
-    messageId?: string;
-    messageType: 'text' | 'voice' | 'image' | 'document' | 'interactive';
-    messageContent?: string;
-    costCents?: number;
-  }
-) {
-  return withMutationLogging(
-    'logOutgoingWhatsAppMessage',
-    { userId: data.userId, messageType: data.messageType },
-    async () => {
-      await db.insert(whatsappMessageLogs).values({
-        whatsappNumberId: data.whatsappNumberId,
-        userId: data.userId,
-        messageId: data.messageId,
-        direction: 'outgoing',
-        messageType: data.messageType,
-        costCents: data.costCents || 0,
-        processed: true,
-        // Store message content in errorMessage field as JSON (temporary until we add content field)
-        errorMessage: data.messageContent ? JSON.stringify({ content: data.messageContent }) : null,
-      });
     }
   );
 }
