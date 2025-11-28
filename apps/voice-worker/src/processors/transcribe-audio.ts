@@ -201,12 +201,12 @@ export async function processTranscribeAudio(
         // Mark as completed
         await updateVoiceMessageJobStatus(db, voiceJobId, 'completed');
         
-        // Send notification
-        await queueManager.enqueueSendNotification({
-          voiceJobId,
-          senderPhone,
-          success: true,
-        });
+        logger.info(
+          { voiceJobId, senderPhone, messageId: response?.messages?.[0]?.id },
+          'Voice message transcription completed and sent successfully'
+        );
+        
+        // Don't enqueue notification - we already sent the message directly
       } catch (sendError) {
         const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
         logger.error(
@@ -241,12 +241,12 @@ export async function processTranscribeAudio(
         // Mark as failed
         await updateVoiceMessageJobStatus(db, voiceJobId, 'failed');
         
-        await queueManager.enqueueSendNotification({
-          voiceJobId,
-          senderPhone,
-          success: false,
-          errorMessage: `Failed to send transcribed text: ${errorMessage}`,
-        });
+        logger.error(
+          { voiceJobId, senderPhone, errorMessage },
+          'Voice message transcription failed - message already sent to user with error details'
+        );
+        
+        // Don't enqueue notification - we already tried to send error message
       }
     } else {
       logger.warn({ voiceJobId, senderPhone }, 'Transcribed text is empty, sending message to user');
@@ -271,12 +271,12 @@ export async function processTranscribeAudio(
       
       await updateVoiceMessageJobStatus(db, voiceJobId, 'failed');
       
-      await queueManager.enqueueSendNotification({
-        voiceJobId,
-        senderPhone,
-        success: false,
-        errorMessage: 'No text was transcribed from the voice message',
-      });
+      logger.warn(
+        { voiceJobId, senderPhone },
+        'Voice message had no transcription - error message already sent to user'
+      );
+      
+      // Don't enqueue notification - we already sent the error message
     }
   } catch (error) {
     const classifiedError = ErrorHandler.classify(error);
