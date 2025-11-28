@@ -33,6 +33,7 @@ function isValidTemplateResponse(text: string): boolean {
     /^Complete a task:/i,
     /^Move a task:/i,
     /^Share a task:/i,
+    /^List tasks:/i,
     /^Create a task folder:/i,
     /^Edit a task folder:/i,
     /^Delete a task folder:/i,
@@ -43,16 +44,19 @@ function isValidTemplateResponse(text: string): boolean {
     /^Delete a reminder:/i,
     /^Pause a reminder:/i,
     /^Resume a reminder:/i,
+    /^List reminders:/i,
     /^Create a note:/i,
     /^Update a note:/i,
     /^Delete a note:/i,
     /^Move a note:/i,
     /^Share a note:/i,
+    /^List notes:/i,
     /^Create a note folder:/i,
     /^Create a note sub-folder:/i,
     /^Edit a note folder:/i,
     /^Delete a note folder:/i,
     /^Share a note folder:/i,
+    /^List events:/i,
   ];
   
   return templatePatterns.some(pattern => pattern.test(trimmed));
@@ -258,7 +262,7 @@ async function processAIResponse(
 ): Promise<void> {
   try {
     // Parse the Title from response
-    const titleMatch = aiResponse.match(/^Title:\s*(task|note|reminder|event|verification)/i);
+    const titleMatch = aiResponse.match(/^Title:\s*(task|note|reminder|event|verification|normal)/i);
     if (!titleMatch || !titleMatch[1]) {
       logger.warn(
         {
@@ -289,12 +293,36 @@ async function processAIResponse(
       'Processing AI response in main workflow'
     );
 
+    // Handle Normal conversation - send directly to user without workflow processing
+    if (titleType === 'normal') {
+      // For Normal conversations, the actionTemplate is the natural response
+      // It's already been sent to the user in analyzeAndRespond, so we just log it
+      logger.info(
+        {
+          userId,
+          responsePreview: actionTemplate.substring(0, 200),
+        },
+        'Normal conversation response - already sent to user'
+      );
+      return;
+    }
+
     // Route to appropriate executor based on Title
     const executor = new ActionExecutor(db, userId, whatsappService, recipient);
     
-    if (titleType === 'task') {
+    // Check if this is a list operation (works for all types)
+    const isListOperation = actionTemplate.toLowerCase().startsWith('list ');
+    
+    if (titleType === 'task' || (isListOperation && (titleType === 'note' || titleType === 'reminder' || titleType === 'event'))) {
+      // For tasks, always try to parse and execute
+      // For notes/reminders/events, only handle list operations for now
       const parsed = executor.parseAction(actionTemplate);
       if (parsed) {
+        // Set resourceType based on titleType for list operations
+        if (isListOperation && titleType !== 'task') {
+          parsed.resourceType = titleType as 'note' | 'reminder' | 'event';
+        }
+        
         const result = await executor.executeAction(parsed);
         // Send success/error message to user
         await whatsappService.sendTextMessage(recipient, result.message);
@@ -318,15 +346,9 @@ async function processAIResponse(
         // Already sent AI response, no need to send again
         logger.info({ userId, titleType }, 'Action parsing failed, user already received AI response');
       }
-    } else if (titleType === 'note') {
-      // TODO: Implement note executor
-      logger.info({ userId, titleType }, 'Note executor not yet implemented');
-    } else if (titleType === 'reminder') {
-      // TODO: Implement reminder executor
-      logger.info({ userId, titleType }, 'Reminder executor not yet implemented');
-    } else if (titleType === 'event') {
-      // TODO: Implement event executor
-      logger.info({ userId, titleType }, 'Event executor not yet implemented');
+    } else if (titleType === 'note' || titleType === 'reminder' || titleType === 'event') {
+      // For non-list operations on notes/reminders/events, log as TODO
+      logger.info({ userId, titleType, actionTemplate: actionTemplate.substring(0, 100) }, `${titleType} executor not yet implemented for this operation`);
     } else if (titleType === 'verification') {
       // Verification is handled separately, no need to process here
       logger.info({ userId }, 'Verification handled separately');

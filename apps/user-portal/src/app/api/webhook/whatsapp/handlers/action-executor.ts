@@ -9,6 +9,8 @@ import {
   deleteFolder,
   getUserFolders,
   getUserTasks,
+  getUserNotes,
+  getRemindersByUserId,
 } from '@imaginecalendar/database/queries';
 import {
   createTaskShare,
@@ -23,7 +25,7 @@ import { WhatsAppService } from '@imaginecalendar/whatsapp';
 
 export interface ParsedAction {
   action: string;
-  resourceType: 'task' | 'folder';
+  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event';
   taskName?: string;
   folderName?: string;
   folderRoute?: string;
@@ -31,6 +33,7 @@ export interface ParsedAction {
   recipient?: string;
   newName?: string;
   status?: string;
+  listFilter?: string; // For list operations: 'all', folder name, status, etc.
   missingFields: string[];
 }
 
@@ -127,6 +130,64 @@ export class ActionExecutor {
       } else {
         missingFields.push('task name, recipient, or folder');
       }
+    } else if (trimmed.startsWith('List tasks:')) {
+      action = 'list';
+      resourceType = 'task';
+      // Match: "List tasks: {folder|all} - status: {open|completed|all}"
+      const matchWithStatus = trimmed.match(/^List tasks:\s*(.+?)\s*-\s*status:\s*(.+)$/i);
+      if (matchWithStatus) {
+        folderRoute = matchWithStatus[1].trim().toLowerCase() === 'all' ? undefined : matchWithStatus[1].trim();
+        status = matchWithStatus[2].trim();
+      } else {
+        // Match: "List tasks: {folder|all}" (no status)
+        const matchWithoutStatus = trimmed.match(/^List tasks:\s*(.+)$/i);
+        if (matchWithoutStatus) {
+          const folderOrAll = matchWithoutStatus[1].trim();
+          folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+          status = 'all'; // Default to all statuses
+        } else {
+          missingFields.push('folder or "all"');
+        }
+      }
+    } else if (trimmed.startsWith('List notes:')) {
+      action = 'list';
+      resourceType = 'note';
+      // Match: "List notes: {folder|all}"
+      const match = trimmed.match(/^List notes:\s*(.+)$/i);
+      if (match) {
+        const folderOrAll = match[1].trim();
+        folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+      } else {
+        missingFields.push('folder or "all"');
+      }
+    } else if (trimmed.startsWith('List reminders:')) {
+      action = 'list';
+      resourceType = 'reminder';
+      // Match: "List reminders: {all|active|paused}"
+      const match = trimmed.match(/^List reminders:\s*(.+)$/i);
+      if (match) {
+        status = match[1].trim();
+      } else {
+        status = 'all'; // Default to all
+      }
+    } else if (trimmed.startsWith('List events:')) {
+      action = 'list';
+      resourceType = 'event';
+      // Match: "List events: {timeframe|all} - calendar: {calendar_name}"
+      const matchWithCalendar = trimmed.match(/^List events:\s*(.+?)\s*-\s*calendar:\s*(.+)$/i);
+      if (matchWithCalendar) {
+        listFilter = matchWithCalendar[1].trim();
+        // Store calendar name in folderRoute for now (could be enhanced later)
+        folderRoute = matchWithCalendar[2].trim();
+      } else {
+        // Match: "List events: {timeframe|all}"
+        const matchWithoutCalendar = trimmed.match(/^List events:\s*(.+)$/i);
+        if (matchWithoutCalendar) {
+          listFilter = matchWithoutCalendar[1].trim();
+        } else {
+          listFilter = 'all'; // Default to all
+        }
+      }
     }
     // Folder operations
     else if (trimmed.startsWith('Create a task folder:')) {
@@ -217,6 +278,20 @@ export class ActionExecutor {
       }
 
       switch (parsed.action) {
+        case 'list':
+          if (parsed.resourceType === 'task') {
+            return await this.listTasks(parsed);
+          } else if (parsed.resourceType === 'note') {
+            return await this.listNotes(parsed);
+          } else if (parsed.resourceType === 'reminder') {
+            return await this.listReminders(parsed);
+          } else if (parsed.resourceType === 'event') {
+            return await this.listEvents(parsed);
+          }
+          return {
+            success: false,
+            message: "I'm sorry, I couldn't understand what you want to list.",
+          };
         case 'create':
           if (parsed.resourceType === 'task') {
             return await this.createTask(parsed);
@@ -757,6 +832,168 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't create the subfolder "${parsed.newName}". Please try again.`,
+      };
+    }
+  }
+
+  private async listTasks(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const folderId = parsed.folderRoute ? await this.resolveFolderRoute(parsed.folderRoute) : undefined;
+      
+      if (parsed.folderRoute && !folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      const statusFilter = parsed.status && parsed.status !== 'all' ? parsed.status as 'open' | 'completed' : undefined;
+      const tasks = await getUserTasks(this.db, this.userId, {
+        folderId,
+        status: statusFilter,
+      });
+
+      if (tasks.length === 0) {
+        const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+        const statusText = statusFilter ? ` (${statusFilter})` : '';
+        return {
+          success: true,
+          message: `📋 You have no tasks${folderText}${statusText}.`,
+        };
+      }
+
+      const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
+      const statusText = statusFilter ? ` (${statusFilter})` : '';
+      let message = `📋 Your tasks${folderText}${statusText}:\n\n`;
+      
+      tasks.slice(0, 20).forEach((task, index) => {
+        const statusIcon = task.status === 'completed' ? '✅' : '⏳';
+        message += `${index + 1}. ${statusIcon} ${task.title}\n`;
+      });
+
+      if (tasks.length > 20) {
+        message += `\n... and ${tasks.length - 20} more tasks.`;
+      }
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId, folderRoute: parsed.folderRoute }, 'Failed to list tasks');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't retrieve your tasks. Please try again.",
+      };
+    }
+  }
+
+  private async listNotes(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const folderId = parsed.folderRoute ? await this.resolveFolderRoute(parsed.folderRoute) : undefined;
+      
+      if (parsed.folderRoute && !folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      const notes = await getUserNotes(this.db, this.userId, {
+        folderId,
+      });
+
+      if (notes.length === 0) {
+        const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+        return {
+          success: true,
+          message: `📝 You have no notes${folderText}.`,
+        };
+      }
+
+      const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
+      let message = `📝 Your notes${folderText}:\n\n`;
+      
+      notes.slice(0, 20).forEach((note, index) => {
+        const contentPreview = note.content ? (note.content.length > 50 ? note.content.substring(0, 50) + '...' : note.content) : '(no content)';
+        message += `${index + 1}. ${note.title}\n   ${contentPreview}\n`;
+      });
+
+      if (notes.length > 20) {
+        message += `\n... and ${notes.length - 20} more notes.`;
+      }
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId, folderRoute: parsed.folderRoute }, 'Failed to list notes');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't retrieve your notes. Please try again.",
+      };
+    }
+  }
+
+  private async listReminders(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const reminders = await getRemindersByUserId(this.db, this.userId);
+
+      // Filter by status if specified
+      let filteredReminders = reminders;
+      if (parsed.status && parsed.status !== 'all') {
+        const isActive = parsed.status === 'active';
+        filteredReminders = reminders.filter(r => r.active === isActive);
+      }
+
+      if (filteredReminders.length === 0) {
+        const statusText = parsed.status && parsed.status !== 'all' ? ` (${parsed.status})` : '';
+        return {
+          success: true,
+          message: `🔔 You have no reminders${statusText}.`,
+        };
+      }
+
+      const statusText = parsed.status && parsed.status !== 'all' ? ` (${parsed.status})` : '';
+      let message = `🔔 Your reminders${statusText}:\n\n`;
+      
+      filteredReminders.slice(0, 20).forEach((reminder, index) => {
+        const statusIcon = reminder.active ? '🔔' : '⏸️';
+        const scheduleText = reminder.frequency ? ` (${reminder.frequency})` : '';
+        message += `${index + 1}. ${statusIcon} ${reminder.title}${scheduleText}\n`;
+      });
+
+      if (filteredReminders.length > 20) {
+        message += `\n... and ${filteredReminders.length - 20} more reminders.`;
+      }
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to list reminders');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't retrieve your reminders. Please try again.",
+      };
+    }
+  }
+
+  private async listEvents(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      // TODO: Implement event listing when event queries are available
+      // For now, return a message indicating it's not yet implemented
+      return {
+        success: false,
+        message: "I'm sorry, listing events is not yet available. Please check your calendar app for your events.",
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to list events');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't retrieve your events. Please try again.",
       };
     }
   }
