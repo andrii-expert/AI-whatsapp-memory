@@ -14,6 +14,7 @@ import {
 import { logger } from '@imaginecalendar/logger';
 import { readFile } from 'node:fs/promises';
 import { TranscriptionService } from '@imaginecalendar/ai-services';
+import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { FileManager } from '../utils/file-manager';
 import { ErrorHandler } from '../utils/error-handler';
 import type { QueueManager } from '../utils/queue-manager';
@@ -108,17 +109,66 @@ export async function processTranscribeAudio(
       await fileManager.cleanup(audioFilePath);
     }
 
-    // Enqueue next job: process WhatsApp voice message (use same analysis as text messages)
+    // Update status
     await updateVoiceMessageJobStatus(db, voiceJobId, 'transcribed');
 
-    // Route to WhatsApp voice processing instead of calendar intent processing
-    await queueManager.enqueueProcessWhatsAppVoice({
-      voiceJobId,
-      userId: updatedVoiceJob.userId,
-      whatsappNumberId: updatedVoiceJob.whatsappNumberId,
-      transcribedText: transcription.text,
-      senderPhone: updatedVoiceJob.senderPhone,
-    });
+    // Send transcribed text directly back to user via WhatsApp
+    if (transcription.text && transcription.text.trim().length > 0) {
+      try {
+        const whatsappService = new WhatsAppService();
+        
+        logger.info(
+          { voiceJobId, senderPhone: updatedVoiceJob.senderPhone, textLength: transcription.text.length },
+          'Sending transcribed text to user'
+        );
+        
+        await whatsappService.sendTextMessage(
+          updatedVoiceJob.senderPhone,
+          transcription.text
+        );
+        
+        logger.info(
+          { voiceJobId, senderPhone: updatedVoiceJob.senderPhone },
+          'Transcribed text sent to user successfully'
+        );
+        
+        // Mark as completed
+        await updateVoiceMessageJobStatus(db, voiceJobId, 'completed');
+        
+        // Send notification
+        await queueManager.enqueueSendNotification({
+          voiceJobId,
+          senderPhone: updatedVoiceJob.senderPhone,
+          success: true,
+        });
+      } catch (sendError) {
+        logger.error(
+          { error: sendError, voiceJobId, senderPhone: updatedVoiceJob.senderPhone },
+          'Failed to send transcribed text to user'
+        );
+        
+        // Still mark as completed but with error
+        await updateVoiceMessageJobStatus(db, voiceJobId, 'failed');
+        
+        await queueManager.enqueueSendNotification({
+          voiceJobId,
+          senderPhone: updatedVoiceJob.senderPhone,
+          success: false,
+          errorMessage: 'Failed to send transcribed text',
+        });
+      }
+    } else {
+      logger.warn({ voiceJobId }, 'Transcribed text is empty, cannot send to user');
+      
+      await updateVoiceMessageJobStatus(db, voiceJobId, 'failed');
+      
+      await queueManager.enqueueSendNotification({
+        voiceJobId,
+        senderPhone: updatedVoiceJob.senderPhone,
+        success: false,
+        errorMessage: 'No text was transcribed from the voice message',
+      });
+    }
   } catch (error) {
     const classifiedError = ErrorHandler.classify(error);
     ErrorHandler.log(classifiedError, { voiceJobId, audioFilePath });
