@@ -10,7 +10,7 @@ export function getTranscriptionModel(provider: string) {
       return openai.transcription('whisper-1');
 
     case 'openai-gpt4o':
-      return openai.transcription('gpt-4o-transcribe');
+      return openai.transcription('gpt-5-transcribe');
 
     case 'google-chirp':
       // Google Chirp model for speech recognition

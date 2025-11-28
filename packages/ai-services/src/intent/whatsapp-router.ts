@@ -30,7 +30,7 @@ export class WhatsappIntentRouterService {
       apiKey: apiKey,
     });
 
-    this.model = openaiClient('gpt-4o-mini');
+    this.model = openaiClient('gpt-5');
   }
 
   async detectIntents(text: string): Promise<WhatsappTextIntent[]> {

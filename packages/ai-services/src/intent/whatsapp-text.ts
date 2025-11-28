@@ -24,7 +24,7 @@ export class WhatsappTextAnalysisService {
       apiKey: apiKey,
     });
 
-    this.model = openaiClient('gpt-4o-mini');
+    this.model = openaiClient('gpt-5');
     
     logger.debug({}, 'WhatsappTextAnalysisService initialized with OpenAI API key');
   }
