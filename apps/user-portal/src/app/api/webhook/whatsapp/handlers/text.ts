@@ -192,7 +192,27 @@ async function analyzeAndRespond(
       'Got response from AI analyzer'
     );
 
-    // Process the AI response in main workflow (this will send appropriate messages to user)
+    // Step 2: Send AI response to user immediately
+    const responseToUser = extractUserFriendlyResponse(aiResponse);
+    await whatsappService.sendTextMessage(recipient, responseToUser);
+    
+    // Store outgoing message in history (free message since it's a response to incoming)
+    try {
+      const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+      if (whatsappNumber) {
+        await logOutgoingWhatsAppMessage(db, {
+          whatsappNumberId: whatsappNumber.id,
+          userId,
+          messageType: 'text',
+          messageContent: responseToUser,
+          isFreeMessage: true, // Response to incoming message, within 24-hour window
+        });
+      }
+    } catch (error) {
+      logger.warn({ error, userId }, 'Failed to log outgoing message');
+    }
+
+    // Step 3: Process the AI response in main workflow
     await processAIResponse(aiResponse, recipient, userId, db, whatsappService);
 
   } catch (error) {
@@ -276,31 +296,13 @@ async function processAIResponse(
     // Handle Normal conversation - send directly to user without workflow processing
     if (titleType === 'normal') {
       // For Normal conversations, the actionTemplate is the natural response
-      // Send it to the user
-      await whatsappService.sendTextMessage(recipient, actionTemplate);
-      
-      // Log outgoing message
-      try {
-        const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-        if (whatsappNumber) {
-          await logOutgoingWhatsAppMessage(db, {
-            whatsappNumberId: whatsappNumber.id,
-            userId,
-            messageType: 'text',
-            messageContent: actionTemplate,
-            isFreeMessage: true,
-          });
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to log outgoing message');
-      }
-      
+      // It's already been sent to the user in analyzeAndRespond, so we just log it
       logger.info(
         {
           userId,
           responsePreview: actionTemplate.substring(0, 200),
         },
-        'Normal conversation response sent to user'
+        'Normal conversation response - already sent to user'
       );
       return;
     }
