@@ -251,20 +251,20 @@ export function buildMergedWhatsappPrompt(
     "CONVERSATION HISTORY (for context)",
     "═══════════════════════════════════════════════════════════════",
     "",
-    ...(options?.messageHistory && options.messageHistory.length > 0
-      ? [
-          "The following is the recent conversation history. Use this to understand context and references:",
-          "",
-          ...options.messageHistory.map((msg, idx) => {
-            const role = msg.direction === 'incoming' ? 'User' : 'Assistant';
-            return `${role}: ${msg.content}`;
-          }),
-          "",
-          "Current user message:",
-        ]
-      : ["Current user message:"]),
-    "",
-    `"""${userMessage.trim()}"""`,
+    // ...(options?.messageHistory && options.messageHistory.length > 0
+    //   ? [
+    //       "The following is the recent conversation history. Use this to understand context and references:",
+    //       "",
+    //       ...options.messageHistory.map((msg, idx) => {
+    //         const role = msg.direction === 'incoming' ? 'User' : 'Assistant';
+    //         return `${role}: ${msg.content}`;
+    //       }),
+    //       "",
+    //       "Current user message:",
+    //     ]
+    //   : ["Current user message:"]),
+    // "",
+    // `"""${userMessage.trim()}"""`,
     //critical
     "CRITICAL: if the user message is about notes, reminders, or events, you MUST respond with Coming soon...",
     "MUST: if the user message is about notes, reminders, or events, you MUST respond with Coming soon...",
