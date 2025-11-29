@@ -192,7 +192,27 @@ async function analyzeAndRespond(
       'Got response from AI analyzer'
     );
 
-    // Process the AI response in main workflow (which will send appropriate messages to user)
+    // Step 2: Send AI response to user immediately
+    const responseToUser = extractUserFriendlyResponse(aiResponse);
+    await whatsappService.sendTextMessage(recipient, responseToUser);
+    
+    // Store outgoing message in history (free message since it's a response to incoming)
+    try {
+      const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+      if (whatsappNumber) {
+        await logOutgoingWhatsAppMessage(db, {
+          whatsappNumberId: whatsappNumber.id,
+          userId,
+          messageType: 'text',
+          messageContent: responseToUser,
+          isFreeMessage: true, // Response to incoming message, within 24-hour window
+        });
+      }
+    } catch (error) {
+      logger.warn({ error, userId }, 'Failed to log outgoing message');
+    }
+
+    // Step 3: Process the AI response in main workflow
     await processAIResponse(aiResponse, recipient, userId, db, whatsappService);
 
   } catch (error) {
@@ -214,6 +234,20 @@ async function analyzeAndRespond(
       logger.error({ error: sendError, senderPhone: recipient }, 'Failed to send error response');
     }
   }
+}
+
+/**
+ * Extract user-friendly response from AI response (removes Title: prefix for user display)
+ */
+function extractUserFriendlyResponse(aiResponse: string): string {
+  const lines = aiResponse.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  
+  // If response starts with "Title:", remove it and return the rest
+  if (lines[0]?.startsWith('Title:')) {
+    return lines.slice(1).join('\n') || lines[0]; // If only title, return it
+  }
+  
+  return aiResponse;
 }
 
 /**
@@ -262,31 +296,13 @@ async function processAIResponse(
     // Handle Normal conversation - send directly to user without workflow processing
     if (titleType === 'normal') {
       // For Normal conversations, the actionTemplate is the natural response
-      // Send it to the user
-      await whatsappService.sendTextMessage(recipient, actionTemplate);
-      
-      // Log outgoing message
-      try {
-        const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-        if (whatsappNumber) {
-          await logOutgoingWhatsAppMessage(db, {
-            whatsappNumberId: whatsappNumber.id,
-            userId,
-            messageType: 'text',
-            messageContent: actionTemplate,
-            isFreeMessage: true,
-          });
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to log outgoing message');
-      }
-      
+      // It's already been sent to the user in analyzeAndRespond, so we just log it
       logger.info(
         {
           userId,
           responsePreview: actionTemplate.substring(0, 200),
         },
-        'Normal conversation response sent to user'
+        'Normal conversation response - already sent to user'
       );
       return;
     }
@@ -327,28 +343,8 @@ async function processAIResponse(
           logger.warn({ error, userId }, 'Failed to log outgoing message');
         }
       } else {
-        // Action parsing failed - send error message to user
-        logger.warn({ userId, titleType, actionTemplate: actionTemplate.substring(0, 100) }, 'Action parsing failed');
-        try {
-          await whatsappService.sendTextMessage(
-            recipient,
-            "I'm sorry, I couldn't understand that request. Could you rephrase it?"
-          );
-          
-          // Log outgoing message
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: "I'm sorry, I couldn't understand that request. Could you rephrase it?",
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.error({ error, userId }, 'Failed to send error message to user');
-        }
+        // Already sent AI response, no need to send again
+        logger.info({ userId, titleType }, 'Action parsing failed, user already received AI response');
       }
     } else if (titleType === 'note' || titleType === 'reminder' || titleType === 'event') {
       // For non-list operations on notes/reminders/events, log as TODO

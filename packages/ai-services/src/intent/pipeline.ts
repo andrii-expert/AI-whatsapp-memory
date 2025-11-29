@@ -99,7 +99,7 @@ export interface IntentPipelineOptions {
 export async function runIntentPipeline(
   options: IntentPipelineOptions
 ): Promise<IntentPipelineResult> {
-  const model = options.model ?? openai('gpt-5');
+  const model = options.model ?? openai('gpt-4o-mini');
   const now = options.now ?? new Date();
 
   // Pre-normalize timestamps to local time for context logging
@@ -133,7 +133,7 @@ export async function runIntentPipeline(
     payload: prompt,
     metadata: {
       provider: 'openai',
-      model: options.model ? 'custom' : 'gpt-5',
+      model: options.model ? 'custom' : 'gpt-4o-mini',
     },
   });
 
@@ -148,7 +148,7 @@ export async function runIntentPipeline(
     payload: result.object,
     metadata: {
       provider: 'openai',
-      model: options.model ? 'custom' : 'gpt-5',
+      model: options.model ? 'custom' : 'gpt-4o-mini',
       usage: 'usage' in result ? (result as any).usage : undefined,
     },
   });

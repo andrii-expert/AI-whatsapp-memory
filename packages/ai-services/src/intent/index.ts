@@ -34,7 +34,7 @@ import { calendarIntentSchema } from './types';
 import type { CalendarIntent, IntentContext } from './types';
 
 export class IntentAnalysisService {
-  private model = openai('gpt-5'); // Using GPT-5 model
+  private model = openai('gpt-4o-mini'); // Fast and cost-effective
 
   async analyzeCalendarIntent(
     text: string,

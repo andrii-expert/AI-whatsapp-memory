@@ -73,7 +73,7 @@ export async function processAnalyzeIntent(
     // Update database with intent
     await updateVoiceMessageJobIntent(db, voiceJobId, {
       intentAnalysis: intent,
-      intentProvider: 'openai-gpt5',
+      intentProvider: 'openai-gpt4o-mini',
     });
 
     logger.info(
