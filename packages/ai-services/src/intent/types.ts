@@ -30,6 +30,9 @@ export const calendarIntentSchema = z.object({
   targetEventDate: z.string().optional().describe('Date of event to update/delete'),
   targetEventTime: z.string().optional().describe('Time of event to update/delete'),
 
+  // For QUERY: timeframe specification
+  queryTimeframe: z.enum(['today', 'tomorrow', 'this_week', 'this_month', 'all']).optional().describe('Timeframe for querying events: today, tomorrow, this_week, this_month, or all'),
+
   // Recurrence
   recurrence: z.object({
     frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY']),

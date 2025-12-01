@@ -398,7 +398,7 @@ export class CalendarService implements ICalendarService {
       // Build search parameters
       const searchParams: any = {
         calendarId: calendarConnection.calendarId || 'primary',
-        maxResults: 10,
+        maxResults: 50, // Increased for better coverage
       };
 
       // Add query text if available
@@ -406,11 +406,83 @@ export class CalendarService implements ICalendarService {
         searchParams.query = intent.title || intent.targetEventTitle;
       }
 
-      // Add time range if provided
-      if (intent.startDate || intent.targetEventDate) {
+      // Handle time range based on queryTimeframe or startDate
+      const now = new Date();
+      let timeMin: Date | undefined;
+      let timeMax: Date | undefined;
+
+      // Check for queryTimeframe first (preferred method)
+      if ('queryTimeframe' in intent && intent.queryTimeframe) {
+        switch (intent.queryTimeframe) {
+          case 'today':
+            timeMin = new Date(now);
+            timeMin.setHours(0, 0, 0, 0);
+            timeMax = new Date(now);
+            timeMax.setHours(23, 59, 59, 999);
+            break;
+          case 'tomorrow':
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            timeMin = new Date(tomorrow);
+            timeMin.setHours(0, 0, 0, 0);
+            timeMax = new Date(tomorrow);
+            timeMax.setHours(23, 59, 59, 999);
+            break;
+          case 'this_week':
+            // Start of current week (Sunday)
+            const weekStart = new Date(now);
+            weekStart.setDate(now.getDate() - now.getDay());
+            timeMin = new Date(weekStart);
+            timeMin.setHours(0, 0, 0, 0);
+            // End of current week (Saturday)
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            timeMax = new Date(weekEnd);
+            timeMax.setHours(23, 59, 59, 999);
+            break;
+          case 'this_month':
+            // Start of current month
+            timeMin = new Date(now.getFullYear(), now.getMonth(), 1);
+            timeMin.setHours(0, 0, 0, 0);
+            // End of current month
+            timeMax = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            timeMax.setHours(23, 59, 59, 999);
+            break;
+          case 'all':
+            // No time range - get all events
+            break;
+        }
+      } else if (intent.startDate || intent.targetEventDate) {
+        // Fallback to parsing startDate if queryTimeframe not provided
         const searchDate = new Date(intent.startDate || intent.targetEventDate!);
-        searchParams.timeMin = new Date(searchDate.setHours(0, 0, 0, 0));
-        searchParams.timeMax = new Date(searchDate.setHours(23, 59, 59, 999));
+        
+        // Check if the date string looks like "today" or "tomorrow" (shouldn't happen but handle gracefully)
+        if (isNaN(searchDate.getTime())) {
+          logger.warn({ userId, dateString: intent.startDate || intent.targetEventDate }, 'Invalid date string, defaulting to today');
+          timeMin = new Date(now);
+          timeMin.setHours(0, 0, 0, 0);
+          timeMax = new Date(now);
+          timeMax.setHours(23, 59, 59, 999);
+        } else {
+          timeMin = new Date(searchDate);
+          timeMin.setHours(0, 0, 0, 0);
+          timeMax = new Date(searchDate);
+          timeMax.setHours(23, 59, 59, 999);
+        }
+      } else {
+        // No timeframe specified - default to showing upcoming events (next 30 days)
+        timeMin = new Date(now);
+        timeMin.setHours(0, 0, 0, 0);
+        timeMax = new Date(now);
+        timeMax.setDate(timeMax.getDate() + 30);
+        timeMax.setHours(23, 59, 59, 999);
+      }
+
+      if (timeMin) {
+        searchParams.timeMin = timeMin;
+      }
+      if (timeMax) {
+        searchParams.timeMax = timeMax;
       }
 
       const foundEvents = await this.withTokenRefresh(
@@ -433,7 +505,7 @@ export class CalendarService implements ICalendarService {
         webLink: e.webLink,
       }));
 
-      logger.info({ userId, count: events.length }, 'Calendar events found');
+      logger.info({ userId, count: events.length, timeframe: intent.queryTimeframe || 'default' }, 'Calendar events found');
 
       return {
         success: true,

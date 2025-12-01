@@ -78,16 +78,115 @@ ${clarificationsBlock}
 ### User Message
 """${text}"""
 
+### Action Recognition Guide
+
+**CREATE Actions** - User wants to create a new calendar event/meeting:
+- Keywords: "create", "add", "new", "schedule", "set up", "put", "make", "book"
+- Also CREATE if user mentions a meeting/event without explicit action words (e.g., "meeting with John at 2pm")
+- Examples:
+  • "Create a calendar event: Meeting with John at 2pm"
+  • "Add a meeting on Friday at 10am"
+  • "New event: Team meeting tomorrow morning"
+  • "Meeting with Sarah at 1pm" (implicit CREATE)
+  • "Set up a meeting for next Monday at 11am"
+  • "Can you add a meeting for me? Tomorrow 4pm"
+  • "Hey… add a meeting for me… Friday at 2pm with John" (voice-note style)
+  • "Meeting Friday at 9 — add it" (casual)
+
+**UPDATE Actions** - User wants to modify an existing event:
+- Keywords: "edit", "update", "change", "modify", "reschedule", "move", "shift"
+- "Reschedule" and "move" are UPDATE actions, not DELETE
+- Examples:
+  • "Edit my meeting with John to 3pm"
+  • "Change the Budget Review event to next Tuesday"
+  • "Update the meeting title to Strategy Session"
+  • "Reschedule the meeting to Thursday at 11am"
+  • "Move my 2pm meeting to 4pm"
+  • "Can you update my event tomorrow? Make it 10am instead"
+  • "Hey… update that meeting… the John one… move it to 3" (voice-note style)
+
+**DELETE Actions** - User wants to cancel/remove an event:
+- Keywords: "delete", "cancel", "remove", "drop"
+- Examples:
+  • "Cancel the meeting with John"
+  • "Delete the event tomorrow at 10am"
+  • "Remove my 3pm client call"
+  • "I don't need that meeting anymore — cancel it"
+  • "Hey… cancel that meeting — the one at 2" (voice-note style)
+
+**QUERY Actions** - User wants to view/list their schedule:
+- Keywords: "show", "list", "view", "display", "what's", "what are", "tell me", "see", "get"
+- For QUERY, set queryTimeframe field:
+  - "today" → queryTimeframe = "today"
+  - "tomorrow" → queryTimeframe = "tomorrow"
+  - "this week" → queryTimeframe = "this_week"
+  - "this month" → queryTimeframe = "this_month"
+  - "all" or no timeframe → queryTimeframe = "all" or leave null
+- Also set startDate for additional context (today = current date, this week = start of week, etc.)
+- Examples:
+  • "Show me my schedule" → action: QUERY, queryTimeframe: "all"
+  • "View my calendar" → action: QUERY, queryTimeframe: "all"
+  • "What's on my calendar today?" → action: QUERY, queryTimeframe: "today"
+  • "Show me today's events" → action: QUERY, queryTimeframe: "today"
+  • "List my meetings today" → action: QUERY, queryTimeframe: "today"
+  • "What do I have planned for today?" → action: QUERY, queryTimeframe: "today"
+  • "Show my events for this week" → action: QUERY, queryTimeframe: "this_week"
+  • "What's happening tomorrow?" → action: QUERY, queryTimeframe: "tomorrow"
+  • "Hey… what's on my schedule?" → action: QUERY, queryTimeframe: "all" (voice-note style)
+
 ### Instructions
-1. Identify the user's desired calendar action (CREATE, UPDATE, DELETE, QUERY).
-2. Extract available details conservatively; never guess. If information is ambiguous, leave it null and add a follow-up entry only for the required fields. Use values from the Clarification Responses section above to fill in any fields that were previously answered.
-3. Normalise date/time information. If only a day or part of a day is mentioned, mark the precision accordingly. Treat provided timestamps as the actual scheduled time; do not apply any conversions. When generating datetime.iso, express the user's intended local time directly (e.g., if they say "tomorrow at 1pm", and tomorrow is Oct 23, use "2025-10-23T13:00:00.000Z").
-4. Attendees should reference the contact roster when possible (match by name). IMPORTANT: If the user says "myself", "me", "just me", "only me", "just myself", or similar self-referencing phrases, interpret this as NO attendees (return empty array []). Only include attendees who are OTHER PEOPLE with real names and email addresses from the contact roster. If an attendee is mentioned but not in the contact roster, add them to followUp to ask for clarification.
-5. Locations should specify whether they are physical, virtual, or unknown. URLs count as virtual locations.
-6. Confidence must reflect how certain the assistant is (0.0–1.0). Lower confidence should trigger follow-up questions.
-7. CRITICAL: For CREATE/UPDATE actions, the final intent MUST include a non-empty "title" and a precise "datetime.iso". Use the user's stated local time directly (no conversions). If either is missing or unclear, add a follow-up question explaining exactly what is required.
-8. All other fields (durationMinutes, attendees, location, description, etc.) are optional. Populate them when the user supplies the information, but do not request clarifications for them if they are absent. Populate the followUp array only for title/date/time gaps or when resolving conflicts explicitly mentioned by the user.
-9. When a field is unavailable, output JSON null (without quotes). If there is no scheduling conflict, set "conflict": null. Never emit the string "null" for missing values.
+1. **Action Identification**: Determine if the user wants to CREATE, UPDATE, DELETE, or QUERY based on the guide above. Be generous in interpreting CREATE - if user mentions a meeting/event without explicit action words, treat as CREATE.
+
+2. **Date/Time Extraction**:
+   - For CREATE/UPDATE: Extract startDate (YYYY-MM-DD) and startTime (HH:MM) from the message
+   - Relative dates: "today" = current date, "tomorrow" = current date + 1 day, "Friday" = next Friday, "next Monday" = Monday of next week
+   - Time formats: Accept "2pm", "14:00", "2:00 PM", "14:30", etc. Convert to 24-hour HH:MM format
+   - For QUERY: Set queryTimeframe field ("today", "tomorrow", "this_week", "this_month", "all"). Also set startDate for context.
+
+3. **Title Extraction**:
+   - Extract event title from the message. If user says "meeting with John", title could be "Meeting with John"
+   - For UPDATE/DELETE: Use targetEventTitle to identify which event to modify
+   - If title is unclear, leave null and add to missingFields
+
+4. **Attendees**:
+   - Match names from contact roster when possible
+   - If user says "myself", "me", "just me", "only me", "just myself" → return empty array []
+   - Only include OTHER PEOPLE with real names from contact roster
+   - If attendee mentioned but not in roster, add to missingFields
+
+5. **Location**:
+   - Extract location text as-is (e.g., "at the office", "Café Mio", "Zoom", "Home Affairs")
+   - URLs count as virtual locations
+
+6. **UPDATE vs DELETE**:
+   - "Reschedule", "move", "shift" → UPDATE action (not DELETE)
+   - "Cancel", "delete", "remove" → DELETE action
+   - For UPDATE: Use targetEventTitle/targetEventDate to identify the event, then use title/startDate/startTime for the new values
+
+7. **QUERY Operations**:
+   - When user asks to view/list/show schedule → action = QUERY
+   - Extract timeframe and set queryTimeframe field: "today" → "today", "tomorrow" → "tomorrow", "this week" → "this_week", "this month" → "this_month", or "all" for all events
+   - Also set startDate based on timeframe (today = current date, this week = start of week, etc.) for additional context
+   - For "show my schedule" without timeframe → set queryTimeframe to "all" or leave null
+
+8. **Confidence**:
+   - High confidence (0.8-1.0): Clear intent with all required fields
+   - Medium confidence (0.5-0.7): Intent clear but some details missing
+   - Low confidence (<0.5): Ambiguous intent, add to missingFields
+
+9. **Required Fields**:
+   - CREATE: title and startDate are required (startTime recommended but can be all-day)
+   - UPDATE: targetEventTitle or targetEventDate required to identify event
+   - DELETE: targetEventTitle or targetEventDate required to identify event
+   - QUERY: No required fields, but startDate helps filter results
+
+10. **Missing Fields**:
+    - Only add to missingFields if the field is REQUIRED and missing
+    - For CREATE: title, startDate are required
+    - For UPDATE/DELETE: targetEventTitle or targetEventDate required
+    - Optional fields (location, attendees, description) should NOT be in missingFields
+
+11. **Null Values**: When a field is unavailable, output JSON null (without quotes). Never emit the string "null".
 
 Return only the JSON object that matches the agreed schema.`;
 }
