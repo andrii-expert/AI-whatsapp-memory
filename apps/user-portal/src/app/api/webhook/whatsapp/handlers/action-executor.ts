@@ -22,6 +22,8 @@ import {
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
+import { CalendarService } from './calendar-service';
+import type { CalendarIntent } from '@imaginecalendar/ai-services';
 
 export interface ParsedAction {
   action: string;
@@ -1021,14 +1023,114 @@ export class ActionExecutor {
 
   private async listEvents(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     try {
-      // TODO: Implement event listing when event queries are available
-      // For now, return a message indicating it's not yet implemented
+      const timeframe = parsed.listFilter || 'all';
+      
+      // Map timeframe strings to queryTimeframe values
+      let queryTimeframe: 'today' | 'tomorrow' | 'this_week' | 'this_month' | 'all';
+      const timeframeLower = timeframe.toLowerCase().trim();
+      
+      if (timeframeLower === 'today' || timeframeLower.includes("today's")) {
+        queryTimeframe = 'today';
+      } else if (timeframeLower === 'tomorrow') {
+        queryTimeframe = 'tomorrow';
+      } else if (
+        timeframeLower.includes('week') || 
+        timeframeLower === 'this week' ||
+        timeframeLower.includes('next few days') ||
+        timeframeLower.includes('coming up')
+      ) {
+        queryTimeframe = 'this_week';
+      } else if (
+        timeframeLower.includes('month') || 
+        timeframeLower === 'this month' ||
+        timeframeLower.includes('rest of the month')
+      ) {
+        queryTimeframe = 'this_month';
+      } else {
+        queryTimeframe = 'all';
+      }
+      
+      // Create calendar intent for query
+      const intent: CalendarIntent = {
+        action: 'QUERY',
+        confidence: 0.9,
+        queryTimeframe,
+      };
+      
+      // Execute query using CalendarService
+      const calendarService = new CalendarService(this.db);
+      const result = await calendarService.execute(this.userId, intent);
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.message || "I'm sorry, I couldn't retrieve your events. Please try again.",
+        };
+      }
+      
+      // Format response message
+      if (result.action === 'QUERY' && result.events) {
+        if (result.events.length === 0) {
+          const timeframeText = queryTimeframe === 'today' ? 'today' 
+            : queryTimeframe === 'tomorrow' ? 'tomorrow'
+            : queryTimeframe === 'this_week' ? 'this week'
+            : queryTimeframe === 'this_month' ? 'this month'
+            : 'upcoming';
+          
+          return {
+            success: true,
+            message: `📅 You have no events scheduled ${timeframeText}.`,
+          };
+        }
+        
+        let message = `📅 You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}`;
+        const timeframeText = queryTimeframe === 'today' ? 'today' 
+          : queryTimeframe === 'tomorrow' ? 'tomorrow'
+          : queryTimeframe === 'this_week' ? 'this week'
+          : queryTimeframe === 'this_month' ? 'this month'
+          : '';
+        
+        if (timeframeText) {
+          message += ` ${timeframeText}`;
+        }
+        message += ':\n\n';
+        
+        // Format each event
+        result.events.slice(0, 20).forEach((event: { title: string; start: Date; location?: string }, index: number) => {
+          const eventTime = event.start.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          });
+          const eventDate = event.start.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+          });
+          
+          message += `${index + 1}. ${event.title}\n   📅 ${eventDate} at ${eventTime}`;
+          if (event.location) {
+            message += `\n   📍 ${event.location}`;
+          }
+          message += '\n';
+        });
+        
+        if (result.events.length > 20) {
+          message += `\n... and ${result.events.length - 20} more event${result.events.length - 20 !== 1 ? 's' : ''}.`;
+        }
+        
+        return {
+          success: true,
+          message: message.trim(),
+        };
+      }
+      
       return {
         success: false,
-        message: "I'm sorry, listing events is not yet available. Please check your calendar app for your events.",
+        message: "I'm sorry, I couldn't retrieve your events. Please try again.",
       };
     } catch (error) {
-      logger.error({ error, userId: this.userId }, 'Failed to list events');
+      logger.error({ error, userId: this.userId, timeframe: parsed.listFilter }, 'Failed to list events');
       return {
         success: false,
         message: "I'm sorry, I couldn't retrieve your events. Please try again.",
