@@ -361,31 +361,6 @@ async function processAIResponse(
         'Processing event operation - AI response logged'
       );
 
-      // Send AI response to user for debugging (as requested)
-      try {
-        await whatsappService.sendTextMessage(
-          recipient,
-          `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
-        );
-        // Log outgoing message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing message');
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to send AI response to user');
-      }
-
       // Handle event operations (create, update, delete, list)
       const isListOperation = actionTemplate.toLowerCase().startsWith('list events:');
       
