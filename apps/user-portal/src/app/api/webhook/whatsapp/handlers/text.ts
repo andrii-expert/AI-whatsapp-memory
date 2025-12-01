@@ -2,7 +2,7 @@ import type { Database } from '@imaginecalendar/database/client';
 import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
-import { WhatsappTextAnalysisService, IntentAnalysisService } from '@imaginecalendar/ai-services';
+import { WhatsappTextAnalysisService, IntentAnalysisService, type CalendarIntent, calendarIntentSchema } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
 import { CalendarService } from './calendar-service';
 import { ActionExecutor } from './action-executor';
@@ -500,59 +500,17 @@ async function handleEventOperation(
       return;
     }
 
-    // Analyze the original user text to extract calendar intent
-    logger.info({ userId, originalText: originalUserText }, 'Starting calendar intent analysis');
+    // Parse the action template to extract calendar intent
+    logger.info({ userId, actionTemplate }, 'Parsing event template to calendar intent');
     
-    // Fetch calendar context (contacts and recent events) for better intent analysis
-    let contactRoster: Array<{ name: string; email: string; source: 'google' | 'microsoft' }> = [];
-    let recentEvents: Array<{ title: string; start: Date; end: Date | null; location?: string }> = [];
-    
+    let intent;
     try {
-      const calendarService = new CalendarService(db);
-      [contactRoster, recentEvents] = await Promise.all([
-        calendarService.getContacts(userId).catch((error) => {
-          logger.warn({ userId, error: error.message }, 'Failed to fetch contacts for intent analysis');
-          return [];
-        }),
-        calendarService.getRecentEvents(userId).catch((error) => {
-          logger.warn({ userId, error: error.message }, 'Failed to fetch recent events for intent analysis');
-          return [];
-        }),
-      ]);
+      intent = parseEventTemplateToIntent(actionTemplate, isCreate, isUpdate, isDelete);
       
       logger.info(
         {
           userId,
-          contactCount: contactRoster.length,
-          recentEventCount: recentEvents.length,
-        },
-        'Fetched calendar context for intent analysis'
-      );
-    } catch (contextError) {
-      logger.warn(
-        {
-          error: contextError instanceof Error ? contextError.message : String(contextError),
-          userId,
-        },
-        'Failed to fetch calendar context, continuing without it'
-      );
-    }
-    
-    let intent;
-    try {
-      const intentService = new IntentAnalysisService();
-      // Note: IntentAnalysisService.analyzeCalendarIntent only accepts IntentContext (userId, timezone, currentDate)
-      // The prompt will be enhanced with contacts/events if we use the pipeline, but for now use basic context
-      intent = await intentService.analyzeCalendarIntent(originalUserText, {
-        userId,
-        currentDate: new Date(),
-      });
-
-      logger.info(
-        {
-          userId,
           action: intent.action,
-          confidence: intent.confidence,
           hasTitle: !!intent.title,
           title: intent.title,
           hasStartDate: !!intent.startDate,
@@ -562,19 +520,19 @@ async function handleEventOperation(
           attendees: intent.attendees,
           fullIntent: JSON.stringify(intent, null, 2),
         },
-        'Calendar intent analyzed from text'
+        'Calendar intent parsed from template'
       );
-    } catch (intentError) {
+    } catch (parseError) {
       logger.error(
         {
-          error: intentError instanceof Error ? intentError.message : String(intentError),
-          errorStack: intentError instanceof Error ? intentError.stack : undefined,
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+          errorStack: parseError instanceof Error ? parseError.stack : undefined,
           userId,
-          originalText: originalUserText,
+          actionTemplate,
         },
-        'Failed to analyze calendar intent'
+        'Failed to parse event template'
       );
-      throw new Error(`Intent analysis failed: ${intentError instanceof Error ? intentError.message : String(intentError)}`);
+      throw new Error(`Template parsing failed: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
     }
 
     // Validate required fields
@@ -737,6 +695,212 @@ async function handleEventOperation(
       logger.error({ error: sendError, senderPhone: recipient }, 'Failed to send error response');
     }
   }
+}
+
+/**
+ * Parse event template string to CalendarIntent
+ * Handles formats like:
+ * - "Create an event: {title} - date: {date} - time: {time} - calendar: {calendar}"
+ * - "Update an event: {title} - changes: {details} - calendar: {calendar}"
+ * - "Delete an event: {title} - calendar: {calendar}"
+ */
+function parseEventTemplateToIntent(
+  template: string,
+  isCreate: boolean,
+  isUpdate: boolean,
+  isDelete: boolean
+): CalendarIntent {
+  // Determine action
+  let action: 'CREATE' | 'UPDATE' | 'DELETE' | 'QUERY';
+  if (isCreate) {
+    action = 'CREATE';
+  } else if (isUpdate) {
+    action = 'UPDATE';
+  } else if (isDelete) {
+    action = 'DELETE';
+  } else {
+    throw new Error('Unknown event operation type');
+  }
+
+  const intent: any = {
+    action,
+    confidence: 0.9, // High confidence since we're parsing a structured template
+  };
+
+  if (isCreate) {
+    // Parse: "Create an event: {title} - date: {date} - time: {time} - calendar: {calendar}"
+    // Can also have: - location: {location} - attendees: {name1, name2}
+    
+    // Extract title (everything after "Create an event:" until first " - ")
+    const titleMatch = template.match(/^Create an event:\s*(.+?)(?:\s*-\s*date:|\s*-\s*time:|\s*-\s*calendar:|\s*-\s*location:|\s*-\s*attendees:|$)/i);
+    if (titleMatch && titleMatch[1]) {
+      intent.title = titleMatch[1].trim();
+    }
+    
+    // Extract date
+    const dateMatch = template.match(/\s*-\s*date:\s*(.+?)(?:\s*-\s*time:|\s*-\s*calendar:|\s*-\s*location:|\s*-\s*attendees:|$)/i);
+    if (dateMatch && dateMatch[1]) {
+      intent.startDate = parseRelativeDate(dateMatch[1].trim());
+    }
+    
+    // Extract time
+    const timeMatch = template.match(/\s*-\s*time:\s*(.+?)(?:\s*-\s*calendar:|\s*-\s*location:|\s*-\s*attendees:|$)/i);
+    if (timeMatch && timeMatch[1]) {
+      intent.startTime = parseTime(timeMatch[1].trim());
+    }
+    
+    // Extract location
+    const locationMatch = template.match(/\s*-\s*location:\s*(.+?)(?:\s*-\s*calendar:|\s*-\s*attendees:|$)/i);
+    if (locationMatch && locationMatch[1]) {
+      intent.location = locationMatch[1].trim();
+    }
+    
+    // Extract attendees
+    const attendeesMatch = template.match(/\s*-\s*attendees:\s*(.+?)(?:\s*-\s*calendar:|$)/i);
+    if (attendeesMatch && attendeesMatch[1]) {
+      const attendeesStr = attendeesMatch[1].trim();
+      intent.attendees = attendeesStr.split(',').map(a => a.trim()).filter(a => a.length > 0);
+    }
+    
+    // Ensure we have at least a title
+    if (!intent.title) {
+      throw new Error(`Could not extract event title from template: ${template}`);
+    }
+    
+    // If no date provided, default to today
+    if (!intent.startDate) {
+      intent.startDate = parseRelativeDate('today');
+    }
+  } else if (isUpdate) {
+    // Parse: "Update an event: {title} - changes: {details} - calendar: {calendar}"
+    const updateMatch = template.match(/^Update an event:\s*(.+?)(?:\s*-\s*changes:\s*(.+?))?(?:\s*-\s*calendar:\s*(.+?))?$/i);
+    
+    if (updateMatch && updateMatch[1]) {
+      intent.targetEventTitle = updateMatch[1].trim();
+      
+      if (updateMatch[2]) {
+        const changes = updateMatch[2].trim();
+        // Try to extract new date/time from changes
+        const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) || changes.match(/(?:on|for)\s+(.+?)(?:\s|$)/i);
+        if (dateMatch && dateMatch[1]) {
+          intent.startDate = parseRelativeDate(dateMatch[1].trim());
+        }
+        
+        const timeMatch = changes.match(/time\s+to\s+(.+?)(?:\s|$)/i) || changes.match(/(?:at|to)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+        if (timeMatch && timeMatch[1]) {
+          intent.startTime = parseTime(timeMatch[1].trim());
+        }
+        
+        // Check if title is being updated
+        const titleMatch = changes.match(/title\s+to\s+(.+?)(?:\s|$)/i);
+        if (titleMatch && titleMatch[1]) {
+          intent.title = titleMatch[1].trim();
+        }
+      }
+    }
+  } else if (isDelete) {
+    // Parse: "Delete an event: {title} - calendar: {calendar}"
+    const deleteMatch = template.match(/^Delete an event:\s*(.+?)(?:\s*-\s*calendar:\s*(.+?))?$/i);
+    
+    if (deleteMatch && deleteMatch[1]) {
+      intent.targetEventTitle = deleteMatch[1].trim();
+    }
+  }
+
+  // Validate and parse with schema
+  return calendarIntentSchema.parse(intent);
+}
+
+/**
+ * Parse relative date strings to YYYY-MM-DD format
+ */
+function parseRelativeDate(dateStr: string): string {
+  const lower = dateStr.toLowerCase().trim();
+  const now = new Date();
+  
+  if (lower === 'today') {
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  if (lower === 'tomorrow') {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const year = tomorrow.getFullYear();
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const day = String(tomorrow.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Try to parse as date string (YYYY-MM-DD or other formats)
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // If it's a day name, find next occurrence
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const dayIndex = dayNames.findIndex(d => lower.includes(d));
+  if (dayIndex !== -1) {
+    const daysUntil = (dayIndex - now.getDay() + 7) % 7 || 7;
+    const targetDate = new Date(now);
+    targetDate.setDate(now.getDate() + daysUntil);
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const day = String(targetDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Default to today if can't parse
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parse time strings to HH:MM format (24-hour)
+ */
+function parseTime(timeStr: string): string {
+  const trimmed = timeStr.trim();
+  
+  // Already in HH:MM format
+  if (/^\d{2}:\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  
+  // Parse 12-hour format (2pm, 2:30pm, 2 PM, etc.)
+  const match = trimmed.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (match) {
+    let hours = parseInt(match[1] || '0', 10);
+    const minutes = parseInt(match[2] || '0', 10);
+    const period = (match[3] || '').toLowerCase();
+    
+    if (period === 'pm' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'am' && hours === 12) {
+      hours = 0;
+    }
+    
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+  
+  // Try to parse as HH:MM directly
+  const directMatch = trimmed.match(/(\d{1,2}):(\d{2})/);
+  if (directMatch) {
+    const hours = parseInt(directMatch[1] || '0', 10);
+    const minutes = parseInt(directMatch[2] || '0', 10);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+  
+  // Default to current time if can't parse
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 }
 
 async function sendTypingIndicatorSafely(recipient: string, messageId: string | undefined): Promise<void> {
