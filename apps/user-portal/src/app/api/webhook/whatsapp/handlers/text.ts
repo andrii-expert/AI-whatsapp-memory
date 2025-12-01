@@ -350,6 +350,42 @@ async function processAIResponse(
         logger.info({ userId, titleType }, 'Action parsing failed, user already received AI response');
       }
     } else if (titleType === 'event') {
+      // Log AI response for debugging
+      logger.info(
+        {
+          userId,
+          titleType,
+          actionTemplate: actionTemplate.substring(0, 200),
+          fullAIResponse: aiResponse.substring(0, 500),
+        },
+        'Processing event operation - AI response logged'
+      );
+
+      // Send AI response to user for debugging (as requested)
+      try {
+        await whatsappService.sendTextMessage(
+          recipient,
+          `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
+        );
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing message');
+        }
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to send AI response to user');
+      }
+
       // Handle event operations (create, update, delete, list)
       const isListOperation = actionTemplate.toLowerCase().startsWith('list events:');
       
@@ -433,8 +469,8 @@ async function handleEventOperation(
     logger.info(
       {
         userId,
-        originalText: originalUserText.substring(0, 100),
-        actionTemplate: actionTemplate.substring(0, 100),
+        originalText: originalUserText,
+        actionTemplate: actionTemplate,
       },
       'Handling event operation from text message'
     );
@@ -444,32 +480,102 @@ async function handleEventOperation(
     const isUpdate = actionTemplate.toLowerCase().startsWith('update an event:');
     const isDelete = actionTemplate.toLowerCase().startsWith('delete an event:');
 
+    logger.info(
+      {
+        userId,
+        isCreate,
+        isUpdate,
+        isDelete,
+        actionTemplate: actionTemplate.substring(0, 200),
+      },
+      'Event operation type detection'
+    );
+
     if (!isCreate && !isUpdate && !isDelete) {
       logger.warn({ userId, actionTemplate }, 'Unknown event operation type');
       await whatsappService.sendTextMessage(
         recipient,
-        "I'm sorry, I couldn't understand what event operation you want to perform. Please try again."
+        `I'm sorry, I couldn't understand what event operation you want to perform.\n\nAction template: ${actionTemplate.substring(0, 200)}\n\nPlease try again.`
       );
       return;
     }
 
     // Analyze the original user text to extract calendar intent
-    const intentService = new IntentAnalysisService();
-    const intent = await intentService.analyzeCalendarIntent(originalUserText, {
-      userId,
-      currentDate: new Date(),
-    });
-
-    logger.info(
-      {
+    logger.info({ userId, originalText: originalUserText }, 'Starting calendar intent analysis');
+    
+    // Fetch calendar context (contacts and recent events) for better intent analysis
+    let contactRoster: Array<{ name: string; email: string; source: 'google' | 'microsoft' }> = [];
+    let recentEvents: Array<{ title: string; start: Date; end: Date | null; location?: string }> = [];
+    
+    try {
+      const calendarService = new CalendarService(db);
+      [contactRoster, recentEvents] = await Promise.all([
+        calendarService.getContacts(userId).catch((error) => {
+          logger.warn({ userId, error: error.message }, 'Failed to fetch contacts for intent analysis');
+          return [];
+        }),
+        calendarService.getRecentEvents(userId).catch((error) => {
+          logger.warn({ userId, error: error.message }, 'Failed to fetch recent events for intent analysis');
+          return [];
+        }),
+      ]);
+      
+      logger.info(
+        {
+          userId,
+          contactCount: contactRoster.length,
+          recentEventCount: recentEvents.length,
+        },
+        'Fetched calendar context for intent analysis'
+      );
+    } catch (contextError) {
+      logger.warn(
+        {
+          error: contextError instanceof Error ? contextError.message : String(contextError),
+          userId,
+        },
+        'Failed to fetch calendar context, continuing without it'
+      );
+    }
+    
+    let intent;
+    try {
+      const intentService = new IntentAnalysisService();
+      // Note: IntentAnalysisService.analyzeCalendarIntent only accepts IntentContext (userId, timezone, currentDate)
+      // The prompt will be enhanced with contacts/events if we use the pipeline, but for now use basic context
+      intent = await intentService.analyzeCalendarIntent(originalUserText, {
         userId,
-        action: intent.action,
-        confidence: intent.confidence,
-        hasTitle: !!intent.title,
-        hasStartDate: !!intent.startDate,
-      },
-      'Calendar intent analyzed from text'
-    );
+        currentDate: new Date(),
+      });
+
+      logger.info(
+        {
+          userId,
+          action: intent.action,
+          confidence: intent.confidence,
+          hasTitle: !!intent.title,
+          title: intent.title,
+          hasStartDate: !!intent.startDate,
+          startDate: intent.startDate,
+          startTime: intent.startTime,
+          location: intent.location,
+          attendees: intent.attendees,
+          fullIntent: JSON.stringify(intent, null, 2),
+        },
+        'Calendar intent analyzed from text'
+      );
+    } catch (intentError) {
+      logger.error(
+        {
+          error: intentError instanceof Error ? intentError.message : String(intentError),
+          errorStack: intentError instanceof Error ? intentError.stack : undefined,
+          userId,
+          originalText: originalUserText,
+        },
+        'Failed to analyze calendar intent'
+      );
+      throw new Error(`Intent analysis failed: ${intentError instanceof Error ? intentError.message : String(intentError)}`);
+    }
 
     // Validate required fields
     if (intent.action === 'CREATE' && (!intent.title || !intent.startDate)) {
@@ -501,8 +607,26 @@ async function handleEventOperation(
     }
 
     // Execute the calendar operation
-    const calendarService = new CalendarService(db);
-    const result = await calendarService.execute(userId, intent);
+    logger.info({ userId, intentAction: intent.action }, 'Executing calendar operation');
+    
+    let result;
+    try {
+      const calendarService = new CalendarService(db);
+      result = await calendarService.execute(userId, intent);
+      logger.info({ userId, success: result.success, action: result.action }, 'Calendar operation executed');
+    } catch (calendarError) {
+      logger.error(
+        {
+          error: calendarError instanceof Error ? calendarError.message : String(calendarError),
+          errorStack: calendarError instanceof Error ? calendarError.stack : undefined,
+          userId,
+          intentAction: intent.action,
+          intentTitle: intent.title,
+        },
+        'Failed to execute calendar operation'
+      );
+      throw new Error(`Calendar operation failed: ${calendarError instanceof Error ? calendarError.message : String(calendarError)}`);
+    }
 
     // Send response to user
     let responseMessage: string;
@@ -574,21 +698,41 @@ async function handleEventOperation(
 
     logger.info({ userId, action: result.action, success: result.success }, 'Event operation completed');
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     logger.error(
       {
-        error: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
+        error: errorMessage,
+        errorStack,
+        errorName: error instanceof Error ? error.name : undefined,
         userId,
-        originalText: originalUserText.substring(0, 100),
+        originalText: originalUserText,
+        actionTemplate: actionTemplate,
       },
       'Failed to handle event operation'
     );
 
     try {
-      await whatsappService.sendTextMessage(
-        recipient,
-        "I'm sorry, I encountered an error processing your event request. Please try again."
-      );
+      // Send detailed error message to user for debugging
+      const errorResponse = `❌ Error processing event request:\n\n${errorMessage}\n\nPlease check the logs for more details or try again.`;
+      await whatsappService.sendTextMessage(recipient, errorResponse);
+      
+      // Log outgoing error message
+      try {
+        const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+        if (whatsappNumber) {
+          await logOutgoingWhatsAppMessage(db, {
+            whatsappNumberId: whatsappNumber.id,
+            userId,
+            messageType: 'text',
+            messageContent: errorResponse,
+            isFreeMessage: true,
+          });
+        }
+      } catch (logError) {
+        logger.warn({ error: logError, userId }, 'Failed to log outgoing error message');
+      }
     } catch (sendError) {
       logger.error({ error: sendError, senderPhone: recipient }, 'Failed to send error response');
     }

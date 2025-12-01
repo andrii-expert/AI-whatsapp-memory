@@ -624,5 +624,108 @@ export class CalendarService implements ICalendarService {
     end.setHours(end.getHours() + 1);
     return end;
   }
+
+  async getRecentEvents(
+    userId: string,
+    options: { days?: number; limit?: number } = {}
+  ): Promise<CalendarEvent[]> {
+    const days = options.days ?? 7;
+    const limit = options.limit ?? 25;
+
+    try {
+      const calendarConnection = await getPrimaryCalendar(this.db, userId);
+
+      if (!calendarConnection || !calendarConnection.isActive || !calendarConnection.accessToken) {
+        logger.warn({ userId }, 'No active calendar connection for recent events');
+        return [];
+      }
+
+      const provider = createCalendarProvider(calendarConnection.provider);
+
+      const now = new Date();
+      const timeMin = new Date(now);
+      timeMin.setDate(timeMin.getDate() - days);
+      const timeMax = new Date(now);
+      timeMax.setDate(timeMax.getDate() + days);
+
+      const events = await this.withTokenRefresh(
+        calendarConnection.id,
+        calendarConnection.accessToken,
+        calendarConnection.refreshToken || null,
+        provider,
+        (token) =>
+          provider.searchEvents(token, {
+            calendarId: calendarConnection.calendarId || 'primary',
+            timeMin,
+            timeMax,
+            maxResults: limit,
+          })
+      );
+
+      return events.map((event) => ({
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        start: event.start,
+        end: event.end,
+        location: event.location,
+        provider: calendarConnection.provider as 'google' | 'microsoft',
+        htmlLink: event.htmlLink,
+        webLink: event.webLink,
+      }));
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to fetch recent events');
+      return [];
+    }
+  }
+
+  async getContacts(userId: string): Promise<Array<{ name: string; email: string; source: 'google' | 'microsoft' }>> {
+    try {
+      // Get user's primary calendar connection
+      const connection = await getPrimaryCalendar(this.db, userId);
+
+      if (!connection || !connection.isActive) {
+        logger.warn({ userId }, 'No active calendar connection found');
+        return [];
+      }
+
+      if (!connection.accessToken) {
+        logger.warn({ userId, provider: connection.provider }, 'No access token found');
+        return [];
+      }
+
+      // Create provider instance
+      const provider = createCalendarProvider(connection.provider);
+
+      // Fetch contacts from the provider with token refresh
+      const contacts = await this.withTokenRefresh(
+        connection.id,
+        connection.accessToken,
+        connection.refreshToken || null,
+        provider,
+        (token) => provider.getContacts(token)
+      );
+
+      // Filter only google/microsoft and map to include source
+      if (connection.provider === 'google' || connection.provider === 'microsoft') {
+        return contacts.map(contact => ({
+          ...contact,
+          source: connection.provider,
+        }));
+      }
+
+      // For apple/caldav, return empty for now
+      logger.warn({ provider: connection.provider }, 'Contacts not supported for this provider');
+      return [];
+    } catch (error: any) {
+      logger.error({
+        error: error.message || String(error),
+        errorName: error.name,
+        errorStack: error.stack,
+        userId
+      }, 'Failed to fetch contacts');
+      return [];
+    }
+  }
 }
 
