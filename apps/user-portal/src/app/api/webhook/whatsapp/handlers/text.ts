@@ -315,19 +315,96 @@ async function processAIResponse(
     
     // Check if this is a list operation (works for all types)
     const isListOperation = actionTemplate.toLowerCase().startsWith('list ');
+    const isListEvents = actionTemplate.toLowerCase().startsWith('list events:');
     
-    if (titleType === 'task' || (isListOperation && (titleType === 'note' || titleType === 'reminder' || titleType === 'event'))) {
-      // For tasks, always try to parse and execute
-      // For notes/reminders/events, only handle list operations for now
+    // Handle list operations for all types (tasks, notes, reminders, events)
+    if (isListOperation && (titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event')) {
+      try {
+        logger.info(
+          {
+            userId,
+            titleType,
+            actionTemplate: actionTemplate.substring(0, 200),
+            isListEvents,
+          },
+          'Processing list operation'
+        );
+        
+        const parsed = executor.parseAction(actionTemplate);
+        if (parsed) {
+          // Set resourceType based on titleType for list operations
+          parsed.resourceType = titleType as 'task' | 'note' | 'reminder' | 'event';
+          
+          logger.info(
+            {
+              userId,
+              resourceType: parsed.resourceType,
+              action: parsed.action,
+              listFilter: parsed.listFilter,
+            },
+            'Parsed list operation, executing'
+          );
+          
+          const result = await executor.executeAction(parsed);
+          
+          logger.info(
+            {
+              userId,
+              success: result.success,
+              messageLength: result.message.length,
+            },
+            'List operation executed, sending response'
+          );
+          
+          // Send success/error message to user
+          await whatsappService.sendTextMessage(recipient, result.message);
+          
+          // Log outgoing message
+          try {
+            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+            if (whatsappNumber) {
+              await logOutgoingWhatsAppMessage(db, {
+                whatsappNumberId: whatsappNumber.id,
+                userId,
+                messageType: 'text',
+                messageContent: result.message,
+                isFreeMessage: true,
+              });
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to log outgoing message');
+          }
+        } else {
+          logger.warn({ userId, titleType, actionTemplate: actionTemplate.substring(0, 200) }, 'Failed to parse list operation');
+          await whatsappService.sendTextMessage(
+            recipient,
+            "I'm sorry, I couldn't understand your request. Please try asking again, for example: 'Show me my schedule' or 'What's on my calendar today?'"
+          );
+        }
+      } catch (listError) {
+        logger.error(
+          {
+            error: listError instanceof Error ? listError.message : String(listError),
+            errorStack: listError instanceof Error ? listError.stack : undefined,
+            userId,
+            titleType,
+            actionTemplate: actionTemplate.substring(0, 200),
+          },
+          'Failed to process list operation'
+        );
+        await whatsappService.sendTextMessage(
+          recipient,
+          "I'm sorry, I encountered an error processing your request. Please make sure your calendar is connected and try again."
+        );
+      }
+      return; // Exit early after handling list operation
+    }
+    
+    // Handle non-list task operations
+    if (titleType === 'task') {
       const parsed = executor.parseAction(actionTemplate);
       if (parsed) {
-        // Set resourceType based on titleType for list operations
-        if (isListOperation && titleType !== 'task') {
-          parsed.resourceType = titleType as 'note' | 'reminder' | 'event';
-        }
-        
         const result = await executor.executeAction(parsed);
-        // Send success/error message to user
         await whatsappService.sendTextMessage(recipient, result.message);
         
         // Log outgoing message
@@ -346,10 +423,13 @@ async function processAIResponse(
           logger.warn({ error, userId }, 'Failed to log outgoing message');
         }
       } else {
-        // Already sent AI response, no need to send again
         logger.info({ userId, titleType }, 'Action parsing failed, user already received AI response');
       }
-    } else if (titleType === 'event') {
+      return; // Exit early after handling task operation
+    }
+    
+    // Handle non-list event operations (create, update, delete)
+    if (titleType === 'event') {
       // Log AI response for debugging
       logger.info(
         {
@@ -358,7 +438,7 @@ async function processAIResponse(
           actionTemplate: actionTemplate.substring(0, 200),
           fullAIResponse: aiResponse.substring(0, 500),
         },
-        'Processing event operation - AI response logged'
+        'Processing non-list event operation (create/update/delete)'
       );
 
       // Send AI response to user for debugging (as requested)
@@ -386,57 +466,8 @@ async function processAIResponse(
         logger.warn({ error, userId }, 'Failed to send AI response to user');
       }
 
-      // Handle event operations (create, update, delete, list)
-      const isListOperation = actionTemplate.toLowerCase().startsWith('list events:');
-      
-      if (isListOperation) {
-        // List events - handled by ActionExecutor
-        try {
-          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
-          const parsed = executor.parseAction(actionTemplate);
-          if (parsed) {
-            parsed.resourceType = 'event';
-            const result = await executor.executeAction(parsed);
-            await whatsappService.sendTextMessage(recipient, result.message);
-            
-            // Log outgoing message
-            try {
-              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-              if (whatsappNumber) {
-                await logOutgoingWhatsAppMessage(db, {
-                  whatsappNumberId: whatsappNumber.id,
-                  userId,
-                  messageType: 'text',
-                  messageContent: result.message,
-                  isFreeMessage: true,
-                });
-              }
-            } catch (error) {
-              logger.warn({ error, userId }, 'Failed to log outgoing message');
-            }
-          } else {
-            logger.warn({ userId, actionTemplate }, 'Failed to parse list events action');
-            await whatsappService.sendTextMessage(
-              recipient,
-              "I'm sorry, I couldn't understand your request. Please try asking again, for example: 'Show me my schedule' or 'What's on my calendar today?'"
-            );
-          }
-        } catch (listError) {
-          logger.error(
-            {
-              error: listError instanceof Error ? listError.message : String(listError),
-              errorStack: listError instanceof Error ? listError.stack : undefined,
-              userId,
-              actionTemplate,
-            },
-            'Failed to list events'
-          );
-          await whatsappService.sendTextMessage(
-            recipient,
-            "I'm sorry, I encountered an error retrieving your events. Please make sure your calendar is connected and try again."
-          );
-        }
-      } else if (originalUserText) {
+      // Handle non-list event operations (create, update, delete)
+      if (originalUserText) {
         // Create, Update, or Delete event - use calendar intent analysis
         await handleEventOperation(originalUserText, actionTemplate, recipient, userId, db, whatsappService);
       } else {
