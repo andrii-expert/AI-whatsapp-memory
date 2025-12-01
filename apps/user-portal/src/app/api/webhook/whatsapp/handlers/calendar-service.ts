@@ -764,7 +764,7 @@ export class CalendarService implements ICalendarService {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}:00${offsetStr}`;
     
     // Create the Date object - JavaScript will convert the timezone-aware string to UTC
-    const date = new Date(dateStr);
+    const utcDate = new Date(dateStr);
     
     logger.info(
       {
@@ -773,14 +773,14 @@ export class CalendarService implements ICalendarService {
         offsetHours: offsetHours.toFixed(2),
         offsetStr,
         dateStr,
-        utcDateISO: date.toISOString(),
-        utcTimeFormatted: `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`,
-        expectedLocalTime: date.toLocaleString('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }),
+        utcDateISO: utcDate.toISOString(),
+        utcTimeFormatted: `${String(utcDate.getUTCHours()).padStart(2, '0')}:${String(utcDate.getUTCMinutes()).padStart(2, '0')}`,
+        expectedLocalTime: utcDate.toLocaleString('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }),
       },
       'Timezone conversion for date parsing'
     );
     
-    return date;
+    return utcDate;
   }
 
   /**
