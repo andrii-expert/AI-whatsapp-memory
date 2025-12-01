@@ -2,8 +2,9 @@ import type { Database } from '@imaginecalendar/database/client';
 import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
-import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
+import { WhatsappTextAnalysisService, IntentAnalysisService } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
+import { CalendarService } from './calendar-service';
 import { ActionExecutor } from './action-executor';
 
 type AnalysisIntent = 'task' | 'reminder' | 'note' | 'event';
@@ -56,6 +57,9 @@ function isValidTemplateResponse(text: string): boolean {
     /^Edit a note folder:/i,
     /^Delete a note folder:/i,
     /^Share a note folder:/i,
+    /^Create an event:/i,
+    /^Update an event:/i,
+    /^Delete an event:/i,
     /^List events:/i,
   ];
   
@@ -193,7 +197,7 @@ async function analyzeAndRespond(
     );
 
     // Process the AI response in main workflow (workflow will send appropriate response to user)
-    await processAIResponse(aiResponse, recipient, userId, db, whatsappService);
+    await processAIResponse(aiResponse, recipient, userId, db, whatsappService, text);
 
   } catch (error) {
     logger.error(
@@ -238,7 +242,8 @@ async function processAIResponse(
   recipient: string,
   userId: string,
   db: Database,
-  whatsappService: WhatsAppService
+  whatsappService: WhatsAppService,
+  originalUserText?: string
 ): Promise<void> {
   try {
     // Parse the Title from response
@@ -344,8 +349,47 @@ async function processAIResponse(
         // Already sent AI response, no need to send again
         logger.info({ userId, titleType }, 'Action parsing failed, user already received AI response');
       }
-    } else if (titleType === 'note' || titleType === 'reminder' || titleType === 'event') {
-      // For non-list operations on notes/reminders/events, log as TODO
+    } else if (titleType === 'event') {
+      // Handle event operations (create, update, delete, list)
+      const isListOperation = actionTemplate.toLowerCase().startsWith('list events:');
+      
+      if (isListOperation) {
+        // List events - handled by ActionExecutor
+        const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+        const parsed = executor.parseAction(actionTemplate);
+        if (parsed) {
+          parsed.resourceType = 'event';
+          const result = await executor.executeAction(parsed);
+          await whatsappService.sendTextMessage(recipient, result.message);
+          
+          // Log outgoing message
+          try {
+            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+            if (whatsappNumber) {
+              await logOutgoingWhatsAppMessage(db, {
+                whatsappNumberId: whatsappNumber.id,
+                userId,
+                messageType: 'text',
+                messageContent: result.message,
+                isFreeMessage: true,
+              });
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to log outgoing message');
+          }
+        }
+      } else if (originalUserText) {
+        // Create, Update, or Delete event - use calendar intent analysis
+        await handleEventOperation(originalUserText, actionTemplate, recipient, userId, db, whatsappService);
+      } else {
+        logger.warn({ userId, actionTemplate: actionTemplate.substring(0, 100) }, 'Event operation but no original user text available');
+        await whatsappService.sendTextMessage(
+          recipient,
+          "I'm sorry, I encountered an error processing your event request. Please try again."
+        );
+      }
+    } else if (titleType === 'note' || titleType === 'reminder') {
+      // For non-list operations on notes/reminders, log as TODO
       logger.info({ userId, titleType, actionTemplate: actionTemplate.substring(0, 100) }, `${titleType} executor not yet implemented for this operation`);
     } else if (titleType === 'verification') {
       // Verification is handled separately, no need to process here
@@ -366,6 +410,184 @@ async function processAIResponse(
       await whatsappService.sendTextMessage(
         recipient,
         "I encountered an error while processing your request. Please try again."
+      );
+    } catch (sendError) {
+      logger.error({ error: sendError, senderPhone: recipient }, 'Failed to send error response');
+    }
+  }
+}
+
+/**
+ * Handle event operations (create, update, delete) by analyzing the original user text
+ * and routing to calendar service
+ */
+async function handleEventOperation(
+  originalUserText: string,
+  actionTemplate: string,
+  recipient: string,
+  userId: string,
+  db: Database,
+  whatsappService: WhatsAppService
+): Promise<void> {
+  try {
+    logger.info(
+      {
+        userId,
+        originalText: originalUserText.substring(0, 100),
+        actionTemplate: actionTemplate.substring(0, 100),
+      },
+      'Handling event operation from text message'
+    );
+
+    // Determine operation type from action template
+    const isCreate = actionTemplate.toLowerCase().startsWith('create an event:');
+    const isUpdate = actionTemplate.toLowerCase().startsWith('update an event:');
+    const isDelete = actionTemplate.toLowerCase().startsWith('delete an event:');
+
+    if (!isCreate && !isUpdate && !isDelete) {
+      logger.warn({ userId, actionTemplate }, 'Unknown event operation type');
+      await whatsappService.sendTextMessage(
+        recipient,
+        "I'm sorry, I couldn't understand what event operation you want to perform. Please try again."
+      );
+      return;
+    }
+
+    // Analyze the original user text to extract calendar intent
+    const intentService = new IntentAnalysisService();
+    const intent = await intentService.analyzeCalendarIntent(originalUserText, {
+      userId,
+      currentDate: new Date(),
+    });
+
+    logger.info(
+      {
+        userId,
+        action: intent.action,
+        confidence: intent.confidence,
+        hasTitle: !!intent.title,
+        hasStartDate: !!intent.startDate,
+      },
+      'Calendar intent analyzed from text'
+    );
+
+    // Validate required fields
+    if (intent.action === 'CREATE' && (!intent.title || !intent.startDate)) {
+      const missing = [];
+      if (!intent.title) missing.push('title');
+      if (!intent.startDate) missing.push('date');
+      
+      await whatsappService.sendTextMessage(
+        recipient,
+        `I need more information to create this event. Please provide: ${missing.join(', ')}.`
+      );
+      
+      // Log outgoing message
+      try {
+        const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+        if (whatsappNumber) {
+          await logOutgoingWhatsAppMessage(db, {
+            whatsappNumberId: whatsappNumber.id,
+            userId,
+            messageType: 'text',
+            messageContent: `I need more information to create this event. Please provide: ${missing.join(', ')}.`,
+            isFreeMessage: true,
+          });
+        }
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to log outgoing message');
+      }
+      return;
+    }
+
+    // Execute the calendar operation
+    const calendarService = new CalendarService(db);
+    const result = await calendarService.execute(userId, intent);
+
+    // Send response to user
+    let responseMessage: string;
+    if (result.success) {
+      if (result.action === 'CREATE' && result.event) {
+        const eventTime = result.event.start.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+        const eventDate = result.event.start.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        });
+        responseMessage = `✅ Event "${result.event.title}" created successfully!\n📅 ${eventDate} at ${eventTime}`;
+        if (result.event.location) {
+          responseMessage += `\n📍 ${result.event.location}`;
+        }
+      } else if (result.action === 'UPDATE' && result.event) {
+        responseMessage = `✅ Event "${result.event.title}" updated successfully!`;
+      } else if (result.action === 'DELETE' && result.event) {
+        responseMessage = `✅ Event "${result.event.title}" deleted successfully!`;
+      } else if (result.action === 'QUERY' && result.events) {
+        if (result.events.length === 0) {
+          responseMessage = "📅 You have no events scheduled.";
+        } else {
+          responseMessage = `📅 You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}:\n\n`;
+          result.events.slice(0, 10).forEach((event: { title: string; start: Date }, index: number) => {
+            const eventTime = event.start.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            });
+            const eventDate = event.start.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            });
+            responseMessage += `${index + 1}. ${event.title}\n   ${eventDate} at ${eventTime}\n`;
+          });
+          if (result.events.length > 10) {
+            responseMessage += `\n... and ${result.events.length - 10} more events.`;
+          }
+        }
+      } else {
+        responseMessage = result.message || 'Operation completed successfully!';
+      }
+    } else {
+      responseMessage = result.message || "I'm sorry, I couldn't complete that operation. Please try again.";
+    }
+
+    await whatsappService.sendTextMessage(recipient, responseMessage);
+
+    // Log outgoing message
+    try {
+      const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+      if (whatsappNumber) {
+        await logOutgoingWhatsAppMessage(db, {
+          whatsappNumberId: whatsappNumber.id,
+          userId,
+          messageType: 'text',
+          messageContent: responseMessage,
+          isFreeMessage: true,
+        });
+      }
+    } catch (error) {
+      logger.warn({ error, userId }, 'Failed to log outgoing message');
+    }
+
+    logger.info({ userId, action: result.action, success: result.success }, 'Event operation completed');
+  } catch (error) {
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        userId,
+        originalText: originalUserText.substring(0, 100),
+      },
+      'Failed to handle event operation'
+    );
+
+    try {
+      await whatsappService.sendTextMessage(
+        recipient,
+        "I'm sorry, I encountered an error processing your event request. Please try again."
       );
     } catch (sendError) {
       logger.error({ error: sendError, senderPhone: recipient }, 'Failed to send error response');
