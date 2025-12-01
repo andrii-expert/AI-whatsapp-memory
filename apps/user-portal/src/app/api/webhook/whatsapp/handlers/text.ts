@@ -361,6 +361,31 @@ async function processAIResponse(
         'Processing event operation - AI response logged'
       );
 
+      // Send AI response to user for debugging (as requested)
+      try {
+        await whatsappService.sendTextMessage(
+          recipient,
+          `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
+        );
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing message');
+        }
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to send AI response to user');
+      }
+
       // Handle event operations (create, update, delete, list)
       const isListOperation = actionTemplate.toLowerCase().startsWith('list events:');
       
@@ -788,11 +813,14 @@ function parseEventTemplateToIntent(
 
 /**
  * Parse relative date strings to YYYY-MM-DD format
+ * Handles: today, tomorrow, day names (Friday, Monday), "next Monday", "15 March", "the 12th", etc.
  */
 function parseRelativeDate(dateStr: string): string {
   const lower = dateStr.toLowerCase().trim();
   const now = new Date();
+  const currentYear = now.getFullYear();
   
+  // Handle "today"
   if (lower === 'today') {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -800,6 +828,7 @@ function parseRelativeDate(dateStr: string): string {
     return `${year}-${month}-${day}`;
   }
   
+  // Handle "tomorrow"
   if (lower === 'tomorrow') {
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -809,25 +838,99 @@ function parseRelativeDate(dateStr: string): string {
     return `${year}-${month}-${day}`;
   }
   
-  // Try to parse as date string (YYYY-MM-DD or other formats)
-  const parsed = new Date(dateStr);
-  if (!isNaN(parsed.getTime())) {
-    const year = parsed.getFullYear();
-    const month = String(parsed.getMonth() + 1).padStart(2, '0');
-    const day = String(parsed.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  // Handle "next [day]" (e.g., "next Monday", "next Friday")
+  const nextMatch = lower.match(/next\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/);
+  if (nextMatch && nextMatch[1]) {
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayIndex = dayNames.indexOf(nextMatch[1]);
+    if (dayIndex !== -1) {
+      const daysUntil = (dayIndex - now.getDay() + 7) % 7 || 7;
+      const targetDate = new Date(now);
+      targetDate.setDate(now.getDate() + daysUntil + 7); // Add 7 more days for "next"
+      const year = targetDate.getFullYear();
+      const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+      const day = String(targetDate.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
   }
   
-  // If it's a day name, find next occurrence
+  // Handle day names (e.g., "Friday", "Monday") - find next occurrence
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const dayIndex = dayNames.findIndex(d => lower.includes(d));
-  if (dayIndex !== -1) {
+  const dayIndex = dayNames.findIndex(d => lower === d || lower.startsWith(d));
+  if (dayIndex !== -1 && !lower.includes('next')) {
     const daysUntil = (dayIndex - now.getDay() + 7) % 7 || 7;
     const targetDate = new Date(now);
     targetDate.setDate(now.getDate() + daysUntil);
     const year = targetDate.getFullYear();
     const month = String(targetDate.getMonth() + 1).padStart(2, '0');
     const day = String(targetDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Handle "the [day]th" or "[day]" (e.g., "the 12th", "15", "15th")
+  const dayNumberMatch = lower.match(/(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/);
+  if (dayNumberMatch && dayNumberMatch[1]) {
+    const dayNum = parseInt(dayNumberMatch[1], 10);
+    if (dayNum >= 1 && dayNum <= 31) {
+      // Try current month first
+      const targetDate = new Date(currentYear, now.getMonth(), dayNum);
+      if (targetDate.getDate() === dayNum && targetDate >= now) {
+        const year = targetDate.getFullYear();
+        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const day = String(targetDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      // If past, try next month
+      const nextMonthDate = new Date(currentYear, now.getMonth() + 1, dayNum);
+      if (nextMonthDate.getDate() === dayNum) {
+        const year = nextMonthDate.getFullYear();
+        const month = String(nextMonthDate.getMonth() + 1).padStart(2, '0');
+        const day = String(nextMonthDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  
+  // Handle "[day] [Month]" or "[Month] [day]" (e.g., "15 March", "March 15", "15th March")
+  const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
+                      'july', 'august', 'september', 'october', 'november', 'december'];
+  const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
+                     'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  
+  for (let i = 0; i < monthNames.length; i++) {
+    const monthName = monthNames[i];
+    const monthAb = monthAbbr[i];
+    
+    // Pattern: "[day] [Month]" or "[Month] [day]"
+    const pattern1 = new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthName}|${monthName}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i');
+    const pattern2 = new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthAb}|${monthAb}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i');
+    
+    const match1 = lower.match(pattern1);
+    const match2 = lower.match(pattern2);
+    const match = match1 || match2;
+    
+    if (match) {
+      const dayNum = parseInt(match[1] || match[2] || '0', 10);
+      if (dayNum >= 1 && dayNum <= 31) {
+        const targetDate = new Date(currentYear, i, dayNum);
+        // If date is in the past, try next year
+        if (targetDate < now) {
+          targetDate.setFullYear(currentYear + 1);
+        }
+        const year = targetDate.getFullYear();
+        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const day = String(targetDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  
+  // Try to parse as date string (YYYY-MM-DD or other formats)
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
   
@@ -840,16 +943,34 @@ function parseRelativeDate(dateStr: string): string {
 
 /**
  * Parse time strings to HH:MM format (24-hour)
+ * Handles: "2pm", "14:00", "morning", "afternoon", "noon", "midnight", etc.
  */
 function parseTime(timeStr: string): string {
-  const trimmed = timeStr.trim();
+  const trimmed = timeStr.trim().toLowerCase();
+  
+  // Handle time-of-day descriptions
+  if (trimmed === 'morning' || trimmed.includes('morning')) {
+    return '09:00'; // Default morning time
+  }
+  if (trimmed === 'afternoon' || trimmed.includes('afternoon')) {
+    return '14:00'; // Default afternoon time
+  }
+  if (trimmed === 'evening' || trimmed.includes('evening')) {
+    return '18:00'; // Default evening time
+  }
+  if (trimmed === 'noon' || trimmed === 'midday') {
+    return '12:00';
+  }
+  if (trimmed === 'midnight') {
+    return '00:00';
+  }
   
   // Already in HH:MM format
   if (/^\d{2}:\d{2}$/.test(trimmed)) {
     return trimmed;
   }
   
-  // Parse 12-hour format (2pm, 2:30pm, 2 PM, etc.)
+  // Parse 12-hour format (2pm, 2:30pm, 2 PM, 2:30 PM, etc.)
   const match = trimmed.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
   if (match) {
     let hours = parseInt(match[1] || '0', 10);
@@ -862,15 +983,29 @@ function parseTime(timeStr: string): string {
       hours = 0;
     }
     
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    // Validate hours and minutes
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
   }
   
-  // Try to parse as HH:MM directly
+  // Try to parse as HH:MM directly (24-hour format)
   const directMatch = trimmed.match(/(\d{1,2}):(\d{2})/);
   if (directMatch) {
     const hours = parseInt(directMatch[1] || '0', 10);
     const minutes = parseInt(directMatch[2] || '0', 10);
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+  }
+  
+  // Try to parse just a number (e.g., "10" = 10:00, "14" = 14:00)
+  const numberMatch = trimmed.match(/^(\d{1,2})$/);
+  if (numberMatch && numberMatch[1]) {
+    const hours = parseInt(numberMatch[1], 10);
+    if (hours >= 0 && hours <= 23) {
+      return `${String(hours).padStart(2, '0')}:00`;
+    }
   }
   
   // Default to current time if can't parse
