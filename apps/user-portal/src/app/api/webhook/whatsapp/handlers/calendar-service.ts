@@ -145,11 +145,17 @@ export class CalendarService implements ICalendarService {
   /**
    * Get timezone offset in hours for a given timezone at a specific date
    * Returns positive for timezones ahead of UTC (e.g., +2 for Africa/Johannesburg)
+   * 
+   * This calculates: offset = local_time - utc_time
+   * So if UTC is 12:00 and local is 14:00, offset = +2
    */
   private getTimezoneOffset(timezone: string, date: Date): number {
     try {
-      // Create two formatters: one for UTC, one for the target timezone
-      const utcFormatter = new Intl.DateTimeFormat('en', {
+      // Get the same moment in time represented in both UTC and the target timezone
+      // The offset is the difference: local_time - utc_time
+      
+      // Format the date in UTC
+      const utcString = date.toLocaleString('en-US', {
         timeZone: 'UTC',
         year: 'numeric',
         month: '2-digit',
@@ -160,7 +166,8 @@ export class CalendarService implements ICalendarService {
         hour12: false,
       });
       
-      const tzFormatter = new Intl.DateTimeFormat('en', {
+      // Format the same date in the target timezone
+      const tzString = date.toLocaleString('en-US', {
         timeZone: timezone,
         year: 'numeric',
         month: '2-digit',
@@ -171,33 +178,46 @@ export class CalendarService implements ICalendarService {
         hour12: false,
       });
       
-      // Format the same date in both timezones
-      const utcParts = utcFormatter.formatToParts(date);
-      const tzParts = tzFormatter.formatToParts(date);
-      
-      const getTime = (parts: Intl.DateTimeFormatPart[]) => {
-        const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-        const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
-        const second = parseInt(parts.find(p => p.type === 'second')?.value || '0', 10);
-        return hour * 3600 + minute * 60 + second;
+      // Parse both strings to get time components
+      const parseTime = (str: string) => {
+        // Format: "MM/DD/YYYY, HH:MM:SS"
+        const parts = str.split(', ');
+        const timePart = parts[1] || '';
+        const [hours, minutes, seconds] = timePart.split(':').map(s => parseInt(s, 10));
+        return (hours || 0) * 3600 + (minutes || 0) * 60 + (seconds || 0);
       };
       
-      const utcTime = getTime(utcParts);
-      const tzTime = getTime(tzParts);
+      const utcSeconds = parseTime(utcString);
+      const tzSeconds = parseTime(tzString);
       
-      // Calculate offset in hours
-      const offsetSeconds = tzTime - utcTime;
-      return offsetSeconds / 3600;
+      // Calculate offset: local - UTC
+      // If UTC is 12:00 (43200 seconds) and local is 14:00 (50400 seconds)
+      // Offset = 50400 - 43200 = 7200 seconds = 2 hours
+      const offsetSeconds = tzSeconds - utcSeconds;
+      const offsetHours = offsetSeconds / 3600;
+      
+      logger.info(
+        {
+          timezone,
+          utcString,
+          tzString,
+          offsetHours: offsetHours.toFixed(2),
+        },
+        'Calculated timezone offset'
+      );
+      
+      return offsetHours;
     } catch (error) {
       logger.warn({ error, timezone }, 'Failed to calculate timezone offset, using fallback');
-      // Fallback: use a simpler method
-      try {
-        const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
-        const tzDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
-        return (tzDate.getTime() - utcDate.getTime()) / (1000 * 60 * 60);
-      } catch {
-        return 2; // Default to GMT+2 for Africa/Johannesburg
-      }
+      // Fallback: use a known offset for common timezones
+      const knownOffsets: Record<string, number> = {
+        'Africa/Johannesburg': 2,
+        'America/New_York': -5, // EST, will vary with DST
+        'America/Los_Angeles': -8, // PST, will vary with DST
+        'Europe/London': 0, // GMT, will vary with DST
+      };
+      
+      return knownOffsets[timezone] ?? 2; // Default to GMT+2
     }
   }
 
@@ -265,22 +285,50 @@ export class CalendarService implements ICalendarService {
       // Create event via provider with token refresh
       const provider = createCalendarProvider(calendarConnection.provider);
       
+      // Log the exact values being sent to the calendar provider
+      logger.info(
+        {
+          userId,
+          timezone: userTimezone,
+          startDateTimeISO: startDateTime.toISOString(),
+          startDateTimeLocal: startDateTime.toLocaleString('en-US', { timeZone: userTimezone }),
+          endDateTimeISO: endDateTime.toISOString(),
+          intentTime: intent.startTime,
+          intentDate: intent.startDate,
+        },
+        'Sending event to calendar provider'
+      );
+      
+      const createParams = {
+        calendarId: calendarConnection.calendarId || 'primary',
+        title: intent.title!,
+        description: intent.description,
+        start: startDateTime,
+        end: endDateTime,
+        allDay: intent.isAllDay ?? false,
+        location: intent.location,
+        attendees: intent.attendees,
+        timeZone: userTimezone, // Use user's actual timezone
+      };
+      
+      logger.info(
+        {
+          userId,
+          createParams: {
+            ...createParams,
+            start: createParams.start.toISOString(),
+            end: createParams.end.toISOString(),
+          },
+        },
+        'Calendar createEvent parameters'
+      );
+      
       const createdEvent = await this.withTokenRefresh(
         calendarConnection.id,
         calendarConnection.accessToken!,
         calendarConnection.refreshToken || null,
         provider,
-        (token) => provider.createEvent(token, {
-          calendarId: calendarConnection.calendarId || 'primary',
-          title: intent.title!,
-          description: intent.description,
-          start: startDateTime,
-          end: endDateTime,
-          allDay: intent.isAllDay ?? false,
-          location: intent.location,
-          attendees: intent.attendees,
-          timeZone: userTimezone, // Use user's actual timezone
-        })
+        (token) => provider.createEvent(token, createParams)
       );
 
       const event: CalendarEvent = {
@@ -680,25 +728,59 @@ export class CalendarService implements ICalendarService {
 
     // Parse time string (HH:MM format) - this is local time in the user's timezone
     const timeParts = timeString.split(':');
-    const hours = parseInt(timeParts[0] || '0', 10);
-    const minutes = parseInt(timeParts[1] || '0', 10);
+    const localHours = parseInt(timeParts[0] || '0', 10);
+    const localMinutes = parseInt(timeParts[1] || '0', 10);
 
-    // Create a temporary date to calculate the timezone offset at this specific date/time
-    // This accounts for DST (Daylight Saving Time) changes
-    const tempDate = new Date(Date.UTC(year, month, day, 12, 0, 0, 0)); // Use noon to avoid DST edge cases
+    // Google Calendar API expects:
+    // - dateTime: ISO 8601 string in UTC (from toISOString())
+    // - timeZone: IANA timezone identifier
+    // 
+    // The dateTime represents the UTC time that, when displayed in the specified timeZone,
+    // equals the desired local time.
+    //
+    // Example: User wants 2 PM (14:00) in Africa/Johannesburg (UTC+2)
+    // - Local time: 14:00
+    // - UTC time needed: 14:00 - 2 hours = 12:00 UTC
+    // - Send: dateTime: "2025-12-01T12:00:00.000Z", timeZone: "Africa/Johannesburg"
+    // - Google displays: 12:00 UTC + 2 hours = 14:00 local ✓
+    
+    // The most reliable way: Create a date string with the local time and timezone offset,
+    // then let JavaScript convert it to UTC automatically
+    // Format: YYYY-MM-DDTHH:mm:ss+HH:mm or YYYY-MM-DDTHH:mm:ss-HH:mm
+    
+    // First, get the timezone offset for this specific date (accounts for DST)
+    const tempDate = new Date(Date.UTC(year, month, day, 12, 0, 0, 0));
     const offsetHours = this.getTimezoneOffset(timezone, tempDate);
     
-    // Create the date string with timezone offset
-    // Format: YYYY-MM-DDTHH:mm:00+HH:mm or YYYY-MM-DDTHH:mm:00-HH:mm
+    // Format the offset as +HH:mm or -HH:mm
     const offsetSign = offsetHours >= 0 ? '+' : '-';
     const offsetAbs = Math.abs(offsetHours);
     const offsetHoursInt = Math.floor(offsetAbs);
     const offsetMinutesInt = Math.round((offsetAbs - offsetHoursInt) * 60);
     const offsetStr = `${offsetSign}${String(offsetHoursInt).padStart(2, '0')}:${String(offsetMinutesInt).padStart(2, '0')}`;
     
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00${offsetStr}`;
+    // Create the date string with timezone offset
+    // JavaScript will automatically convert this to UTC when we create the Date object
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}:00${offsetStr}`;
     
-    return new Date(dateStr);
+    // Create the Date object - JavaScript will convert the timezone-aware string to UTC
+    const date = new Date(dateStr);
+    
+    logger.info(
+      {
+        timezone,
+        localTime: `${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}`,
+        offsetHours: offsetHours.toFixed(2),
+        offsetStr,
+        dateStr,
+        utcDateISO: date.toISOString(),
+        utcTimeFormatted: `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`,
+        expectedLocalTime: date.toLocaleString('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }),
+      },
+      'Timezone conversion for date parsing'
+    );
+    
+    return date;
   }
 
   /**
