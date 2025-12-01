@@ -391,28 +391,50 @@ async function processAIResponse(
       
       if (isListOperation) {
         // List events - handled by ActionExecutor
-        const executor = new ActionExecutor(db, userId, whatsappService, recipient);
-        const parsed = executor.parseAction(actionTemplate);
-        if (parsed) {
-          parsed.resourceType = 'event';
-          const result = await executor.executeAction(parsed);
-          await whatsappService.sendTextMessage(recipient, result.message);
-          
-          // Log outgoing message
-          try {
-            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-            if (whatsappNumber) {
-              await logOutgoingWhatsAppMessage(db, {
-                whatsappNumberId: whatsappNumber.id,
-                userId,
-                messageType: 'text',
-                messageContent: result.message,
-                isFreeMessage: true,
-              });
+        try {
+          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+          const parsed = executor.parseAction(actionTemplate);
+          if (parsed) {
+            parsed.resourceType = 'event';
+            const result = await executor.executeAction(parsed);
+            await whatsappService.sendTextMessage(recipient, result.message);
+            
+            // Log outgoing message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'text',
+                  messageContent: result.message,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to log outgoing message');
             }
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to log outgoing message');
+          } else {
+            logger.warn({ userId, actionTemplate }, 'Failed to parse list events action');
+            await whatsappService.sendTextMessage(
+              recipient,
+              "I'm sorry, I couldn't understand your request. Please try asking again, for example: 'Show me my schedule' or 'What's on my calendar today?'"
+            );
           }
+        } catch (listError) {
+          logger.error(
+            {
+              error: listError instanceof Error ? listError.message : String(listError),
+              errorStack: listError instanceof Error ? listError.stack : undefined,
+              userId,
+              actionTemplate,
+            },
+            'Failed to list events'
+          );
+          await whatsappService.sendTextMessage(
+            recipient,
+            "I'm sorry, I encountered an error retrieving your events. Please make sure your calendar is connected and try again."
+          );
         }
       } else if (originalUserText) {
         // Create, Update, or Delete event - use calendar intent analysis

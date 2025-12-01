@@ -186,19 +186,36 @@ export class ActionExecutor {
       action = 'list';
       resourceType = 'event';
       // Match: "List events: {timeframe|all} - calendar: {calendar_name}"
+      // Use a more flexible regex that handles multi-word timeframes like "this week", "next few days", "rest of the month"
+      // First try to match with calendar
       const matchWithCalendar = trimmed.match(/^List events:\s*(.+?)\s*-\s*calendar:\s*(.+)$/i);
-      if (matchWithCalendar) {
+      if (matchWithCalendar && matchWithCalendar[1]) {
         listFilter = matchWithCalendar[1].trim();
         // Store calendar name in folderRoute for now (could be enhanced later)
-        folderRoute = matchWithCalendar[2].trim();
+        if (matchWithCalendar[2]) {
+          folderRoute = matchWithCalendar[2].trim();
+        }
       } else {
-        // Match: "List events: {timeframe|all}"
-        const matchWithoutCalendar = trimmed.match(/^List events:\s*(.+)$/i);
-        if (matchWithoutCalendar) {
+        // Match: "List events: {timeframe|all}" - capture everything after "List events:" until end or newline
+        // Remove any trailing whitespace or newlines
+        const matchWithoutCalendar = trimmed.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
+        if (matchWithoutCalendar && matchWithoutCalendar[1]) {
           listFilter = matchWithoutCalendar[1].trim();
         } else {
-          listFilter = 'all'; // Default to all
+          // Fallback: extract everything after "List events:"
+          const afterPrefix = trimmed.replace(/^List events:\s*/i, '').trim();
+          if (afterPrefix) {
+            // Remove any trailing "- calendar: ..." part
+            listFilter = afterPrefix.split(/\s*-\s*calendar:/i)[0].trim();
+          } else {
+            listFilter = 'all'; // Default to all
+          }
         }
+      }
+      
+      // Clean up listFilter - remove any trailing dashes or calendar references
+      if (listFilter) {
+        listFilter = listFilter.split(/\s*-\s*calendar:/i)[0].trim();
       }
     }
     // Folder operations
@@ -1025,6 +1042,15 @@ export class ActionExecutor {
     try {
       const timeframe = parsed.listFilter || 'all';
       
+      logger.info(
+        {
+          userId: this.userId,
+          originalTimeframe: timeframe,
+          listFilter: parsed.listFilter,
+        },
+        'Parsing timeframe for event query'
+      );
+      
       // Map timeframe strings to queryTimeframe values
       let queryTimeframe: 'today' | 'tomorrow' | 'this_week' | 'this_month' | 'all';
       const timeframeLower = timeframe.toLowerCase().trim();
@@ -1037,18 +1063,29 @@ export class ActionExecutor {
         timeframeLower.includes('week') || 
         timeframeLower === 'this week' ||
         timeframeLower.includes('next few days') ||
-        timeframeLower.includes('coming up')
+        timeframeLower.includes('coming up') ||
+        timeframeLower.includes('few days')
       ) {
         queryTimeframe = 'this_week';
       } else if (
         timeframeLower.includes('month') || 
         timeframeLower === 'this month' ||
-        timeframeLower.includes('rest of the month')
+        timeframeLower.includes('rest of the month') ||
+        timeframeLower.includes('rest of month')
       ) {
         queryTimeframe = 'this_month';
       } else {
         queryTimeframe = 'all';
       }
+      
+      logger.info(
+        {
+          userId: this.userId,
+          originalTimeframe: timeframe,
+          mappedTimeframe: queryTimeframe,
+        },
+        'Timeframe mapped for calendar query'
+      );
       
       // Create calendar intent for query
       const intent: CalendarIntent = {
@@ -1058,10 +1095,46 @@ export class ActionExecutor {
       };
       
       // Execute query using CalendarService
-      const calendarService = new CalendarService(this.db);
-      const result = await calendarService.execute(this.userId, intent);
+      let result;
+      try {
+        const calendarService = new CalendarService(this.db);
+        result = await calendarService.execute(this.userId, intent);
+        
+        logger.info(
+          {
+            userId: this.userId,
+            success: result.success,
+            action: result.action,
+            eventCount: result.events?.length || 0,
+          },
+          'Calendar query executed'
+        );
+      } catch (calendarError) {
+        logger.error(
+          {
+            error: calendarError instanceof Error ? calendarError.message : String(calendarError),
+            errorStack: calendarError instanceof Error ? calendarError.stack : undefined,
+            userId: this.userId,
+            queryTimeframe,
+            intent: JSON.stringify(intent, null, 2),
+          },
+          'CalendarService.execute failed'
+        );
+        return {
+          success: false,
+          message: "I'm sorry, I couldn't retrieve your events. Please make sure your calendar is connected and try again.",
+        };
+      }
       
       if (!result.success) {
+        logger.warn(
+          {
+            userId: this.userId,
+            resultMessage: result.message,
+            queryTimeframe,
+          },
+          'Calendar query returned unsuccessful result'
+        );
         return {
           success: false,
           message: result.message || "I'm sorry, I couldn't retrieve your events. Please try again.",
