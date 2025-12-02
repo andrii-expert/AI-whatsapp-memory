@@ -1017,7 +1017,33 @@ export class CalendarService implements ICalendarService {
     timezone: string = 'Africa/Johannesburg'
   ): Date {
     // Parse the date string (YYYY-MM-DD format)
-    const [year, month, day] = dateString.split('-').map(Number);
+    const dateParts = dateString.split('-');
+    if (dateParts.length !== 3) {
+      logger.error({ dateString, timezone }, 'Invalid date format in parseDateTime');
+      throw new Error(`Invalid date format: ${dateString}. Expected YYYY-MM-DD`);
+    }
+    
+    const year = parseInt(dateParts[0] || '0', 10);
+    const month = parseInt(dateParts[1] || '0', 10);
+    const day = parseInt(dateParts[2] || '0', 10);
+    
+    // Validate parsed values
+    if (isNaN(year) || isNaN(month) || isNaN(day) || year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+      logger.error({ dateString, year, month, day, timezone }, 'Invalid date values in parseDateTime');
+      throw new Error(`Invalid date values: year=${year}, month=${month}, day=${day}`);
+    }
+    
+    logger.info(
+      {
+        dateString,
+        parsedYear: year,
+        parsedMonth: month,
+        parsedDay: day,
+        timeString,
+        timezone,
+      },
+      'Parsing date/time in parseDateTime'
+    );
     
     if (isAllDay || !timeString) {
       // For all-day events, use UTC midnight
@@ -1028,23 +1054,41 @@ export class CalendarService implements ICalendarService {
     const timeParts = timeString.split(':');
     const localHours = parseInt(timeParts[0] || '0', 10);
     const localMinutes = parseInt(timeParts[1] || '0', 10);
+    
+    if (isNaN(localHours) || isNaN(localMinutes) || localHours < 0 || localHours > 23 || localMinutes < 0 || localMinutes > 59) {
+      logger.error({ timeString, localHours, localMinutes, timezone }, 'Invalid time values in parseDateTime');
+      throw new Error(`Invalid time values: hours=${localHours}, minutes=${localMinutes}`);
+    }
 
-    // The correct approach: We need to find the UTC time that, when converted to the target timezone,
-    // displays as the desired local time.
+    // Simplified approach: Use a more direct method to find the UTC time
+    // We'll create a date representing the local time in the timezone, then find its UTC equivalent
     // 
-    // Method: Create a date string in ISO format with the local time, then use Intl to find
-    // what UTC time that corresponds to. We'll use an iterative approach.
+    // Strategy: Create a date string that represents the local time, then use Intl to convert it
+    // We'll use the fact that we can construct a date and check what UTC time it represents
     
-    // Start with a reasonable guess: assume the timezone offset is between -12 and +14 hours
-    // We'll create a date representing the local time and then find the UTC equivalent
+    // Create a date string in ISO format: YYYY-MM-DDTHH:mm:00
+    // This represents the desired local time
+    const localDateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}:00`;
     
-    // Create a date string in the format that represents local time in the timezone
-    // We'll use a trick: create multiple candidate UTC times and check which one displays correctly
+    // Now we need to find what UTC time corresponds to this local time in the given timezone
+    // We'll use an iterative approach: try different UTC times until we find one that displays correctly
     
-    // Strategy: Use the fact that we can check what a UTC time displays as in a timezone
-    // We want: UTC_time such that when displayed in timezone, it shows as localHours:localMinutes
+    // Start with a reasonable guess: assume timezone offset is between -12 and +14 hours
+    // Calculate approximate offset (this is just a starting point)
+    const now = new Date();
+    const utcTime = now.getTime();
+    const localTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(now);
     
-    // Start with the local time as UTC (initial guess)
+    // Get the timezone offset in minutes (approximate, for initial guess)
+    // We'll use a more reliable method: binary search or iterative refinement
+    
+    // Start with the local time as if it were UTC (this will be wrong, but gives us a starting point)
     let candidateUTC = new Date(Date.UTC(year, month - 1, day, localHours, localMinutes, 0, 0));
     
     // Create formatters for checking
@@ -1062,70 +1106,58 @@ export class CalendarService implements ICalendarService {
       day: '2-digit',
     });
     
-    // Check what the candidate displays as
-    let displayedTime = timeFormatter.format(candidateUTC);
-    let displayedDate = dateFormatter.format(candidateUTC);
-    let [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
-    
-    // Calculate the difference
-    const desiredMinutes = localHours * 60 + localMinutes;
-    let displayedMinutes = displayedHour * 60 + displayedMinute;
-    let diffMinutes = desiredMinutes - displayedMinutes;
-    
-    // Handle day rollover - if the difference is more than 12 hours, we might be on the wrong day
-    if (Math.abs(diffMinutes) > 12 * 60) {
-      // Try adjusting by a day
-      if (diffMinutes > 12 * 60) {
-        candidateUTC = new Date(candidateUTC.getTime() - 24 * 60 * 60 * 1000);
-        displayedTime = timeFormatter.format(candidateUTC);
-        [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
-        displayedMinutes = displayedHour * 60 + displayedMinute;
-        diffMinutes = desiredMinutes - displayedMinutes;
-      } else if (diffMinutes < -12 * 60) {
-        candidateUTC = new Date(candidateUTC.getTime() + 24 * 60 * 60 * 1000);
-        displayedTime = timeFormatter.format(candidateUTC);
-        [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
-        displayedMinutes = displayedHour * 60 + displayedMinute;
-        diffMinutes = desiredMinutes - displayedMinutes;
-      }
-    }
-    
-    // Adjust the candidate by the difference
-    // If displayed time is ahead of desired time, we need to go back in UTC
-    // If displayed time is behind desired time, we need to go forward in UTC
-    // diffMinutes = desired - displayed
-    // If diffMinutes is negative (displayed > desired), we need to subtract from UTC
-    // If diffMinutes is positive (displayed < desired), we need to add to UTC
-    candidateUTC = new Date(candidateUTC.getTime() + diffMinutes * 60 * 1000);
-    
-    // Verify the result
-    displayedTime = timeFormatter.format(candidateUTC);
-    [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
-    
-    // If still not correct, do one more iteration
-    if (displayedHour !== localHours || displayedMinute !== localMinutes) {
-      displayedMinutes = displayedHour * 60 + displayedMinute;
-      diffMinutes = desiredMinutes - displayedMinutes;
+    // Iteratively refine the UTC time until it displays correctly in the timezone
+    const maxIterations = 10;
+    for (let i = 0; i < maxIterations; i++) {
+      // Check what the candidate displays as
+      const displayedTime = timeFormatter.format(candidateUTC);
+      const displayedDate = dateFormatter.format(candidateUTC);
+      const [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
       
-      // Handle day rollover again
+      // Check if date matches
+      const displayedDateParts = displayedDate.split('/');
+      const displayedMonth = parseInt(displayedDateParts[0] || '0', 10);
+      const displayedDay = parseInt(displayedDateParts[1] || '0', 10);
+      const displayedYear = parseInt(displayedDateParts[2] || '0', 10);
+      
+      // If date doesn't match, adjust
+      if (displayedYear !== year || displayedMonth !== month || displayedDay !== day) {
+        const dateDiff = (year * 365 + month * 30 + day) - (displayedYear * 365 + displayedMonth * 30 + displayedDay);
+        candidateUTC = new Date(candidateUTC.getTime() + dateDiff * 24 * 60 * 60 * 1000);
+        continue;
+      }
+      
+      // If time matches, we're done
+      if (displayedHour === localHours && displayedMinute === localMinutes) {
+        break;
+      }
+      
+      // Calculate the difference in minutes
+      const desiredMinutes = localHours * 60 + localMinutes;
+      const displayedMinutes = displayedHour * 60 + displayedMinute;
+      let diffMinutes = desiredMinutes - displayedMinutes;
+      
+      // Handle wraparound (if difference is more than 12 hours, we might need to adjust by a day)
       if (Math.abs(diffMinutes) > 12 * 60) {
         if (diffMinutes > 12 * 60) {
-          candidateUTC = new Date(candidateUTC.getTime() - 24 * 60 * 60 * 1000);
+          diffMinutes -= 24 * 60; // Go back a day
         } else {
-          candidateUTC = new Date(candidateUTC.getTime() + 24 * 60 * 60 * 1000);
+          diffMinutes += 24 * 60; // Go forward a day
         }
-        displayedTime = timeFormatter.format(candidateUTC);
-        [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
-        displayedMinutes = displayedHour * 60 + displayedMinute;
-        diffMinutes = desiredMinutes - displayedMinutes;
       }
       
+      // Adjust the candidate by the difference
       candidateUTC = new Date(candidateUTC.getTime() + diffMinutes * 60 * 1000);
-      
-      // Final verification
-      displayedTime = timeFormatter.format(candidateUTC);
-      [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
     }
+    
+    // Final verification
+    const finalDisplayedTime = timeFormatter.format(candidateUTC);
+    const finalDisplayedDate = dateFormatter.format(candidateUTC);
+    const [finalHour, finalMinute] = finalDisplayedTime.split(':').map(Number);
+    const finalDateParts = finalDisplayedDate.split('/');
+    const finalMonth = parseInt(finalDateParts[0] || '0', 10);
+    const finalDay = parseInt(finalDateParts[1] || '0', 10);
+    const finalYear = parseInt(finalDateParts[2] || '0', 10);
     
     logger.info(
       {
@@ -1133,11 +1165,13 @@ export class CalendarService implements ICalendarService {
         inputDate: dateString,
         inputTime: timeString,
         desiredLocalTime: `${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}`,
+        desiredDate: `${year}-${month}-${day}`,
         finalUTC: candidateUTC.toISOString(),
         finalUTCTime: `${String(candidateUTC.getUTCHours()).padStart(2, '0')}:${String(candidateUTC.getUTCMinutes()).padStart(2, '0')}`,
-        verification: `${String(displayedHour).padStart(2, '0')}:${String(displayedMinute).padStart(2, '0')}`,
-        verificationDate: dateFormatter.format(candidateUTC),
-        correct: displayedHour === localHours && displayedMinute === localMinutes,
+        verificationTime: `${String(finalHour).padStart(2, '0')}:${String(finalMinute).padStart(2, '0')}`,
+        verificationDate: `${finalYear}-${finalMonth}-${finalDay}`,
+        timeCorrect: finalHour === localHours && finalMinute === localMinutes,
+        dateCorrect: finalYear === year && finalMonth === month && finalDay === day,
       },
       'Timezone conversion for date parsing'
     );

@@ -659,6 +659,18 @@ async function handleEventOperation(
     // Execute the calendar operation
     logger.info({ userId, intentAction: intent.action }, 'Executing calendar operation');
     
+    // Get calendar timezone for formatting response
+    let calendarTimezone = 'Africa/Johannesburg'; // Default fallback
+    try {
+      const calendarConnection = await getPrimaryCalendar(db, userId);
+      if (calendarConnection) {
+        const calendarService = new CalendarService(db);
+        calendarTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+      }
+    } catch (error) {
+      logger.warn({ error, userId }, 'Failed to get calendar timezone for response formatting, using default');
+    }
+    
     let result;
     try {
       const calendarService = new CalendarService(db);
@@ -686,11 +698,13 @@ async function handleEventOperation(
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
+          timeZone: calendarTimezone,
         });
         const eventDate = result.event.start.toLocaleDateString('en-US', {
           weekday: 'short',
           month: 'short',
           day: 'numeric',
+          timeZone: calendarTimezone,
         });
         responseMessage = `✅ Event "${result.event.title}" created successfully!\n📅 ${eventDate} at ${eventTime}`;
         if (result.event.location) {
@@ -710,10 +724,12 @@ async function handleEventOperation(
               hour: 'numeric',
               minute: '2-digit',
               hour12: true,
+              timeZone: calendarTimezone,
             });
             const eventDate = event.start.toLocaleDateString('en-US', {
               month: 'short',
               day: 'numeric',
+              timeZone: calendarTimezone,
             });
             responseMessage += `${index + 1}. ${event.title}\n   ${eventDate} at ${eventTime}\n`;
           });
@@ -926,9 +942,25 @@ function parseEventTemplateToIntent(
  * Handles: today, tomorrow, day names (Friday, Monday), "next Monday", "15 March", "the 12th", etc.
  */
 function parseRelativeDate(dateStr: string): string {
-  const lower = dateStr.toLowerCase().trim();
+  const trimmed = dateStr.trim();
+  const lower = trimmed.toLowerCase();
   const now = new Date();
   const currentYear = now.getFullYear();
+  
+  // FIRST: Check if the date is already in YYYY-MM-DD format
+  // If it is, return it as-is (don't parse it, as that can cause timezone issues)
+  const yyyyMmDdMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (yyyyMmDdMatch && yyyyMmDdMatch[1] && yyyyMmDdMatch[2] && yyyyMmDdMatch[3]) {
+    const year = parseInt(yyyyMmDdMatch[1], 10);
+    const month = parseInt(yyyyMmDdMatch[2], 10);
+    const day = parseInt(yyyyMmDdMatch[3], 10);
+    
+    // Validate the date components
+    if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      // Return as-is - it's already in the correct format
+      return trimmed;
+    }
+  }
   
   // Handle "today"
   if (lower === 'today') {
