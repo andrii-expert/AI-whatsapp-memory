@@ -15,7 +15,62 @@ import { z } from "zod";
 
 export const calendarRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx: { db, session } }) => {
-    return getUserCalendars(db, session.user.id);
+    const calendars = await getUserCalendars(db, session.user.id);
+    
+    // Fetch timezone for each active calendar
+    const calendarsWithTimezone = await Promise.all(
+      calendars.map(async (calendar) => {
+        // If calendar is not active or has no access token, return as-is
+        if (!calendar.isActive || !calendar.accessToken) {
+          return { ...calendar, timeZone: undefined };
+        }
+        
+        try {
+          const provider = createCalendarProvider(calendar.provider);
+          let accessToken = calendar.accessToken;
+          
+          // Try to get calendar timezone
+          try {
+            const calendarInfo = await provider.getCalendarById(accessToken, calendar.calendarId || 'primary');
+            return { ...calendar, timeZone: calendarInfo.timeZone };
+          } catch (error: any) {
+            // If authentication fails and we have a refresh token, try refreshing
+            if (calendar.refreshToken && error.message?.includes("authentication")) {
+              const refreshedTokens = await provider.refreshTokens(calendar.refreshToken);
+              accessToken = refreshedTokens.accessToken;
+              
+              // Update the calendar with the new tokens
+              await updateCalendarConnection(db, calendar.id, {
+                accessToken: refreshedTokens.accessToken,
+                refreshToken: refreshedTokens.refreshToken,
+                expiresAt: refreshedTokens.expiresAt,
+              });
+              
+              // Retry with the new access token
+              const calendarInfo = await provider.getCalendarById(accessToken, calendar.calendarId || 'primary');
+              return { ...calendar, timeZone: calendarInfo.timeZone };
+            } else {
+              // If we can't get timezone, return without it
+              logger.warn({
+                userId: session.user.id,
+                calendarId: calendar.id,
+                error: error.message
+              }, "Failed to fetch calendar timezone");
+              return { ...calendar, timeZone: undefined };
+            }
+          }
+        } catch (error: any) {
+          logger.warn({
+            userId: session.user.id,
+            calendarId: calendar.id,
+            error: error.message
+          }, "Failed to fetch calendar timezone");
+          return { ...calendar, timeZone: undefined };
+        }
+      })
+    );
+    
+    return calendarsWithTimezone;
   }),
 
   get: protectedProcedure

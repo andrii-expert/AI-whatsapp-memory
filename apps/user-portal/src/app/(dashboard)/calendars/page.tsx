@@ -652,21 +652,54 @@ export default function CalendarsPage() {
     return acc;
   }, {});
 
+  // Helper function to format date/time in a specific timezone
+  const formatInTimezone = (date: Date, timezone: string, formatStr: 'time' | 'date' | 'datetime' = 'datetime') => {
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: timezone,
+    };
+    
+    if (formatStr === 'time') {
+      options.hour = 'numeric';
+      options.minute = '2-digit';
+      options.hour12 = true;
+    } else if (formatStr === 'date') {
+      options.weekday = 'short';
+      options.month = 'short';
+      options.day = 'numeric';
+    } else {
+      options.hour = 'numeric';
+      options.minute = '2-digit';
+      options.hour12 = true;
+      options.weekday = 'short';
+      options.month = 'short';
+      options.day = 'numeric';
+    }
+    
+    return new Intl.DateTimeFormat('en-US', options).format(date);
+  };
+
   // Process events for display
   const processedEvents = allEvents.map((event: any) => {
-    const calendar = calendars.find((cal: any) => cal.id === event.calendarId);
+    const calendar = calendars.find((cal: any) => cal.id === event.calendarId) as any;
     const provider = calendar?.provider || "google";
     const color = provider === "google" ? "bg-blue-500" : "bg-purple-500";
+    
+    // Get calendar timezone - try to get from calendar, fallback to default
+    const calendarTimezone = calendar?.timeZone || 'Africa/Johannesburg';
+    
+    const startDate = new Date(event.start);
+    const endDate = new Date(event.end);
     
     return {
       id: event.id,
       title: event.title,
-      start: new Date(event.start),
-      end: new Date(event.end),
+      start: startDate,
+      end: endDate,
       color,
       location: event.location,
       htmlLink: event.htmlLink,
       webLink: event.webLink,
+      calendarTimezone, // Store timezone for formatting
     };
   });
 
@@ -1188,7 +1221,7 @@ export default function CalendarsPage() {
                                 {event.title}
                               </div>
                               <div className="text-[10px] opacity-90">
-                                {format(event.start, "h:mm a")}
+                                {formatInTimezone(event.start, event.calendarTimezone || 'Africa/Johannesburg', 'time')}
                               </div>
                             </div>
                           ))}
@@ -1346,10 +1379,7 @@ export default function CalendarsPage() {
                                 event.color,
                                 "text-white font-medium shadow-sm"
                               )}
-                              title={`${event.title} - ${format(
-                                event.start,
-                                "h:mm a"
-                              )}`}
+                              title={`${event.title} - ${formatInTimezone(event.start, event.calendarTimezone || 'Africa/Johannesburg', 'time')}`}
                               onClick={() =>
                                 event.htmlLink &&
                                 window.open(event.htmlLink, "_blank")
@@ -1358,7 +1388,7 @@ export default function CalendarsPage() {
                               <span className="hidden md:inline">• </span>
                               <span className="truncate">{event.title}</span>
                               <span className="hidden lg:inline ml-1">
-                                {format(event.start, "h:mm a")}
+                                {formatInTimezone(event.start, event.calendarTimezone || 'Africa/Johannesburg', 'time')}
                               </span>
                             </div>
                           ))}
