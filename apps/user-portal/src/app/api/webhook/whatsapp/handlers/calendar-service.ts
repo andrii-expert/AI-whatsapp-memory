@@ -778,6 +778,23 @@ export class CalendarService implements ICalendarService {
         searchParams.timeMax = timeMax;
       }
 
+      logger.info(
+        {
+          userId,
+          queryTimeframe: intent.queryTimeframe,
+          startDate: intent.startDate,
+          targetEventDate: intent.targetEventDate,
+          timeMin: timeMin?.toISOString(),
+          timeMax: timeMax?.toISOString(),
+          searchParams: {
+            ...searchParams,
+            timeMin: searchParams.timeMin?.toISOString(),
+            timeMax: searchParams.timeMax?.toISOString(),
+          },
+        },
+        'Calendar query parameters'
+      );
+
       const foundEvents = await this.withTokenRefresh(
         calendarConnection.id,
         calendarConnection.accessToken!,
@@ -798,13 +815,57 @@ export class CalendarService implements ICalendarService {
         webLink: e.webLink,
       }));
 
-      logger.info({ userId, count: events.length, timeframe: intent.queryTimeframe || 'default' }, 'Calendar events found');
+      // If we queried for a specific date, filter events to ensure they're on that date
+      // (calendar APIs sometimes return events slightly outside the range due to timezone issues)
+      let filteredEvents = events;
+      if (intent.startDate || intent.targetEventDate) {
+        const dateString = intent.startDate || intent.targetEventDate!;
+        const dateMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (dateMatch) {
+          const year = parseInt(dateMatch[1], 10);
+          const month = parseInt(dateMatch[2], 10) - 1;
+          const day = parseInt(dateMatch[3], 10);
+          
+          // Create date boundaries in UTC for the specific date
+          const targetDateStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+          const targetDateEnd = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+          
+          // Filter events to only include those that fall on the target date
+          // Check if the event start date (in UTC) falls within the target date
+          filteredEvents = events.filter(event => {
+            const eventStart = new Date(event.start);
+            return eventStart >= targetDateStart && eventStart <= targetDateEnd;
+          });
+          
+          logger.info(
+            {
+              userId,
+              targetDate: dateString,
+              totalEvents: events.length,
+              filteredEvents: filteredEvents.length,
+              targetDateStart: targetDateStart.toISOString(),
+              targetDateEnd: targetDateEnd.toISOString(),
+            },
+            'Filtered events to specific date'
+          );
+        }
+      }
+
+      logger.info(
+        {
+          userId,
+          count: filteredEvents.length,
+          timeframe: intent.queryTimeframe || 'default',
+          hasStartDate: !!(intent.startDate || intent.targetEventDate),
+        },
+        'Calendar events found'
+      );
 
       return {
         success: true,
         action: 'QUERY',
-        events,
-        message: `Found ${events.length} event${events.length !== 1 ? 's' : ''}`,
+        events: filteredEvents,
+        message: `Found ${filteredEvents.length} event${filteredEvents.length !== 1 ? 's' : ''}`,
       };
     } catch (error) {
       logger.error({ error, userId }, 'Failed to query calendar events');

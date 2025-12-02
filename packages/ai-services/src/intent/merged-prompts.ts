@@ -1,9 +1,13 @@
+import { formatDateToLocalLabel } from '../utils/timezone';
+
 export interface MergedPromptOptions {
   verificationCode?: string;
   defaultFolderLabel?: string;
   defaultStatusLabel?: string;
   defaultCalendarLabel?: string;
   messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }>;
+  currentDate?: Date;
+  timezone?: string;
 }
 
 const DEFAULT_VERIFICATION_CODE = "169753";
@@ -12,6 +16,7 @@ const DEFAULT_VERIFICATION_PHRASE =
 const DEFAULT_FOLDER = "General";
 const DEFAULT_STATUS = 'active';
 const DEFAULT_CALENDAR = 'primary';
+const DEFAULT_TIMEZONE = 'Africa/Johannesburg';
 
 export function buildMergedWhatsappPrompt(
   userMessage: string,
@@ -25,10 +30,26 @@ export function buildMergedWhatsappPrompt(
   const defaultFolder = options?.defaultFolderLabel ?? DEFAULT_FOLDER;
   const defaultStatus = options?.defaultStatusLabel ?? DEFAULT_STATUS;
   const defaultCalendar = options?.defaultCalendarLabel ?? DEFAULT_CALENDAR;
+  
+  // Get current date/time for context
+  const currentDate = options?.currentDate ?? new Date();
+  const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
+  const currentLabel = formatDateToLocalLabel(currentDate, timezone);
 
   return [
     "You are the CrackOn WhatsApp Assistant.",
     "Your job is to interpret each incoming user message and respond with a structured format.",
+    "",
+    "═══════════════════════════════════════════════════════════════",
+    "CURRENT DATE/TIME CONTEXT",
+    "═══════════════════════════════════════════════════════════════",
+    "",
+    `IMPORTANT: The current date and time is: ${currentLabel}`,
+    `Use this information when interpreting relative dates like "today", "tomorrow", "Friday", "next Monday", etc.`,
+    `When the user says "today", it means ${currentLabel.split(',')[0]} (the current date).`,
+    `When the user says "tomorrow", calculate it from the current date.`,
+    `When the user mentions a day name (e.g., "Friday"), find the next occurrence from the current date.`,
+    `When the user mentions a date (e.g., "December 4", "4th December", "dec 1"), use the current year unless they specify a different year.`,
     "",
     "═══════════════════════════════════════════════════════════════",
     "CRITICAL OUTPUT FORMAT",

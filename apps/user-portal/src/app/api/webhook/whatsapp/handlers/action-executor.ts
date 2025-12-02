@@ -1104,9 +1104,10 @@ export class ActionExecutor {
         const monthAb = monthAbbr[i];
         
         // Pattern: "[day] [Month]" or "[Month] [day]" with optional "th", "st", "nd", "rd"
-        // Examples: "4th december", "4 december", "december 4", "december 4th", "on 4th december", "on the 4th december"
-        const pattern1 = new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthName}(?:\\s+\\d{4})?|${monthName}\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+\\d{4})?`, 'i');
-        const pattern2 = new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthAb}(?:\\s+\\d{4})?|${monthAb}\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+\\d{4})?`, 'i');
+        // Examples: "4th december", "4 december", "december 4", "december 4th", "dec 1", "1 dec", "on 4th december", "on the 4th december"
+        // Note: Using word boundaries and more flexible spacing
+        const pattern1 = new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthName}(?:\\s+\\d{4})?\\b|\\b${monthName}\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+\\d{4})?`, 'i');
+        const pattern2 = new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthAb}\\b(?:\\s+\\d{4})?|\\b${monthAb}\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+\\d{4})?`, 'i');
         
         const match1 = timeframeLower.match(pattern1);
         const match2 = timeframeLower.match(pattern2);
@@ -1121,17 +1122,43 @@ export class ActionExecutor {
             // Try current year first
             let targetDate = new Date(currentYear, i, dayNum);
             
-            // If date is in the past this year, try next year
-            if (targetDate < now) {
-              targetDate = new Date(currentYear + 1, i, dayNum);
-            }
-            
             // Check if the date is valid (handles cases like Feb 30)
             if (targetDate.getDate() === dayNum) {
+              // For past dates in the current month, still use current year (user might want to see past events)
+              // Only go to next year if the date is more than a month in the past
+              const oneMonthAgo = new Date(now);
+              oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+              
+              if (targetDate < oneMonthAgo) {
+                // Date is more than a month in the past, try next year
+                targetDate = new Date(currentYear + 1, i, dayNum);
+                // Verify the next year date is also valid
+                if (targetDate.getDate() !== dayNum) {
+                  // Invalid date in next year, use current year anyway
+                  targetDate = new Date(currentYear, i, dayNum);
+                }
+              }
+              
               const year = targetDate.getFullYear();
               const month = String(targetDate.getMonth() + 1).padStart(2, '0');
               const day = String(targetDate.getDate()).padStart(2, '0');
               parsedDate = `${year}-${month}-${day}`;
+              
+              logger.info(
+                {
+                  userId: this.userId,
+                  originalTimeframe: timeframe,
+                  matchedPattern: match[0],
+                  dayNum,
+                  monthIndex: i,
+                  monthName: monthName,
+                  monthAb: monthAb,
+                  parsedDate,
+                  targetDate: targetDate.toISOString(),
+                },
+                'Parsed specific date from timeframe'
+              );
+              
               break;
             }
           }

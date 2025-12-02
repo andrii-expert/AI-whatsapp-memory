@@ -1,5 +1,5 @@
 import type { Database } from '@imaginecalendar/database/client';
-import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory } from '@imaginecalendar/database/queries';
+import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
 import { WhatsappTextAnalysisService, IntentAnalysisService, type CalendarIntent, calendarIntentSchema } from '@imaginecalendar/ai-services';
@@ -176,16 +176,38 @@ async function analyzeAndRespond(
   // Step 1: Analyze message with merged prompt
   let aiResponse: string;
   try {
+    // Get user's calendar timezone for accurate date/time context
+    let userTimezone = 'Africa/Johannesburg'; // Default fallback
+    try {
+      const calendarConnection = await getPrimaryCalendar(db, userId);
+      if (calendarConnection) {
+        const calendarService = new CalendarService(db);
+        // Access the private getUserTimezone method using bracket notation
+        // This method will fetch timezone from calendar, fallback to user preferences, then default
+        userTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+      }
+    } catch (error) {
+      logger.warn({ error, userId }, 'Failed to get user timezone, using default');
+    }
+    
+    const currentDate = new Date();
+    
     logger.info(
       {
         userId,
         messageText: text.substring(0, 100),
         historyCount: messageHistory.length,
+        currentDate: currentDate.toISOString(),
+        timezone: userTimezone,
       },
       'Analyzing message with merged prompt'
     );
 
-    aiResponse = (await analyzer.analyzeMessage(text, { messageHistory })).trim();
+    aiResponse = (await analyzer.analyzeMessage(text, { 
+      messageHistory,
+      currentDate,
+      timezone: userTimezone,
+    })).trim();
 
     logger.debug(
       {
