@@ -1088,11 +1088,93 @@ export class ActionExecutor {
         'Parsing timeframe for event query'
       );
       
-      // Map timeframe strings to queryTimeframe values
-      let queryTimeframe: 'today' | 'tomorrow' | 'this_week' | 'this_month' | 'all';
+      // First, try to parse as a specific date
+      let parsedDate: string | undefined;
       const timeframeLower = timeframe.toLowerCase().trim();
       
-      if (timeframeLower === 'today' || timeframeLower.includes("today's")) {
+      // Try to parse specific dates like "4th december", "december 4", "4 december", etc.
+      const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
+                          'july', 'august', 'september', 'october', 'november', 'december'];
+      const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
+                         'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      
+      // Pattern: "4th december", "4 december", "december 4", "december 4th", "4th dec", "dec 4", etc.
+      for (let i = 0; i < monthNames.length; i++) {
+        const monthName = monthNames[i];
+        const monthAb = monthAbbr[i];
+        
+        // Pattern: "[day] [Month]" or "[Month] [day]" with optional "th", "st", "nd", "rd"
+        // Examples: "4th december", "4 december", "december 4", "december 4th", "on 4th december", "on the 4th december"
+        const pattern1 = new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthName}(?:\\s+\\d{4})?|${monthName}\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+\\d{4})?`, 'i');
+        const pattern2 = new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthAb}(?:\\s+\\d{4})?|${monthAb}\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+\\d{4})?`, 'i');
+        
+        const match1 = timeframeLower.match(pattern1);
+        const match2 = timeframeLower.match(pattern2);
+        const match = match1 || match2;
+        
+        if (match) {
+          const dayNum = parseInt(match[1] || match[2] || '0', 10);
+          if (dayNum >= 1 && dayNum <= 31) {
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            
+            // Try current year first
+            let targetDate = new Date(currentYear, i, dayNum);
+            
+            // If date is in the past this year, try next year
+            if (targetDate < now) {
+              targetDate = new Date(currentYear + 1, i, dayNum);
+            }
+            
+            // Check if the date is valid (handles cases like Feb 30)
+            if (targetDate.getDate() === dayNum) {
+              const year = targetDate.getFullYear();
+              const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+              const day = String(targetDate.getDate()).padStart(2, '0');
+              parsedDate = `${year}-${month}-${day}`;
+              break;
+            }
+          }
+        }
+      }
+      
+      // If no specific date found, try parsing as just a day number (e.g., "4th", "15")
+      if (!parsedDate) {
+        const dayOnlyMatch = timeframeLower.match(/(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?$/);
+        if (dayOnlyMatch) {
+          const dayNum = parseInt(dayOnlyMatch[1], 10);
+          if (dayNum >= 1 && dayNum <= 31) {
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            
+            // Try current month first
+            let targetDate = new Date(currentYear, now.getMonth(), dayNum);
+            if (targetDate.getDate() === dayNum && targetDate >= now) {
+              const year = targetDate.getFullYear();
+              const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+              const day = String(targetDate.getDate()).padStart(2, '0');
+              parsedDate = `${year}-${month}-${day}`;
+            } else {
+              // If past, try next month
+              const nextMonthDate = new Date(currentYear, now.getMonth() + 1, dayNum);
+              if (nextMonthDate.getDate() === dayNum) {
+                const year = nextMonthDate.getFullYear();
+                const month = String(nextMonthDate.getMonth() + 1).padStart(2, '0');
+                const day = String(nextMonthDate.getDate()).padStart(2, '0');
+                parsedDate = `${year}-${month}-${day}`;
+              }
+            }
+          }
+        }
+      }
+      
+      // Map timeframe strings to queryTimeframe values (if not a specific date)
+      let queryTimeframe: 'today' | 'tomorrow' | 'this_week' | 'this_month' | 'all' | undefined;
+      
+      if (parsedDate) {
+        // Specific date found, don't set queryTimeframe
+        queryTimeframe = undefined;
+      } else if (timeframeLower === 'today' || timeframeLower.includes("today's")) {
         queryTimeframe = 'today';
       } else if (timeframeLower === 'tomorrow') {
         queryTimeframe = 'tomorrow';
@@ -1119,6 +1201,7 @@ export class ActionExecutor {
         {
           userId: this.userId,
           originalTimeframe: timeframe,
+          parsedDate,
           mappedTimeframe: queryTimeframe,
         },
         'Timeframe mapped for calendar query'
@@ -1128,7 +1211,8 @@ export class ActionExecutor {
       const intent: CalendarIntent = {
         action: 'QUERY',
         confidence: 0.9,
-        queryTimeframe,
+        ...(queryTimeframe ? { queryTimeframe } : {}),
+        ...(parsedDate ? { startDate: parsedDate } : {}),
       };
       
       // Execute query using CalendarService
