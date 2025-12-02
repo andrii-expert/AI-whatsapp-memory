@@ -383,11 +383,48 @@ export class CalendarService implements ICalendarService {
         throw new Error('Event not found. Please provide more details about which event to update.');
       }
 
+      // If multiple events found, try to select the most relevant one
+      let targetEvent: CalendarEvent;
       if (targetEvents.length > 1) {
-        throw new Error('Multiple events found. Please be more specific about which event to update.');
+        logger.warn(
+          {
+            userId,
+            eventCount: targetEvents.length,
+            eventTitles: targetEvents.map(e => e.title),
+            intentTitle: intent.targetEventTitle || intent.title,
+          },
+          'Multiple events found, selecting most relevant one'
+        );
+        
+        // For updates, prefer the most recent upcoming event (or closest to now if all are past)
+        const now = new Date();
+        const upcomingEvents = targetEvents.filter(e => new Date(e.start) >= now);
+        
+        if (upcomingEvents.length > 0) {
+          // Select the earliest upcoming event
+          targetEvent = upcomingEvents.sort((a, b) => 
+            new Date(a.start).getTime() - new Date(b.start).getTime()
+          )[0]!;
+        } else {
+          // All events are in the past, select the most recent one
+          targetEvent = targetEvents.sort((a, b) => 
+            new Date(b.start).getTime() - new Date(a.start).getTime()
+          )[0]!;
+        }
+        
+        logger.info(
+          {
+            userId,
+            selectedEventId: targetEvent.id,
+            selectedEventTitle: targetEvent.title,
+            selectedEventDate: targetEvent.start,
+            totalMatches: targetEvents.length,
+          },
+          'Selected event from multiple matches'
+        );
+      } else {
+        targetEvent = targetEvents[0]!;
       }
-
-      const targetEvent = targetEvents[0]!;
 
       // Build update parameters
       const provider = createCalendarProvider(calendarConnection.provider);
@@ -487,11 +524,48 @@ export class CalendarService implements ICalendarService {
         throw new Error('Event not found. Please provide more details about which event to delete.');
       }
 
+      // If multiple events found, try to select the most relevant one
+      let targetEvent: CalendarEvent;
       if (targetEvents.length > 1) {
-        throw new Error('Multiple events found. Please be more specific about which event to delete.');
+        logger.warn(
+          {
+            userId,
+            eventCount: targetEvents.length,
+            eventTitles: targetEvents.map(e => e.title),
+            intentTitle: intent.targetEventTitle || intent.title,
+          },
+          'Multiple events found, selecting most relevant one'
+        );
+        
+        // For deletes, prefer the most recent upcoming event (or closest to now if all are past)
+        const now = new Date();
+        const upcomingEvents = targetEvents.filter(e => new Date(e.start) >= now);
+        
+        if (upcomingEvents.length > 0) {
+          // Select the earliest upcoming event
+          targetEvent = upcomingEvents.sort((a, b) => 
+            new Date(a.start).getTime() - new Date(b.start).getTime()
+          )[0]!;
+        } else {
+          // All events are in the past, select the most recent one
+          targetEvent = targetEvents.sort((a, b) => 
+            new Date(b.start).getTime() - new Date(a.start).getTime()
+          )[0]!;
+        }
+        
+        logger.info(
+          {
+            userId,
+            selectedEventId: targetEvent.id,
+            selectedEventTitle: targetEvent.title,
+            selectedEventDate: targetEvent.start,
+            totalMatches: targetEvents.length,
+          },
+          'Selected event from multiple matches'
+        );
+      } else {
+        targetEvent = targetEvents[0]!;
       }
-
-      const targetEvent = targetEvents[0]!;
 
       // Delete the event
       const provider = createCalendarProvider(calendarConnection.provider);
@@ -661,6 +735,10 @@ export class CalendarService implements ICalendarService {
 
   /**
    * Find target event for UPDATE/DELETE operations
+   * When multiple events are found, tries to narrow down by:
+   * 1. Using date/time information if available
+   * 2. Selecting the most relevant event (upcoming, or most recent)
+   * 3. For updates: if new date is provided, prefer events that don't match the new date
    */
   private async findTargetEvent(
     _userId: string,
@@ -673,7 +751,7 @@ export class CalendarService implements ICalendarService {
 
     const searchParams: any = {
       calendarId,
-      maxResults: 5,
+      maxResults: 20, // Increased to get more results for better filtering
     };
 
     // Use targetEventTitle or regular title as search query
@@ -681,16 +759,26 @@ export class CalendarService implements ICalendarService {
       searchParams.query = intent.targetEventTitle || intent.title;
     }
 
-    // Add time range if target date provided
-    if (intent.targetEventDate || intent.startDate) {
-      const searchDate = new Date(intent.targetEventDate || intent.startDate!);
-      searchParams.timeMin = new Date(searchDate.setHours(0, 0, 0, 0));
-      searchParams.timeMax = new Date(searchDate.setHours(23, 59, 59, 999));
-    }
+    // For UPDATE operations, we want to search more broadly first
+    // Then filter based on the new date/time provided
+    const now = new Date();
+    const searchWindowDays = 60; // Search within 60 days (past and future)
+    
+    // Set a wider time range to find all matching events
+    const timeMin = new Date(now);
+    timeMin.setDate(timeMin.getDate() - searchWindowDays);
+    timeMin.setHours(0, 0, 0, 0);
+    
+    const timeMax = new Date(now);
+    timeMax.setDate(timeMax.getDate() + searchWindowDays);
+    timeMax.setHours(23, 59, 59, 999);
+    
+    searchParams.timeMin = timeMin;
+    searchParams.timeMax = timeMax;
 
     const foundEvents = await calendarProvider.searchEvents(accessToken, searchParams);
 
-    return foundEvents.map(e => ({
+    let events: CalendarEvent[] = foundEvents.map(e => ({
       id: e.id,
       title: e.title,
       description: e.description,
@@ -701,6 +789,67 @@ export class CalendarService implements ICalendarService {
       htmlLink: e.htmlLink,
       webLink: e.webLink,
     }));
+
+    // If we have a specific target date, try to narrow down
+    if (intent.targetEventDate) {
+      const targetDate = new Date(intent.targetEventDate);
+      targetDate.setHours(0, 0, 0, 0);
+      const targetDateEnd = new Date(targetDate);
+      targetDateEnd.setHours(23, 59, 59, 999);
+      
+      // Filter events that match the target date
+      const dateMatched = events.filter(e => {
+        const eventDate = new Date(e.start);
+        eventDate.setHours(0, 0, 0, 0);
+        return eventDate >= targetDate && eventDate <= targetDateEnd;
+      });
+      
+      if (dateMatched.length > 0) {
+        events = dateMatched;
+      }
+    }
+
+    // For UPDATE operations with a new date/time, prefer events that DON'T match the new date
+    // (since we're rescheduling FROM the old date TO the new date)
+    if (intent.action === 'UPDATE' && intent.startDate) {
+      const newDate = new Date(intent.startDate);
+      newDate.setHours(0, 0, 0, 0);
+      const newDateEnd = new Date(newDate);
+      newDateEnd.setHours(23, 59, 59, 999);
+      
+      // Filter out events that already match the new date
+      const notMatchingNewDate = events.filter(e => {
+        const eventDate = new Date(e.start);
+        eventDate.setHours(0, 0, 0, 0);
+        return !(eventDate >= newDate && eventDate <= newDateEnd);
+      });
+      
+      // If we still have events after filtering, use those
+      // Otherwise, use all events (maybe user wants to update an event that's already on that date)
+      if (notMatchingNewDate.length > 0) {
+        events = notMatchingNewDate;
+      }
+    }
+
+    // Sort events: upcoming events first, then by date
+    events.sort((a, b) => {
+      const aDate = new Date(a.start);
+      const bDate = new Date(b.start);
+      const now = new Date();
+      
+      // If both are in the past or both are in the future, sort by date
+      if ((aDate < now && bDate < now) || (aDate >= now && bDate >= now)) {
+        return aDate.getTime() - bDate.getTime();
+      }
+      
+      // Prefer upcoming events over past events
+      if (aDate >= now && bDate < now) return -1;
+      if (aDate < now && bDate >= now) return 1;
+      
+      return 0;
+    });
+
+    return events;
   }
 
   /**

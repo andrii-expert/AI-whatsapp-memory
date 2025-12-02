@@ -69,6 +69,7 @@ export class ActionExecutor {
     let recipient: string | undefined;
     let newName: string | undefined;
     let status: string | undefined;
+    let listFilter: string | undefined;
 
     // Task operations
     if (trimmed.startsWith('Create a task:')) {
@@ -186,38 +187,41 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('List events:')) {
       action = 'list';
       resourceType = 'event';
-      // Match: "List events: {timeframe|all} - calendar: {calendar_name}"
-      // Use a more flexible regex that handles multi-word timeframes like "this week", "next few days", "rest of the month"
-      // First try to match with calendar
-      const matchWithCalendar = trimmed.match(/^List events:\s*(.+?)\s*-\s*calendar:\s*(.+)$/i);
-      if (matchWithCalendar && matchWithCalendar[1]) {
-        listFilter = matchWithCalendar[1].trim();
-        // Store calendar name in folderRoute for now (could be enhanced later)
-        if (matchWithCalendar[2]) {
-          folderRoute = matchWithCalendar[2].trim();
+      
+      // Extract everything after "List events:"
+      const afterPrefix = trimmed.replace(/^List events:\s*/i, '').trim();
+      
+      if (afterPrefix) {
+        // Remove any trailing "- calendar: ..." part first
+        listFilter = afterPrefix.split(/\s*-\s*calendar:/i)[0].trim();
+        
+        // Remove common prefixes like "for", "on", "in", "all" that might appear before timeframes
+        // Examples: "for today" -> "today", "on tomorrow" -> "tomorrow", "in this week" -> "this week", "all events" -> "all"
+        listFilter = listFilter.replace(/^(for|on|in|during|all\s+events?|show\s+me\s+all\s+events?\s+for)\s+/i, '').trim();
+        
+        // If listFilter is empty after cleaning, default to 'all'
+        if (!listFilter || listFilter.length === 0) {
+          listFilter = 'all';
         }
       } else {
-        // Match: "List events: {timeframe|all}" - capture everything after "List events:" until end or newline
-        // Remove any trailing whitespace or newlines
-        const matchWithoutCalendar = trimmed.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
-        if (matchWithoutCalendar && matchWithoutCalendar[1]) {
-          listFilter = matchWithoutCalendar[1].trim();
-        } else {
-          // Fallback: extract everything after "List events:"
-          const afterPrefix = trimmed.replace(/^List events:\s*/i, '').trim();
-          if (afterPrefix) {
-            // Remove any trailing "- calendar: ..." part
-            listFilter = afterPrefix.split(/\s*-\s*calendar:/i)[0].trim();
-          } else {
-            listFilter = 'all'; // Default to all
-          }
-        }
+        // If nothing after "List events:", default to 'all'
+        listFilter = 'all';
       }
       
-      // Clean up listFilter - remove any trailing dashes or calendar references
-      if (listFilter) {
-        listFilter = listFilter.split(/\s*-\s*calendar:/i)[0].trim();
+      // Also check for calendar specification (if present)
+      const calendarMatch = trimmed.match(/\s*-\s*calendar:\s*(.+)$/i);
+      if (calendarMatch && calendarMatch[1]) {
+        folderRoute = calendarMatch[1].trim();
       }
+      
+      logger.debug(
+        {
+          originalText: trimmed,
+          extractedListFilter: listFilter,
+          afterPrefix,
+        },
+        'Parsed List events action'
+      );
     }
     // Folder operations
     else if (trimmed.startsWith('Create a task folder:')) {
@@ -291,6 +295,7 @@ export class ActionExecutor {
       recipient,
       newName,
       status,
+      listFilter,
       missingFields,
     };
   }
@@ -1060,7 +1065,18 @@ export class ActionExecutor {
         };
       }
       
+      // Ensure listFilter is set, default to 'all' if not provided
       const timeframe = parsed.listFilter || 'all';
+      
+      logger.info(
+        {
+          userId: this.userId,
+          listFilter: parsed.listFilter,
+          timeframe,
+          parsedAction: JSON.stringify(parsed, null, 2),
+        },
+        'List events - timeframe extracted'
+      );
       
       logger.info(
         {

@@ -850,19 +850,37 @@ function parseEventTemplateToIntent(
       
       if (updateMatch[2]) {
         const changes = updateMatch[2].trim();
-        // Try to extract new date/time from changes
-        const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) || changes.match(/(?:on|for)\s+(.+?)(?:\s|$)/i);
-        if (dateMatch && dateMatch[1]) {
-          intent.startDate = parseRelativeDate(dateMatch[1].trim());
-        }
         
-        const timeMatch = changes.match(/time\s+to\s+(.+?)(?:\s|$)/i) || changes.match(/(?:at|to)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-        if (timeMatch && timeMatch[1]) {
-          intent.startTime = parseTime(timeMatch[1].trim());
+        // Handle "reschedule to {date} at {time}" pattern
+        const rescheduleMatch = changes.match(/reschedule\s+(?:to|for)\s+(.+?)(?:\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i);
+        if (rescheduleMatch) {
+          if (rescheduleMatch[1]) {
+            intent.startDate = parseRelativeDate(rescheduleMatch[1].trim());
+          }
+          if (rescheduleMatch[2]) {
+            intent.startTime = parseTime(rescheduleMatch[2].trim());
+          }
+        } else {
+          // Try to extract new date/time from changes using other patterns
+          const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) 
+            || changes.match(/reschedule\s+to\s+(.+?)(?:\s+at|\s|$)/i)
+            || changes.match(/(?:on|for)\s+(.+?)(?:\s+at|\s|$)/i)
+            || changes.match(/move\s+to\s+(.+?)(?:\s+at|\s|$)/i);
+          if (dateMatch && dateMatch[1]) {
+            intent.startDate = parseRelativeDate(dateMatch[1].trim());
+          }
+          
+          const timeMatch = changes.match(/time\s+to\s+(.+?)(?:\s|$)/i) 
+            || changes.match(/at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i)
+            || changes.match(/to\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+          if (timeMatch && timeMatch[1]) {
+            intent.startTime = parseTime(timeMatch[1].trim());
+          }
         }
         
         // Check if title is being updated
-        const titleMatch = changes.match(/title\s+to\s+(.+?)(?:\s|$)/i);
+        const titleMatch = changes.match(/title\s+to\s+(.+?)(?:\s|$)/i) 
+          || changes.match(/rename\s+to\s+(.+?)(?:\s|$)/i);
         if (titleMatch && titleMatch[1]) {
           intent.title = titleMatch[1].trim();
         }
