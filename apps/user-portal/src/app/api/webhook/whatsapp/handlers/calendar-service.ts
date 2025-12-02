@@ -130,16 +130,69 @@ export class CalendarService implements ICalendarService {
   }
 
   /**
-   * Get user's timezone from preferences
+   * Get calendar's timezone from the connected calendar
+   * Falls back to user preferences, then to default
    */
-  private async getUserTimezone(userId: string): Promise<string> {
+  private async getUserTimezone(userId: string, calendarConnection?: any): Promise<string> {
+    // First, try to get timezone from the calendar itself
+    if (calendarConnection && calendarConnection.accessToken) {
+      try {
+        const provider = createCalendarProvider(calendarConnection.provider);
+        const calendarId = calendarConnection.calendarId || 'primary';
+        
+        // Use withTokenRefresh to handle token expiration
+        const calendar = await this.withTokenRefresh(
+          calendarConnection.id,
+          calendarConnection.accessToken,
+          calendarConnection.refreshToken || null,
+          provider,
+          async (token) => provider.getCalendarById(token, calendarId)
+        );
+        
+        if (calendar.timeZone) {
+          logger.info(
+            {
+              userId,
+              calendarId: calendarConnection.calendarId,
+              timezone: calendar.timeZone,
+            },
+            'Using calendar timezone from provider'
+          );
+          return calendar.timeZone;
+        }
+      } catch (error) {
+        logger.warn(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            userId,
+            calendarId: calendarConnection.calendarId,
+          },
+          'Failed to get calendar timezone from provider, falling back to preferences'
+        );
+      }
+    }
+    
+    // Fallback to user preferences
     try {
       const preferences = await getUserPreferences(this.db, userId);
-      return preferences?.timezone || 'Africa/Johannesburg';
+      if (preferences?.timezone) {
+        logger.info(
+          {
+            userId,
+            timezone: preferences.timezone,
+            source: 'user_preferences',
+          },
+          'Using timezone from user preferences'
+        );
+        return preferences.timezone;
+      }
     } catch (error) {
-      logger.warn({ error, userId }, 'Failed to get user timezone, using default');
-      return 'Africa/Johannesburg';
+      logger.warn({ error, userId }, 'Failed to get user timezone from preferences');
     }
+    
+    // Final fallback to default
+    logger.warn({ userId }, 'Using default timezone (Africa/Johannesburg)');
+    return 'Africa/Johannesburg';
   }
 
   /**
@@ -239,9 +292,9 @@ export class CalendarService implements ICalendarService {
         throw new Error('Calendar connection is inactive. Please reconnect your calendar.');
       }
 
-      // Get user's timezone
-      const userTimezone = await this.getUserTimezone(userId);
-      logger.info({ userId, timezone: userTimezone }, 'Using user timezone for event creation');
+      // Get calendar's timezone (from calendar, not user preferences)
+      const calendarTimezone = await this.getUserTimezone(userId, calendarConnection);
+      logger.info({ userId, timezone: calendarTimezone, source: 'calendar' }, 'Using calendar timezone for event creation');
 
       // Validate intent has required fields
       if (!intent.title) {
@@ -252,12 +305,12 @@ export class CalendarService implements ICalendarService {
         throw new Error('Event start date is required');
       }
 
-      // Parse dates with user's timezone
+      // Parse dates with calendar's timezone
       const startDateTime = this.parseDateTime(
         intent.startDate,
         intent.startTime || undefined,
         intent.isAllDay || false,
-        userTimezone
+        calendarTimezone
       );
 
       const endDateTime = this.parseEndDateTime(
@@ -272,14 +325,14 @@ export class CalendarService implements ICalendarService {
       logger.info(
         {
           userId,
-          timezone: userTimezone,
+          timezone: calendarTimezone,
           intentDate: intent.startDate,
           intentTime: intent.startTime,
           parsedStartISO: startDateTime.toISOString(),
-          parsedStartLocal: startDateTime.toLocaleString('en-US', { timeZone: userTimezone }),
+          parsedStartLocal: startDateTime.toLocaleString('en-US', { timeZone: calendarTimezone }),
           parsedEndISO: endDateTime.toISOString(),
         },
-        'Parsed event date/time'
+        'Parsed event date/time using calendar timezone'
       );
 
       // Create event via provider with token refresh
@@ -289,14 +342,14 @@ export class CalendarService implements ICalendarService {
       logger.info(
         {
           userId,
-          timezone: userTimezone,
+          timezone: calendarTimezone,
           startDateTimeISO: startDateTime.toISOString(),
-          startDateTimeLocal: startDateTime.toLocaleString('en-US', { timeZone: userTimezone }),
+          startDateTimeLocal: startDateTime.toLocaleString('en-US', { timeZone: calendarTimezone }),
           endDateTimeISO: endDateTime.toISOString(),
           intentTime: intent.startTime,
           intentDate: intent.startDate,
         },
-        'Sending event to calendar provider'
+        'Sending event to calendar provider with calendar timezone'
       );
       
       const createParams = {
@@ -308,7 +361,7 @@ export class CalendarService implements ICalendarService {
         allDay: intent.isAllDay ?? false,
         location: intent.location,
         attendees: intent.attendees,
-        timeZone: userTimezone, // Use user's actual timezone
+        timeZone: calendarTimezone, // Use calendar's timezone
       };
       
       logger.info(
@@ -440,12 +493,13 @@ export class CalendarService implements ICalendarService {
       if (intent.location) updates.location = intent.location;
       if (intent.attendees) updates.attendees = intent.attendees;
 
-      // Get user's timezone
-      const userTimezone = await this.getUserTimezone(userId);
+      // Get calendar's timezone (from calendar, not user preferences)
+      const calendarTimezone = await this.getUserTimezone(userId, calendarConnection);
+      logger.info({ userId, timezone: calendarTimezone, source: 'calendar' }, 'Using calendar timezone for event update');
       
       // Update dates if provided
       if (intent.startDate) {
-        updates.start = this.parseDateTime(intent.startDate, intent.startTime, intent.isAllDay, userTimezone);
+        updates.start = this.parseDateTime(intent.startDate, intent.startTime, intent.isAllDay, calendarTimezone);
       }
 
       if (intent.endDate || intent.endTime || intent.duration) {
@@ -461,7 +515,7 @@ export class CalendarService implements ICalendarService {
       
       // Add timezone to updates if dates are being changed
       if (updates.start || updates.end) {
-        updates.timeZone = userTimezone;
+        updates.timeZone = calendarTimezone;
       }
       
       const updatedEvent = await this.withTokenRefresh(
