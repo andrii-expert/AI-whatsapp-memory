@@ -1324,6 +1324,17 @@ export class ActionExecutor {
           };
         }
         
+        // Get calendar timezone for formatting events
+        let calendarTimezone = 'Africa/Johannesburg'; // Default fallback
+        try {
+          const calendarService = new CalendarService(this.db);
+          if (calendarConnection) {
+            calendarTimezone = await (calendarService as any).getUserTimezone(this.userId, calendarConnection);
+          }
+        } catch (error) {
+          logger.warn({ error, userId: this.userId }, 'Failed to get calendar timezone for event formatting, using default');
+        }
+        
         let message = `📅 You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}`;
         const timeframeText = queryTimeframe === 'today' ? 'today' 
           : queryTimeframe === 'tomorrow' ? 'tomorrow'
@@ -1336,17 +1347,19 @@ export class ActionExecutor {
         }
         message += ':\n\n';
         
-        // Format each event
+        // Format each event using calendar's timezone
         result.events.slice(0, 20).forEach((event: { title: string; start: Date; location?: string }, index: number) => {
           const eventTime = event.start.toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',
             hour12: true,
+            timeZone: calendarTimezone,
           });
           const eventDate = event.start.toLocaleDateString('en-US', {
             weekday: 'short',
             month: 'short',
             day: 'numeric',
+            timeZone: calendarTimezone,
           });
           
           message += `${index + 1}. ${event.title}\n   📅 ${eventDate} at ${eventTime}`;

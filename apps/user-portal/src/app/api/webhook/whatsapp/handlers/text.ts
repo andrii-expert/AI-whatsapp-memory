@@ -727,6 +727,7 @@ async function handleEventOperation(
               timeZone: calendarTimezone,
             });
             const eventDate = event.start.toLocaleDateString('en-US', {
+              weekday: 'short',
               month: 'short',
               day: 'numeric',
               timeZone: calendarTimezone,
