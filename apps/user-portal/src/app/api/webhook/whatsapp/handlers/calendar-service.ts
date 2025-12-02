@@ -908,8 +908,18 @@ export class CalendarService implements ICalendarService {
 
   /**
    * Parse start date and time into Date object
-   * Creates a Date that represents the local time in the user's timezone
-   * The calendar provider will use the timeZone parameter to interpret it correctly
+   * Creates a Date that represents the UTC time which, when displayed in the calendar's timezone,
+   * equals the desired local time.
+   * 
+   * Google Calendar API expects:
+   * - dateTime: UTC time in ISO 8601 format
+   * - timeZone: IANA timezone identifier
+   * 
+   * The dateTime should be the UTC equivalent of the desired local time.
+   * Example: User wants 18:00 in America/Los_Angeles (UTC-8 in winter)
+   * - 18:00 PST = 02:00 UTC (next day)
+   * - Send: dateTime: "2025-12-03T02:00:00.000Z", timeZone: "America/Los_Angeles"
+   * - Google displays: 02:00 UTC converted to PST = 18:00 (previous day) ✓
    */
   private parseDateTime(
     dateString: string,
@@ -918,72 +928,87 @@ export class CalendarService implements ICalendarService {
     timezone: string = 'Africa/Johannesburg'
   ): Date {
     // Parse the date string (YYYY-MM-DD format)
-    const date = new Date(dateString + 'T00:00:00Z'); // Parse as UTC to avoid timezone issues
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth();
-    const day = date.getUTCDate();
-
+    const [year, month, day] = dateString.split('-').map(Number);
+    
     if (isAllDay || !timeString) {
-      // For all-day events, create date at midnight UTC
-      // The calendar provider will interpret this correctly with the timeZone parameter
-      return new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+      // For all-day events, use UTC midnight
+      return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
     }
 
-    // Parse time string (HH:MM format) - this is local time in the user's timezone
+    // Parse time string (HH:MM format) - this is local time in the calendar's timezone
     const timeParts = timeString.split(':');
     const localHours = parseInt(timeParts[0] || '0', 10);
     const localMinutes = parseInt(timeParts[1] || '0', 10);
 
-    // Google Calendar API expects:
-    // - dateTime: ISO 8601 string in UTC (from toISOString())
-    // - timeZone: IANA timezone identifier
-    // 
-    // The dateTime represents the UTC time that, when displayed in the specified timeZone,
-    // equals the desired local time.
-    //
-    // Example: User wants 2 PM (14:00) in Africa/Johannesburg (UTC+2)
-    // - Local time: 14:00
-    // - UTC time needed: 14:00 - 2 hours = 12:00 UTC
-    // - Send: dateTime: "2025-12-01T12:00:00.000Z", timeZone: "Africa/Johannesburg"
-    // - Google displays: 12:00 UTC + 2 hours = 14:00 local ✓
+    // Strategy: Use binary search or iterative approach to find the correct UTC time
+    // We'll start with a guess and adjust until we get the right local time display
     
-    // The most reliable way: Create a date string with the local time and timezone offset,
-    // then let JavaScript convert it to UTC automatically
-    // Format: YYYY-MM-DDTHH:mm:ss+HH:mm or YYYY-MM-DDTHH:mm:ss-HH:mm
+    // Start with the local time as if it were UTC (this is our initial guess)
+    let candidateUTC = new Date(Date.UTC(year, month - 1, day, localHours, localMinutes, 0, 0));
     
-    // First, get the timezone offset for this specific date (accounts for DST)
-    const tempDate = new Date(Date.UTC(year, month, day, 12, 0, 0, 0));
-    const offsetHours = this.getTimezoneOffset(timezone, tempDate);
+    // Create a formatter to check what UTC times display as in the target timezone
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
     
-    // Format the offset as +HH:mm or -HH:mm
-    const offsetSign = offsetHours >= 0 ? '+' : '-';
-    const offsetAbs = Math.abs(offsetHours);
-    const offsetHoursInt = Math.floor(offsetAbs);
-    const offsetMinutesInt = Math.round((offsetAbs - offsetHoursInt) * 60);
-    const offsetStr = `${offsetSign}${String(offsetHoursInt).padStart(2, '0')}:${String(offsetMinutesInt).padStart(2, '0')}`;
+    // Check what our candidate displays as
+    let displayedTime = formatter.format(candidateUTC);
+    let [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
     
-    // Create the date string with timezone offset
-    // JavaScript will automatically convert this to UTC when we create the Date object
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}:00${offsetStr}`;
+    // Calculate difference and adjust
+    const desiredMinutes = localHours * 60 + localMinutes;
+    let displayedMinutes = displayedHour * 60 + displayedMinute;
+    let diffMinutes = desiredMinutes - displayedMinutes;
     
-    // Create the Date object - JavaScript will convert the timezone-aware string to UTC
-    const utcDate = new Date(dateStr);
+    // Handle day rollover
+    if (diffMinutes > 12 * 60) {
+      diffMinutes -= 24 * 60;
+    } else if (diffMinutes < -12 * 60) {
+      diffMinutes += 24 * 60;
+    }
+    
+    // Adjust the candidate
+    candidateUTC = new Date(candidateUTC.getTime() + diffMinutes * 60 * 1000);
+    
+    // Verify the result
+    displayedTime = formatter.format(candidateUTC);
+    [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
+    
+    // If still not correct, do one more adjustment (should rarely be needed)
+    if (displayedHour !== localHours || displayedMinute !== localMinutes) {
+      displayedMinutes = displayedHour * 60 + displayedMinute;
+      diffMinutes = desiredMinutes - displayedMinutes;
+      if (diffMinutes > 12 * 60) {
+        diffMinutes -= 24 * 60;
+      } else if (diffMinutes < -12 * 60) {
+        diffMinutes += 24 * 60;
+      }
+      candidateUTC = new Date(candidateUTC.getTime() + diffMinutes * 60 * 1000);
+      
+      // Final verification
+      displayedTime = formatter.format(candidateUTC);
+      [displayedHour, displayedMinute] = displayedTime.split(':').map(Number);
+    }
     
     logger.info(
       {
         timezone,
-        localTime: `${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}`,
-        offsetHours: offsetHours.toFixed(2),
-        offsetStr,
-        dateStr,
-        utcDateISO: utcDate.toISOString(),
-        utcTimeFormatted: `${String(utcDate.getUTCHours()).padStart(2, '0')}:${String(utcDate.getUTCMinutes()).padStart(2, '0')}`,
-        expectedLocalTime: utcDate.toLocaleString('en-US', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }),
+        inputDate: dateString,
+        inputTime: timeString,
+        desiredLocalTime: `${String(localHours).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')}`,
+        finalUTC: candidateUTC.toISOString(),
+        finalUTCTime: `${String(candidateUTC.getUTCHours()).padStart(2, '0')}:${String(candidateUTC.getUTCMinutes()).padStart(2, '0')}`,
+        verification: `${String(displayedHour).padStart(2, '0')}:${String(displayedMinute).padStart(2, '0')}`,
+        correct: displayedHour === localHours && displayedMinute === localMinutes,
       },
       'Timezone conversion for date parsing'
     );
     
-    return utcDate;
+    return candidateUTC;
   }
 
   /**
