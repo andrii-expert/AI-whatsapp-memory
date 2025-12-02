@@ -500,10 +500,44 @@ export class CalendarService implements ICalendarService {
       // Update dates if provided
       if (intent.startDate) {
         updates.start = this.parseDateTime(intent.startDate, intent.startTime, intent.isAllDay, calendarTimezone);
-      }
-
-      if (intent.endDate || intent.endTime || intent.duration) {
-        const startDate = updates.start || targetEvent.start;
+        
+        // If start is updated, we must also update end to maintain a valid time range
+        // Use the new start date for calculating end
+        const newStartDate = updates.start;
+        
+        // If explicit end date/time/duration is provided, use it
+        if (intent.endDate || intent.endTime || intent.duration) {
+          updates.end = this.parseEndDateTime(
+            newStartDate,
+            intent.endDate,
+            intent.endTime,
+            intent.duration,
+            intent.isAllDay
+          );
+        } else {
+          // Calculate end based on the original event's duration
+          const originalStart = new Date(targetEvent.start);
+          const originalEnd = new Date(targetEvent.end);
+          const durationMs = originalEnd.getTime() - originalStart.getTime();
+          
+          // Apply the same duration to the new start time
+          updates.end = new Date(newStartDate.getTime() + durationMs);
+          
+          logger.info(
+            {
+              userId,
+              originalStart: originalStart.toISOString(),
+              originalEnd: originalEnd.toISOString(),
+              durationMs,
+              newStart: newStartDate.toISOString(),
+              newEnd: updates.end.toISOString(),
+            },
+            'Calculated end date based on original event duration'
+          );
+        }
+      } else if (intent.endDate || intent.endTime || intent.duration) {
+        // Only end is being updated (start stays the same)
+        const startDate = new Date(targetEvent.start);
         updates.end = this.parseEndDateTime(
           startDate,
           intent.endDate,
@@ -513,9 +547,44 @@ export class CalendarService implements ICalendarService {
         );
       }
       
+      // Validate that end is after start
+      if (updates.start && updates.end) {
+        if (updates.end <= updates.start) {
+          logger.warn(
+            {
+              userId,
+              start: updates.start.toISOString(),
+              end: updates.end.toISOString(),
+            },
+            'End date is before or equal to start date, adjusting end date'
+          );
+          // If end is not after start, add 1 hour to end
+          updates.end = new Date(updates.start.getTime() + 60 * 60 * 1000);
+        }
+      }
+      
       // Add timezone to updates if dates are being changed
       if (updates.start || updates.end) {
         updates.timeZone = calendarTimezone;
+        
+        // Log the update parameters for debugging
+        logger.info(
+          {
+            userId,
+            timezone: calendarTimezone,
+            updates: {
+              start: updates.start?.toISOString(),
+              end: updates.end?.toISOString(),
+              title: updates.title,
+              location: updates.location,
+            },
+            originalEvent: {
+              start: targetEvent.start,
+              end: targetEvent.end,
+            },
+          },
+          'Preparing event update parameters'
+        );
       }
       
       const updatedEvent = await this.withTokenRefresh(

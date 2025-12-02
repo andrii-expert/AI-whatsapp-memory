@@ -890,29 +890,68 @@ function parseEventTemplateToIntent(
         const changes = updateMatch[2].trim();
         
         // Handle "reschedule to {date} at {time}" pattern
-        const rescheduleMatch = changes.match(/reschedule\s+(?:to|for)\s+(.+?)(?:\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i);
-        if (rescheduleMatch) {
-          if (rescheduleMatch[1]) {
-            intent.startDate = parseRelativeDate(rescheduleMatch[1].trim());
-          }
-          if (rescheduleMatch[2]) {
-            intent.startTime = parseTime(rescheduleMatch[2].trim());
+        // Support both 24-hour (17:00) and 12-hour (5pm) formats
+        // Pattern: "reschedule to 2025-12-03 at 17:00" or "reschedule to 2025-12-03 at 5pm"
+        const rescheduleMatch = changes.match(/reschedule\s+(?:to|for)\s+(.+?)(?:\s+at\s+([\d:]+(?:\s*(?:am|pm))?))?/i);
+        if (rescheduleMatch && rescheduleMatch[1]) {
+          const datePart = rescheduleMatch[1].trim();
+          // Check if the date part contains a time (e.g., "2025-12-03 at 17:00")
+          const dateTimeMatch = datePart.match(/^(.+?)(?:\s+at\s+([\d:]+(?:\s*(?:am|pm))?))$/i);
+          if (dateTimeMatch && dateTimeMatch[1]) {
+            intent.startDate = parseRelativeDate(dateTimeMatch[1].trim());
+            if (dateTimeMatch[2]) {
+              intent.startTime = parseTime(dateTimeMatch[2].trim());
+            }
+          } else {
+            intent.startDate = parseRelativeDate(datePart);
+            if (rescheduleMatch[2]) {
+              intent.startTime = parseTime(rescheduleMatch[2].trim());
+            }
           }
         } else {
           // Try to extract new date/time from changes using other patterns
-          const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) 
-            || changes.match(/reschedule\s+to\s+(.+?)(?:\s+at|\s|$)/i)
-            || changes.match(/(?:on|for)\s+(.+?)(?:\s+at|\s|$)/i)
-            || changes.match(/move\s+to\s+(.+?)(?:\s+at|\s|$)/i);
-          if (dateMatch && dateMatch[1]) {
-            intent.startDate = parseRelativeDate(dateMatch[1].trim());
-          }
-          
-          const timeMatch = changes.match(/time\s+to\s+(.+?)(?:\s|$)/i) 
-            || changes.match(/at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i)
-            || changes.match(/to\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-          if (timeMatch && timeMatch[1]) {
-            intent.startTime = parseTime(timeMatch[1].trim());
+          // First, try to match "reschedule to {date} at {time}" with better regex
+          const rescheduleToMatch = changes.match(/reschedule\s+to\s+(.+?)(?:\s+at\s+([\d:]+(?:\s*(?:am|pm))?))?/i);
+          if (rescheduleToMatch && rescheduleToMatch[1]) {
+            const datePart = rescheduleToMatch[1].trim();
+            // Check if date part contains time
+            const dateTimeMatch = datePart.match(/^(.+?)(?:\s+at\s+([\d:]+(?:\s*(?:am|pm))?))$/i);
+            if (dateTimeMatch && dateTimeMatch[1]) {
+              intent.startDate = parseRelativeDate(dateTimeMatch[1].trim());
+              if (dateTimeMatch[2]) {
+                intent.startTime = parseTime(dateTimeMatch[2].trim());
+              }
+            } else {
+              intent.startDate = parseRelativeDate(datePart);
+              if (rescheduleToMatch[2]) {
+                intent.startTime = parseTime(rescheduleToMatch[2].trim());
+              }
+            }
+          } else {
+            // Try other patterns
+            const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) 
+              || changes.match(/(?:on|for)\s+(.+?)(?:\s+at|\s|$)/i)
+              || changes.match(/move\s+to\s+(.+?)(?:\s+at|\s|$)/i);
+            if (dateMatch && dateMatch[1]) {
+              const datePart = dateMatch[1].trim();
+              // Check if date part contains time
+              const dateTimeMatch = datePart.match(/^(.+?)(?:\s+at\s+([\d:]+(?:\s*(?:am|pm))?))$/i);
+              if (dateTimeMatch && dateTimeMatch[1]) {
+                intent.startDate = parseRelativeDate(dateTimeMatch[1].trim());
+                if (dateTimeMatch[2]) {
+                  intent.startTime = parseTime(dateTimeMatch[2].trim());
+                }
+              } else {
+                intent.startDate = parseRelativeDate(datePart);
+              }
+            }
+            
+            const timeMatch = changes.match(/time\s+to\s+(.+?)(?:\s|$)/i) 
+              || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)/i)
+              || changes.match(/to\s+([\d:]+(?:\s*(?:am|pm))?)/i);
+            if (timeMatch && timeMatch[1]) {
+              intent.startTime = parseTime(timeMatch[1].trim());
+            }
           }
         }
         
