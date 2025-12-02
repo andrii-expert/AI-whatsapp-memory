@@ -11,6 +11,7 @@ import {
   getUserTasks,
   getUserNotes,
   getRemindersByUserId,
+  getPrimaryCalendar,
 } from '@imaginecalendar/database/queries';
 import {
   createTaskShare,
@@ -1040,6 +1041,25 @@ export class ActionExecutor {
 
   private async listEvents(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     try {
+      // Check calendar connection first
+      const calendarConnection = await getPrimaryCalendar(this.db, this.userId);
+      
+      if (!calendarConnection) {
+        logger.warn({ userId: this.userId }, 'No calendar connection found for list events');
+        return {
+          success: false,
+          message: "I couldn't find a connected calendar. Please connect your calendar in settings first.",
+        };
+      }
+      
+      if (!calendarConnection.isActive) {
+        logger.warn({ userId: this.userId, calendarId: calendarConnection.id }, 'Calendar connection is inactive');
+        return {
+          success: false,
+          message: "Your calendar connection is inactive. Please reconnect your calendar in settings.",
+        };
+      }
+      
       const timeframe = parsed.listFilter || 'all';
       
       logger.info(
@@ -1047,6 +1067,7 @@ export class ActionExecutor {
           userId: this.userId,
           originalTimeframe: timeframe,
           listFilter: parsed.listFilter,
+          calendarProvider: calendarConnection.provider,
         },
         'Parsing timeframe for event query'
       );
@@ -1110,19 +1131,39 @@ export class ActionExecutor {
           'Calendar query executed'
         );
       } catch (calendarError) {
+        const errorMessage = calendarError instanceof Error ? calendarError.message : String(calendarError);
+        const errorStack = calendarError instanceof Error ? calendarError.stack : undefined;
+        
         logger.error(
           {
-            error: calendarError instanceof Error ? calendarError.message : String(calendarError),
-            errorStack: calendarError instanceof Error ? calendarError.stack : undefined,
+            error: errorMessage,
+            errorStack,
             userId: this.userId,
             queryTimeframe,
             intent: JSON.stringify(intent, null, 2),
           },
           'CalendarService.execute failed'
         );
+        
+        // Provide more specific error messages based on error type
+        if (errorMessage.includes('No calendar connected') || errorMessage.includes('calendar connection')) {
+          return {
+            success: false,
+            message: "I couldn't find a connected calendar. Please connect your calendar in settings first.",
+          };
+        }
+        
+        if (errorMessage.includes('authentication') || errorMessage.includes('expired') || errorMessage.includes('token')) {
+          return {
+            success: false,
+            message: "Your calendar authentication has expired. Please reconnect your calendar in settings.",
+          };
+        }
+        
+        // Generic error message for other issues
         return {
           success: false,
-          message: "I'm sorry, I couldn't retrieve your events. Please make sure your calendar is connected and try again.",
+          message: `I encountered an error retrieving your events: ${errorMessage}. Please try again or reconnect your calendar.`,
         };
       }
       

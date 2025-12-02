@@ -382,20 +382,37 @@ async function processAIResponse(
           );
         }
       } catch (listError) {
+        const errorMessage = listError instanceof Error ? listError.message : String(listError);
+        const errorStack = listError instanceof Error ? listError.stack : undefined;
+        
         logger.error(
           {
-            error: listError instanceof Error ? listError.message : String(listError),
-            errorStack: listError instanceof Error ? listError.stack : undefined,
+            error: errorMessage,
+            errorStack,
             userId,
             titleType,
             actionTemplate: actionTemplate.substring(0, 200),
           },
           'Failed to process list operation'
         );
-        await whatsappService.sendTextMessage(
-          recipient,
-          "I'm sorry, I encountered an error processing your request. Please make sure your calendar is connected and try again."
-        );
+        
+        // Provide more specific error messages based on error type
+        let userMessage: string;
+        if (errorMessage.includes('No calendar connected') || errorMessage.includes('calendar connection')) {
+          userMessage = "I couldn't find a connected calendar. Please connect your calendar in settings first.";
+        } else if (errorMessage.includes('authentication') || errorMessage.includes('expired') || errorMessage.includes('token')) {
+          userMessage = "Your calendar authentication has expired. Please reconnect your calendar in settings.";
+        } else if (errorMessage.includes('inactive')) {
+          userMessage = "Your calendar connection is inactive. Please reconnect your calendar in settings.";
+        } else {
+          // For other errors, use the error message from the executor if available
+          // Otherwise use a generic message
+          userMessage = errorMessage && errorMessage.length < 200 
+            ? errorMessage 
+            : "I encountered an error processing your request. Please try again or reconnect your calendar.";
+        }
+        
+        await whatsappService.sendTextMessage(recipient, userMessage);
       }
       return; // Exit early after handling list operation
     }
