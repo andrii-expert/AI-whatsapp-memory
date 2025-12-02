@@ -499,7 +499,30 @@ export class CalendarService implements ICalendarService {
       
       // Update dates if provided
       if (intent.startDate) {
+        // Log the intent values before parsing
+        logger.info(
+          {
+            userId,
+            intentStartDate: intent.startDate,
+            intentStartTime: intent.startTime,
+            intentIsAllDay: intent.isAllDay,
+            calendarTimezone,
+          },
+          'Parsing start date/time for event update'
+        );
+        
         updates.start = this.parseDateTime(intent.startDate, intent.startTime, intent.isAllDay, calendarTimezone);
+        
+        // Log the parsed result
+        logger.info(
+          {
+            userId,
+            parsedStartUTC: updates.start.toISOString(),
+            parsedStartLocal: updates.start.toLocaleString('en-US', { timeZone: calendarTimezone }),
+            expectedLocalTime: intent.startTime ? `${intent.startDate} ${intent.startTime}` : intent.startDate,
+          },
+          'Parsed start date/time for update'
+        );
         
         // If start is updated, we must also update end to maintain a valid time range
         // Use the new start date for calculating end
