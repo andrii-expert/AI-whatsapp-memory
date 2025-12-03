@@ -1088,8 +1088,28 @@ export class ActionExecutor {
   private parseReminderSchedule(schedule: string, timezone?: string): Partial<CreateReminderInput> {
     const scheduleLower = schedule.toLowerCase().trim();
     const result: Partial<CreateReminderInput> = {};
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-    // Check for recurring patterns first
+    // Check for "every [day]" pattern first (e.g., "every tuesday", "every monday")
+    const everyDayMatch = scheduleLower.match(/every\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i);
+    if (everyDayMatch && everyDayMatch[1]) {
+      result.frequency = 'weekly';
+      const dayIndex = dayNames.indexOf(everyDayMatch[1].toLowerCase());
+      if (dayIndex !== -1) {
+        result.daysOfWeek = [dayIndex];
+      }
+      // Extract time if present
+      const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+      if (timeMatch && timeMatch[1]) {
+        result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+      } else {
+        // Default to 9am if no time specified
+        result.time = '09:00';
+      }
+      return result;
+    }
+
+    // Check for recurring patterns
     if (scheduleLower.includes('every day') || scheduleLower.includes('daily')) {
       result.frequency = 'daily';
       // Extract time if present
@@ -1103,7 +1123,6 @@ export class ActionExecutor {
     } else if (scheduleLower.includes('every week') || scheduleLower.includes('weekly')) {
       result.frequency = 'weekly';
       // Extract day of week
-      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const dayMatch = scheduleLower.match(/(?:on\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i);
       if (dayMatch && dayMatch[1]) {
         const dayIndex = dayNames.indexOf(dayMatch[1].toLowerCase());
@@ -1253,6 +1272,63 @@ export class ActionExecutor {
       const scheduleStr = parsed.listFilter || 'once';
       const scheduleData = this.parseReminderSchedule(scheduleStr, timezone);
       
+      // Auto-detect birthday and set to yearly
+      const titleLower = parsed.taskName.toLowerCase();
+      const isBirthday = titleLower.includes('birthday') || titleLower.includes('birth day');
+      
+      if (isBirthday) {
+        // Override frequency to yearly for birthdays
+        scheduleData.frequency = 'yearly';
+        
+        // Try to extract date from schedule string (e.g., "on the 4th October", "4th October", "October 4th")
+        const dateMatch = scheduleStr.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i) 
+          || scheduleStr.match(/(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?/i);
+        
+        if (dateMatch) {
+          const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+          let dayNum: number;
+          let monthName: string;
+          
+          if (dateMatch[1] && monthNames.includes(dateMatch[1].toLowerCase())) {
+            // Format: "October 4th"
+            monthName = dateMatch[1].toLowerCase();
+            dayNum = parseInt(dateMatch[2] || '1', 10);
+          } else {
+            // Format: "4th October"
+            dayNum = parseInt(dateMatch[1] || '1', 10);
+            monthName = dateMatch[2]?.toLowerCase() || '';
+          }
+          
+          if (monthName && dayNum >= 1 && dayNum <= 31) {
+            const monthIndex = monthNames.indexOf(monthName);
+            if (monthIndex !== -1) {
+              scheduleData.dayOfMonth = dayNum;
+              scheduleData.month = monthIndex + 1; // 1-12
+            }
+          }
+        }
+        
+        // Default time to 9am for birthdays if not specified
+        if (!scheduleData.time) {
+          scheduleData.time = '09:00';
+        }
+      }
+      
+      logger.info(
+        {
+          userId: this.userId,
+          scheduleStr,
+          parsedSchedule: scheduleData,
+          frequency: scheduleData.frequency,
+          daysOfWeek: scheduleData.daysOfWeek,
+          time: scheduleData.time,
+          isBirthday,
+          dayOfMonth: scheduleData.dayOfMonth,
+          month: scheduleData.month,
+        },
+        'Parsed reminder schedule'
+      );
+      
       const reminderInput: CreateReminderInput = {
         userId: this.userId,
         title: parsed.taskName,
@@ -1351,12 +1427,34 @@ export class ActionExecutor {
         } else if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
           const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
           const dayName = dayNames[reminder.daysOfWeek[0]];
-          responseMessage += `\n⏰ Weekly on ${dayName} at ${formattedTime}`;
+          if (reminder.time) {
+            responseMessage += `\n⏰ Every ${dayName} at ${formattedTime}`;
+          } else {
+            responseMessage += `\n⏰ Every ${dayName}`;
+          }
         } else if (reminder.frequency === 'monthly' && reminder.dayOfMonth) {
           responseMessage += `\n⏰ Monthly on the ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)} at ${formattedTime}`;
+        } else if (reminder.frequency === 'yearly' && reminder.dayOfMonth && reminder.month) {
+          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const monthName = monthNames[reminder.month - 1];
+          if (reminder.time) {
+            responseMessage += `\n⏰ Every year on ${monthName} ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)} at ${formattedTime}`;
+          } else {
+            responseMessage += `\n⏰ Every year on ${monthName} ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)}`;
+          }
         } else {
           responseMessage += `\n⏰ ${formattedTime}`;
         }
+      } else if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
+        // Weekly reminder without time specified
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayName = dayNames[reminder.daysOfWeek[0]];
+        responseMessage += `\n⏰ Every ${dayName}`;
+      } else if (reminder.frequency === 'yearly' && reminder.dayOfMonth && reminder.month) {
+        // Yearly reminder (birthday) without time specified
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthName = monthNames[reminder.month - 1];
+        responseMessage += `\n⏰ Every year on ${monthName} ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)}`;
       }
 
       return {
