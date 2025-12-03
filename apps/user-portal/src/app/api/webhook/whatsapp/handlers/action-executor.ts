@@ -311,7 +311,7 @@ export class ActionExecutor {
   /**
    * Execute the parsed action
    */
-  async executeAction(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+  async executeAction(parsed: ParsedAction, timezone?: string): Promise<{ success: boolean; message: string }> {
     try {
       // Check for missing critical fields
       if (parsed.missingFields.length > 0) {
@@ -339,7 +339,7 @@ export class ActionExecutor {
           if (parsed.resourceType === 'task') {
             return await this.createTask(parsed);
           } else if (parsed.resourceType === 'reminder') {
-            return await this.createReminder(parsed);
+            return await this.createReminder(parsed, timezone);
           } else {
             return await this.createFolder(parsed);
           }
@@ -347,7 +347,7 @@ export class ActionExecutor {
           if (parsed.resourceType === 'task') {
             return await this.editTask(parsed);
           } else if (parsed.resourceType === 'reminder') {
-            return await this.updateReminder(parsed);
+            return await this.updateReminder(parsed, timezone);
           } else {
             return await this.editFolder(parsed);
           }
@@ -1085,7 +1085,7 @@ export class ActionExecutor {
    * - "later" → once (no specific time)
    * - "on the 1st" → once, dayOfMonth: 1
    */
-  private parseReminderSchedule(schedule: string): Partial<CreateReminderInput> {
+  private parseReminderSchedule(schedule: string, timezone?: string): Partial<CreateReminderInput> {
     const scheduleLower = schedule.toLowerCase().trim();
     const result: Partial<CreateReminderInput> = {};
 
@@ -1241,7 +1241,7 @@ export class ActionExecutor {
     return '09:00';
   }
 
-  private async createReminder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+  private async createReminder(parsed: ParsedAction, timezone?: string): Promise<{ success: boolean; message: string }> {
     try {
       if (!parsed.taskName) {
         return {
@@ -1251,7 +1251,7 @@ export class ActionExecutor {
       }
 
       const scheduleStr = parsed.listFilter || 'once';
-      const scheduleData = this.parseReminderSchedule(scheduleStr);
+      const scheduleData = this.parseReminderSchedule(scheduleStr, timezone);
       
       const reminderInput: CreateReminderInput = {
         userId: this.userId,
@@ -1270,11 +1270,98 @@ export class ActionExecutor {
 
       const reminder = await createReminder(this.db, reminderInput);
 
-      logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder created');
+      logger.info({ userId: this.userId, reminderId: reminder.id, timezone }, 'Reminder created');
+
+      // Format response message with timezone-aware time display
+      let responseMessage = `🔔 Reminder "${reminder.title}" created successfully!`;
+      
+      if (reminder.time) {
+        // Format time in user's timezone
+        // Create a date representing today in UTC, then format it in the user's timezone
+        const timeParts = reminder.time.split(':');
+        const hours = parseInt(timeParts[0] || '0', 10);
+        const minutes = parseInt(timeParts[1] || '0', 10);
+        
+        // Create a date for today, then format the time portion in the user's timezone
+        // We'll use Intl.DateTimeFormat to format just the time
+        const tz = timezone || 'Africa/Johannesburg';
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: tz,
+        });
+        
+        // Create a date object for today at the specified time in UTC
+        // Then adjust it so when displayed in the user's timezone, it shows the correct time
+        const now = new Date();
+        const utcDate = new Date(Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate(),
+          hours,
+          minutes,
+          0
+        ));
+        
+        // Get what this UTC time would be in the user's timezone
+        const localTimeStr = utcDate.toLocaleString('en-US', { timeZone: tz, hour12: false });
+        const localTimeParts = localTimeStr.split(', ')[1]?.split(':') || [];
+        const localHours = parseInt(localTimeParts[0] || '0', 10);
+        const localMinutes = parseInt(localTimeParts[1] || '0', 10);
+        
+        // Calculate the offset
+        const offsetHours = hours - localHours;
+        const offsetMinutes = minutes - localMinutes;
+        
+        // Create a date that, when formatted in the user's timezone, shows the desired time
+        const adjustedDate = new Date();
+        adjustedDate.setUTCHours(hours - offsetHours, minutes - offsetMinutes, 0, 0);
+        
+        // Actually, simpler approach: just format the time string directly
+        // Since reminder.time is stored as "HH:MM" in the user's intended local time,
+        // we can create a date for today and set it to that time, then format
+        const timeDate = new Date();
+        // Parse the time as if it's in the user's timezone
+        const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        
+        // Use a simpler approach: format the time directly
+        const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const formattedTime = `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+        
+        if (reminder.frequency === 'once') {
+          if (reminder.daysFromNow !== undefined) {
+            const targetDate = new Date();
+            targetDate.setDate(targetDate.getDate() + reminder.daysFromNow);
+            const dateStr = targetDate.toLocaleDateString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              timeZone: tz,
+            });
+            responseMessage += `\n📅 ${dateStr} at ${formattedTime}`;
+          } else if (reminder.dayOfMonth) {
+            responseMessage += `\n📅 On the ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)} at ${formattedTime}`;
+          } else {
+            responseMessage += `\n⏰ ${formattedTime}`;
+          }
+        } else if (reminder.frequency === 'daily') {
+          responseMessage += `\n⏰ Daily at ${formattedTime}`;
+        } else if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
+          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const dayName = dayNames[reminder.daysOfWeek[0]];
+          responseMessage += `\n⏰ Weekly on ${dayName} at ${formattedTime}`;
+        } else if (reminder.frequency === 'monthly' && reminder.dayOfMonth) {
+          responseMessage += `\n⏰ Monthly on the ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)} at ${formattedTime}`;
+        } else {
+          responseMessage += `\n⏰ ${formattedTime}`;
+        }
+      }
 
       return {
         success: true,
-        message: `🔔 Reminder "${reminder.title}" created successfully!`,
+        message: responseMessage,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to create reminder');
@@ -1285,7 +1372,17 @@ export class ActionExecutor {
     }
   }
 
-  private async updateReminder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+  private getOrdinalSuffix(day: number): string {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  }
+
+  private async updateReminder(parsed: ParsedAction, timezone?: string): Promise<{ success: boolean; message: string }> {
     try {
       if (!parsed.taskName) {
         return {
@@ -1324,7 +1421,7 @@ export class ActionExecutor {
         
         // Check for date changes
         if (changes.includes('date') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday')) {
-          const scheduleData = this.parseReminderSchedule(parsed.newName);
+          const scheduleData = this.parseReminderSchedule(parsed.newName, timezone);
           if (scheduleData.daysFromNow !== undefined) {
             updateInput.daysFromNow = scheduleData.daysFromNow;
           }
@@ -1344,11 +1441,30 @@ export class ActionExecutor {
 
       const updated = await updateReminder(this.db, reminder.id, this.userId, updateInput);
 
-      logger.info({ userId: this.userId, reminderId: updated.id }, 'Reminder updated');
+      logger.info({ userId: this.userId, reminderId: updated.id, timezone }, 'Reminder updated');
+
+      // Format response message with timezone-aware time display
+      let responseMessage = `🔔 Reminder "${updated.title || reminder.title}" updated successfully!`;
+      
+      if (updated.time || reminder.time) {
+        const timeToDisplay = updated.time || reminder.time;
+        if (timeToDisplay) {
+          const timeParts = timeToDisplay.split(':');
+          const hours = parseInt(timeParts[0] || '0', 10);
+          const minutes = parseInt(timeParts[1] || '0', 10);
+          
+          // Format time directly (since it's stored as local time)
+          const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const formattedTime = `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+          
+          responseMessage += `\n⏰ ${formattedTime}`;
+        }
+      }
 
       return {
         success: true,
-        message: `🔔 Reminder "${updated.title}" updated successfully!`,
+        message: responseMessage,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to update reminder');

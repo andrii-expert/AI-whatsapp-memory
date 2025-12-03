@@ -528,6 +528,45 @@ async function processAIResponse(
       const isResume = /^Resume a reminder:/i.test(actionTemplate);
       const isList = /^List reminders:/i.test(actionTemplate);
       
+      // Send AI response to user (as requested)
+      if (!isList) {
+        try {
+          await whatsappService.sendTextMessage(
+            recipient,
+            `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
+          );
+          // Log outgoing message
+          try {
+            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+            if (whatsappNumber) {
+              await logOutgoingWhatsAppMessage(db, {
+                whatsappNumberId: whatsappNumber.id,
+                userId,
+                messageType: 'text',
+                messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
+                isFreeMessage: true,
+              });
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to log outgoing AI response message');
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to send AI response to user');
+        }
+      }
+      
+      // Get calendar timezone for reminder operations
+      let calendarTimezone = 'Africa/Johannesburg'; // Default fallback
+      try {
+        const calendarConnection = await getPrimaryCalendar(db, userId);
+        if (calendarConnection) {
+          const calendarService = new CalendarService(db);
+          calendarTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+        }
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to get calendar timezone for reminder operations, using default');
+      }
+      
       // Handle reminder operations
       const executor = new ActionExecutor(db, userId, whatsappService, recipient);
       
@@ -556,9 +595,9 @@ async function processAIResponse(
           await whatsappService.sendTextMessage(recipient, result.message);
         }
       } else {
-        // For create/update/delete/pause/resume, parse and execute
+        // For create/update/delete/pause/resume, parse and execute with timezone
         const parsed = parseReminderTemplateToAction(actionTemplate, isCreate, isUpdate, isDelete, isPause, isResume);
-        const result = await executor.executeAction(parsed);
+        const result = await executor.executeAction(parsed, calendarTimezone);
         
         try {
           const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
