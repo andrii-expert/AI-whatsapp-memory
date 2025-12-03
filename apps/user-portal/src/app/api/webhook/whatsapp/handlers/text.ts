@@ -5,7 +5,7 @@ import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/wha
 import { WhatsappTextAnalysisService, IntentAnalysisService, type CalendarIntent, calendarIntentSchema } from '@imaginecalendar/ai-services';
 import type { WebhookProcessingSummary } from '../types';
 import { CalendarService } from './calendar-service';
-import { ActionExecutor } from './action-executor';
+import { ActionExecutor, type ParsedAction } from './action-executor';
 
 type AnalysisIntent = 'task' | 'reminder' | 'note' | 'event';
 
@@ -516,9 +516,67 @@ async function processAIResponse(
           "I'm sorry, I encountered an error processing your event request. Please try again."
         );
       }
-    } else if (titleType === 'note' || titleType === 'reminder') {
-      // For non-list operations on notes/reminders, log as TODO
+    } else if (titleType === 'note') {
+      // For non-list operations on notes, log as TODO
       logger.info({ userId, titleType, actionTemplate: actionTemplate.substring(0, 100) }, `${titleType} executor not yet implemented for this operation`);
+    } else if (titleType === 'reminder') {
+      // Handle reminder operations
+      const isCreate = /^Create a reminder:/i.test(actionTemplate);
+      const isUpdate = /^Update a reminder:/i.test(actionTemplate);
+      const isDelete = /^Delete a reminder:/i.test(actionTemplate);
+      const isPause = /^Pause a reminder:/i.test(actionTemplate);
+      const isResume = /^Resume a reminder:/i.test(actionTemplate);
+      const isList = /^List reminders:/i.test(actionTemplate);
+      
+      // Handle reminder operations
+      const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+      
+      if (isList) {
+        // List reminders is handled by action executor
+        const parsed = executor.parseAction(actionTemplate);
+        if (parsed) {
+          parsed.resourceType = 'reminder';
+          const result = await executor.executeAction(parsed);
+          
+          try {
+            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+            if (whatsappNumber) {
+              await logOutgoingWhatsAppMessage(db, {
+                whatsappNumberId: whatsappNumber.id,
+                userId,
+                messageType: 'text',
+                messageContent: result.message,
+                isFreeMessage: true,
+              });
+            }
+          } catch (logError) {
+            logger.warn({ error: logError, userId }, 'Failed to log outgoing reminder list message');
+          }
+          
+          await whatsappService.sendTextMessage(recipient, result.message);
+        }
+      } else {
+        // For create/update/delete/pause/resume, parse and execute
+        const parsed = parseReminderTemplateToAction(actionTemplate, isCreate, isUpdate, isDelete, isPause, isResume);
+        const result = await executor.executeAction(parsed);
+        
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: result.message,
+              isFreeMessage: true,
+            });
+          }
+        } catch (logError) {
+          logger.warn({ error: logError, userId }, 'Failed to log outgoing reminder message');
+        }
+        
+        await whatsappService.sendTextMessage(recipient, result.message);
+      }
     } else if (titleType === 'verification') {
       // Verification is handled separately, no need to process here
       logger.info({ userId }, 'Verification handled separately');
@@ -945,6 +1003,104 @@ function parseEventTemplateToIntent(
 
   // Validate and parse with schema
   return calendarIntentSchema.parse(intent);
+}
+
+/**
+ * Parse reminder template string to ParsedAction
+ * Handles formats like:
+ * - "Create a reminder: {title} - schedule: {schedule} - status: {active|paused}"
+ * - "Update a reminder: {title} - to: {changes}"
+ * - "Delete a reminder: {title}"
+ * - "Pause a reminder: {title}"
+ * - "Resume a reminder: {title}"
+ */
+function parseReminderTemplateToAction(
+  template: string,
+  isCreate: boolean,
+  isUpdate: boolean,
+  isDelete: boolean,
+  isPause: boolean,
+  isResume: boolean
+): ParsedAction {
+  let action: string;
+  let resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' = 'reminder';
+  let reminderTitle: string | undefined;
+  let reminderSchedule: string | undefined;
+  let reminderStatus: string | undefined;
+  let reminderChanges: string | undefined;
+  const missingFields: string[] = [];
+
+  if (isCreate) {
+    action = 'create';
+    // Parse: "Create a reminder: {title} - schedule: {schedule} - status: {active|paused}"
+    const titleMatch = template.match(/^Create a reminder:\s*(.+?)(?:\s*-\s*schedule:|\s*-\s*status:|$)/i);
+    if (titleMatch && titleMatch[1]) {
+      reminderTitle = titleMatch[1].trim();
+    } else {
+      missingFields.push('reminder title');
+    }
+
+    const scheduleMatch = template.match(/\s*-\s*schedule:\s*(.+?)(?:\s*-\s*status:|$)/i);
+    if (scheduleMatch && scheduleMatch[1]) {
+      reminderSchedule = scheduleMatch[1].trim();
+    }
+
+    const statusMatch = template.match(/\s*-\s*status:\s*(.+?)$/i);
+    if (statusMatch && statusMatch[1]) {
+      reminderStatus = statusMatch[1].trim().toLowerCase();
+    }
+  } else if (isUpdate) {
+    action = 'edit';
+    // Parse: "Update a reminder: {title} - to: {changes}"
+    const updateMatch = template.match(/^Update a reminder:\s*(.+?)(?:\s*-\s*to:\s*(.+?))?$/i);
+    if (updateMatch && updateMatch[1]) {
+      reminderTitle = updateMatch[1].trim();
+    } else {
+      missingFields.push('reminder title');
+    }
+    if (updateMatch && updateMatch[2]) {
+      reminderChanges = updateMatch[2].trim();
+    }
+  } else if (isDelete) {
+    action = 'delete';
+    // Parse: "Delete a reminder: {title}"
+    const deleteMatch = template.match(/^Delete a reminder:\s*(.+?)$/i);
+    if (deleteMatch && deleteMatch[1]) {
+      reminderTitle = deleteMatch[1].trim();
+    } else {
+      missingFields.push('reminder title');
+    }
+  } else if (isPause) {
+    action = 'pause';
+    // Parse: "Pause a reminder: {title}"
+    const pauseMatch = template.match(/^Pause a reminder:\s*(.+?)$/i);
+    if (pauseMatch && pauseMatch[1]) {
+      reminderTitle = pauseMatch[1].trim();
+    } else {
+      missingFields.push('reminder title');
+    }
+  } else if (isResume) {
+    action = 'resume';
+    // Parse: "Resume a reminder: {title}"
+    const resumeMatch = template.match(/^Resume a reminder:\s*(.+?)$/i);
+    if (resumeMatch && resumeMatch[1]) {
+      reminderTitle = resumeMatch[1].trim();
+    } else {
+      missingFields.push('reminder title');
+    }
+  } else {
+    throw new Error('Unknown reminder operation type');
+  }
+
+  return {
+    action,
+    resourceType,
+    taskName: reminderTitle, // Reuse taskName field for reminder title
+    newName: reminderChanges, // Reuse newName field for reminder changes
+    listFilter: reminderSchedule, // Reuse listFilter field for reminder schedule
+    status: reminderStatus, // Reuse status field for reminder status
+    missingFields,
+  };
 }
 
 /**

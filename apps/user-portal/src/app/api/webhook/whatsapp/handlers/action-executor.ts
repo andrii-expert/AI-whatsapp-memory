@@ -14,6 +14,16 @@ import {
   getPrimaryCalendar,
 } from '@imaginecalendar/database/queries';
 import {
+  createReminder,
+  updateReminder,
+  deleteReminder,
+  toggleReminderActive,
+  getReminderById,
+  type CreateReminderInput,
+  type UpdateReminderInput,
+  type ReminderFrequency,
+} from '@imaginecalendar/database/queries/reminders';
+import {
   createTaskShare,
   searchUsersForSharing,
   getUserById,
@@ -330,21 +340,43 @@ export class ActionExecutor {
         case 'create':
           if (parsed.resourceType === 'task') {
             return await this.createTask(parsed);
+          } else if (parsed.resourceType === 'reminder') {
+            return await this.createReminder(parsed);
           } else {
             return await this.createFolder(parsed);
           }
         case 'edit':
           if (parsed.resourceType === 'task') {
             return await this.editTask(parsed);
+          } else if (parsed.resourceType === 'reminder') {
+            return await this.updateReminder(parsed);
           } else {
             return await this.editFolder(parsed);
           }
         case 'delete':
           if (parsed.resourceType === 'task') {
             return await this.deleteTask(parsed);
+          } else if (parsed.resourceType === 'reminder') {
+            return await this.deleteReminder(parsed);
           } else {
             return await this.deleteFolder(parsed);
           }
+        case 'pause':
+          if (parsed.resourceType === 'reminder') {
+            return await this.pauseReminder(parsed);
+          }
+          return {
+            success: false,
+            message: "I'm sorry, I couldn't understand what you want to pause.",
+          };
+        case 'resume':
+          if (parsed.resourceType === 'reminder') {
+            return await this.resumeReminder(parsed);
+          }
+          return {
+            success: false,
+            message: "I'm sorry, I couldn't understand what you want to resume.",
+          };
         case 'complete':
           return await this.completeTask(parsed);
         case 'move':
@@ -1040,6 +1072,411 @@ export class ActionExecutor {
       return {
         success: false,
         message: "I'm sorry, I couldn't retrieve your reminders. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Parse schedule string to reminder input format
+   * Examples:
+   * - "at 5pm" → once, time: "17:00"
+   * - "tomorrow morning" → once, daysFromNow: 1, time: "09:00"
+   * - "every day at 9am" → daily, time: "09:00"
+   * - "weekly on Monday at 8am" → weekly, daysOfWeek: [1], time: "08:00"
+   * - "monthly on the 1st" → monthly, dayOfMonth: 1
+   * - "later" → once (no specific time)
+   * - "on the 1st" → once, dayOfMonth: 1
+   */
+  private parseReminderSchedule(schedule: string): Partial<CreateReminderInput> {
+    const scheduleLower = schedule.toLowerCase().trim();
+    const result: Partial<CreateReminderInput> = {};
+
+    // Check for recurring patterns first
+    if (scheduleLower.includes('every day') || scheduleLower.includes('daily')) {
+      result.frequency = 'daily';
+      // Extract time if present
+      const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+      if (timeMatch && timeMatch[1]) {
+        result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+      } else {
+        // Default to 9am if no time specified
+        result.time = '09:00';
+      }
+    } else if (scheduleLower.includes('every week') || scheduleLower.includes('weekly')) {
+      result.frequency = 'weekly';
+      // Extract day of week
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const dayMatch = scheduleLower.match(/(?:on\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i);
+      if (dayMatch && dayMatch[1]) {
+        const dayIndex = dayNames.indexOf(dayMatch[1].toLowerCase());
+        if (dayIndex !== -1) {
+          result.daysOfWeek = [dayIndex];
+        }
+      } else {
+        // Default to Monday if no day specified
+        result.daysOfWeek = [1];
+      }
+      // Extract time if present
+      const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+      if (timeMatch && timeMatch[1]) {
+        result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+      } else {
+        // Default to 8am if no time specified
+        result.time = '08:00';
+      }
+    } else if (scheduleLower.includes('every month') || scheduleLower.includes('monthly')) {
+      result.frequency = 'monthly';
+      // Extract day of month
+      const dayMatch = scheduleLower.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
+      if (dayMatch && dayMatch[1]) {
+        result.dayOfMonth = parseInt(dayMatch[1], 10);
+      } else {
+        // Default to 1st if no day specified
+        result.dayOfMonth = 1;
+      }
+      // Extract time if present
+      const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+      if (timeMatch && timeMatch[1]) {
+        result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+      } else {
+        // Default to 9am if no time specified
+        result.time = '09:00';
+      }
+    } else if (scheduleLower.includes('every hour') || scheduleLower.includes('hourly')) {
+      result.frequency = 'hourly';
+    } else if (scheduleLower.includes('every minute') || scheduleLower.includes('minutely')) {
+      result.frequency = 'minutely';
+    } else {
+      // Default to once
+      result.frequency = 'once';
+      
+      // Check for relative dates
+      if (scheduleLower.includes('tomorrow')) {
+        result.daysFromNow = 1;
+        // Extract time based on time of day or explicit time
+        if (scheduleLower.includes('morning')) {
+          result.time = '09:00';
+        } else if (scheduleLower.includes('afternoon')) {
+          result.time = '14:00';
+        } else if (scheduleLower.includes('evening') || scheduleLower.includes('night')) {
+          result.time = '18:00';
+        } else {
+          const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+          if (timeMatch && timeMatch[1]) {
+            result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+          } else {
+            // Default to 9am for tomorrow if no time specified
+            result.time = '09:00';
+          }
+        }
+      } else if (scheduleLower.includes('today') || scheduleLower.includes('tonight')) {
+        result.daysFromNow = 0;
+        if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
+          result.time = '18:00';
+        } else {
+          const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+          if (timeMatch && timeMatch[1]) {
+            result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+          }
+        }
+      } else if (scheduleLower.includes('later')) {
+        // "later" means once, no specific time/date
+        result.frequency = 'once';
+      } else {
+        // Extract time
+        const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+        if (timeMatch && timeMatch[1]) {
+          result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+        }
+        
+        // Check for specific date (e.g., "on the 1st")
+        const dayMatch = scheduleLower.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
+        if (dayMatch && dayMatch[1]) {
+          const dayNum = parseInt(dayMatch[1], 10);
+          const now = new Date();
+          const currentDay = now.getDate();
+          if (dayNum >= 1 && dayNum <= 31) {
+            // If day is in the past this month, schedule for next month
+            if (dayNum < currentDay) {
+              result.dayOfMonth = dayNum;
+              result.month = now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2;
+            } else {
+              result.dayOfMonth = dayNum;
+              result.month = now.getMonth() + 1;
+            }
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Parse time string to 24-hour format (HH:MM)
+   */
+  private parseTimeTo24Hour(timeStr: string): string {
+    const trimmed = timeStr.trim().toLowerCase();
+    
+    // Already in HH:MM format
+    if (/^\d{2}:\d{2}$/.test(trimmed)) {
+      return trimmed;
+    }
+    
+    // Parse 12-hour format
+    const match = trimmed.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (match) {
+      let hours = parseInt(match[1] || '0', 10);
+      const minutes = parseInt(match[2] || '0', 10);
+      const period = match[3]?.toLowerCase();
+      
+      if (period === 'pm' && hours !== 12) {
+        hours += 12;
+      } else if (period === 'am' && hours === 12) {
+        hours = 0;
+      }
+      
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+    
+    // Default to current time or 09:00
+    return '09:00';
+  }
+
+  private async createReminder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.taskName) {
+        return {
+          success: false,
+          message: "I need to know what you want to be reminded about. Please provide a reminder title.",
+        };
+      }
+
+      const scheduleStr = parsed.listFilter || 'once';
+      const scheduleData = this.parseReminderSchedule(scheduleStr);
+      
+      const reminderInput: CreateReminderInput = {
+        userId: this.userId,
+        title: parsed.taskName,
+        frequency: scheduleData.frequency || 'once',
+        time: scheduleData.time,
+        minuteOfHour: scheduleData.minuteOfHour,
+        intervalMinutes: scheduleData.intervalMinutes,
+        daysFromNow: scheduleData.daysFromNow,
+        targetDate: scheduleData.targetDate,
+        dayOfMonth: scheduleData.dayOfMonth,
+        month: scheduleData.month,
+        daysOfWeek: scheduleData.daysOfWeek,
+        active: parsed.status === 'paused' ? false : true,
+      };
+
+      const reminder = await createReminder(this.db, reminderInput);
+
+      logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder created');
+
+      return {
+        success: true,
+        message: `🔔 Reminder "${reminder.title}" created successfully!`,
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to create reminder');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't create your reminder. Please try again.",
+      };
+    }
+  }
+
+  private async updateReminder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.taskName) {
+        return {
+          success: false,
+          message: "I need to know which reminder you want to update. Please provide the reminder title.",
+        };
+      }
+
+      // Find reminder by title
+      const reminders = await getRemindersByUserId(this.db, this.userId);
+      const reminder = reminders.find(r => 
+        r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+        parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
+      );
+
+      if (!reminder) {
+        return {
+          success: false,
+          message: `I couldn't find a reminder matching "${parsed.taskName}". Please check the reminder title and try again.`,
+        };
+      }
+
+      const updateInput: UpdateReminderInput = {};
+
+      if (parsed.newName) {
+        // Parse changes
+        const changes = parsed.newName.toLowerCase();
+        
+        // Check for time changes
+        if (changes.includes('time') || changes.includes('at')) {
+          const timeMatch = parsed.newName.match(/(?:to|at)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+          if (timeMatch && timeMatch[1]) {
+            updateInput.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+          }
+        }
+        
+        // Check for date changes
+        if (changes.includes('date') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday')) {
+          const scheduleData = this.parseReminderSchedule(parsed.newName);
+          if (scheduleData.daysFromNow !== undefined) {
+            updateInput.daysFromNow = scheduleData.daysFromNow;
+          }
+          if (scheduleData.targetDate) {
+            updateInput.targetDate = scheduleData.targetDate;
+          }
+        }
+        
+        // Check for title changes
+        if (changes.includes('title') || changes.includes('rename')) {
+          const titleMatch = parsed.newName.match(/(?:to|rename)\s+(.+?)(?:\s|$)/i);
+          if (titleMatch && titleMatch[1]) {
+            updateInput.title = titleMatch[1].trim();
+          }
+        }
+      }
+
+      const updated = await updateReminder(this.db, reminder.id, this.userId, updateInput);
+
+      logger.info({ userId: this.userId, reminderId: updated.id }, 'Reminder updated');
+
+      return {
+        success: true,
+        message: `🔔 Reminder "${updated.title}" updated successfully!`,
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to update reminder');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't update your reminder. Please try again.",
+      };
+    }
+  }
+
+  private async deleteReminder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.taskName) {
+        return {
+          success: false,
+          message: "I need to know which reminder you want to delete. Please provide the reminder title.",
+        };
+      }
+
+      // Find reminder by title
+      const reminders = await getRemindersByUserId(this.db, this.userId);
+      const reminder = reminders.find(r => 
+        r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+        parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
+      );
+
+      if (!reminder) {
+        return {
+          success: false,
+          message: `I couldn't find a reminder matching "${parsed.taskName}". Please check the reminder title and try again.`,
+        };
+      }
+
+      await deleteReminder(this.db, reminder.id, this.userId);
+
+      logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder deleted');
+
+      return {
+        success: true,
+        message: `🔔 Reminder "${reminder.title}" deleted successfully!`,
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to delete reminder');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't delete your reminder. Please try again.",
+      };
+    }
+  }
+
+  private async pauseReminder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.taskName) {
+        return {
+          success: false,
+          message: "I need to know which reminder you want to pause. Please provide the reminder title.",
+        };
+      }
+
+      // Find reminder by title
+      const reminders = await getRemindersByUserId(this.db, this.userId);
+      const reminder = reminders.find(r => 
+        r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+        parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
+      );
+
+      if (!reminder) {
+        return {
+          success: false,
+          message: `I couldn't find a reminder matching "${parsed.taskName}". Please check the reminder title and try again.`,
+        };
+      }
+
+      await toggleReminderActive(this.db, reminder.id, this.userId, false);
+
+      logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder paused');
+
+      return {
+        success: true,
+        message: `🔔 Reminder "${reminder.title}" paused successfully!`,
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to pause reminder');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't pause your reminder. Please try again.",
+      };
+    }
+  }
+
+  private async resumeReminder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.taskName) {
+        return {
+          success: false,
+          message: "I need to know which reminder you want to resume. Please provide the reminder title.",
+        };
+      }
+
+      // Find reminder by title
+      const reminders = await getRemindersByUserId(this.db, this.userId);
+      const reminder = reminders.find(r => 
+        r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+        parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
+      );
+
+      if (!reminder) {
+        return {
+          success: false,
+          message: `I couldn't find a reminder matching "${parsed.taskName}". Please check the reminder title and try again.`,
+        };
+      }
+
+      await toggleReminderActive(this.db, reminder.id, this.userId, true);
+
+      logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder resumed');
+
+      return {
+        success: true,
+        message: `🔔 Reminder "${reminder.title}" resumed successfully!`,
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to resume reminder');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't resume your reminder. Please try again.",
       };
     }
   }
