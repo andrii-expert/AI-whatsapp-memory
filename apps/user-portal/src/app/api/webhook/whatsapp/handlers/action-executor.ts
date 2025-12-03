@@ -12,8 +12,6 @@ import {
   getUserNotes,
   getRemindersByUserId,
   getPrimaryCalendar,
-} from '@imaginecalendar/database/queries';
-import {
   createReminder,
   updateReminder,
   deleteReminder,
@@ -22,7 +20,7 @@ import {
   type CreateReminderInput,
   type UpdateReminderInput,
   type ReminderFrequency,
-} from '@imaginecalendar/database/queries/reminders';
+} from '@imaginecalendar/database/queries';
 import {
   createTaskShare,
   searchUsersForSharing,
