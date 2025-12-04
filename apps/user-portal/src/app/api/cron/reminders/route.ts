@@ -40,12 +40,25 @@ export async function GET(req: NextRequest) {
     // Clean up old cache entries
     cleanupNotificationCache(now);
 
-    logger.info({ timestamp: now.toISOString() }, 'Checking for due reminders');
+    logger.info(
+      { 
+        timestamp: now.toISOString(),
+        localTime: now.toLocaleString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      'Checking for reminders happening in next 1 minute'
+    );
 
     // Get all active reminders efficiently
     const activeReminders = await getActiveReminders(db);
 
-    logger.info({ count: activeReminders.length }, 'Found active reminders');
+    logger.info(
+      { 
+        count: activeReminders.length,
+        reminderIds: activeReminders.map(r => ({ id: r.id, title: r.title, frequency: r.frequency, time: r.time }))
+      },
+      'Found active reminders to check'
+    );
 
     let notificationsSent = 0;
     let notificationsSkipped = 0;
@@ -99,33 +112,68 @@ export async function GET(req: NextRequest) {
             const reminderTime = calculateReminderTime(reminder, now);
             
             if (!reminderTime) {
+              logger.debug(
+                { reminderId: reminder.id, frequency: reminder.frequency },
+                'Could not calculate reminder time, skipping'
+              );
               continue; // Can't calculate reminder time (e.g., past reminder)
             }
 
-            // Calculate time until the reminder should occur
+            // Round down to the minute for comparison (remove seconds/milliseconds)
+            const reminderMinute = new Date(reminderTime);
+            reminderMinute.setSeconds(0, 0);
+            
+            const nowMinute = new Date(now);
+            nowMinute.setSeconds(0, 0);
+            
+            // Calculate time difference in milliseconds
             const timeUntilReminder = reminderTime.getTime() - now.getTime();
-            const fiveMinutesInMs = 5 * 60 * 1000;
             const oneMinuteInMs = 60 * 1000;
             
-            // Fire notification if reminder is due in approximately 5 minutes
-            // We check within a 1-minute window to account for cron job timing variations
-            // This means we'll send the notification when there are 4-6 minutes remaining
-            const shouldNotify = timeUntilReminder >= (fiveMinutesInMs - oneMinuteInMs) && 
-                               timeUntilReminder <= (fiveMinutesInMs + oneMinuteInMs);
+            // Check if reminder is happening in the current minute window
+            // Since cron runs every minute, we check if the reminder minute matches the current minute
+            // OR if the reminder is within the next 1 minute window (0 to 60 seconds from now)
+            // We also account for reminders that are slightly in the past (up to 5 seconds) due to cron timing
+            const isSameMinute = reminderMinute.getTime() === nowMinute.getTime();
+            const isInNextMinute = timeUntilReminder > 0 && timeUntilReminder <= oneMinuteInMs;
+            const isJustPassed = timeUntilReminder < 0 && timeUntilReminder >= -5000; // Up to 5 seconds in the past
+            
+            const shouldNotify = isSameMinute || isInNextMinute || isJustPassed;
+            
+            logger.debug(
+              {
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                reminderTime: reminderTime.toISOString(),
+                reminderMinute: reminderMinute.toISOString(),
+                now: now.toISOString(),
+                nowMinute: nowMinute.toISOString(),
+                timeUntilReminderMs: timeUntilReminder,
+                timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
+                isSameMinute,
+                isInNextMinute,
+                isJustPassed,
+                shouldNotify,
+              },
+              'Checking if reminder should be notified'
+            );
             
             if (shouldNotify) {
               // Send notification
               const userName = user.firstName || user.name || 'there';
               const timeStr = reminder.time ? ` at ${formatTime(reminder.time)}` : '';
               
+              // Format the reminder time for the message
+              const reminderTimeStr = formatReminderTime(reminderTime);
+              
               // Create polite and professional message
               let message: string;
               if (reminder.frequency === 'yearly' && reminder.title.toLowerCase().includes('birthday')) {
                 // Special message for birthdays
-                message = `Hello ${userName}! 👋\n\nThis is a friendly reminder that ${reminder.title}${timeStr ? ` is coming up${timeStr}` : ' is coming up'}.\n\nWe wanted to make sure you don't miss this special occasion!`;
+                message = `Hello ${userName}! 👋\n\nThis is a friendly reminder that ${reminder.title}${timeStr ? ` is${timeStr}` : ' is now'}.\n\nWe wanted to make sure you don't miss this special occasion!`;
               } else {
                 // Standard reminder message - polite and professional
-                message = `Hello ${userName}! 👋\n\nThis is a friendly reminder:\n\n${reminder.title}${timeStr ? `\n\nScheduled for${timeStr}` : ''}\n\nWe hope this helps you stay on top of your schedule!`;
+                message = `Hello ${userName}! 👋\n\nThis is a friendly reminder:\n\n${reminder.title}${timeStr ? `\n\nScheduled for${timeStr}` : `\n\nTime: ${reminderTimeStr}`}\n\nWe hope this helps you stay on top of your schedule!`;
               }
               
               try {
@@ -150,7 +198,8 @@ export async function GET(req: NextRequest) {
                     reminderId: reminder.id,
                     reminderTitle: reminder.title,
                     reminderTime: reminderTime.toISOString(),
-                    timeUntilReminder: Math.round(timeUntilReminder / 1000 / 60) + ' minutes',
+                    timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
+                    frequency: reminder.frequency,
                   },
                   'Reminder notification sent'
                 );
@@ -218,9 +267,15 @@ function calculateReminderTime(reminder: any, now: Date): Date | null {
         if (reminder.time) {
           const [hours, minutes] = reminder.time.split(':').map(Number);
           target.setHours(hours, minutes, 0, 0);
+        } else {
+          // If no time specified, set to midnight
+          target.setHours(0, 0, 0, 0);
         }
-        // If target date is in the past, return null (reminder already passed)
-        if (target < now) {
+        target.setSeconds(0, 0);
+        // If target date is in the past (more than 1 minute), return null (reminder already passed)
+        // We allow 1 minute grace period for cron timing
+        const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+        if (target < oneMinuteAgo) {
           return null;
         }
         return target;
@@ -234,9 +289,11 @@ function calculateReminderTime(reminder: any, now: Date): Date | null {
           // Default to 9am if no time specified
           next.setHours(9, 0, 0, 0);
         }
+        next.setSeconds(0, 0);
         // If calculated time is in the past, it means daysFromNow was relative to creation, not now
         // For "once" reminders with daysFromNow, we should only fire if it's today or future
-        if (next < now) {
+        const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+        if (next < oneMinuteAgo) {
           return null; // Already passed
         }
         return next;
@@ -249,6 +306,7 @@ function calculateReminderTime(reminder: any, now: Date): Date | null {
         } else {
           next.setHours(9, 0, 0, 0);
         }
+        next.setSeconds(0, 0);
         if (next < now) {
           // If this year's date has passed, check next year
           next.setFullYear(next.getFullYear() + 1);
@@ -308,6 +366,7 @@ function calculateReminderTime(reminder: any, now: Date): Date | null {
     } else if (reminder.frequency === 'hourly' && reminder.minuteOfHour !== undefined) {
       const next = new Date(now);
       next.setMinutes(reminder.minuteOfHour, 0, 0);
+      next.setSeconds(0, 0);
       if (next <= now) {
         next.setHours(next.getHours() + 1);
       }
@@ -315,6 +374,7 @@ function calculateReminderTime(reminder: any, now: Date): Date | null {
     } else if (reminder.frequency === 'minutely' && reminder.intervalMinutes) {
       const next = new Date(now);
       next.setMinutes(next.getMinutes() + reminder.intervalMinutes, 0, 0);
+      next.setSeconds(0, 0);
       return next;
     }
 
@@ -380,6 +440,17 @@ function getNextWeeklyOccurrence(now: Date, dayOfWeek: number, time?: string): D
  */
 function formatTime(timeStr: string): string {
   const [hours, minutes] = timeStr.split(':').map(Number);
+  const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+}
+
+/**
+ * Format a Date object to a readable time string
+ */
+function formatReminderTime(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
   const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
   const period = hours >= 12 ? 'PM' : 'AM';
   return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;

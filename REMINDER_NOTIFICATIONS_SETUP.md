@@ -1,17 +1,18 @@
 # Reminder Notifications Setup
 
 ## Overview
-The reminder notification system sends WhatsApp messages to users 5 minutes before their reminders are due.
+The reminder notification system sends WhatsApp messages to users when their reminders are due. The system checks for reminders happening in the current minute window and sends notifications accordingly.
 
 ## How It Works
 
 1. **API Endpoint**: `/api/cron/reminders`
 2. **Frequency**: Should be called every 1 minute by a cron job
 3. **Functionality**:
-   - Checks all active reminders
+   - Checks all active reminders every minute
    - Calculates when each reminder should occur
-   - Sends WhatsApp notification 5 minutes before the reminder time
+   - Sends WhatsApp notification when the reminder time is in the current minute window (or within the next 1 minute)
    - Prevents duplicate notifications using in-memory cache (10-minute TTL)
+   - Handles slight timing variations by checking if reminder is in the same minute or up to 5 seconds in the past
 
 ## Setup Instructions
 
@@ -133,8 +134,9 @@ curl -X GET "http://localhost:3000/api/cron/reminders" \
 ## Features
 
 - ✅ Checks all active reminders every minute
-- ✅ Sends notifications 5 minutes before reminder time
+- ✅ Sends notifications when reminder time matches the current minute (or within next 1 minute)
 - ✅ Prevents duplicate notifications (10-minute cache)
+- ✅ Handles timing variations with grace period for cron execution delays
 - ✅ Handles all reminder frequencies:
   - Once
   - Daily
