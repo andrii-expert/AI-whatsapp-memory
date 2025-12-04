@@ -154,19 +154,19 @@ export async function GET(req: NextRequest) {
         // Check each reminder for this user
         for (const reminder of userReminders) {
           try {
-            // Check if we've already sent a notification for this reminder recently
+            // Check if we've already sent a notification for this reminder recently (prevent duplicates)
             const cacheKey = `${reminder.id}`;
             const lastSent = notificationCache.get(cacheKey);
             if (lastSent && (now.getTime() - lastSent) < CACHE_TTL) {
               notificationsSkipped++;
               logger.debug(
                 { reminderId: reminder.id, lastSent: new Date(lastSent).toISOString() },
-                'Skipping duplicate notification'
+                'Skipping duplicate notification (already sent recently)'
               );
               continue;
             }
 
-            // Calculate when this reminder should actually occur (the time user wants to be reminded about)
+            // Calculate when this reminder should actually occur (the exact time the user wants to be reminded)
             const reminderTime = calculateReminderTime(reminder, now);
             
             if (!reminderTime) {
@@ -174,46 +174,59 @@ export async function GET(req: NextRequest) {
                 { reminderId: reminder.id, frequency: reminder.frequency },
                 'Could not calculate reminder time, skipping'
               );
-              continue; // Can't calculate reminder time (e.g., past reminder)
+              continue; // Can't calculate reminder time (e.g., past reminder, invalid configuration)
             }
 
-            // Round down to the minute for comparison (remove seconds/milliseconds)
-            const reminderMinute = new Date(reminderTime);
-            reminderMinute.setSeconds(0, 0);
-            
-            const nowMinute = new Date(now);
-            nowMinute.setSeconds(0, 0);
-            
-            // Calculate time difference in milliseconds
+            /**
+             * Check if reminder should notify the user in the next 1 minute window.
+             * 
+             * Since cron runs every minute, we check:
+             * 1. If reminder is happening in the current minute (e.g., reminder at 3:25:00, cron at 3:25:05)
+             * 2. If reminder is happening in the next minute (e.g., reminder at 3:26:00, cron at 3:25:05)
+             * 3. If reminder time is within 1 minute from now (edge cases)
+             * 
+             * This ensures users get notified when their reminder is about to happen or is happening.
+             */
             const timeUntilReminder = reminderTime.getTime() - now.getTime();
             const oneMinuteInMs = 60 * 1000;
             
-            // Check if reminder is happening in the current minute window
-            // Since cron runs every minute, we check if the reminder minute matches the current minute
-            // OR if the reminder is within the next 1 minute window (0 to 60 seconds from now)
-            // We also account for reminders that are slightly in the past (up to 5 seconds) due to cron timing
-            const isSameMinute = reminderMinute.getTime() === nowMinute.getTime();
-            const isInNextMinute = timeUntilReminder > 0 && timeUntilReminder <= oneMinuteInMs;
-            const isJustPassed = timeUntilReminder < 0 && timeUntilReminder >= -5000; // Up to 5 seconds in the past
+            // Get the minute boundaries for comparison (round down to start of minute)
+            const reminderMinute = new Date(reminderTime);
+            reminderMinute.setSeconds(0, 0);
+            reminderMinute.setMilliseconds(0);
             
-            const shouldNotify = isSameMinute || isInNextMinute || isJustPassed;
+            const currentMinute = new Date(now);
+            currentMinute.setSeconds(0, 0);
+            currentMinute.setMilliseconds(0);
             
-            logger.debug(
+            const nextMinute = new Date(currentMinute);
+            nextMinute.setMinutes(nextMinute.getMinutes() + 1);
+            
+            // Check if reminder should notify:
+            const isCurrentMinute = reminderMinute.getTime() === currentMinute.getTime(); // Reminder is in current minute
+            const isNextMinute = reminderMinute.getTime() === nextMinute.getTime(); // Reminder is in next minute
+            const isWithinOneMinute = timeUntilReminder >= 0 && timeUntilReminder <= oneMinuteInMs; // Within 1 minute window
+            
+            const shouldNotify = isCurrentMinute || isNextMinute || isWithinOneMinute;
+            
+            logger.info(
               {
                 reminderId: reminder.id,
                 reminderTitle: reminder.title,
+                frequency: reminder.frequency,
                 reminderTime: reminderTime.toISOString(),
                 reminderMinute: reminderMinute.toISOString(),
                 now: now.toISOString(),
-                nowMinute: nowMinute.toISOString(),
+                currentMinute: currentMinute.toISOString(),
+                nextMinute: nextMinute.toISOString(),
                 timeUntilReminderMs: timeUntilReminder,
                 timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
-                isSameMinute,
-                isInNextMinute,
-                isJustPassed,
+                isCurrentMinute,
+                isNextMinute,
+                isWithinOneMinute,
                 shouldNotify,
               },
-              'Checking if reminder should be notified'
+              'Checking if reminder should be notified in next 1 minute'
             );
             
             if (shouldNotify) {
