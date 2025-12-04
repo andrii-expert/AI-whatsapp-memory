@@ -252,3 +252,25 @@ export async function resetWhatsAppVerification(db: Database, userId: string) {
     }
   );
 }
+
+export async function getAllVerifiedWhatsAppNumbers(db: Database) {
+  return withQueryLogging(
+    'getAllVerifiedWhatsAppNumbers',
+    {},
+    async () => {
+      return await db
+        .select()
+        .from(whatsappNumbers)
+        .where(
+          and(
+            eq(whatsappNumbers.isVerified, true),
+            eq(whatsappNumbers.isActive, true)
+          )
+        )
+        .orderBy(
+          desc(whatsappNumbers.isPrimary),
+          desc(whatsappNumbers.createdAt)
+        );
+    }
+  );
+}

@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDb } from '@imaginecalendar/database/client';
-import { getActiveReminders, logOutgoingWhatsAppMessage, getUserById, getUserWhatsAppNumbers } from '@imaginecalendar/database/queries';
+import { getActiveReminders, logOutgoingWhatsAppMessage, getUserById, getUserWhatsAppNumbers, getAllVerifiedWhatsAppNumbers } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 
@@ -48,6 +48,64 @@ export async function GET(req: NextRequest) {
       },
       'Checking for reminders happening in next 1 minute'
     );
+
+    // Send current time to all registered WhatsApp numbers
+    let cronNotificationsSent = 0;
+    const cronErrors: string[] = [];
+    try {
+      const allVerifiedNumbers = await getAllVerifiedWhatsAppNumbers(db);
+      logger.info(
+        { count: allVerifiedNumbers.length },
+        'Sending current time to all registered WhatsApp numbers'
+      );
+
+      const timeStr = formatCurrentTime(now);
+      const dateStr = formatCurrentDate(now);
+      const message = `🕐 Cron Job Notification\n\nCurrent Time: ${timeStr}\nDate: ${dateStr}\n\nThis is an automated message from the reminder system.`;
+
+      // Send to all verified WhatsApp numbers
+      for (const whatsappNumber of allVerifiedNumbers) {
+        try {
+          await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, message);
+          
+          // Log the message
+          await logOutgoingWhatsAppMessage(db, {
+            whatsappNumberId: whatsappNumber.id,
+            userId: whatsappNumber.userId,
+            messageType: 'text',
+            messageContent: message,
+            isFreeMessage: true,
+          });
+          
+          cronNotificationsSent++;
+        } catch (sendError) {
+          logger.error(
+            { 
+              error: sendError, 
+              userId: whatsappNumber.userId, 
+              phoneNumber: whatsappNumber.phoneNumber 
+            },
+            'Failed to send cron notification'
+          );
+          cronErrors.push(`Failed to send to ${whatsappNumber.phoneNumber}`);
+        }
+      }
+
+      logger.info(
+        { 
+          sent: cronNotificationsSent, 
+          total: allVerifiedNumbers.length,
+          errors: cronErrors.length 
+        },
+        'Completed sending cron notifications to all registered WhatsApp numbers'
+      );
+    } catch (cronError) {
+      logger.error(
+        { error: cronError },
+        'Failed to send cron notifications to all WhatsApp numbers'
+      );
+      cronErrors.push('Failed to process cron notifications');
+    }
 
     // Get all active reminders efficiently
     const activeReminders = await getActiveReminders(db);
@@ -229,6 +287,10 @@ export async function GET(req: NextRequest) {
       success: true, 
       message: 'Reminder check completed',
       checkedAt: now.toISOString(),
+      cronNotifications: {
+        sent: cronNotificationsSent,
+        errors: cronErrors.length > 0 ? cronErrors : undefined
+      },
       remindersChecked: activeReminders.length,
       notificationsSent,
       notificationsSkipped,
@@ -454,5 +516,29 @@ function formatReminderTime(date: Date): string {
   const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
   const period = hours >= 12 ? 'PM' : 'AM';
   return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+}
+
+/**
+ * Format a Date object to a readable time string with seconds
+ */
+function formatCurrentTime(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+  const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  return `${hour12}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} ${period}`;
+}
+
+/**
+ * Format a Date object to a readable date string
+ */
+function formatCurrentDate(date: Date): string {
+  return date.toLocaleDateString([], {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
