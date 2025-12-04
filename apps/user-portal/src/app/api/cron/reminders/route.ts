@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDb } from '@imaginecalendar/database/client';
-import { getActiveReminders, logOutgoingWhatsAppMessage, getUserById, getUserWhatsAppNumbers, getAllVerifiedWhatsAppNumbers } from '@imaginecalendar/database/queries';
+import { getActiveReminders, logOutgoingWhatsAppMessage, getUserById, getUserWhatsAppNumbers } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 
@@ -48,64 +48,6 @@ export async function GET(req: NextRequest) {
       },
       'Checking for reminders happening in next 1 minute'
     );
-
-    // Send current time to all registered WhatsApp numbers
-    let cronNotificationsSent = 0;
-    const cronErrors: string[] = [];
-    try {
-      const allVerifiedNumbers = await getAllVerifiedWhatsAppNumbers(db);
-      logger.info(
-        { count: allVerifiedNumbers.length },
-        'Sending current time to all registered WhatsApp numbers'
-      );
-
-      const timeStr = formatCurrentTime(now);
-      const dateStr = formatCurrentDate(now);
-      const message = `🕐 Cron Job Notification\n\nCurrent Time: ${timeStr}\nDate: ${dateStr}\n\nThis is an automated message from the reminder system.`;
-
-      // Send to all verified WhatsApp numbers
-      for (const whatsappNumber of allVerifiedNumbers) {
-        try {
-          await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, message);
-          
-          // Log the message
-          await logOutgoingWhatsAppMessage(db, {
-            whatsappNumberId: whatsappNumber.id,
-            userId: whatsappNumber.userId,
-            messageType: 'text',
-            messageContent: message,
-            isFreeMessage: true,
-          });
-          
-          cronNotificationsSent++;
-        } catch (sendError) {
-          logger.error(
-            { 
-              error: sendError, 
-              userId: whatsappNumber.userId, 
-              phoneNumber: whatsappNumber.phoneNumber 
-            },
-            'Failed to send cron notification'
-          );
-          cronErrors.push(`Failed to send to ${whatsappNumber.phoneNumber}`);
-        }
-      }
-
-      logger.info(
-        { 
-          sent: cronNotificationsSent, 
-          total: allVerifiedNumbers.length,
-          errors: cronErrors.length 
-        },
-        'Completed sending cron notifications to all registered WhatsApp numbers'
-      );
-    } catch (cronError) {
-      logger.error(
-        { error: cronError },
-        'Failed to send cron notifications to all WhatsApp numbers'
-      );
-      cronErrors.push('Failed to process cron notifications');
-    }
 
     // Get all active reminders efficiently
     const activeReminders = await getActiveReminders(db);
@@ -180,27 +122,10 @@ export async function GET(req: NextRequest) {
             const timeUntilReminder = reminderTime.getTime() - now.getTime();
             const oneMinuteInMs = 60 * 1000;
             
-            // Get the minute boundaries for comparison
-            const reminderMinute = new Date(reminderTime);
-            reminderMinute.setSeconds(0, 0);
-            reminderMinute.setMilliseconds(0);
-            
-            const currentMinute = new Date(now);
-            currentMinute.setSeconds(0, 0);
-            currentMinute.setMilliseconds(0);
-            
-            const nextMinute = new Date(currentMinute);
-            nextMinute.setMinutes(nextMinute.getMinutes() + 1);
-            
-            // Check if reminder should notify in the next 1 minute:
-            // 1. Reminder minute matches current minute (happening now)
-            // 2. Reminder minute matches next minute (happening in next minute)
-            // 3. Reminder is within 1 minute from now (edge cases)
-            const isCurrentMinute = reminderMinute.getTime() === currentMinute.getTime();
-            const isNextMinute = reminderMinute.getTime() === nextMinute.getTime();
-            const isWithinOneMinute = timeUntilReminder >= 0 && timeUntilReminder <= oneMinuteInMs;
-            
-            const shouldNotify = isCurrentMinute || isNextMinute || isWithinOneMinute;
+            // Only send notification if reminder is happening within the next 1 minute (not already passed)
+            // timeUntilReminder > 0 means reminder is in the future
+            // timeUntilReminder <= oneMinuteInMs means it's within 1 minute
+            const shouldNotify = timeUntilReminder > 0 && timeUntilReminder <= oneMinuteInMs;
             
             logger.info(
               {
@@ -208,21 +133,15 @@ export async function GET(req: NextRequest) {
                 reminderTitle: reminder.title,
                 frequency: reminder.frequency,
                 reminderTime: reminderTime.toISOString(),
-                reminderMinute: reminderMinute.toISOString(),
                 now: now.toISOString(),
-                currentMinute: currentMinute.toISOString(),
-                nextMinute: nextMinute.toISOString(),
                 timeUntilReminderMs: timeUntilReminder,
                 timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
-                isCurrentMinute,
-                isNextMinute,
-                isWithinOneMinute,
                 shouldNotify,
               },
-              'Checking if reminder should be notified in next 1 minute'
+              'Checking if reminder should be notified (within next 1 minute)'
             );
             
-            // Only send notification if reminder should happen in the next 1 minute
+            // Only send notification if reminder should happen in the next 1 minute (not already passed)
             if (!shouldNotify) {
               logger.debug(
                 { reminderId: reminder.id, timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000) },
@@ -230,24 +149,38 @@ export async function GET(req: NextRequest) {
               );
               continue;
             }
-
-            // Format time information
-            const timeUntilReminderStr = formatTimeUntil(timeUntilReminder);
-            const currentTimeStr = formatCurrentTime(now);
-            const currentDateStr = formatCurrentDate(now);
-            const reminderTimeStr = formatReminderTime(reminderTime);
-            const reminderDateStr = formatReminderDate(reminderTime);
             
-            // Create message with all the information
+            // Check cache to prevent duplicate notifications
+            // Use date + time (hour:minute) as cache key to prevent duplicates for the same reminder occurrence
+            const reminderDate = new Date(reminderTime);
+            const dateKey = `${reminderDate.getFullYear()}-${reminderDate.getMonth() + 1}-${reminderDate.getDate()}-${reminderDate.getHours()}-${reminderDate.getMinutes()}`;
+            const cacheKey = `${reminder.id}-${dateKey}`;
+            const lastSent = notificationCache.get(cacheKey);
+            if (lastSent && (now.getTime() - lastSent) < CACHE_TTL) {
+              notificationsSkipped++;
+              logger.debug(
+                { reminderId: reminder.id, lastSent: new Date(lastSent).toISOString(), cacheKey },
+                'Skipping duplicate notification (already sent recently)'
+              );
+              continue;
+            }
+
+            // Format reminder time for message
+            const reminderTimeStr = formatReminderTime(reminderTime);
+            
+            // Create polite and professional reminder message
             const userName = user.firstName || user.name || 'there';
-            const message = `🔔 Reminder Notification\n\n` +
-              `📋 Reminder: ${reminder.title}\n\n` +
-              `🕐 Current Time: ${currentTimeStr}\n` +
-              `📅 Current Date: ${currentDateStr}\n\n` +
-              `⏰ Reminder Time: ${reminderTimeStr}\n` +
-              `📅 Reminder Date: ${reminderDateStr}\n\n` +
-              `⏳ Time Until Reminder: ${timeUntilReminderStr}\n\n` +
-              `Frequency: ${getFrequencyDisplayName(reminder.frequency)}`;
+            let message: string;
+            
+            // Create polite and professional reminder message
+            if (reminder.frequency === 'yearly' && reminder.title.toLowerCase().includes('birthday')) {
+              // Special message for birthdays
+              message = `Hello ${userName}! 👋\n\nThis is a friendly reminder that ${reminder.title} is coming up soon.\n\nWe wanted to make sure you don't miss this special occasion!`;
+            } else {
+              // Standard reminder message - polite and professional
+              const timeInfo = reminderTimeStr ? ` at ${reminderTimeStr}` : '';
+              message = `Hello ${userName}! 👋\n\nReminder: ${reminder.title}${timeInfo}\n\nJust wanted to make sure you don't forget!`;
+            }
             
             try {
               await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, message);
@@ -261,6 +194,9 @@ export async function GET(req: NextRequest) {
                 isFreeMessage: true,
               });
               
+              // Cache the notification to prevent duplicates
+              notificationCache.set(cacheKey, now.getTime());
+              
               notificationsSent++;
               logger.info(
                 {
@@ -268,7 +204,7 @@ export async function GET(req: NextRequest) {
                   reminderId: reminder.id,
                   reminderTitle: reminder.title,
                   reminderTime: reminderTime.toISOString(),
-                  timeUntilReminderStr,
+                  timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
                 },
                 'Reminder notification sent'
               );
@@ -297,10 +233,6 @@ export async function GET(req: NextRequest) {
       success: true, 
       message: 'Reminder check completed',
       checkedAt: now.toISOString(),
-      cronNotifications: {
-        sent: cronNotificationsSent,
-        errors: cronErrors.length > 0 ? cronErrors : undefined
-      },
       remindersChecked: activeReminders.length,
       notificationsSent,
       notificationsSkipped,
