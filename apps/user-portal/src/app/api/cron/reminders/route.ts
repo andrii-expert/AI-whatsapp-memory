@@ -8,11 +8,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDb } from '@imaginecalendar/database/client';
-import { getRemindersByUserId, logOutgoingWhatsAppMessage, getUserById, getUserWhatsAppNumbers } from '@imaginecalendar/database/queries';
+import { getActiveReminders, logOutgoingWhatsAppMessage, getUserById, getUserWhatsAppNumbers } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
-import { reminders } from '@imaginecalendar/database/schema';
-import { eq, and } from 'drizzle-orm';
 
 // Verify cron secret to prevent unauthorized access
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -45,10 +43,7 @@ export async function GET(req: NextRequest) {
     logger.info({ timestamp: now.toISOString() }, 'Checking for due reminders');
 
     // Get all active reminders efficiently
-    const activeReminders = await db
-      .select()
-      .from(reminders)
-      .where(eq(reminders.active, true));
+    const activeReminders = await getActiveReminders(db);
 
     logger.info({ count: activeReminders.length }, 'Found active reminders');
 

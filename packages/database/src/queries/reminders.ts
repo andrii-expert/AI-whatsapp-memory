@@ -117,3 +117,10 @@ export async function toggleReminderActive(
   return updated;
 }
 
+export async function getActiveReminders(db: Database) {
+  return await db
+    .select()
+    .from(reminders)
+    .where(eq(reminders.active, true));
+}
+
