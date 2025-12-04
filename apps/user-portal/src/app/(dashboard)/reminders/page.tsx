@@ -332,6 +332,58 @@ function getFrequencyDescription(reminder: Reminder): string {
   }
 }
 
+// ==================== CURRENT TIME DISPLAY COMPONENT ====================
+
+function CurrentTimeDisplay() {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    // Update time every second
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatTime = (date: Date): string => {
+    return date.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const formatDate = (date: Date): string => {
+    return date.toLocaleDateString([], {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  return (
+    <Card className="rounded-xl border-slate-200 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-sm">
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex flex-col items-end sm:items-start gap-1">
+          <div className="flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+            <span className="text-xs text-slate-600 font-medium">Current Time</span>
+          </div>
+          <div className="text-xl sm:text-2xl font-bold text-primary tabular-nums">
+            {formatTime(currentTime)}
+          </div>
+          <div className="text-xs text-slate-500">
+            {formatDate(currentTime)}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ==================== MAIN COMPONENT ====================
 
 export default function RemindersPage() {
@@ -728,10 +780,15 @@ export default function RemindersPage() {
 
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Reminders</h1>
-        <p className="text-muted-foreground mt-2">
-          Create and manage recurring reminders
-        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-primary">Reminders</h1>
+            <p className="text-muted-foreground mt-2">
+              Create and manage recurring reminders
+            </p>
+          </div>
+          <CurrentTimeDisplay />
+        </div>
       </div>
 
       {/* Search and Add Button */}
