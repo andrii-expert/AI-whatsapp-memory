@@ -151,22 +151,10 @@ export async function GET(req: NextRequest) {
           continue; // Skip users without verified WhatsApp
         }
 
-        // Check each reminder for this user
+        // Send status update for each reminder to the user
         for (const reminder of userReminders) {
           try {
-            // Check if we've already sent a notification for this reminder recently (prevent duplicates)
-            const cacheKey = `${reminder.id}`;
-            const lastSent = notificationCache.get(cacheKey);
-            if (lastSent && (now.getTime() - lastSent) < CACHE_TTL) {
-              notificationsSkipped++;
-              logger.debug(
-                { reminderId: reminder.id, lastSent: new Date(lastSent).toISOString() },
-                'Skipping duplicate notification (already sent recently)'
-              );
-              continue;
-            }
-
-            // Calculate when this reminder should actually occur (the exact time the user wants to be reminded)
+            // Calculate when this reminder should occur
             const reminderTime = calculateReminderTime(reminder, now);
             
             if (!reminderTime) {
@@ -177,110 +165,56 @@ export async function GET(req: NextRequest) {
               continue; // Can't calculate reminder time (e.g., past reminder, invalid configuration)
             }
 
-            /**
-             * Check if reminder should notify the user in the next 1 minute window.
-             * 
-             * Since cron runs every minute, we check:
-             * 1. If reminder is happening in the current minute (e.g., reminder at 3:25:00, cron at 3:25:05)
-             * 2. If reminder is happening in the next minute (e.g., reminder at 3:26:00, cron at 3:25:05)
-             * 3. If reminder time is within 1 minute from now (edge cases)
-             * 
-             * This ensures users get notified when their reminder is about to happen or is happening.
-             */
+            // Calculate time until reminder
             const timeUntilReminder = reminderTime.getTime() - now.getTime();
-            const oneMinuteInMs = 60 * 1000;
+            const timeUntilReminderStr = formatTimeUntil(timeUntilReminder);
             
-            // Get the minute boundaries for comparison (round down to start of minute)
-            const reminderMinute = new Date(reminderTime);
-            reminderMinute.setSeconds(0, 0);
-            reminderMinute.setMilliseconds(0);
+            // Format current time and reminder time
+            const currentTimeStr = formatCurrentTime(now);
+            const currentDateStr = formatCurrentDate(now);
+            const reminderTimeStr = formatReminderTime(reminderTime);
+            const reminderDateStr = formatReminderDate(reminderTime);
             
-            const currentMinute = new Date(now);
-            currentMinute.setSeconds(0, 0);
-            currentMinute.setMilliseconds(0);
+            // Create message with all the information
+            const userName = user.firstName || user.name || 'there';
+            const message = `🔔 Reminder Status Update\n\n` +
+              `📋 Reminder: ${reminder.title}\n\n` +
+              `🕐 Current Time: ${currentTimeStr}\n` +
+              `📅 Current Date: ${currentDateStr}\n\n` +
+              `⏰ Reminder Time: ${reminderTimeStr}\n` +
+              `📅 Reminder Date: ${reminderDateStr}\n\n` +
+              `⏳ Time Until Reminder: ${timeUntilReminderStr}\n\n` +
+              `Frequency: ${getFrequencyDisplayName(reminder.frequency)}`;
             
-            const nextMinute = new Date(currentMinute);
-            nextMinute.setMinutes(nextMinute.getMinutes() + 1);
-            
-            // Check if reminder should notify:
-            const isCurrentMinute = reminderMinute.getTime() === currentMinute.getTime(); // Reminder is in current minute
-            const isNextMinute = reminderMinute.getTime() === nextMinute.getTime(); // Reminder is in next minute
-            const isWithinOneMinute = timeUntilReminder >= 0 && timeUntilReminder <= oneMinuteInMs; // Within 1 minute window
-            
-            const shouldNotify = isCurrentMinute || isNextMinute || isWithinOneMinute;
-            
-            logger.info(
-              {
-                reminderId: reminder.id,
-                reminderTitle: reminder.title,
-                frequency: reminder.frequency,
-                reminderTime: reminderTime.toISOString(),
-                reminderMinute: reminderMinute.toISOString(),
-                now: now.toISOString(),
-                currentMinute: currentMinute.toISOString(),
-                nextMinute: nextMinute.toISOString(),
-                timeUntilReminderMs: timeUntilReminder,
-                timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
-                isCurrentMinute,
-                isNextMinute,
-                isWithinOneMinute,
-                shouldNotify,
-              },
-              'Checking if reminder should be notified in next 1 minute'
-            );
-            
-            if (shouldNotify) {
-              // Send notification
-              const userName = user.firstName || user.name || 'there';
-              const timeStr = reminder.time ? ` at ${formatTime(reminder.time)}` : '';
+            try {
+              await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, message);
               
-              // Format the reminder time for the message
-              const reminderTimeStr = formatReminderTime(reminderTime);
+              // Log the message
+              await logOutgoingWhatsAppMessage(db, {
+                whatsappNumberId: whatsappNumber.id,
+                userId: user.id,
+                messageType: 'text',
+                messageContent: message,
+                isFreeMessage: true,
+              });
               
-              // Create polite and professional message
-              let message: string;
-              if (reminder.frequency === 'yearly' && reminder.title.toLowerCase().includes('birthday')) {
-                // Special message for birthdays
-                message = `Hello ${userName}! 👋\n\nThis is a friendly reminder that ${reminder.title}${timeStr ? ` is${timeStr}` : ' is now'}.\n\nWe wanted to make sure you don't miss this special occasion!`;
-              } else {
-                // Standard reminder message - polite and professional
-                message = `Hello ${userName}! 👋\n\nThis is a friendly reminder:\n\n${reminder.title}${timeStr ? `\n\nScheduled for${timeStr}` : `\n\nTime: ${reminderTimeStr}`}\n\nWe hope this helps you stay on top of your schedule!`;
-              }
-              
-              try {
-                await whatsappService.sendTextMessage(whatsappNumber.phone, message);
-                
-                // Log the message
-                await logOutgoingWhatsAppMessage(db, {
-                  whatsappNumberId: whatsappNumber.id,
+              notificationsSent++;
+              logger.info(
+                {
                   userId: user.id,
-                  messageType: 'text',
-                  messageContent: message,
-                  isFreeMessage: true,
-                });
-                
-                // Cache the notification to prevent duplicates
-                notificationCache.set(cacheKey, now.getTime());
-                
-                notificationsSent++;
-                logger.info(
-                  {
-                    userId: user.id,
-                    reminderId: reminder.id,
-                    reminderTitle: reminder.title,
-                    reminderTime: reminderTime.toISOString(),
-                    timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
-                    frequency: reminder.frequency,
-                  },
-                  'Reminder notification sent'
-                );
-              } catch (sendError) {
-                logger.error(
-                  { error: sendError, userId: user.id, reminderId: reminder.id },
-                  'Failed to send reminder notification'
-                );
-                errors.push(`Failed to send reminder ${reminder.id} to user ${user.id}`);
-              }
+                  reminderId: reminder.id,
+                  reminderTitle: reminder.title,
+                  reminderTime: reminderTime.toISOString(),
+                  timeUntilReminderStr,
+                },
+                'Reminder status update sent'
+              );
+            } catch (sendError) {
+              logger.error(
+                { error: sendError, userId: user.id, reminderId: reminder.id },
+                'Failed to send reminder status update'
+              );
+              errors.push(`Failed to send reminder ${reminder.id} to user ${user.id}`);
             }
           } catch (reminderError) {
             logger.error(
@@ -553,5 +487,72 @@ function formatCurrentDate(date: Date): string {
     month: 'long',
     day: 'numeric',
   });
+}
+
+/**
+ * Format a Date object to a readable date string (for reminder dates)
+ */
+function formatReminderDate(date: Date): string {
+  return date.toLocaleDateString([], {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/**
+ * Format time difference in milliseconds to human-readable string (X days, X hours, X minutes)
+ */
+function formatTimeUntil(timeMs: number): string {
+  if (timeMs < 0) {
+    return 'Already passed';
+  }
+  
+  const totalSeconds = Math.floor(timeMs / 1000);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(totalHours / 24);
+  
+  const hours = totalHours % 24;
+  const minutes = totalMinutes % 60;
+  const seconds = totalSeconds % 60;
+  
+  const parts: string[] = [];
+  
+  if (days > 0) {
+    parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+  }
+  if (hours > 0) {
+    parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+  }
+  if (parts.length === 0 && seconds > 0) {
+    parts.push(`${seconds} ${seconds === 1 ? 'second' : 'seconds'}`);
+  }
+  
+  if (parts.length === 0) {
+    return 'Now';
+  }
+  
+  return parts.join(', ');
+}
+
+/**
+ * Get display name for reminder frequency
+ */
+function getFrequencyDisplayName(frequency: string): string {
+  const frequencyMap: Record<string, string> = {
+    'once': 'One-time',
+    'daily': 'Daily',
+    'weekly': 'Weekly',
+    'monthly': 'Monthly',
+    'yearly': 'Yearly',
+    'hourly': 'Hourly',
+    'minutely': 'Every N minutes',
+  };
+  return frequencyMap[frequency] || frequency;
 }
 
