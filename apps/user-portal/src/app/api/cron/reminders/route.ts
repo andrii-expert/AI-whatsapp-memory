@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
           continue; // Skip users without verified WhatsApp
         }
 
-        // Send status update for each reminder to the user
+        // Check each reminder and send notification if it should happen in the next 1 minute
         for (const reminder of userReminders) {
           try {
             // Calculate when this reminder should occur
@@ -164,12 +164,75 @@ export async function GET(req: NextRequest) {
               );
               continue; // Can't calculate reminder time (e.g., past reminder, invalid configuration)
             }
+            
+            logger.debug(
+              {
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                reminderTime: reminderTime.toISOString(),
+                now: now.toISOString(),
+              },
+              'Calculated reminder time'
+            );
 
             // Calculate time until reminder
             const timeUntilReminder = reminderTime.getTime() - now.getTime();
-            const timeUntilReminderStr = formatTimeUntil(timeUntilReminder);
+            const oneMinuteInMs = 60 * 1000;
             
-            // Format current time and reminder time
+            // Get the minute boundaries for comparison
+            const reminderMinute = new Date(reminderTime);
+            reminderMinute.setSeconds(0, 0);
+            reminderMinute.setMilliseconds(0);
+            
+            const currentMinute = new Date(now);
+            currentMinute.setSeconds(0, 0);
+            currentMinute.setMilliseconds(0);
+            
+            const nextMinute = new Date(currentMinute);
+            nextMinute.setMinutes(nextMinute.getMinutes() + 1);
+            
+            // Check if reminder should notify in the next 1 minute:
+            // 1. Reminder minute matches current minute (happening now)
+            // 2. Reminder minute matches next minute (happening in next minute)
+            // 3. Reminder is within 1 minute from now (edge cases)
+            const isCurrentMinute = reminderMinute.getTime() === currentMinute.getTime();
+            const isNextMinute = reminderMinute.getTime() === nextMinute.getTime();
+            const isWithinOneMinute = timeUntilReminder >= 0 && timeUntilReminder <= oneMinuteInMs;
+            
+            const shouldNotify = isCurrentMinute || isNextMinute || isWithinOneMinute;
+            
+            logger.info(
+              {
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                reminderTime: reminderTime.toISOString(),
+                reminderMinute: reminderMinute.toISOString(),
+                now: now.toISOString(),
+                currentMinute: currentMinute.toISOString(),
+                nextMinute: nextMinute.toISOString(),
+                timeUntilReminderMs: timeUntilReminder,
+                timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
+                isCurrentMinute,
+                isNextMinute,
+                isWithinOneMinute,
+                shouldNotify,
+              },
+              'Checking if reminder should be notified in next 1 minute'
+            );
+            
+            // Only send notification if reminder should happen in the next 1 minute
+            if (!shouldNotify) {
+              logger.debug(
+                { reminderId: reminder.id, timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000) },
+                'Reminder not due in next 1 minute, skipping'
+              );
+              continue;
+            }
+
+            // Format time information
+            const timeUntilReminderStr = formatTimeUntil(timeUntilReminder);
             const currentTimeStr = formatCurrentTime(now);
             const currentDateStr = formatCurrentDate(now);
             const reminderTimeStr = formatReminderTime(reminderTime);
@@ -177,7 +240,7 @@ export async function GET(req: NextRequest) {
             
             // Create message with all the information
             const userName = user.firstName || user.name || 'there';
-            const message = `🔔 Reminder Status Update\n\n` +
+            const message = `🔔 Reminder Notification\n\n` +
               `📋 Reminder: ${reminder.title}\n\n` +
               `🕐 Current Time: ${currentTimeStr}\n` +
               `📅 Current Date: ${currentDateStr}\n\n` +
@@ -207,12 +270,12 @@ export async function GET(req: NextRequest) {
                   reminderTime: reminderTime.toISOString(),
                   timeUntilReminderStr,
                 },
-                'Reminder status update sent'
+                'Reminder notification sent'
               );
             } catch (sendError) {
               logger.error(
                 { error: sendError, userId: user.id, reminderId: reminder.id },
-                'Failed to send reminder status update'
+                'Failed to send reminder notification'
               );
               errors.push(`Failed to send reminder ${reminder.id} to user ${user.id}`);
             }
@@ -327,11 +390,30 @@ function calculateReminderTime(reminder: any, now: Date): Date | null {
       const next = new Date(now);
       if (reminder.time) {
         const [hours, minutes] = reminder.time.split(':').map(Number);
+        
+        // Set to today at the reminder time
         next.setHours(hours, minutes, 0, 0);
         next.setSeconds(0, 0);
-        if (next <= now) {
+        next.setMilliseconds(0);
+        
+        // Get minute boundaries for comparison
+        const reminderMinute = new Date(next);
+        reminderMinute.setSeconds(0, 0);
+        reminderMinute.setMilliseconds(0);
+        
+        const currentMinute = new Date(now);
+        currentMinute.setSeconds(0, 0);
+        currentMinute.setMilliseconds(0);
+        
+        // Compare minute boundaries (not exact times)
+        // If reminder minute is strictly before current minute, move to tomorrow
+        // If reminder minute equals current minute (same minute), keep it for today so we can notify
+        // Example: reminder at 4:24:00 PM, now is 4:24:05 PM -> both are in 4:24 minute, keep today
+        if (reminderMinute.getTime() < currentMinute.getTime()) {
+          // Reminder minute has passed (more than 1 minute ago), move to tomorrow
           next.setDate(next.getDate() + 1);
         }
+        // If reminderMinute >= currentMinute, it's today (could be now, same minute, or in the future)
       } else {
         // No time specified, default to tomorrow at 9am
         next.setDate(next.getDate() + 1);
