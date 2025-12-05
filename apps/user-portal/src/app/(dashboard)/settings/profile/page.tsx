@@ -91,7 +91,7 @@ export default function ProfilePage() {
     if (user) {
       const phoneValue = user.phone || "";
       setOriginalPhone(phoneValue);
-      
+
       const countryValue = user.country || "";
       const ageGroupValue = (user.ageGroup as "18-25" | "26-35" | "36-45" | "46 and over") || "26-35";
       const genderValue = user.gender as "male" | "female" | "other" | "prefer_not_to_say" | undefined;
@@ -106,7 +106,7 @@ export default function ProfilePage() {
         gender: genderValue,
         birthday: user.birthday ? new Date(user.birthday) : undefined,
       };
-      
+
       reset(formData, { keepDefaultValues: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -301,9 +301,9 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="country">Country *</Label>
-                <Select 
+                <Select
                   key={`country-${country || 'empty'}`}
-                  value={country || ""} 
+                  value={country || ""}
                   onValueChange={(value) => {
                     console.log("Country onValueChange called with:", value);
                     setValue("country", value, { shouldValidate: true, shouldDirty: true });
@@ -327,9 +327,9 @@ export default function ProfilePage() {
 
               <div>
                 <Label htmlFor="ageGroup">Age Group *</Label>
-                <Select 
+                <Select
                   key={`ageGroup-${ageGroup || 'empty'}`}
-                  value={ageGroup || "26-35"} 
+                  value={ageGroup || "26-35"}
                   onValueChange={(value) => {
                     console.log("AgeGroup onValueChange called with:", value);
                     setValue("ageGroup", value as "18-25" | "26-35" | "36-45" | "46 and over", { shouldValidate: true, shouldDirty: true });
@@ -356,9 +356,9 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="gender">Gender (Optional)</Label>
-                <Select 
+                <Select
                   key={`gender-${gender || 'empty'}`}
-                  value={gender || ""} 
+                  value={gender || ""}
                   onValueChange={(value) => {
                     console.log("Gender onValueChange called with:", value);
                     setValue("gender", value as any || undefined, { shouldValidate: true, shouldDirty: true });

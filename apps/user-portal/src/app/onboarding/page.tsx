@@ -80,15 +80,15 @@ export default function OnboardingPage() {
           duration: 2000,
         });
 
-        updateClerkOnboardingMetadata().catch(() => {});
+        updateClerkOnboardingMetadata().catch(() => { });
 
         setIsSubmitting(false);
-        
+
         // Set flag to show welcome modal on dashboard
         if (typeof window !== 'undefined') {
           localStorage.setItem("show-welcome-modal", "true");
         }
-        
+
         router.push("/dashboard");
       },
       onError: (error) => {
@@ -153,7 +153,7 @@ export default function OnboardingPage() {
   // Update selected plan when billing cycle changes
   useEffect(() => {
     const currentPlan = getValues("plan");
-    
+
     // If user toggles annual/monthly, update to the correct plan variant
     if (currentPlan && currentPlan !== 'free') {
       // Extract tier from current plan (silver or gold)
@@ -163,10 +163,10 @@ export default function OnboardingPage() {
       } else if (currentPlan.includes('silver')) {
         tier = 'silver';
       }
-      
+
       // Generate new plan ID based on billing cycle
       const newPlanId = isAnnual ? `${tier}-annual` : `${tier}-monthly`;
-      
+
       // Only update if the new plan exists and is different from current
       if (plans.some(p => p.id === newPlanId) && currentPlan !== newPlanId) {
         setValue("plan", newPlanId, { shouldDirty: false });
@@ -255,502 +255,502 @@ export default function OnboardingPage() {
           </p>
         </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        {/* Personal Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-            <CardDescription>Tell us a bit about yourself</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          {/* Personal Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>Tell us a bit about yourself</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="firstName">First Name *</Label>
+                  <Input
+                    id="firstName"
+                    {...register("firstName")}
+                    placeholder="John"
+                    className={errors.firstName ? "border-red-500" : ""}
+                  />
+                  {errors.firstName && (
+                    <p className="text-sm text-red-500 mt-1">{errors.firstName.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="lastName">Last Name *</Label>
+                  <Input
+                    id="lastName"
+                    {...register("lastName")}
+                    placeholder="Doe"
+                    className={errors.lastName ? "border-red-500" : ""}
+                  />
+                  {errors.lastName && (
+                    <p className="text-sm text-red-500 mt-1">{errors.lastName.message}</p>
+                  )}
+                </div>
+              </div>
+
               <div>
-                <Label htmlFor="firstName">First Name *</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
-                  id="firstName"
-                  {...register("firstName")}
-                  placeholder="John"
-                  className={errors.firstName ? "border-red-500" : ""}
+                  id="email"
+                  type="email"
+                  value={user?.primaryEmailAddress?.emailAddress || ""}
+                  disabled
+                  className="bg-muted"
                 />
-                {errors.firstName && (
-                  <p className="text-sm text-red-500 mt-1">{errors.firstName.message}</p>
+              </div>
+
+              <div>
+                <Label htmlFor="phone">WhatsApp Phone Number *</Label>
+                <PhoneInput
+                  id="phone"
+                  value={watch("phone")}
+                  onChange={(value) => setValue("phone", value)}
+                  error={!!errors.phone}
+                  defaultCountry="ZA"
+                />
+                {errors.phone && (
+                  <p className="text-sm text-red-500 mt-1">{errors.phone.message}</p>
+                )}
+                <p className="text-sm text-muted-foreground mt-1">
+                  We'll use this number to connect your WhatsApp account
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="country">Country *</Label>
+                  <Select onValueChange={(value) => setValue("country", value)}>
+                    <SelectTrigger className={errors.country ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Select country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRY_OPTIONS.map((country) => (
+                        <SelectItem key={country} value={country}>
+                          {country}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.country && (
+                    <p className="text-sm text-red-500 mt-1">{errors.country.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="ageGroup">Age Group *</Label>
+                  <Select onValueChange={(value) => setValue("ageGroup", value as any)}>
+                    <SelectTrigger className={errors.ageGroup ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Select age group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AGE_GROUP_OPTIONS.map((age: string) => (
+                        <SelectItem key={age} value={age}>
+                          {age}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.ageGroup && (
+                    <p className="text-sm text-red-500 mt-1">{errors.ageGroup.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="gender">Gender (Optional)</Label>
+                  <Select onValueChange={(value) => setValue("gender", value as any)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {GENDER_OPTIONS.map((gender: string) => (
+                        <SelectItem key={gender} value={gender}>
+                          {gender.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="birthday">Birthday (Optional)</Label>
+                  <Popover open={birthdayPopoverOpen} onOpenChange={setBirthdayPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedBirthday ? format(selectedBirthday, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto overflow-hidden p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={selectedBirthday}
+                        onSelect={(date) => {
+                          setValue("birthday", date)
+                          setBirthdayPopoverOpen(false)
+                        }}
+                        captionLayout="dropdown"
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="mainUse">Main Use *</Label>
+                <Select onValueChange={(value) => setValue("mainUse", value)}>
+                  <SelectTrigger className={errors.mainUse ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Select main use" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MAIN_USE_OPTIONS.map((use: string) => (
+                      <SelectItem key={use} value={use}>
+                        {use}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.mainUse && (
+                  <p className="text-sm text-red-500 mt-1">{errors.mainUse.message}</p>
                 )}
               </div>
 
               <div>
-                <Label htmlFor="lastName">Last Name *</Label>
-                <Input
-                  id="lastName"
-                  {...register("lastName")}
-                  placeholder="Doe"
-                  className={errors.lastName ? "border-red-500" : ""}
-                />
-                {errors.lastName && (
-                  <p className="text-sm text-red-500 mt-1">{errors.lastName.message}</p>
+                <Label htmlFor="howHeardAboutUs">How did you hear about us? *</Label>
+                <Select onValueChange={(value) => setValue("howHeardAboutUs", value)}>
+                  <SelectTrigger className={errors.howHeardAboutUs ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Select an option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HOW_HEARD_OPTIONS.map((option: string) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.howHeardAboutUs && (
+                  <p className="text-sm text-red-500 mt-1">{errors.howHeardAboutUs.message}</p>
                 )}
               </div>
-            </div>
 
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={user?.primaryEmailAddress?.emailAddress || ""}
-                disabled
-                className="bg-muted"
-              />
-            </div>
+              <div>
+                <Label htmlFor="company">Company (Optional)</Label>
+                <Input
+                  id="company"
+                  {...register("company")}
+                  placeholder="Acme Inc."
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-            <div>
-              <Label htmlFor="phone">WhatsApp Phone Number *</Label>
-              <PhoneInput
-                id="phone"
-                value={watch("phone")}
-                onChange={(value) => setValue("phone", value)}
-                error={!!errors.phone}
-                defaultCountry="ZA"
-              />
-              {errors.phone && (
-                <p className="text-sm text-red-500 mt-1">{errors.phone.message}</p>
-              )}
-              <p className="text-sm text-muted-foreground mt-1">
-                We'll use this number to connect your WhatsApp account
+          {/* Plan Selection - Free/Silver/Gold with Monthly/Annual Toggle */}
+          <div className="mb-8">
+            <h3 className="text-2xl font-bold mb-2 text-center">Choose Your Plan</h3>
+            <p className="text-muted-foreground text-center mb-6">Select the plan that works best for you</p>
+
+            {/* Monthly/Annual Toggle */}
+            <div className="flex flex-col items-center gap-3 mb-8">
+              <div className="flex items-center gap-4">
+                <span className={cn("text-base font-semibold transition-colors", !isAnnual ? "text-primary" : "text-muted-foreground")}>
+                  Monthly Billing
+                </span>
+                <Switch
+                  checked={isAnnual}
+                  onCheckedChange={setIsAnnual}
+                  className="data-[state=checked]:bg-primary"
+                />
+                <span className={cn("text-base font-semibold transition-colors", isAnnual ? "text-primary" : "text-muted-foreground")}>
+                  Annual Billing
+                </span>
+                {isAnnual && (
+                  <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 animate-in fade-in">
+                    💰 Save 20%
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {isAnnual
+                  ? "Pay upfront for a full year and save 20% compared to monthly billing"
+                  : "Pay month-to-month with no long-term commitment"}
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="country">Country *</Label>
-                <Select onValueChange={(value) => setValue("country", value)}>
-                  <SelectTrigger className={errors.country ? "border-red-500" : ""}>
-                    <SelectValue placeholder="Select country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COUNTRY_OPTIONS.map((country) => (
-                      <SelectItem key={country} value={country}>
-                        {country}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.country && (
-                  <p className="text-sm text-red-500 mt-1">{errors.country.message}</p>
-                )}
+            {USE_DB_PLANS && plansQuery.isError && (
+              <div className="mb-4 text-sm text-red-500">
+                We couldn't load the latest plans. Showing default options instead.
               </div>
+            )}
 
-              <div>
-                <Label htmlFor="ageGroup">Age Group *</Label>
-                <Select onValueChange={(value) => setValue("ageGroup", value as any)}>
-                  <SelectTrigger className={errors.ageGroup ? "border-red-500" : ""}>
-                    <SelectValue placeholder="Select age group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AGE_GROUP_OPTIONS.map((age: string) => (
-                      <SelectItem key={age} value={age}>
-                        {age}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.ageGroup && (
-                  <p className="text-sm text-red-500 mt-1">{errors.ageGroup.message}</p>
-                )}
-              </div>
-            </div>
+            {USE_DB_PLANS && plansQuery.isLoading && plans.length === 0 ? (
+              <div className="text-center text-muted-foreground">Loading plans...</div>
+            ) : plans.length === 0 ? (
+              <div className="text-center text-muted-foreground">No plans are currently available. Please contact support.</div>
+            ) : (
+              <RadioGroup
+                value={selectedPlan}
+                onValueChange={(value) => setValue("plan", value as any)}
+                className="grid grid-cols-1 md:grid-cols-3 gap-6"
+              >
+                {/* Free Plan */}
+                {(() => {
+                  const freePlan = plans.find(p => p.id === 'free');
+                  if (!freePlan) return null;
+                  const isSelected = selectedPlan === 'free';
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="gender">Gender (Optional)</Label>
-                <Select onValueChange={(value) => setValue("gender", value as any)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {GENDER_OPTIONS.map((gender: string) => (
-                      <SelectItem key={gender} value={gender}>
-                        {gender.replace(/_/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="birthday">Birthday (Optional)</Label>
-                <Popover open={birthdayPopoverOpen} onOpenChange={setBirthdayPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
+                  return (
+                    <label
+                      key="free"
+                      htmlFor="free"
+                      className={cn(
+                        "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                        isSelected
+                          ? "border-blue-500 bg-blue-500 shadow-xl scale-105"
+                          : "border-gray-300 hover:border-blue-400 bg-white"
+                      )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {selectedBirthday ? format(selectedBirthday, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto overflow-hidden p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedBirthday}
-                      onSelect={(date) => {
-                        setValue("birthday", date)
-                        setBirthdayPopoverOpen(false)
-                      }}
-                      captionLayout="dropdown"
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
+                      <RadioGroupItem
+                        value="free"
+                        id="free"
+                        className={cn(
+                          "absolute top-4 right-4",
+                          isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                        )}
+                      />
 
-            <div>
-              <Label htmlFor="mainUse">Main Use *</Label>
-              <Select onValueChange={(value) => setValue("mainUse", value)}>
-                <SelectTrigger className={errors.mainUse ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Select main use" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MAIN_USE_OPTIONS.map((use: string) => (
-                    <SelectItem key={use} value={use}>
-                      {use}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.mainUse && (
-                <p className="text-sm text-red-500 mt-1">{errors.mainUse.message}</p>
-              )}
-            </div>
+                      <div className="text-center mb-6">
+                        <div className={cn(
+                          "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                          isSelected ? "bg-white/20" : "bg-blue-100"
+                        )}>
+                          <Sparkles className={cn("h-6 w-6", isSelected ? "text-white" : "text-blue-600")} />
+                        </div>
+                        <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                          {freePlan.name}
+                        </h4>
+                        <div className="mb-3">
+                          <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                            {freePlan.displayPrice}
+                          </span>
+                          <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                            /{freePlan.billingPeriod}
+                          </span>
+                        </div>
+                        <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : "text-primary/80")}>
+                          {freePlan.description}
+                        </p>
+                      </div>
 
-            <div>
-              <Label htmlFor="howHeardAboutUs">How did you hear about us? *</Label>
-              <Select onValueChange={(value) => setValue("howHeardAboutUs", value)}>
-                <SelectTrigger className={errors.howHeardAboutUs ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Select an option" />
-                </SelectTrigger>
-                <SelectContent>
-                  {HOW_HEARD_OPTIONS.map((option: string) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.howHeardAboutUs && (
-                <p className="text-sm text-red-500 mt-1">{errors.howHeardAboutUs.message}</p>
-              )}
-            </div>
+                      <div className={cn(
+                        "pt-4 flex-1",
+                        isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                      )}>
+                        <ul className="space-y-3">
+                          {freePlan.features.map((feature, i) => (
+                            <li key={i} className="flex items-start gap-3 text-sm">
+                              <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                              <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </label>
+                  );
+                })()}
 
-            <div>
-              <Label htmlFor="company">Company (Optional)</Label>
-              <Input
-                id="company"
-                {...register("company")}
-                placeholder="Acme Inc."
-              />
-            </div>
-          </CardContent>
-        </Card>
+                {/* Silver Plan */}
+                {(() => {
+                  const planId = isAnnual ? 'silver-annual' : 'silver-monthly';
+                  const silverPlan = plans.find(p => p.id === planId);
+                  if (!silverPlan) return null;
+                  const isSelected = selectedPlan === planId;
 
-        {/* Plan Selection - Free/Silver/Gold with Monthly/Annual Toggle */}
-        <div className="mb-8">
-          <h3 className="text-2xl font-bold mb-2 text-center">Choose Your Plan</h3>
-          <p className="text-muted-foreground text-center mb-6">Select the plan that works best for you</p>
+                  // Get monthly plan for savings calculation
+                  const silverMonthly = plans.find(p => p.id === 'silver-monthly');
+                  const monthlyEquivalent = silverPlan.monthlyPriceCents / 100;
+                  const savings = silverMonthly && isAnnual
+                    ? (silverMonthly.amountCents * 12 - silverPlan.amountCents) / 100
+                    : 0;
 
-          {/* Monthly/Annual Toggle */}
-          <div className="flex flex-col items-center gap-3 mb-8">
-            <div className="flex items-center gap-4">
-              <span className={cn("text-base font-semibold transition-colors", !isAnnual ? "text-primary" : "text-muted-foreground")}>
-                Monthly Billing
-              </span>
-              <Switch
-                checked={isAnnual}
-                onCheckedChange={setIsAnnual}
-                className="data-[state=checked]:bg-primary"
-              />
-              <span className={cn("text-base font-semibold transition-colors", isAnnual ? "text-primary" : "text-muted-foreground")}>
-                Annual Billing
-              </span>
-              {isAnnual && (
-                <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200 animate-in fade-in">
-                  💰 Save 20%
-                </Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {isAnnual 
-                ? "Pay upfront for a full year and save 20% compared to monthly billing" 
-                : "Pay month-to-month with no long-term commitment"}
-            </p>
+                  return (
+                    <label
+                      key={planId}
+                      htmlFor={planId}
+                      className={cn(
+                        "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                        isSelected
+                          ? "border-purple-500 bg-purple-500 shadow-xl scale-105"
+                          : "border-gray-300 hover:border-purple-400 bg-white"
+                      )}
+                    >
+                      <RadioGroupItem
+                        value={planId}
+                        id={planId}
+                        className={cn(
+                          "absolute top-4 right-4",
+                          isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                        )}
+                      />
+
+                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                        <span className="bg-accent text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md">
+                          Most Popular
+                        </span>
+                      </div>
+
+                      <div className="text-center mb-6">
+                        <div className={cn(
+                          "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                          isSelected ? "bg-white/20" : "bg-purple-100"
+                        )}>
+                          <Zap className={cn("h-6 w-6", isSelected ? "text-white" : "text-purple-600")} />
+                        </div>
+                        <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                          {silverPlan.name.replace(' Annual', '')}
+                        </h4>
+                        <div className="mb-1">
+                          <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                            {silverPlan.displayPrice}
+                          </span>
+                          <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                            /{silverPlan.billingPeriod}
+                          </span>
+                        </div>
+                        {isAnnual && monthlyEquivalent && (
+                          <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
+                            R{monthlyEquivalent.toFixed(0)}/month when paid annually
+                          </p>
+                        )}
+                        <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
+                          {isAnnual && savings > 0 ? `💰 Save R${savings.toFixed(0)}/year` : silverPlan.description}
+                        </p>
+                      </div>
+
+                      <div className={cn(
+                        "pt-4 flex-1",
+                        isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                      )}>
+                        <ul className="space-y-3">
+                          {silverPlan.features.map((feature, i) => (
+                            <li key={i} className="flex items-start gap-3 text-sm">
+                              <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                              <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </label>
+                  );
+                })()}
+
+                {/* Gold Plan */}
+                {(() => {
+                  const planId = isAnnual ? 'gold-annual' : 'gold-monthly';
+                  const goldPlan = plans.find(p => p.id === planId);
+                  if (!goldPlan) return null;
+                  const isSelected = selectedPlan === planId;
+
+                  // Get monthly plan for savings calculation
+                  const goldMonthly = plans.find(p => p.id === 'gold-monthly');
+                  const monthlyEquivalent = goldPlan.monthlyPriceCents / 100;
+                  const savings = goldMonthly && isAnnual
+                    ? (goldMonthly.amountCents * 12 - goldPlan.amountCents) / 100
+                    : 0;
+
+                  return (
+                    <label
+                      key={planId}
+                      htmlFor={planId}
+                      className={cn(
+                        "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                        isSelected
+                          ? "border-yellow-500 bg-yellow-500 shadow-xl scale-105"
+                          : "border-gray-300 hover:border-yellow-400 bg-white"
+                      )}
+                    >
+                      <RadioGroupItem
+                        value={planId}
+                        id={planId}
+                        className={cn(
+                          "absolute top-4 right-4",
+                          isSelected && "!border-white !text-white [&_svg]:!fill-white"
+                        )}
+                      />
+
+                      <div className="text-center mb-6">
+                        <div className={cn(
+                          "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                          isSelected ? "bg-white/20" : "bg-yellow-100"
+                        )}>
+                          <Crown className={cn("h-6 w-6", isSelected ? "text-white" : "text-yellow-600")} />
+                        </div>
+                        <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
+                          {goldPlan.name.replace(' Annual', '')}
+                        </h4>
+                        <div className="mb-1">
+                          <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
+                            {goldPlan.displayPrice}
+                          </span>
+                          <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
+                            /{goldPlan.billingPeriod}
+                          </span>
+                        </div>
+                        {isAnnual && monthlyEquivalent && (
+                          <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
+                            R{monthlyEquivalent.toFixed(0)}/month when paid annually
+                          </p>
+                        )}
+                        <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
+                          {isAnnual && savings > 0 ? `💰 Save R${savings.toFixed(0)}/year` : goldPlan.description}
+                        </p>
+                      </div>
+
+                      <div className={cn(
+                        "pt-4 flex-1",
+                        isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
+                      )}>
+                        <ul className="space-y-3">
+                          {goldPlan.features.map((feature, i) => (
+                            <li key={i} className="flex items-start gap-3 text-sm">
+                              <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                              <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </label>
+                  );
+                })()}
+              </RadioGroup>
+            )}
           </div>
 
-          {USE_DB_PLANS && plansQuery.isError && (
-            <div className="mb-4 text-sm text-red-500">
-              We couldn't load the latest plans. Showing default options instead.
-            </div>
-          )}
-
-          {USE_DB_PLANS && plansQuery.isLoading && plans.length === 0 ? (
-            <div className="text-center text-muted-foreground">Loading plans...</div>
-          ) : plans.length === 0 ? (
-            <div className="text-center text-muted-foreground">No plans are currently available. Please contact support.</div>
-          ) : (
-            <RadioGroup
-              value={selectedPlan}
-              onValueChange={(value) => setValue("plan", value as any)}
-              className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          {/* Submit Button */}
+          <div className="flex justify-end space-x-4">
+            <Button
+              type="submit"
+              variant="blue-primary"
+              size="lg"
+              disabled={isSubmitting}
             >
-              {/* Free Plan */}
-              {(() => {
-                const freePlan = plans.find(p => p.id === 'free');
-                if (!freePlan) return null;
-                const isSelected = selectedPlan === 'free';
-                
-                return (
-                  <label
-                    key="free"
-                    htmlFor="free"
-                    className={cn(
-                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
-                      isSelected
-                        ? "border-blue-500 bg-blue-500 shadow-xl scale-105"
-                        : "border-gray-300 hover:border-blue-400 bg-white"
-                    )}
-                  >
-                    <RadioGroupItem
-                      value="free"
-                      id="free"
-                      className={cn(
-                        "absolute top-4 right-4",
-                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
-                      )}
-                    />
-
-                    <div className="text-center mb-6">
-                      <div className={cn(
-                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
-                        isSelected ? "bg-white/20" : "bg-blue-100"
-                      )}>
-                        <Sparkles className={cn("h-6 w-6", isSelected ? "text-white" : "text-blue-600")} />
-                      </div>
-                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
-                        {freePlan.name}
-                      </h4>
-                      <div className="mb-3">
-                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
-                          {freePlan.displayPrice}
-                        </span>
-                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
-                          /{freePlan.billingPeriod}
-                        </span>
-                      </div>
-                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : "text-primary/80")}>
-                        {freePlan.description}
-                      </p>
-                    </div>
-
-                    <div className={cn(
-                      "pt-4 flex-1",
-                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
-                    )}>
-                      <ul className="space-y-3">
-                        {freePlan.features.map((feature, i) => (
-                          <li key={i} className="flex items-start gap-3 text-sm">
-                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
-                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </label>
-                );
-              })()}
-
-              {/* Silver Plan */}
-              {(() => {
-                const planId = isAnnual ? 'silver-annual' : 'silver-monthly';
-                const silverPlan = plans.find(p => p.id === planId);
-                if (!silverPlan) return null;
-                const isSelected = selectedPlan === planId;
-                
-                // Get monthly plan for savings calculation
-                const silverMonthly = plans.find(p => p.id === 'silver-monthly');
-                const monthlyEquivalent = silverPlan.monthlyPriceCents / 100;
-                const savings = silverMonthly && isAnnual 
-                  ? (silverMonthly.amountCents * 12 - silverPlan.amountCents) / 100
-                  : 0;
-
-                return (
-                  <label
-                    key={planId}
-                    htmlFor={planId}
-                    className={cn(
-                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
-                      isSelected
-                        ? "border-purple-500 bg-purple-500 shadow-xl scale-105"
-                        : "border-gray-300 hover:border-purple-400 bg-white"
-                    )}
-                  >
-                    <RadioGroupItem
-                      value={planId}
-                      id={planId}
-                      className={cn(
-                        "absolute top-4 right-4",
-                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
-                      )}
-                    />
-
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <span className="bg-accent text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md">
-                        Most Popular
-                      </span>
-                    </div>
-
-                    <div className="text-center mb-6">
-                      <div className={cn(
-                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
-                        isSelected ? "bg-white/20" : "bg-purple-100"
-                      )}>
-                        <Zap className={cn("h-6 w-6", isSelected ? "text-white" : "text-purple-600")} />
-                      </div>
-                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
-                        {silverPlan.name.replace(' Annual', '')}
-                      </h4>
-                      <div className="mb-1">
-                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
-                          {silverPlan.displayPrice}
-                        </span>
-                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
-                          /{silverPlan.billingPeriod}
-                        </span>
-                      </div>
-                      {isAnnual && monthlyEquivalent && (
-                        <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
-                          R{monthlyEquivalent.toFixed(0)}/month when paid annually
-                        </p>
-                      )}
-                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
-                        {isAnnual && savings > 0 ? `💰 Save R${savings.toFixed(0)}/year` : silverPlan.description}
-                      </p>
-                    </div>
-
-                    <div className={cn(
-                      "pt-4 flex-1",
-                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
-                    )}>
-                      <ul className="space-y-3">
-                        {silverPlan.features.map((feature, i) => (
-                          <li key={i} className="flex items-start gap-3 text-sm">
-                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
-                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </label>
-                );
-              })()}
-
-              {/* Gold Plan */}
-              {(() => {
-                const planId = isAnnual ? 'gold-annual' : 'gold-monthly';
-                const goldPlan = plans.find(p => p.id === planId);
-                if (!goldPlan) return null;
-                const isSelected = selectedPlan === planId;
-                
-                // Get monthly plan for savings calculation
-                const goldMonthly = plans.find(p => p.id === 'gold-monthly');
-                const monthlyEquivalent = goldPlan.monthlyPriceCents / 100;
-                const savings = goldMonthly && isAnnual 
-                  ? (goldMonthly.amountCents * 12 - goldPlan.amountCents) / 100
-                  : 0;
-
-                return (
-                  <label
-                    key={planId}
-                    htmlFor={planId}
-                    className={cn(
-                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
-                      isSelected
-                        ? "border-yellow-500 bg-yellow-500 shadow-xl scale-105"
-                        : "border-gray-300 hover:border-yellow-400 bg-white"
-                    )}
-                  >
-                    <RadioGroupItem
-                      value={planId}
-                      id={planId}
-                      className={cn(
-                        "absolute top-4 right-4",
-                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
-                      )}
-                    />
-
-                    <div className="text-center mb-6">
-                      <div className={cn(
-                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
-                        isSelected ? "bg-white/20" : "bg-yellow-100"
-                      )}>
-                        <Crown className={cn("h-6 w-6", isSelected ? "text-white" : "text-yellow-600")} />
-                      </div>
-                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
-                        {goldPlan.name.replace(' Annual', '')}
-                      </h4>
-                      <div className="mb-1">
-                        <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
-                          {goldPlan.displayPrice}
-                        </span>
-                        <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
-                          /{goldPlan.billingPeriod}
-                        </span>
-                      </div>
-                      {isAnnual && monthlyEquivalent && (
-                        <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
-                          R{monthlyEquivalent.toFixed(0)}/month when paid annually
-                        </p>
-                      )}
-                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
-                        {isAnnual && savings > 0 ? `💰 Save R${savings.toFixed(0)}/year` : goldPlan.description}
-                      </p>
-                    </div>
-
-                    <div className={cn(
-                      "pt-4 flex-1",
-                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
-                    )}>
-                      <ul className="space-y-3">
-                        {goldPlan.features.map((feature, i) => (
-                          <li key={i} className="flex items-start gap-3 text-sm">
-                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
-                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </label>
-                );
-              })()}
-            </RadioGroup>
-          )}
-        </div>
-
-        {/* Submit Button */}
-        <div className="flex justify-end space-x-4">
-          <Button
-            type="submit"
-            variant="blue-primary"
-            size="lg"
-            disabled={isSubmitting}
-          >
-            {isSubmitting
-              ? "Processing..."
-              : isFreeSelected
-                ? "Start with Free Plan"
-                : "Continue to Payment"
-            }
-          </Button>
-        </div>
-      </form>
+              {isSubmitting
+                ? "Processing..."
+                : isFreeSelected
+                  ? "Start with Free Plan"
+                  : "Continue to Payment"
+              }
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );

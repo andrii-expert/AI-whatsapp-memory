@@ -5,6 +5,6 @@ export default defineConfig({
   out: "./migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/imaginecalendar_db",
+    url: process.env.DATABASE_URL || "postgresql://postgres:PIDcuirouqing0512ViacheslavPassword@localhost:5432/imaginecalendar_db",
   },
 });
