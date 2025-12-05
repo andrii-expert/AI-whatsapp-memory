@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -28,7 +28,17 @@ export function TimezoneSelector({
   required = false,
   className,
 }: TimezoneSelectorProps) {
-  const timezoneOptions = useMemo(() => getTimezoneOptions(), []);
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // Only calculate timezones after component mounts (client-side only)
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  
+  const timezoneOptions = useMemo(() => {
+    if (!isMounted) return [];
+    return getTimezoneOptions();
+  }, [isMounted]);
   
   // Group timezones by region for better organization
   const groupedOptions = useMemo(() => {
@@ -45,34 +55,36 @@ export function TimezoneSelector({
   }, [timezoneOptions]);
 
   // Get default value if not provided
-  const selectedValue = value || getUserTimezone();
+  const selectedValue = value || (isMounted ? getUserTimezone() : 'Africa/Johannesburg');
 
   return (
     <div className={className}>
       <Label htmlFor="timezone">
         {label} {required && <span className="text-red-500">*</span>}
       </Label>
-      <Select value={selectedValue} onValueChange={onValueChange}>
+      <Select value={selectedValue} onValueChange={onValueChange} disabled={!isMounted}>
         <SelectTrigger
           id="timezone"
           className={error ? "border-red-500" : ""}
         >
-          <SelectValue placeholder="Select timezone" />
+          <SelectValue placeholder={isMounted ? "Select timezone" : "Loading..."} />
         </SelectTrigger>
-        <SelectContent className="max-h-[300px]">
-          {Object.keys(groupedOptions).map((region) => (
-            <div key={region}>
-              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground sticky top-0 bg-background">
-                {region}
+        {isMounted && (
+          <SelectContent className="max-h-[300px]">
+            {Object.keys(groupedOptions).map((region) => (
+              <div key={region}>
+                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground sticky top-0 bg-background">
+                  {region}
+                </div>
+                {groupedOptions[region].map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </div>
-              {groupedOptions[region].map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </div>
-          ))}
-        </SelectContent>
+            ))}
+          </SelectContent>
+        )}
       </Select>
     </div>
   );

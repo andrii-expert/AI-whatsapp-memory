@@ -12,32 +12,50 @@ export interface TimezoneOption {
 
 /**
  * Get timezone offset in hours from UTC
+ * Uses Intl.DateTimeFormat for efficient calculation
  */
 function getTimezoneOffset(tz: string): number {
   try {
+    // Check if we're in a browser environment
+    if (typeof Intl === 'undefined' || !Intl.DateTimeFormat) {
+      return 0;
+    }
+    
     const now = new Date();
     
-    // Use Intl to get timezone offset
-    const dateInTz = new Date(now.toLocaleString('en-US', { timeZone: tz }));
-    const dateInUtc = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+    // Use Intl to get the timezone offset directly
+    const formatter = new Intl.DateTimeFormat('en', {
+      timeZone: tz,
+      timeZoneName: 'longOffset',
+    });
     
-    // Calculate the difference in milliseconds
-    const offsetMs = dateInTz.getTime() - dateInUtc.getTime();
+    const parts = formatter.formatToParts(now);
+    const offsetString = parts.find(p => p.type === 'timeZoneName')?.value;
     
-    // Convert to hours (accounting for potential day boundary crossing)
+    if (offsetString) {
+      // Parse offset string like "GMT+2" or "GMT-5:30"
+      const match = offsetString.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+      if (match && match[1] && match[2]) {
+        const sign = match[1] === '+' ? 1 : -1;
+        const hours = parseInt(match[2], 10);
+        const minutes = match[3] ? parseInt(match[3], 10) : 0;
+        return sign * (hours + minutes / 60);
+      }
+    }
+    
+    // Fallback: calculate using time difference
+    const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const tzDate = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+    const offsetMs = tzDate.getTime() - utcDate.getTime();
     let offsetHours = offsetMs / (1000 * 60 * 60);
     
     // Normalize to -12 to +12 range
-    if (offsetHours > 12) {
-      offsetHours -= 24;
-    } else if (offsetHours < -12) {
-      offsetHours += 24;
-    }
+    if (offsetHours > 12) offsetHours -= 24;
+    if (offsetHours < -12) offsetHours += 24;
     
     return offsetHours;
   } catch (error) {
-    // Fallback to 0 if calculation fails
-    console.warn(`Failed to calculate offset for timezone ${tz}:`, error);
+    // Return 0 as fallback
     return 0;
   }
 }
@@ -59,8 +77,20 @@ function formatOffset(offsetHours: number): string {
 
 /**
  * Get all timezone options grouped by region
+ * Only executes on client side to avoid build-time memory issues
  */
 export function getTimezoneOptions(): TimezoneOption[] {
+  // Skip calculation during build/SSR
+  if (typeof window === 'undefined') {
+    // Return a minimal list during SSR/build
+    return [
+      { value: 'Africa/Johannesburg', label: 'Johannesburg (GMT+02)', offset: 'GMT+02', region: 'Africa' },
+      { value: 'America/New_York', label: 'New York (GMT-05)', offset: 'GMT-05', region: 'America' },
+      { value: 'Europe/London', label: 'London (GMT+00)', offset: 'GMT+00', region: 'Europe' },
+      { value: 'Asia/Tokyo', label: 'Tokyo (GMT+09)', offset: 'GMT+09', region: 'Asia' },
+    ];
+  }
+  
   const timezones: { [key: string]: string[] } = {
     'Africa': [
       'Africa/Cairo',
@@ -127,7 +157,10 @@ export function getTimezoneOptions(): TimezoneOption[] {
   const options: TimezoneOption[] = [];
 
   Object.keys(timezones).forEach((region) => {
-    timezones[region].forEach((tz) => {
+    const regionTimezones = timezones[region];
+    if (!regionTimezones) return;
+    
+    regionTimezones.forEach((tz) => {
       try {
         const offsetHours = getTimezoneOffset(tz);
         const offset = formatOffset(offsetHours);
