@@ -18,6 +18,7 @@ import {
   getUserFolders,
   createNoteFolder,
   getUserNoteFolders,
+  updateLocaleSettings,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";
@@ -256,6 +257,19 @@ export const authRouter = createTRPCRouter({
           icon: "folder",
         });
         logger.info({ userId: session.user.id }, "Default 'General' note folder created");
+      }
+
+      // Update timezone preference if provided
+      if (input.timezone) {
+        try {
+          await updateLocaleSettings(db, session.user.id, {
+            timezone: input.timezone,
+          });
+          logger.info({ userId: session.user.id, timezone: input.timezone }, "Timezone preference updated during onboarding");
+        } catch (error) {
+          logger.error({ error, userId: session.user.id }, "Failed to update timezone preference during onboarding");
+          // Don't fail onboarding if timezone update fails
+        }
       }
 
       // Update Clerk metadata

@@ -28,6 +28,7 @@ import {
   GENDER_OPTIONS,
   COUNTRY_OPTIONS
 } from "@imaginecalendar/database/constants/onboarding";
+import { TimezoneSelector } from "@/components/timezone-selector";
 import { format } from "date-fns";
 import { CalendarIcon, Check, Sparkles, Zap, Crown } from "lucide-react";
 import { z } from "zod";
@@ -55,7 +56,7 @@ const formSchema = z.object({
   mainUse: z.string().min(1, "Please select your main use"),
   howHeardAboutUs: z.string().min(1, "Please let us know how you heard about us"),
   company: z.string().optional(),
-  timezone: z.string().default("Africa/Johannesburg"),
+  timezone: z.string().min(1, "Timezone is required").default("Africa/Johannesburg"),
   plan: z.string().min(1, "Please select a plan").default("free"),
 });
 
@@ -449,6 +450,21 @@ export default function OnboardingPage() {
                 {...register("company")}
                 placeholder="Acme Inc."
               />
+            </div>
+
+            <div>
+              <TimezoneSelector
+                value={watch("timezone")}
+                onValueChange={(value) => setValue("timezone", value)}
+                error={!!errors.timezone}
+                required
+              />
+              {errors.timezone && (
+                <p className="text-sm text-red-500 mt-1">{errors.timezone.message}</p>
+              )}
+              <p className="text-sm text-muted-foreground mt-1">
+                This helps us send reminders at the correct time for your location
+              </p>
             </div>
           </CardContent>
         </Card>
