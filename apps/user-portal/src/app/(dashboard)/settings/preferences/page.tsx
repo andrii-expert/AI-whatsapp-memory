@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imag
 import { Label } from "@imaginecalendar/ui/label";
 import { Switch } from "@imaginecalendar/ui/switch";
 import { Input } from "@imaginecalendar/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@imaginecalendar/ui/select";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { Loader2, Home, ChevronLeft } from "lucide-react";
@@ -20,6 +21,7 @@ const preferencesSchema = z.object({
   marketingEmails: z.boolean(),
   reminderNotifications: z.boolean(),
   reminderMinutes: z.number().min(1).max(1440),
+  timezone: z.string(),
 });
 
 export default function PreferencesPage() {
@@ -27,6 +29,8 @@ export default function PreferencesPage() {
   const trpc = useTRPC();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [timezones, setTimezones] = useState<string[]>([]);
+  const [isLoadingTimezones, setIsLoadingTimezones] = useState(true);
 
   // Fetch current preferences
   const { data: preferences, isLoading } = useQuery(
@@ -39,8 +43,28 @@ export default function PreferencesPage() {
       marketingEmails: false,
       reminderNotifications: true,
       reminderMinutes: 10,
+      timezone: "Africa/Johannesburg",
     },
   });
+
+  // Fetch timezone list on mount
+  useEffect(() => {
+    async function fetchTimezones() {
+      try {
+        const res = await fetch('/api/timezones');
+        if (res.ok) {
+          const { timezones: tzList } = await res.json();
+          setTimezones(tzList || []);
+        }
+      } catch (error) {
+        console.error('Error fetching timezones:', error);
+      } finally {
+        setIsLoadingTimezones(false);
+      }
+    }
+
+    fetchTimezones();
+  }, []);
 
   const {
     register,
@@ -61,6 +85,7 @@ export default function PreferencesPage() {
         marketingEmails: preferences.marketingEmails,
         reminderNotifications: preferences.reminderNotifications,
         reminderMinutes: preferences.reminderMinutes,
+        timezone: preferences.timezone || "Africa/Johannesburg",
       });
     }
   }, [preferences, reset]);
@@ -89,8 +114,23 @@ export default function PreferencesPage() {
     })
   );
 
-  function onSubmit(values: z.infer<typeof preferencesSchema>) {
+  async function onSubmit(values: z.infer<typeof preferencesSchema>) {
     setIsSubmitting(true);
+    
+    // Fetch utc_offset if timezone is provided
+    let utcOffset: string | undefined;
+    if (values.timezone) {
+      try {
+        const res = await fetch(`/api/timezone/${values.timezone}`);
+        if (res.ok) {
+          const data = await res.json();
+          utcOffset = data.utcOffset;
+        }
+      } catch (error) {
+        console.error('Error fetching timezone offset:', error);
+      }
+    }
+
     updatePreferencesMutation.mutate({
       notifications: {
         marketingEmails: values.marketingEmails,
@@ -98,6 +138,10 @@ export default function PreferencesPage() {
       },
       reminders: {
         reminderMinutes: values.reminderMinutes,
+      },
+      locale: {
+        timezone: values.timezone,
+        utcOffset: utcOffset,
       },
     });
   }
@@ -214,6 +258,49 @@ export default function PreferencesPage() {
                   </p>
                 </div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Locale Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Locale Settings</CardTitle>
+            <CardDescription>
+              Configure your timezone and regional preferences
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="timezone">Timezone</Label>
+              <Select
+                value={watch("timezone")}
+                onValueChange={(value) => setValue("timezone", value)}
+                disabled={isLoadingTimezones}
+              >
+                <SelectTrigger className={errors.timezone ? "border-red-500" : ""}>
+                  <SelectValue placeholder={isLoadingTimezones ? "Loading timezones..." : "Select your timezone"} />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {timezones.length > 0 ? (
+                    timezones.map((tz) => (
+                      <SelectItem key={tz} value={tz}>
+                        {tz.replace(/_/g, " ")}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="Africa/Johannesburg" disabled>
+                      No timezones available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {errors.timezone && (
+                <p className="text-sm text-red-500">{errors.timezone.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                We'll use this to schedule reminders and events at the right time for you
+              </p>
             </div>
           </CardContent>
         </Card>

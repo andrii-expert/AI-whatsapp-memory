@@ -18,8 +18,8 @@ import {
   getUserFolders,
   createNoteFolder,
   getUserNoteFolders,
-  updateLocaleSettings,
 } from "@imaginecalendar/database/queries";
+import { updateLocaleSettings } from "@imaginecalendar/database/queries/preferences";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";
 import { sendWelcomeEmail } from "@api/utils/email";
@@ -259,16 +259,31 @@ export const authRouter = createTRPCRouter({
         logger.info({ userId: session.user.id }, "Default 'General' note folder created");
       }
 
-      // Update timezone preference if provided
+      // Update timezone and fetch utc_offset if timezone is provided
       if (input.timezone) {
         try {
+          // Fetch timezone details to get utc_offset
+          const timezoneResponse = await fetch(`https://worldtimeapi.org/api/timezone/${input.timezone}`);
+          if (timezoneResponse.ok) {
+            const timezoneData = await timezoneResponse.json();
+            await updateLocaleSettings(db, session.user.id, {
+              timezone: input.timezone,
+              utcOffset: timezoneData.utc_offset,
+            });
+            logger.info({ userId: session.user.id, timezone: input.timezone, utcOffset: timezoneData.utc_offset }, "Timezone and UTC offset updated");
+          } else {
+            // If API fails, just save the timezone without offset
+            await updateLocaleSettings(db, session.user.id, {
+              timezone: input.timezone,
+            });
+            logger.warn({ userId: session.user.id, timezone: input.timezone }, "Failed to fetch UTC offset, saved timezone only");
+          }
+        } catch (error) {
+          // If fetching fails, just save the timezone without offset
           await updateLocaleSettings(db, session.user.id, {
             timezone: input.timezone,
           });
-          logger.info({ userId: session.user.id, timezone: input.timezone }, "Timezone preference updated during onboarding");
-        } catch (error) {
-          logger.error({ error, userId: session.user.id }, "Failed to update timezone preference during onboarding");
-          // Don't fail onboarding if timezone update fails
+          logger.error({ error, userId: session.user.id, timezone: input.timezone }, "Error fetching timezone details, saved timezone only");
         }
       }
 

@@ -78,6 +78,7 @@ export async function updateLocaleSettings(
   userId: string,
   locale: {
     timezone?: string;
+    utcOffset?: string;
     dateFormat?: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
     timeFormat?: "12h" | "24h";
   }
