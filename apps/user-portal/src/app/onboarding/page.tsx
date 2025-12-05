@@ -66,8 +66,6 @@ export default function OnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);
   const [isAnnual, setIsAnnual] = useState(false);
-  const [timezones, setTimezones] = useState<string[]>([]);
-  const [isLoadingTimezones, setIsLoadingTimezones] = useState(true);
   const trpc = useTRPC();
   const plansQueryOpts = trpc.plans.listActive.queryOptions();
   const plansQuery = useQuery(plansQueryOpts);
@@ -113,39 +111,9 @@ export default function OnboardingPage() {
       firstName: "",
       lastName: "",
       plan: "free",
-      timezone: "Africa/Johannesburg", // Default, will be updated when detected
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
   });
-
-  // Fetch timezone list and detect user's timezone on mount
-  useEffect(() => {
-    async function fetchTimezones() {
-      try {
-        const [timezonesRes, detectRes] = await Promise.all([
-          fetch('/api/timezones'),
-          fetch('/api/timezone/detect'),
-        ]);
-
-        if (timezonesRes.ok) {
-          const { timezones: tzList } = await timezonesRes.json();
-          setTimezones(tzList || []);
-        }
-
-        if (detectRes.ok) {
-          const { timezone: detectedTz } = await detectRes.json();
-          if (detectedTz) {
-            setValue('timezone', detectedTz);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching timezones:', error);
-      } finally {
-        setIsLoadingTimezones(false);
-      }
-    }
-
-    fetchTimezones();
-  }, [setValue]);
 
   const {
     register,
@@ -481,38 +449,6 @@ export default function OnboardingPage() {
                 {...register("company")}
                 placeholder="Acme Inc."
               />
-            </div>
-
-            <div>
-              <Label htmlFor="timezone">Timezone *</Label>
-              <Select
-                value={watch("timezone")}
-                onValueChange={(value) => setValue("timezone", value)}
-                disabled={isLoadingTimezones}
-              >
-                <SelectTrigger className={errors.timezone ? "border-red-500" : ""}>
-                  <SelectValue placeholder={isLoadingTimezones ? "Loading timezones..." : "Select your timezone"} />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px]">
-                  {timezones.length > 0 ? (
-                    timezones.map((tz) => (
-                      <SelectItem key={tz} value={tz}>
-                        {tz.replace(/_/g, " ")}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="Africa/Johannesburg" disabled>
-                      No timezones available
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-              {errors.timezone && (
-                <p className="text-sm text-red-500 mt-1">{errors.timezone.message}</p>
-              )}
-              <p className="text-sm text-muted-foreground mt-1">
-                We'll use this to schedule reminders and events at the right time for you
-              </p>
             </div>
           </CardContent>
         </Card>

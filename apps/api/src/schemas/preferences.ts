@@ -14,7 +14,6 @@ export const updatePreferencesSchema = z.object({
 
   locale: z.object({
     timezone: z.string().optional(),
-    utcOffset: z.string().optional(),
     dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]).optional(),
     timeFormat: z.enum(["12h", "24h"]).optional(),
   }).optional(),

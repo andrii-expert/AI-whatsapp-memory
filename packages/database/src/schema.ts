@@ -232,7 +232,6 @@ export const userPreferences = pgTable("user_preferences", {
   
   // Locale settings
   timezone: text("timezone").default("Africa/Johannesburg").notNull(),
-  utcOffset: text("utc_offset"), // UTC offset in format "+05:00" or "-05:00"
   dateFormat: dateFormatEnum("date_format").default("DD/MM/YYYY").notNull(),
   timeFormat: timeFormatEnum("time_format").default("24h").notNull(),
   
