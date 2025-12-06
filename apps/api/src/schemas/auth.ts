@@ -30,7 +30,8 @@ export const completeOnboardingSchema = z.object({
   mainUse: z.string().min(1, "Please select your main use"),
   howHeardAboutUs: z.string().min(1, "Please let us know how you heard about us"),
   company: z.string().optional(),
-  timezone: z.string().default("Africa/Johannesburg"),
+  timezone: z.string().min(1, "Timezone is required"),
+  utcOffset: z.string().min(1, "UTC offset is required"),
   plan: planIdSchema.default("trial"),
 });
 

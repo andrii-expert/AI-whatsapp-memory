@@ -34,8 +34,28 @@ export async function GET(req: NextRequest) {
     }
 
     const db = await connectDb();
-    const whatsappService = new WhatsAppService();
     const now = new Date();
+    
+    // Check WhatsApp configuration before proceeding
+    const hasWhatsAppConfig = !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+    if (!hasWhatsAppConfig) {
+      logger.error(
+        {
+          hasAccessToken: !!process.env.WHATSAPP_ACCESS_TOKEN,
+          hasPhoneNumberId: !!process.env.WHATSAPP_PHONE_NUMBER_ID,
+        },
+        'WhatsApp service not configured - cannot send reminder messages'
+      );
+      return NextResponse.json(
+        { 
+          error: 'WhatsApp service not configured',
+          message: 'Missing WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID environment variables'
+        },
+        { status: 500 }
+      );
+    }
+    
+    const whatsappService = new WhatsAppService();
     
     // Clean up old cache entries
     cleanupNotificationCache(now);
@@ -45,8 +65,9 @@ export async function GET(req: NextRequest) {
         timestamp: now.toISOString(),
         localTime: now.toLocaleString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        hasWhatsAppConfig: !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
       },
-      'Checking for reminders happening in next 1 minute'
+      'Starting reminder check cron job'
     );
 
     // Get all active reminders efficiently
@@ -55,10 +76,22 @@ export async function GET(req: NextRequest) {
     logger.info(
       { 
         count: activeReminders.length,
-        reminderIds: activeReminders.map(r => ({ id: r.id, title: r.title, frequency: r.frequency, time: r.time }))
+        reminderIds: activeReminders.map(r => ({ id: r.id, title: r.title, frequency: r.frequency, time: r.time, userId: r.userId }))
       },
       'Found active reminders to check'
     );
+    
+    if (activeReminders.length === 0) {
+      logger.info({}, 'No active reminders found, exiting');
+      return NextResponse.json({ 
+        success: true, 
+        message: 'No active reminders to check',
+        checkedAt: now.toISOString(),
+        remindersChecked: 0,
+        notificationsSent: 0,
+        notificationsSkipped: 0,
+      });
+    }
 
     let notificationsSent = 0;
     let notificationsSkipped = 0;
@@ -83,104 +116,212 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
+        // Get user's timezone
+        const userTimezone = (user as any).timezone;
+        if (!userTimezone) {
+          logger.warn({ userId }, 'User has no timezone set, skipping reminders');
+          continue; // Skip users without timezone set
+        }
+
+        // Get current time in user's timezone
+        const now = new Date();
+        const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
+        const userLocalTimeDate = new Date(userTimeString);
+        
+        // Extract user's local time components (these represent the actual time in user's timezone)
+        const userLocalTime = {
+          year: userLocalTimeDate.getFullYear(),
+          month: userLocalTimeDate.getMonth(),
+          day: userLocalTimeDate.getDate(),
+          hours: userLocalTimeDate.getHours(),
+          minutes: userLocalTimeDate.getMinutes(),
+          seconds: userLocalTimeDate.getSeconds(),
+          date: userLocalTimeDate, // This Date object represents the current time in user's timezone
+        };
+        
+        logger.info(
+          {
+            userId,
+            serverTime: now.toISOString(),
+            userTimezone,
+            userLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+            remindersCount: userReminders.length,
+          },
+          'Processing reminders for user'
+        );
+        
+        logger.info(
+          {
+            userId,
+            serverTime: now.toISOString(),
+            serverTimezoneOffset: now.getTimezoneOffset(),
+                currentTime: now.toISOString(),
+            userTimezone,
+            userLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')} on ${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+          },
+          'Timezone conversion for user'
+        );
+
         // Get user's verified WhatsApp numbers (prefer primary, then any verified)
         const whatsappNumbers = await getUserWhatsAppNumbers(db, userId);
+        logger.info(
+          {
+            userId,
+            whatsappNumbersCount: whatsappNumbers.length,
+            whatsappNumbers: whatsappNumbers.map(n => ({
+              phoneNumber: n.phoneNumber,
+              isVerified: n.isVerified,
+              isActive: n.isActive,
+              isPrimary: n.isPrimary,
+            })),
+          },
+          'Checking WhatsApp numbers for user'
+        );
+        
         const whatsappNumber = whatsappNumbers.find(n => n.isVerified && n.isActive) || 
                               whatsappNumbers.find(n => n.isVerified);
         
         if (!whatsappNumber) {
-          logger.debug({ userId }, 'User has no verified WhatsApp number, skipping');
+          logger.warn(
+            {
+              userId,
+              whatsappNumbersCount: whatsappNumbers.length,
+              availableNumbers: whatsappNumbers.map(n => ({
+                phoneNumber: n.phoneNumber,
+                isVerified: n.isVerified,
+                isActive: n.isActive,
+              })),
+            },
+            'User has no verified WhatsApp number, skipping'
+          );
           continue; // Skip users without verified WhatsApp
         }
+        
+        logger.info(
+          {
+            userId,
+            whatsappNumberId: whatsappNumber.id,
+            phoneNumber: whatsappNumber.phoneNumber,
+            isVerified: whatsappNumber.isVerified,
+            isActive: whatsappNumber.isActive,
+          },
+          'Found verified WhatsApp number for user'
+        );
 
-        // Check each reminder and send notification if it should happen in the next 1 minute
+        // Check each reminder and send notification if it's due now (within 1 minute)
+        // We check based on the user's current local time in their timezone
+        const dueReminders: Array<{ reminder: any; reminderTime: Date }> = [];
+        
         for (const reminder of userReminders) {
           try {
-            // Calculate when this reminder should occur
-            const reminderTime = calculateReminderTime(reminder, now);
+            // Check if this reminder should fire now based on user's local time
+            const shouldFire = checkIfReminderShouldFire(reminder, userLocalTime, userTimezone);
+            
+            if (!shouldFire.shouldNotify) {
+              logger.debug(
+                {
+                  reminderId: reminder.id,
+                  frequency: reminder.frequency,
+                  reason: shouldFire.reason,
+                  userLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
+                },
+                'Reminder not due yet'
+              );
+              continue;
+            }
+            
+            // Calculate the actual reminder time for display purposes
+            const reminderTime = shouldFire.reminderTime || calculateReminderTime(reminder, userLocalTime, userTimezone);
             
             if (!reminderTime) {
               logger.debug(
                 { reminderId: reminder.id, frequency: reminder.frequency },
                 'Could not calculate reminder time, skipping'
               );
-              continue; // Can't calculate reminder time (e.g., past reminder, invalid configuration)
+              continue;
             }
-            
-            logger.debug(
-              {
-                reminderId: reminder.id,
-                reminderTitle: reminder.title,
-                frequency: reminder.frequency,
-                reminderTime: reminderTime.toISOString(),
-                now: now.toISOString(),
-              },
-              'Calculated reminder time'
-            );
-
-            // Calculate time until reminder
-            const timeUntilReminder = reminderTime.getTime() - now.getTime();
-            const oneMinuteInMs = 60 * 1000;
-            
-            // Only send notification if reminder is happening within the next 1 minute (not already passed)
-            // timeUntilReminder > 0 means reminder is in the future
-            // timeUntilReminder <= oneMinuteInMs means it's within 1 minute
-            const shouldNotify = timeUntilReminder > 0 && timeUntilReminder <= oneMinuteInMs;
             
             logger.info(
               {
                 reminderId: reminder.id,
                 reminderTitle: reminder.title,
-                frequency: reminder.frequency,
                 reminderTime: reminderTime.toISOString(),
-                now: now.toISOString(),
-                timeUntilReminderMs: timeUntilReminder,
-                timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
-                shouldNotify,
+                currentTime: now.toISOString(),
+                userTimezone,
+                userLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')}`,
+                reason: shouldFire.reason,
               },
-              'Checking if reminder should be notified (within next 1 minute)'
+              'Reminder is due - will send notification'
             );
             
-            // Only send notification if reminder should happen in the next 1 minute (not already passed)
-            if (!shouldNotify) {
-              logger.debug(
-                { reminderId: reminder.id, timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000) },
-                'Reminder not due in next 1 minute, skipping'
-              );
-              continue;
+            // Only process reminders that are due now
+            if (shouldFire.shouldNotify) {
+              // Check cache to prevent duplicate notifications
+              const reminderDate = new Date(reminderTime);
+              const dateKey = `${reminderDate.getUTCFullYear()}-${reminderDate.getUTCMonth() + 1}-${reminderDate.getUTCDate()}-${reminderDate.getUTCHours()}-${reminderDate.getUTCMinutes()}`;
+              const cacheKey = `${reminder.id}-${dateKey}`;
+              const lastSent = notificationCache.get(cacheKey);
+              
+              if (!lastSent || (now.getTime() - lastSent) >= CACHE_TTL) {
+                dueReminders.push({ reminder, reminderTime });
+              } else {
+                notificationsSkipped++;
+                logger.debug(
+                  { reminderId: reminder.id, lastSent: new Date(lastSent).toISOString(), cacheKey },
+                  'Skipping duplicate notification (already sent recently)'
+                );
+              }
             }
+          } catch (reminderError) {
+            logger.error(
+              { error: reminderError, reminderId: reminder.id, userId },
+              'Error processing reminder'
+            );
+            errors.push(`Error processing reminder ${reminder.id}`);
+          }
+        }
+        
+        // Send notifications for reminders that are due now (within 1 minute)
+        for (const { reminder, reminderTime } of dueReminders) {
+          try {
+            // Format reminder time for message using user's timezone
+            const reminderTimeInUserTz = new Date(reminderTime.toLocaleString("en-US", { timeZone: userTimezone }));
+            const hours = reminderTimeInUserTz.getHours();
+            const minutes = reminderTimeInUserTz.getMinutes();
+            const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+            const period = hours >= 12 ? 'PM' : 'AM';
+            const reminderTimeStr = `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
             
-            // Check cache to prevent duplicate notifications
-            // Use date + time (hour:minute) as cache key to prevent duplicates for the same reminder occurrence
-            const reminderDate = new Date(reminderTime);
-            const dateKey = `${reminderDate.getFullYear()}-${reminderDate.getMonth() + 1}-${reminderDate.getDate()}-${reminderDate.getHours()}-${reminderDate.getMinutes()}`;
-            const cacheKey = `${reminder.id}-${dateKey}`;
-            const lastSent = notificationCache.get(cacheKey);
-            if (lastSent && (now.getTime() - lastSent) < CACHE_TTL) {
-              notificationsSkipped++;
-              logger.debug(
-                { reminderId: reminder.id, lastSent: new Date(lastSent).toISOString(), cacheKey },
-                'Skipping duplicate notification (already sent recently)'
-              );
-              continue;
-            }
-
-            // Format reminder time for message
-            const reminderTimeStr = formatReminderTime(reminderTime);
+            logger.info(
+              {
+                userId: user.id,
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                reminderTime: reminderTime.toISOString(),
+                reminderLocalTime: `${hours}:${String(minutes).padStart(2, '0')}`,
+                userTimezone,
+                formattedTime: reminderTimeStr,
+              },
+              'Reminder due - preparing notification with user timezone'
+            );
             
-            // Create polite and professional reminder message
-            const userName = user.firstName || user.name || 'there';
-            let message: string;
+            // Create reminder message in standard format
+            const timeInfo = reminderTimeStr ? ` at ${reminderTimeStr}` : '';
+            const message = `🔔 *Reminder Alarm:*\n"${reminder.title}${timeInfo}"`;
             
-            // Create polite and professional reminder message
-            if (reminder.frequency === 'yearly' && reminder.title.toLowerCase().includes('birthday')) {
-              // Special message for birthdays
-              message = `Hello ${userName}! 👋\n\nThis is a friendly reminder that ${reminder.title} is coming up soon.\n\nWe wanted to make sure you don't miss this special occasion!`;
-            } else {
-              // Standard reminder message - polite and professional
-              const timeInfo = reminderTimeStr ? ` at ${reminderTimeStr}` : '';
-              message = `Hello ${userName}! 👋\n\nReminder: ${reminder.title}${timeInfo}\n\nJust wanted to make sure you don't forget!`;
-            }
+            logger.info(
+              {
+                userId: user.id,
+                phoneNumber: whatsappNumber.phoneNumber,
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                reminderTime: reminderTime.toISOString(),
+                reminderLocalTimeFormatted: reminderTimeStr,
+                messageLength: message.length,
+                message: message.substring(0, 200) + '...', // Log first 200 chars
+              },
+              'Preparing to send due reminder notification'
+            );
             
             try {
               await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, message);
@@ -195,32 +336,43 @@ export async function GET(req: NextRequest) {
               });
               
               // Cache the notification to prevent duplicates
+              const reminderDate = new Date(reminderTime);
+              const dateKey = `${reminderDate.getUTCFullYear()}-${reminderDate.getUTCMonth() + 1}-${reminderDate.getUTCDate()}-${reminderDate.getUTCHours()}-${reminderDate.getUTCMinutes()}`;
+              const cacheKey = `${reminder.id}-${dateKey}`;
               notificationCache.set(cacheKey, now.getTime());
               
               notificationsSent++;
               logger.info(
                 {
                   userId: user.id,
+                  phoneNumber: whatsappNumber.phoneNumber,
                   reminderId: reminder.id,
                   reminderTitle: reminder.title,
                   reminderTime: reminderTime.toISOString(),
-                  timeUntilReminderSeconds: Math.round(timeUntilReminder / 1000),
                 },
-                'Reminder notification sent'
+                'Reminder notification sent successfully'
               );
             } catch (sendError) {
               logger.error(
-                { error: sendError, userId: user.id, reminderId: reminder.id },
+                {
+                  error: sendError,
+                  errorMessage: sendError instanceof Error ? sendError.message : String(sendError),
+                  errorStack: sendError instanceof Error ? sendError.stack : undefined,
+                  userId: user.id,
+                  phoneNumber: whatsappNumber.phoneNumber,
+                  reminderId: reminder.id,
+                  reminderTitle: reminder.title,
+                },
                 'Failed to send reminder notification'
               );
-              errors.push(`Failed to send reminder ${reminder.id} to user ${user.id}`);
+              errors.push(`Failed to send reminder ${reminder.id} to user ${user.id}: ${sendError instanceof Error ? sendError.message : String(sendError)}`);
             }
           } catch (reminderError) {
             logger.error(
               { error: reminderError, reminderId: reminder.id, userId },
-              'Error processing reminder'
+              'Error sending due reminder'
             );
-            errors.push(`Error processing reminder ${reminder.id}`);
+            errors.push(`Error sending reminder ${reminder.id}`);
           }
         }
       } catch (userError) {
@@ -229,6 +381,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    logger.info(
+      {
+        remindersChecked: activeReminders.length,
+        notificationsSent,
+        notificationsSkipped,
+        errorsCount: errors.length,
+        usersProcessed: remindersByUser.size,
+      },
+      'Reminder check completed'
+    );
+    
     return NextResponse.json({ 
       success: true, 
       message: 'Reminder check completed',
@@ -236,6 +399,7 @@ export async function GET(req: NextRequest) {
       remindersChecked: activeReminders.length,
       notificationsSent,
       notificationsSkipped,
+      usersProcessed: remindersByUser.size,
       errors: errors.length > 0 ? errors : undefined
     });
   } catch (error) {
@@ -260,145 +424,540 @@ function cleanupNotificationCache(now: Date): void {
 }
 
 /**
+ * Get the current UTC time (server time converted to UTC)
+ * Server is in UTC+4, so we need to subtract 4 hours to get UTC
+ * getTimezoneOffset() returns minutes behind UTC (positive = behind, negative = ahead)
+ * For UTC+4, it returns -240 (negative because ahead of UTC)
+ * To convert to UTC: UTC = Local - offset = Local - (-240) = Local + 240 minutes = Local + 4 hours
+ * But we want to subtract, so: UTC = Local + offset (where offset is negative)
+ */
+function getCurrentUtcTime(): Date {
+  const now = new Date();
+  // getTimezoneOffset() returns minutes behind UTC
+  // For UTC+4, it returns -240 (negative = ahead of UTC)
+  // To convert local to UTC: UTC = Local + offset (offset is negative, so this subtracts)
+  const serverTimezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+  const utcTimestamp = now.getTime() + serverTimezoneOffsetMs;
+  const utcDate = new Date(utcTimestamp);
+  
+  // Log for debugging
+  logger.debug({
+    serverLocalTime: now.toISOString(),
+    serverTimezoneOffset: now.getTimezoneOffset(),
+    serverTimezoneOffsetMs,
+    calculatedUtc: utcDate.toISOString(),
+    serverTimeHours: now.getHours(),
+    utcHours: utcDate.getUTCHours(),
+  }, 'Converting server time to UTC');
+  
+  return utcDate;
+}
+
+/**
+ * Convert UTC time to user's local time using their UTC offset
+ * @param utcTime - Current UTC time
+ * @param utcOffset - User's UTC offset (e.g., "-05:00", "+02:00")
+ * @returns Object with local time components (year, month, day, hours, minutes, etc.)
+ * 
+ * Example: If UTC is 10:00 and user is UTC-5, their local time is 05:00
+ * Example: If UTC is 10:00 and user is UTC+2, their local time is 12:00
+ */
+function getLocalTimeComponents(utcTime: Date, utcOffset: string): {
+  year: number;
+  month: number;
+  day: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  date: Date; // Date object for the local time (for calculations)
+} {
+  // Parse UTC offset (e.g., "-05:00" or "+02:00")
+  const offsetMatch = utcOffset.match(/^([+-])(\d{2}):(\d{2})$/);
+  if (!offsetMatch) {
+    logger.warn({ utcOffset }, 'Invalid UTC offset format, using UTC time');
+    return {
+      year: utcTime.getUTCFullYear(),
+      month: utcTime.getUTCMonth(),
+      day: utcTime.getUTCDate(),
+      hours: utcTime.getUTCHours(),
+      minutes: utcTime.getUTCMinutes(),
+      seconds: utcTime.getUTCSeconds(),
+      date: utcTime,
+    };
+  }
+
+  const [, sign, hours, minutes] = offsetMatch;
+  const offsetHours = parseInt(hours || '0', 10);
+  const offsetMinutes = parseInt(minutes || '0', 10);
+  const totalOffsetMinutes = offsetHours * 60 + offsetMinutes;
+  const offsetMs = totalOffsetMinutes * 60 * 1000;
+  // offsetMsWithSign: negative for UTC- (e.g., UTC-5 = -300 minutes), positive for UTC+ (e.g., UTC+2 = +120 minutes)
+  const offsetMsWithSign = sign === '-' ? -offsetMs : offsetMs;
+
+  // Convert UTC to user's local time
+  // If user is UTC-5 (offsetMsWithSign = -300 minutes), we subtract -300 = add 300 minutes to UTC to get local time
+  // If user is UTC+2 (offsetMsWithSign = +120 minutes), we subtract +120 = subtract 120 minutes from UTC to get local time
+  // Formula: Local = UTC - offset (where offset is negative for UTC- and positive for UTC+)
+  const userLocalTimestamp = utcTime.getTime() - offsetMsWithSign;
+  const userLocalDate = new Date(userLocalTimestamp);
+  
+  // Extract components (these are in UTC but represent the user's local time)
+  const components = {
+    year: userLocalDate.getUTCFullYear(),
+    month: userLocalDate.getUTCMonth(),
+    day: userLocalDate.getUTCDate(),
+    hours: userLocalDate.getUTCHours(),
+    minutes: userLocalDate.getUTCMinutes(),
+    seconds: userLocalDate.getUTCSeconds(),
+    date: userLocalDate,
+  };
+  
+  logger.debug({
+    utcTime: utcTime.toISOString(),
+    utcOffset,
+    offsetMsWithSign,
+    userLocalTime: `${components.hours}:${String(components.minutes).padStart(2, '0')} on ${components.year}-${components.month + 1}-${components.day}`,
+    userLocalTimestamp: userLocalDate.toISOString(),
+  }, 'Converted UTC to user local time');
+  
+  return components;
+}
+
+/**
+ * Create a Date object representing a time in the user's local timezone
+ * @param year - Year in user's local timezone
+ * @param month - Month (0-11) in user's local timezone
+ * @param day - Day in user's local timezone
+ * @param hours - Hours (0-23) in user's local timezone
+ * @param minutes - Minutes (0-59) in user's local timezone
+ * @param timezone - User's timezone string (e.g., "Europe/Berlin", "America/New_York")
+ * @returns Date object that represents the specified time in user's timezone
+ */
+function createDateInUserTimezone(
+  year: number,
+  month: number,
+  day: number,
+  hours: number,
+  minutes: number,
+  timezone: string
+): Date {
+  // Create a date string in ISO format
+  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+  
+  // We need to create a Date object that, when converted to the user's timezone, gives us the desired time
+  // Strategy: Use iterative approach to find the correct UTC timestamp
+  
+  // Start with a guess: assume the time is in UTC
+  let candidate = new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+  
+  // Check what this represents in the user's timezone
+  let candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
+  
+  // Get components of what we got
+  let gotYear = candidateInUserTz.getFullYear();
+  let gotMonth = candidateInUserTz.getMonth();
+  let gotDay = candidateInUserTz.getDate();
+  let gotHours = candidateInUserTz.getHours();
+  let gotMinutes = candidateInUserTz.getMinutes();
+  
+  // Calculate how far off we are
+  const targetMs = new Date(year, month, day, hours, minutes, 0, 0).getTime();
+  const gotMs = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
+  const diff = targetMs - gotMs;
+  
+  // Adjust the candidate
+  candidate = new Date(candidate.getTime() + diff);
+  
+  // Verify and fine-tune if needed (one more iteration)
+  candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
+  gotYear = candidateInUserTz.getFullYear();
+  gotMonth = candidateInUserTz.getMonth();
+  gotDay = candidateInUserTz.getDate();
+  gotHours = candidateInUserTz.getHours();
+  gotMinutes = candidateInUserTz.getMinutes();
+  
+  if (
+    gotYear === year &&
+    gotMonth === month &&
+    gotDay === day &&
+    gotHours === hours &&
+    gotMinutes === minutes
+  ) {
+    return candidate;
+  }
+  
+  // One more adjustment if needed
+  const targetMs2 = new Date(year, month, day, hours, minutes, 0, 0).getTime();
+  const gotMs2 = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
+  const diff2 = targetMs2 - gotMs2;
+  
+  return new Date(candidate.getTime() + diff2);
+}
+
+/**
+ * Check if a reminder should fire now based on user's local time
+ * @param reminder - The reminder object
+ * @param userLocalTime - Current time components in user's local timezone
+ * @param userTimezone - User's timezone string (e.g., "Europe/Berlin")
+ * @returns Object with shouldNotify flag and optional reminderTime
+ */
+function checkIfReminderShouldFire(
+  reminder: any,
+  userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date },
+  userTimezone: string
+): { shouldNotify: boolean; reason?: string; reminderTime?: Date } {
+  if (!reminder.active) {
+    return { shouldNotify: false, reason: 'Reminder is not active' };
+  }
+
+  const currentHour = userLocalTime.hours;
+  const currentMinute = userLocalTime.minutes;
+  const currentSecond = userLocalTime.seconds;
+  const currentDay = userLocalTime.day;
+  const currentMonth = userLocalTime.month;
+  const currentYear = userLocalTime.year;
+  const currentDayOfWeek = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day).getDay();
+
+  try {
+    if (reminder.frequency === 'daily') {
+      if (!reminder.time) {
+        return { shouldNotify: false, reason: 'No time specified for daily reminder' };
+      }
+      const [hours, minutes] = reminder.time.split(':').map(Number);
+      // Check if current time matches reminder time (exact match or within 1 minute after)
+      // Cron runs every minute, so we check if we're at the exact minute or 1 minute after
+      const currentTimeInMinutes = currentHour * 60 + currentMinute;
+      const reminderTimeInMinutes = hours * 60 + minutes;
+      const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
+      // Fire if we're at the exact time (0) or 1 minute after (1) to account for cron timing
+      if (timeDiff >= 0 && timeDiff <= 1) {
+        const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, hours, minutes, userTimezone);
+        return { shouldNotify: true, reason: 'Daily reminder time matches', reminderTime };
+      }
+      return { shouldNotify: false, reason: `Time doesn't match: current ${currentHour}:${String(currentMinute).padStart(2, '0')}, reminder ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}, diff ${timeDiff}` };
+    } else if (reminder.frequency === 'hourly') {
+      const minuteOfHour = Number(reminder.minuteOfHour ?? 0);
+      // Check if current minute matches (exact or 1 minute after)
+      const minuteDiff = currentMinute - minuteOfHour;
+      if (minuteDiff >= 0 && minuteDiff <= 1) {
+        const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, currentHour, minuteOfHour, userTimezone);
+        return { shouldNotify: true, reason: 'Hourly reminder minute matches', reminderTime };
+      }
+      return { shouldNotify: false, reason: `Minute doesn't match: current ${currentMinute}, reminder ${minuteOfHour}, diff ${minuteDiff}` };
+    } else if (reminder.frequency === 'minutely') {
+      const interval = Math.max(1, Number(reminder.intervalMinutes ?? 1));
+      // Check if current time is on the interval (exact match or 1 minute after)
+      const remainder = currentMinute % interval;
+      // Fire if remainder is 0 (exact) or 1 (1 minute after interval)
+      if (remainder === 0 || remainder === 1) {
+        const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, currentHour, currentMinute, userTimezone);
+        return { shouldNotify: true, reason: 'Minutely reminder interval matches', reminderTime };
+      }
+      return { shouldNotify: false, reason: `Interval doesn't match: current minute ${currentMinute}, interval ${interval}, remainder ${remainder}` };
+    } else if (reminder.frequency === 'weekly') {
+      if (!reminder.daysOfWeek || reminder.daysOfWeek.length === 0 || !reminder.time) {
+        return { shouldNotify: false, reason: 'Weekly reminder missing days or time' };
+      }
+      const [hours, minutes] = reminder.time.split(':').map(Number);
+      // Check if today is one of the reminder days and time matches
+      if (reminder.daysOfWeek.includes(currentDayOfWeek)) {
+        const currentTimeInMinutes = currentHour * 60 + currentMinute;
+        const reminderTimeInMinutes = hours * 60 + minutes;
+        const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
+        // Fire if we're at the exact time or 1 minute after
+        if (timeDiff >= 0 && timeDiff <= 1) {
+          const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, hours, minutes, userTimezone);
+          return { shouldNotify: true, reason: 'Weekly reminder day and time match', reminderTime };
+        }
+        return { shouldNotify: false, reason: `Day matches but time doesn't: current ${currentHour}:${String(currentMinute).padStart(2, '0')}, reminder ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}, diff ${timeDiff}` };
+      }
+      return { shouldNotify: false, reason: `Day doesn't match: current ${currentDayOfWeek}, reminder days ${reminder.daysOfWeek.join(',')}` };
+    } else if (reminder.frequency === 'monthly') {
+      if (!reminder.dayOfMonth) {
+        return { shouldNotify: false, reason: 'Monthly reminder missing day of month' };
+      }
+      const dayOfMonth = Number(reminder.dayOfMonth);
+      const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
+      // Check if today is the reminder day and time matches
+      if (currentDay === dayOfMonth) {
+        const currentTimeInMinutes = currentHour * 60 + currentMinute;
+        const reminderTimeInMinutes = hours * 60 + minutes;
+        const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
+        // Fire if we're at the exact time or 1 minute after
+        if (timeDiff >= 0 && timeDiff <= 1) {
+          const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, hours, minutes, userTimezone);
+          return { shouldNotify: true, reason: 'Monthly reminder day and time match', reminderTime };
+        }
+        return { shouldNotify: false, reason: `Day matches but time doesn't: current ${currentHour}:${String(currentMinute).padStart(2, '0')}, reminder ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}, diff ${timeDiff}` };
+      }
+      return { shouldNotify: false, reason: `Day doesn't match: current ${currentDay}, reminder ${dayOfMonth}` };
+    } else if (reminder.frequency === 'yearly') {
+      if (!reminder.month || !reminder.dayOfMonth) {
+        return { shouldNotify: false, reason: 'Yearly reminder missing month or day' };
+      }
+      const month = Number(reminder.month);
+      const dayOfMonth = Number(reminder.dayOfMonth);
+      const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
+      // Check if today is the reminder date and time matches
+      // Note: month in reminder is 1-12, currentMonth is 0-11
+      if (currentMonth === month - 1 && currentDay === dayOfMonth) {
+        const currentTimeInMinutes = currentHour * 60 + currentMinute;
+        const reminderTimeInMinutes = hours * 60 + minutes;
+        const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
+        // Fire if we're at the exact time or 1 minute after
+        if (timeDiff >= 0 && timeDiff <= 1) {
+          const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, hours, minutes, userTimezone);
+          return { shouldNotify: true, reason: 'Yearly reminder date and time match', reminderTime };
+        }
+        return { shouldNotify: false, reason: `Date matches but time doesn't: current ${currentHour}:${String(currentMinute).padStart(2, '0')}, reminder ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}, diff ${timeDiff}` };
+      }
+      return { shouldNotify: false, reason: `Date doesn't match: current ${currentMonth + 1}/${currentDay}, reminder ${month}/${dayOfMonth}` };
+    } else if (reminder.frequency === 'once') {
+      // For once reminders, calculate the next occurrence and check if it's now
+      const reminderTime = calculateReminderTime(reminder, userLocalTime, userTimezone);
+      if (!reminderTime) {
+        return { shouldNotify: false, reason: 'Once reminder already passed or invalid' };
+      }
+      // Check if reminder time is within 1 minute of now
+      const now = new Date();
+      const timeUntilReminder = reminderTime.getTime() - now.getTime();
+      const oneMinuteInMs = 60 * 1000;
+      if (timeUntilReminder > 0 && timeUntilReminder <= oneMinuteInMs) {
+        return { shouldNotify: true, reason: 'Once reminder is due', reminderTime };
+      }
+      return { shouldNotify: false, reason: `Once reminder not due yet: ${Math.round(timeUntilReminder / 1000)}s until reminder` };
+    }
+
+    return { shouldNotify: false, reason: `Unknown frequency: ${reminder.frequency}` };
+  } catch (error) {
+    logger.error({ error, reminderId: reminder.id, frequency: reminder.frequency }, 'Error checking if reminder should fire');
+    return { shouldNotify: false, reason: 'Error checking reminder' };
+  }
+}
+
+/**
  * Calculate the actual time when the reminder should occur (not 5 minutes before)
  * This is the time the user wants to be reminded about
+ * @param reminder - The reminder object
+ * @param userLocalTime - Current time components in user's local timezone
+ * @param userTimezone - User's timezone string (e.g., "Europe/Berlin")
  */
-function calculateReminderTime(reminder: any, now: Date): Date | null {
+function calculateReminderTime(reminder: any, userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date }, userTimezone: string): Date | null {
   try {
     if (reminder.frequency === 'once') {
       if (reminder.targetDate) {
         const target = new Date(reminder.targetDate);
+        // targetDate is already a Date object, we need to interpret the time in user's timezone
+        const targetYear = target.getUTCFullYear();
+        const targetMonth = target.getUTCMonth();
+        const targetDay = target.getUTCDate();
+        
         if (reminder.time) {
-          const [hours, minutes] = reminder.time.split(':').map(Number);
-          target.setHours(hours, minutes, 0, 0);
+          const timeParts = reminder.time.split(':');
+          const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+          const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+          const reminderTimeUtc = createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+          // If target date is in the past (more than 1 minute), return null (reminder already passed)
+          const oneMinuteAgo = new Date(userLocalTime.date.getTime() - 60 * 1000);
+          if (reminderTimeUtc < oneMinuteAgo) {
+            return null;
+          }
+          return reminderTimeUtc;
         } else {
-          // If no time specified, set to midnight
-          target.setHours(0, 0, 0, 0);
+          // If no time specified, set to midnight in user's timezone
+          return createDateInUserTimezone(targetYear, targetMonth, targetDay, 0, 0, userTimezone);
         }
-        target.setSeconds(0, 0);
-        // If target date is in the past (more than 1 minute), return null (reminder already passed)
-        // We allow 1 minute grace period for cron timing
-        const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
-        if (target < oneMinuteAgo) {
-          return null;
-        }
-        return target;
       } else if (reminder.daysFromNow !== undefined) {
-        const next = new Date(now);
-        next.setDate(next.getDate() + reminder.daysFromNow);
+        const nextDay = userLocalTime.day + reminder.daysFromNow;
+        const nextDate = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, nextDay));
+        // Handle month/year overflow
+        const actualYear = nextDate.getUTCFullYear();
+        const actualMonth = nextDate.getUTCMonth();
+        const actualDay = nextDate.getUTCDate();
+        
         if (reminder.time) {
           const [hours, minutes] = reminder.time.split(':').map(Number);
-          next.setHours(hours, minutes, 0, 0);
+          const reminderTimeUtc = createDateInUserTimezone(actualYear, actualMonth, actualDay, hours, minutes, userTimezone);
+          const oneMinuteAgo = new Date(userLocalTime.date.getTime() - 60 * 1000);
+          if (reminderTimeUtc < oneMinuteAgo) {
+            return null; // Already passed
+          }
+          return reminderTimeUtc;
         } else {
           // Default to 9am if no time specified
-          next.setHours(9, 0, 0, 0);
+          return createDateInUserTimezone(actualYear, actualMonth, actualDay, 9, 0, userTimezone);
         }
-        next.setSeconds(0, 0);
-        // If calculated time is in the past, it means daysFromNow was relative to creation, not now
-        // For "once" reminders with daysFromNow, we should only fire if it's today or future
-        const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
-        if (next < oneMinuteAgo) {
-          return null; // Already passed
-        }
-        return next;
       } else if (reminder.dayOfMonth && reminder.month) {
         // This is for "once" reminders with specific date
-        const next = new Date(now.getFullYear(), reminder.month - 1, reminder.dayOfMonth);
+        let nextYear = userLocalTime.year;
+        let nextMonth = reminder.month - 1; // Convert 1-12 to 0-11
+        let nextDay = reminder.dayOfMonth;
+        
+        // Check if this year's date has passed
+        let checkHours = 9;
+        let checkMinutes = 0;
         if (reminder.time) {
-          const [hours, minutes] = reminder.time.split(':').map(Number);
-          next.setHours(hours, minutes, 0, 0);
+          const timeParts = reminder.time.split(':');
+          checkHours = timeParts[0] ? parseInt(timeParts[0], 10) : 9;
+          checkMinutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+        }
+        const thisYearDate = createDateInUserTimezone(nextYear, nextMonth, nextDay, checkHours, checkMinutes, userTimezone);
+        if (thisYearDate < userLocalTime.date) {
+          nextYear += 1;
+        }
+        
+        if (reminder.time) {
+          const timeParts = reminder.time.split(':');
+          const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+          const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+          return createDateInUserTimezone(nextYear, nextMonth, nextDay, hours, minutes, userTimezone);
         } else {
-          next.setHours(9, 0, 0, 0);
+          return createDateInUserTimezone(nextYear, nextMonth, nextDay, 9, 0, userTimezone);
         }
-        next.setSeconds(0, 0);
-        if (next < now) {
-          // If this year's date has passed, check next year
-          next.setFullYear(next.getFullYear() + 1);
-        }
-        return next;
       }
       return null; // Can't calculate
     } else if (reminder.frequency === 'daily') {
-      const next = new Date(now);
       if (reminder.time) {
-        const [hours, minutes] = reminder.time.split(':').map(Number);
+        const timeParts = reminder.time.split(':');
+        const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+        const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
         
-        // Set to today at the reminder time
-        next.setHours(hours, minutes, 0, 0);
-        next.setSeconds(0, 0);
-        next.setMilliseconds(0);
+        // Check if reminder time today has passed
+        const todayReminder = createDateInUserTimezone(userLocalTime.year, userLocalTime.month, userLocalTime.day, hours, minutes, userTimezone);
+        const currentMinute = new Date(userLocalTime.date);
+        currentMinute.setUTCSeconds(0, 0);
         
-        // Get minute boundaries for comparison
-        const reminderMinute = new Date(next);
-        reminderMinute.setSeconds(0, 0);
-        reminderMinute.setMilliseconds(0);
-        
-        const currentMinute = new Date(now);
-        currentMinute.setSeconds(0, 0);
-        currentMinute.setMilliseconds(0);
-        
-        // Compare minute boundaries (not exact times)
-        // If reminder minute is strictly before current minute, move to tomorrow
-        // If reminder minute equals current minute (same minute), keep it for today so we can notify
-        // Example: reminder at 4:24:00 PM, now is 4:24:05 PM -> both are in 4:24 minute, keep today
-        if (reminderMinute.getTime() < currentMinute.getTime()) {
-          // Reminder minute has passed (more than 1 minute ago), move to tomorrow
-          next.setDate(next.getDate() + 1);
+        if (todayReminder < currentMinute) {
+          // Reminder time today has passed, move to tomorrow
+          const tomorrow = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, userLocalTime.day + 1));
+          return createDateInUserTimezone(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth(), tomorrow.getUTCDate(), hours, minutes, userTimezone);
         }
-        // If reminderMinute >= currentMinute, it's today (could be now, same minute, or in the future)
+        return todayReminder;
       } else {
         // No time specified, default to tomorrow at 9am
-        next.setDate(next.getDate() + 1);
-        next.setHours(9, 0, 0, 0);
+        const tomorrow = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, userLocalTime.day + 1));
+        return createDateInUserTimezone(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth(), tomorrow.getUTCDate(), 9, 0, userTimezone);
       }
-      return next;
     } else if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
-      return getNextWeeklyOccurrence(now, reminder.daysOfWeek[0], reminder.time);
+      return getNextWeeklyOccurrence(userLocalTime, reminder.daysOfWeek[0], reminder.time || undefined, userTimezone);
     } else if (reminder.frequency === 'monthly' && reminder.dayOfMonth) {
-      const next = new Date(now);
-      next.setDate(reminder.dayOfMonth);
+      let nextYear = userLocalTime.year;
+      let nextMonth = userLocalTime.month;
+      let nextDay = reminder.dayOfMonth;
+      
+      // Check if this month's date has passed
+      let checkHours = 9;
+      let checkMinutes = 0;
       if (reminder.time) {
-        const [hours, minutes] = reminder.time.split(':').map(Number);
-        next.setHours(hours, minutes, 0, 0);
-      } else {
-        next.setHours(9, 0, 0, 0);
+        const timeParts = reminder.time.split(':');
+        checkHours = timeParts[0] ? parseInt(timeParts[0], 10) : 9;
+        checkMinutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
       }
-      next.setSeconds(0, 0);
-      if (next <= now) {
-        next.setMonth(next.getMonth() + 1);
-        // Handle month overflow (e.g., Jan 31 -> Feb 31 becomes Mar 3)
-        if (next.getDate() !== reminder.dayOfMonth) {
-          // Day doesn't exist in next month, set to last day of that month
-          next.setDate(0); // Goes to last day of previous month
+      const thisMonthDate = createDateInUserTimezone(nextYear, nextMonth, nextDay, checkHours, checkMinutes, userTimezone);
+      if (thisMonthDate <= userLocalTime.date) {
+        // Move to next month
+        nextMonth += 1;
+        if (nextMonth > 11) {
+          nextMonth = 0;
+          nextYear += 1;
+        }
+        // Handle day overflow (e.g., Jan 31 -> Feb doesn't have 31st)
+        const lastDayOfMonth = new Date(Date.UTC(nextYear, nextMonth + 1, 0)).getUTCDate();
+        nextDay = Math.min(reminder.dayOfMonth, lastDayOfMonth);
+      }
+      
+      if (reminder.time) {
+        const timeParts = reminder.time.split(':');
+        const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+        const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+        return createDateInUserTimezone(nextYear, nextMonth, nextDay, hours, minutes, userTimezone);
+      } else {
+        return createDateInUserTimezone(nextYear, nextMonth, nextDay, 9, 0, userTimezone);
+      }
+    } else if (reminder.frequency === 'yearly' && reminder.dayOfMonth && reminder.month) {
+      let nextYear = userLocalTime.year;
+      const nextMonth = reminder.month - 1; // Convert 1-12 to 0-11
+      let nextDay = reminder.dayOfMonth;
+      
+      // Check if this year's date has passed
+      let checkHours = 9;
+      let checkMinutes = 0;
+      if (reminder.time) {
+        const timeParts = reminder.time.split(':');
+        checkHours = timeParts[0] ? parseInt(timeParts[0], 10) : 9;
+        checkMinutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+      }
+      const thisYearDate = createDateInUserTimezone(nextYear, nextMonth, nextDay, checkHours, checkMinutes, userTimezone);
+      if (thisYearDate < userLocalTime.date) {
+        nextYear += 1;
+        // Recalculate day for next year (handle leap years)
+        const lastDayOfMonth = new Date(Date.UTC(nextYear, nextMonth + 1, 0)).getUTCDate();
+        nextDay = Math.min(reminder.dayOfMonth, lastDayOfMonth);
+      }
+      
+      if (reminder.time) {
+        const timeParts = reminder.time.split(':');
+        const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+        const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+        return createDateInUserTimezone(nextYear, nextMonth, nextDay, hours, minutes, userTimezone);
+      } else {
+        return createDateInUserTimezone(nextYear, nextMonth, nextDay, 9, 0, userTimezone);
+      }
+    } else if (reminder.frequency === 'hourly' && reminder.minuteOfHour !== undefined && reminder.minuteOfHour !== null) {
+      let nextYear = userLocalTime.year;
+      let nextMonth = userLocalTime.month;
+      let nextDay = userLocalTime.day;
+      let nextHour = userLocalTime.hours;
+      const nextMinute = reminder.minuteOfHour;
+      
+      // Check if this hour's minute has passed
+      if (userLocalTime.minutes >= nextMinute) {
+        // Move to next hour
+        nextHour += 1;
+        if (nextHour >= 24) {
+          nextHour = 0;
+          nextDay += 1;
+          // Handle day overflow
+          const daysInMonth = new Date(Date.UTC(nextYear, nextMonth + 1, 0)).getUTCDate();
+          if (nextDay > daysInMonth) {
+            nextDay = 1;
+            nextMonth += 1;
+            if (nextMonth > 11) {
+              nextMonth = 0;
+              nextYear += 1;
+            }
+          }
         }
       }
-      return next;
-    } else if (reminder.frequency === 'yearly' && reminder.dayOfMonth && reminder.month) {
-      const next = new Date(now.getFullYear(), reminder.month - 1, reminder.dayOfMonth);
-      if (reminder.time) {
-        const [hours, minutes] = reminder.time.split(':').map(Number);
-        next.setHours(hours, minutes, 0, 0);
-      } else {
-        next.setHours(9, 0, 0, 0);
+      
+      return createDateInUserTimezone(nextYear, nextMonth, nextDay, nextHour, nextMinute, userTimezone);
+    } else if (reminder.frequency === 'minutely' && reminder.intervalMinutes !== undefined && reminder.intervalMinutes !== null) {
+      const interval = reminder.intervalMinutes;
+      const currentMinutes = userLocalTime.hours * 60 + userLocalTime.minutes;
+      const nextMinutes = currentMinutes + interval;
+      
+      let nextYear = userLocalTime.year;
+      let nextMonth = userLocalTime.month;
+      let nextDay = userLocalTime.day;
+      let nextHour = Math.floor(nextMinutes / 60);
+      const nextMinute = nextMinutes % 60;
+      
+      // Handle hour/day overflow
+      if (nextHour >= 24) {
+        nextHour = nextHour % 24;
+        nextDay += 1;
+        const daysInMonth = new Date(Date.UTC(nextYear, nextMonth + 1, 0)).getUTCDate();
+        if (nextDay > daysInMonth) {
+          nextDay = 1;
+          nextMonth += 1;
+          if (nextMonth > 11) {
+            nextMonth = 0;
+            nextYear += 1;
+          }
+        }
       }
-      next.setSeconds(0, 0);
-      if (next < now) {
-        next.setFullYear(next.getFullYear() + 1);
-      }
-      return next;
-    } else if (reminder.frequency === 'hourly' && reminder.minuteOfHour !== undefined) {
-      const next = new Date(now);
-      next.setMinutes(reminder.minuteOfHour, 0, 0);
-      next.setSeconds(0, 0);
-      if (next <= now) {
-        next.setHours(next.getHours() + 1);
-      }
-      return next;
-    } else if (reminder.frequency === 'minutely' && reminder.intervalMinutes) {
-      const next = new Date(now);
-      next.setMinutes(next.getMinutes() + reminder.intervalMinutes, 0, 0);
-      next.setSeconds(0, 0);
-      return next;
+      
+      return createDateInUserTimezone(nextYear, nextMonth, nextDay, nextHour, nextMinute, userTimezone);
     }
 
     return null;
@@ -411,69 +970,113 @@ function calculateReminderTime(reminder: any, now: Date): Date | null {
 /**
  * Calculate next occurrence of a reminder (the actual reminder time)
  */
-function calculateNextOccurrence(reminder: any, now: Date): Date | null {
-  return calculateReminderTime(reminder, now);
+function calculateNextOccurrence(reminder: any, userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date }, userTimezone: string): Date | null {
+  return calculateReminderTime(reminder, userLocalTime, userTimezone);
 }
 
 /**
  * Get next weekly occurrence
  */
-function getNextWeeklyOccurrence(now: Date, dayOfWeek: number, time?: string): Date {
-  const next = new Date(now);
-  const currentDay = next.getDay();
-  let daysUntilNext = dayOfWeek - currentDay;
+function getNextWeeklyOccurrence(userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date }, dayOfWeek: number, time: string | undefined, userTimezone: string): Date {
+  // Get current day of week (0=Sunday, 1=Monday, ..., 6=Saturday)
+  // We need to calculate this from the user's local time
+  const currentDate = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, userLocalTime.day));
+  const currentDayOfWeek = currentDate.getUTCDay();
+  
+  let daysUntilNext = dayOfWeek - currentDayOfWeek;
   
   if (daysUntilNext < 0) {
     daysUntilNext += 7;
   } else if (daysUntilNext === 0) {
     // Same day - check if time has passed
     if (time) {
-      const [hours, minutes] = time.split(':').map(Number);
-      const todayAtTime = new Date(next);
-      todayAtTime.setHours(hours, minutes, 0, 0);
-      todayAtTime.setSeconds(0, 0);
-      if (todayAtTime <= now) {
+      const timeParts = time.split(':');
+      const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+      const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+      const todayAtTime = createDateInUserTimezone(userLocalTime.year, userLocalTime.month, userLocalTime.day, hours, minutes, userTimezone);
+      if (todayAtTime <= userLocalTime.date) {
         daysUntilNext = 7; // Next week
+      } else {
+        return todayAtTime; // Today, same day
       }
     } else {
       // No time specified, default to 9am
-      const todayAtTime = new Date(next);
-      todayAtTime.setHours(9, 0, 0, 0);
-      if (todayAtTime <= now) {
+      const todayAtTime = createDateInUserTimezone(userLocalTime.year, userLocalTime.month, userLocalTime.day, 9, 0, userTimezone);
+      if (todayAtTime <= userLocalTime.date) {
         daysUntilNext = 7; // Next week
+      } else {
+        return todayAtTime; // Today, same day
       }
     }
   }
   
-  next.setDate(next.getDate() + daysUntilNext);
+  // Calculate the next occurrence date
+  const nextDate = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, userLocalTime.day + daysUntilNext));
+  const nextYear = nextDate.getUTCFullYear();
+  const nextMonth = nextDate.getUTCMonth();
+  const nextDay = nextDate.getUTCDate();
   
   if (time) {
-    const [hours, minutes] = time.split(':').map(Number);
-    next.setHours(hours, minutes, 0, 0);
+    const timeParts = time.split(':');
+    const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+    const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+        return createDateInUserTimezone(nextYear, nextMonth, nextDay, hours, minutes, userTimezone);
   } else {
-    next.setHours(9, 0, 0, 0); // Default to 9am
+    return createDateInUserTimezone(nextYear, nextMonth, nextDay, 9, 0, userTimezone); // Default to 9am
   }
-  next.setSeconds(0, 0);
-  
-  return next;
 }
 
 /**
  * Format time string to 12-hour format
  */
 function formatTime(timeStr: string): string {
-  const [hours, minutes] = timeStr.split(':').map(Number);
+  const timeParts = timeStr.split(':');
+  const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+  const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
   const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
   const period = hours >= 12 ? 'PM' : 'AM';
   return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
 }
 
 /**
- * Format a Date object to a readable time string
+ * Format reminder time from local time components
+ */
+function formatReminderTimeFromComponents(localTime: { year: number; month: number; day: number; hours: number; minutes: number; date: Date }, currentUtc: Date, userUtcOffset?: string): string {
+  const hours = localTime.hours;
+  const minutes = localTime.minutes;
+  const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  
+  // Check if it's today in user's timezone
+  let isToday = false;
+  if (userUtcOffset) {
+    const currentLocalTime = getLocalTimeComponents(currentUtc, userUtcOffset);
+    isToday = localTime.year === currentLocalTime.year &&
+               localTime.month === currentLocalTime.month &&
+               localTime.day === currentLocalTime.day;
+  }
+  
+  if (isToday) {
+    return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+  } else {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Calculate day of week from the date components
+    const dateObj = new Date(Date.UTC(localTime.year, localTime.month, localTime.day));
+    const dayName = dayNames[dateObj.getUTCDay()];
+    const monthName = monthNames[localTime.month];
+    const day = localTime.day;
+    return `${dayName}, ${monthName} ${day} at ${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+  }
+}
+
+/**
+ * Format a Date object to a readable time string (for backward compatibility)
  */
 function formatReminderTime(date: Date): string {
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
+  // This is a fallback - should use formatReminderTimeFromComponents instead
+  const hours = date.getUTCHours();
+  const minutes = date.getUTCMinutes();
   const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
   const period = hours >= 12 ? 'PM' : 'AM';
   return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
@@ -513,6 +1116,45 @@ function formatReminderDate(date: Date): string {
     month: 'short',
     day: 'numeric',
   });
+}
+
+/**
+ * Get relative time until a date (e.g., "in 2 hours", "in 3 days", "now")
+ */
+function getRelativeTimeUntil(targetDate: Date, currentDate: Date): string {
+  const timeMs = targetDate.getTime() - currentDate.getTime();
+  
+  if (timeMs < 0) {
+    return 'Already passed';
+  }
+  
+  if (timeMs < 60000) { // Less than 1 minute
+    return 'now';
+  }
+  
+  const totalSeconds = Math.floor(timeMs / 1000);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(totalHours / 24);
+  
+  const hours = totalHours % 24;
+  const minutes = totalMinutes % 60;
+  
+  if (days > 0) {
+    if (hours === 0) {
+      return `in ${days} ${days === 1 ? 'day' : 'days'}`;
+    }
+    return `in ${days} ${days === 1 ? 'day' : 'days'} and ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  }
+  
+  if (totalHours > 0) {
+    if (minutes === 0) {
+      return `in ${totalHours} ${totalHours === 1 ? 'hour' : 'hours'}`;
+    }
+    return `in ${totalHours} ${totalHours === 1 ? 'hour' : 'hours'} and ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  }
+  
+  return `in ${totalMinutes} ${totalMinutes === 1 ? 'minute' : 'minutes'}`;
 }
 
 /**

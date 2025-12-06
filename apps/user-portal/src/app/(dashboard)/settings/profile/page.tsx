@@ -35,6 +35,8 @@ const profileSchema = z.object({
   ageGroup: z.enum(["18-25", "26-35", "36-45", "46 and over"]),
   gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
   birthday: z.date().optional(),
+  timezone: z.string().min(1, "Timezone is required"),
+  utcOffset: z.string().min(1, "UTC offset is required"),
 });
 
 export default function ProfilePage() {
@@ -46,6 +48,7 @@ export default function ProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);
   const [originalPhone, setOriginalPhone] = useState<string>("");
+  const [timezones, setTimezones] = useState<string[]>([]);
 
   // Fetch current user data
   const { data: user, isLoading, error } = useQuery(
@@ -64,6 +67,8 @@ export default function ProfilePage() {
       ageGroup: "26-35" as const,
       gender: undefined,
       birthday: undefined,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      utcOffset: "",
     },
   });
 
@@ -85,6 +90,50 @@ export default function ProfilePage() {
   const lastName = watch("lastName");
   const phone = watch("phone");
   const company = watch("company");
+  const timezone = watch("timezone");
+
+  // Fetch timezone list on mount
+  useEffect(() => {
+    const fetchTimezones = async () => {
+      try {
+        const response = await fetch("https://worldtimeapi.org/api/timezone");
+        if (response.ok) {
+          const data = await response.json();
+          setTimezones(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch timezones:", error);
+      }
+    };
+    fetchTimezones();
+  }, []);
+
+  // Fetch UTC offset when timezone changes
+  useEffect(() => {
+    if (timezone && timezone !== user?.timezone) {
+      // Only fetch if timezone actually changed from the user's current timezone
+      const fetchUtcOffset = async () => {
+        try {
+          const queryOpts = trpc.user.getTimezoneDetails.queryOptions({ timezone });
+          const result = await queryClient.fetchQuery(queryOpts);
+          if (result.utcOffset) {
+            console.log("Setting utcOffset to:", result.utcOffset, "for timezone:", timezone);
+            setValue("utcOffset", result.utcOffset, { shouldValidate: true, shouldDirty: true });
+          } else {
+            console.warn("No utcOffset returned for timezone:", timezone);
+          }
+        } catch (error) {
+          console.error("Failed to fetch UTC offset:", error);
+          toast({
+            title: "Failed to fetch timezone offset",
+            description: "Please try selecting the timezone again.",
+            variant: "destructive",
+          });
+        }
+      };
+      fetchUtcOffset();
+    }
+  }, [timezone, trpc, queryClient, setValue, user?.timezone, toast]);
 
   // Update form when user data is loaded
   useEffect(() => {
@@ -105,9 +154,27 @@ export default function ProfilePage() {
         ageGroup: ageGroupValue,
         gender: genderValue,
         birthday: user.birthday ? new Date(user.birthday) : undefined,
+        timezone: user.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        utcOffset: user.utcOffset || "",
       };
 
       reset(formData, { keepDefaultValues: false });
+
+      // If timezone is set but utcOffset is missing, fetch it
+      if (formData.timezone && !formData.utcOffset) {
+        const fetchUtcOffset = async () => {
+          try {
+            const queryOpts = trpc.user.getTimezoneDetails.queryOptions({ timezone: formData.timezone });
+            const result = await queryClient.fetchQuery(queryOpts);
+            if (result.utcOffset) {
+              setValue("utcOffset", result.utcOffset, { shouldValidate: true, shouldDirty: true });
+            }
+          } catch (error) {
+            console.error("Failed to fetch UTC offset for initial load:", error);
+          }
+        };
+        fetchUtcOffset();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -159,6 +226,23 @@ export default function ProfilePage() {
   );
 
   function onSubmit(values: z.infer<typeof profileSchema>) {
+    console.log("Submitting profile with values:", {
+      timezone: values.timezone,
+      utcOffset: values.utcOffset,
+      ...values,
+    });
+
+    // Ensure utcOffset is set if timezone is set
+    if (values.timezone && !values.utcOffset) {
+      toast({
+        title: "Missing UTC Offset",
+        description: "Please wait for the timezone offset to load, or try selecting the timezone again.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(true);
     updateProfileMutation.mutate(values);
   }
@@ -404,6 +488,59 @@ export default function ProfilePage() {
                   </PopoverContent>
                 </Popover>
               </div>
+            </div>
+
+            {/* Timezone */}
+            <div>
+              <Label htmlFor="timezone">Timezone *</Label>
+              <Select
+                key={`timezone-${timezone || 'empty'}`}
+                value={timezone || ""}
+                onValueChange={async (value) => {
+                  setValue("timezone", value, { shouldValidate: true, shouldDirty: true });
+                  // Immediately fetch UTC offset when timezone changes
+                  try {
+                    const queryOpts = trpc.user.getTimezoneDetails.queryOptions({ timezone: value });
+                    const result = await queryClient.fetchQuery(queryOpts);
+                    if (result.utcOffset) {
+                      console.log("Timezone changed to:", value, "Setting utcOffset to:", result.utcOffset);
+                      setValue("utcOffset", result.utcOffset, { shouldValidate: true, shouldDirty: true });
+                    } else {
+                      console.warn("No utcOffset returned for timezone:", value);
+                    }
+                  } catch (error) {
+                    console.error("Failed to fetch UTC offset:", error);
+                    toast({
+                      title: "Failed to fetch timezone offset",
+                      description: "Please try selecting the timezone again.",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+              >
+                <SelectTrigger className={errors.timezone ? "border-red-500" : ""}>
+                  <SelectValue placeholder="Select timezone" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {timezones.length > 0 ? (
+                    timezones.map((tz) => (
+                      <SelectItem key={tz} value={tz}>
+                        {tz.replace(/_/g, " ")}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value={timezone || ""} disabled>
+                      {timezone || "Loading timezones..."}
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {errors.timezone && (
+                <p className="text-sm text-red-500 mt-1">{errors.timezone.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Your timezone helps us schedule events at the right time
+              </p>
             </div>
           </CardContent>
         </Card>

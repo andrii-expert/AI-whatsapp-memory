@@ -1,5 +1,6 @@
+import { z } from "zod";
 import { updateUserSchema } from "@api/schemas/users";
-import { createTRPCRouter, protectedProcedure } from "@api/trpc/init";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "@api/trpc/init";
 import {
   deleteUser,
   getUserById,
@@ -14,11 +15,24 @@ export const userRouter = createTRPCRouter({
   update: protectedProcedure
     .input(updateUserSchema)
     .mutation(async ({ ctx: { db, session }, input }) => {
-      // If phone is being updated, mark it as unverified
-      const updateData = {
-        ...input,
-        ...(input.phone && { phoneVerified: false }),
-      };
+      // Only mark phone as unverified if the phone number actually changed
+      let updateData = { ...input };
+      
+      if (input.phone) {
+        // Get current user to compare phone numbers
+        const currentUser = await getUserById(db, session.user.id);
+        const currentPhone = currentUser?.phone;
+        
+        // Only set phoneVerified to false if the phone number actually changed
+        if (currentPhone !== input.phone) {
+          updateData = {
+            ...updateData,
+            phoneVerified: false,
+          };
+        }
+        // If phone didn't change, don't modify phoneVerified - keep existing value
+      }
+      
       return updateUser(db, session.user.id, updateData);
     }),
 
@@ -32,4 +46,48 @@ export const userRouter = createTRPCRouter({
 
     return data;
   }),
+
+  // Detect timezone from IP address
+  detectTimezone: publicProcedure.query(async () => {
+    try {
+      const response = await fetch("https://worldtimeapi.org/api/ip");
+      if (!response.ok) {
+        throw new Error("Failed to detect timezone");
+      }
+      const data = await response.json();
+      return {
+        timezone: data.timezone || null,
+        utcOffset: data.utc_offset || null,
+      };
+    } catch (error) {
+      console.error("Error detecting timezone:", error);
+      return {
+        timezone: null,
+        utcOffset: null,
+      };
+    }
+  }),
+
+  // Get timezone details for a specific timezone
+  getTimezoneDetails: publicProcedure
+    .input(z.object({ timezone: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const response = await fetch(`https://worldtimeapi.org/api/timezone/${input.timezone}`);
+        if (!response.ok) {
+          throw new Error("Failed to get timezone details");
+        }
+        const data = await response.json();
+        return {
+          timezone: data.timezone || null,
+          utcOffset: data.utc_offset || null,
+        };
+      } catch (error) {
+        console.error("Error getting timezone details:", error);
+        return {
+          timezone: null,
+          utcOffset: null,
+        };
+      }
+    }),
 });

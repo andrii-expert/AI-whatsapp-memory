@@ -185,10 +185,18 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('List reminders:')) {
       action = 'list';
       resourceType = 'reminder';
-      // Match: "List reminders: {all|active|paused}"
+      // Match: "List reminders: {all|active|paused|today|tomorrow|this week|this month}"
       const match = trimmed.match(/^List reminders:\s*(.+)$/i);
       if (match) {
-        status = match[1].trim();
+        const filterText = match[1].trim().toLowerCase();
+        // Check if it's a status filter
+        if (filterText === 'active' || filterText === 'paused' || filterText === 'all') {
+          status = filterText;
+        } else {
+          // It's a time-based filter (today, tomorrow, etc.)
+          listFilter = filterText;
+          status = 'all'; // Default status when using time filter
+        }
       } else {
         status = 'all'; // Default to all
       }
@@ -327,7 +335,10 @@ export class ActionExecutor {
           } else if (parsed.resourceType === 'note') {
             return await this.listNotes(parsed);
           } else if (parsed.resourceType === 'reminder') {
-            return await this.listReminders(parsed);
+            // Get user timezone for reminder filtering
+            const user = await getUserById(this.db, this.userId);
+            const userTimezone = (user as any)?.timezone;
+            return await this.listReminders(parsed, userTimezone);
           } else if (parsed.resourceType === 'event') {
             return await this.listEvents(parsed);
           }
@@ -434,9 +445,10 @@ export class ActionExecutor {
         status: 'open',
       });
 
+      const folderName = parsed.folderRoute || 'General';
       return {
         success: true,
-        message: `✅ Task "${parsed.taskName}" has been created successfully in the "${parsed.folderRoute || 'General'}" folder.`,
+        message: `✅ *New Task created:*\n"${parsed.taskName}"`,
       };
     } catch (error) {
       logger.error({ error, taskName: parsed.taskName, userId: this.userId }, 'Failed to create task');
@@ -463,7 +475,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ Folder "${parsed.folderRoute}" has been created successfully.`,
+        message: `📁 *New Notes Folder created:*\n"${parsed.folderRoute}"`,
       };
     } catch (error) {
       logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create folder');
@@ -659,7 +671,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ Task "${parsed.taskName}" has been updated successfully.`,
+        message: `✏️ *Task updated:*\n"${parsed.newName === 'unspecified' ? parsed.taskName : parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to update task');
@@ -698,7 +710,7 @@ export class ActionExecutor {
       await deleteTask(this.db, task.id, this.userId);
       return {
         success: true,
-        message: `✅ Task "${parsed.taskName}" has been deleted successfully.`,
+        message: `🗑️ *Task deleted:*\n"${parsed.taskName}"`,
       };
     } catch (error) {
       logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to delete task');
@@ -737,7 +749,7 @@ export class ActionExecutor {
       await toggleTaskStatus(this.db, task.id, this.userId);
       return {
         success: true,
-        message: `✅ Task "${parsed.taskName}" has been marked as completed.`,
+        message: `✅ *Task completed:*\n"${parsed.taskName}"`,
       };
     } catch (error) {
       logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to complete task');
@@ -918,7 +930,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ Subfolder "${parsed.newName}" has been created successfully in the "${parsed.folderRoute}" folder.`,
+        message: `📁 *New Notes Folder created:*\n"${parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, parentFolderId, subfolderName: parsed.newName, userId: this.userId }, 'Failed to create subfolder');
@@ -951,17 +963,17 @@ export class ActionExecutor {
         const statusText = statusFilter ? ` (${statusFilter})` : '';
         return {
           success: true,
-          message: `📋 You have no tasks${folderText}${statusText}.`,
+          message: `📋 *You have no tasks${folderText}${statusText}:*\n"None"`,
         };
       }
 
       const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
       const statusText = statusFilter ? ` (${statusFilter})` : '';
-      let message = `📋 Your tasks${folderText}${statusText}:\n\n`;
+      let message = `📋 *Your tasks${folderText}${statusText}:*\n`;
       
       tasks.slice(0, 20).forEach((task, index) => {
         const statusIcon = task.status === 'completed' ? '✅' : '⏳';
-        message += `${index + 1}. ${statusIcon} ${task.title}\n`;
+        message += `${index + 1}. ${statusIcon} "${task.title}"\n`;
       });
 
       if (tasks.length > 20) {
@@ -1000,16 +1012,16 @@ export class ActionExecutor {
         const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
         return {
           success: true,
-          message: `📝 You have no notes${folderText}.`,
+          message: `📝 *You have no notes${folderText}:*\n"None"`,
         };
       }
 
       const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
-      let message = `📝 Your notes${folderText}:\n\n`;
+      let message = `📝 *Your notes${folderText}:*\n`;
       
       notes.slice(0, 20).forEach((note, index) => {
         const contentPreview = note.content ? (note.content.length > 50 ? note.content.substring(0, 50) + '...' : note.content) : '(no content)';
-        message += `${index + 1}. ${note.title}\n   ${contentPreview}\n`;
+        message += `${index + 1}. "${note.title}"\n   ${contentPreview}\n`;
       });
 
       if (notes.length > 20) {
@@ -1029,7 +1041,7 @@ export class ActionExecutor {
     }
   }
 
-  private async listReminders(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+  private async listReminders(parsed: ParsedAction, userTimezone?: string): Promise<{ success: boolean; message: string }> {
     try {
       const reminders = await getRemindersByUserId(this.db, this.userId);
 
@@ -1040,25 +1052,180 @@ export class ActionExecutor {
         filteredReminders = reminders.filter(r => r.active === isActive);
       }
 
+      // Filter by time if specified (today, tomorrow, this week, this month)
+      if (parsed.listFilter && userTimezone) {
+        const timeFilter = parsed.listFilter.toLowerCase().trim();
+        const now = new Date();
+        
+        // Get user's local time components using Intl.DateTimeFormat for reliable parsing
+        const dateFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+          hour12: false
+        });
+        
+        const timeFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+          hour12: false
+        });
+        
+        const dateParts = dateFormatter.formatToParts(now);
+        const timeParts = timeFormatter.formatToParts(now);
+        
+        const userLocalTime = {
+          year: parseInt(dateParts.find(p => p.type === 'year')?.value || '0', 10),
+          month: parseInt(dateParts.find(p => p.type === 'month')?.value || '0', 10) - 1, // Month is 0-indexed
+          day: parseInt(dateParts.find(p => p.type === 'day')?.value || '0', 10),
+          hours: parseInt(timeParts.find(p => p.type === 'hour')?.value || '0', 10),
+          minutes: parseInt(timeParts.find(p => p.type === 'minute')?.value || '0', 10),
+          seconds: parseInt(timeParts.find(p => p.type === 'second')?.value || '0', 10),
+          date: new Date(),
+        };
+
+        // Log for debugging
+        logger.info({
+          userId: this.userId,
+          timeFilter,
+          parsedListFilter: parsed.listFilter,
+          userTimezone,
+          userLocalTime,
+          reminderCountBeforeFilter: filteredReminders.length,
+        }, 'Filtering reminders by time');
+
+        filteredReminders = filteredReminders.filter(reminder => {
+          if (!reminder.active) return false;
+          
+          if (timeFilter === 'today' || timeFilter.includes('today')) {
+            // For "today" filter, check if reminder is scheduled for today
+            const isToday = this.isReminderScheduledForDate(reminder, userLocalTime, userTimezone);
+            if (!isToday) {
+              // Log why reminder was filtered out
+              logger.info({
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                reason: 'Next occurrence is not today',
+              }, 'Reminder filtered out for today');
+            }
+            return isToday;
+          }
+          
+          // For other filters, use next occurrence
+          // Calculate next occurrence for this reminder
+          const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+          if (!nextTime) return false;
+
+          // Convert nextTime to user's timezone for comparison
+          const nextTimeInUserTz = new Date(nextTime.toLocaleString("en-US", { timeZone: userTimezone }));
+          const nextYear = nextTimeInUserTz.getFullYear();
+          const nextMonth = nextTimeInUserTz.getMonth();
+          const nextDay = nextTimeInUserTz.getDate();
+          
+          if (timeFilter === 'tomorrow' || timeFilter.includes('tomorrow')) {
+            const tomorrow = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day + 1);
+            return nextYear === tomorrow.getFullYear() && 
+                   nextMonth === tomorrow.getMonth() && 
+                   nextDay === tomorrow.getDate();
+          } else if (timeFilter.includes('this week') || timeFilter.includes('week')) {
+            const weekStart = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day);
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week (Sunday)
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6); // End of week (Saturday)
+            const nextDate = new Date(nextYear, nextMonth, nextDay);
+            return nextDate >= weekStart && nextDate <= weekEnd;
+          } else if (timeFilter.includes('this month') || timeFilter.includes('month')) {
+            return nextYear === userLocalTime.year && nextMonth === userLocalTime.month;
+          } else if (timeFilter.includes('next week')) {
+            const nextWeekStart = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day);
+            nextWeekStart.setDate(nextWeekStart.getDate() - nextWeekStart.getDay() + 7); // Start of next week
+            const nextWeekEnd = new Date(nextWeekStart);
+            nextWeekEnd.setDate(nextWeekEnd.getDate() + 6); // End of next week
+            const nextDate = new Date(nextYear, nextMonth, nextDay);
+            return nextDate >= nextWeekStart && nextDate <= nextWeekEnd;
+          }
+          
+          // If filter doesn't match known patterns, don't show any (filter is unknown)
+          logger.warn({ timeFilter, userId: this.userId }, 'Unknown time filter, filtering out all reminders');
+          return false;
+        });
+      }
+
+      // Log filtered results
+      logger.info({
+        userId: this.userId,
+        timeFilter: parsed.listFilter,
+        reminderCountAfterFilter: filteredReminders.length,
+        reminderCountBeforeFilter: reminders.length,
+      }, 'Reminder filtering complete');
+
       if (filteredReminders.length === 0) {
         const statusText = parsed.status && parsed.status !== 'all' ? ` (${parsed.status})` : '';
+        const timeText = parsed.listFilter ? ` for ${parsed.listFilter}` : '';
         return {
           success: true,
-          message: `🔔 You have no reminders${statusText}.`,
+          message: `🔔 *You have no reminders${statusText}${timeText}:*\n"None"`,
         };
       }
 
+      // Sort reminders by next occurrence time (if timezone is available)
+      let remindersWithNextTime: Array<{ reminder: any; nextTime: Date }>;
+      if (userTimezone) {
+        const now = new Date();
+        const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
+        const userLocalTimeDate = new Date(userTimeString);
+        const userLocalTime = {
+          year: userLocalTimeDate.getFullYear(),
+          month: userLocalTimeDate.getMonth(),
+          day: userLocalTimeDate.getDate(),
+          hours: userLocalTimeDate.getHours(),
+          minutes: userLocalTimeDate.getMinutes(),
+          seconds: userLocalTimeDate.getSeconds(),
+          date: userLocalTimeDate,
+        };
+        remindersWithNextTime = filteredReminders.map(reminder => {
+          const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+          return { reminder, nextTime: nextTime || new Date(0) };
+        }).sort((a, b) => a.nextTime.getTime() - b.nextTime.getTime());
+      } else {
+        // If no timezone, just use reminders as-is without sorting by time
+        remindersWithNextTime = filteredReminders.map(reminder => ({ reminder, nextTime: new Date(0) }));
+      }
+
       const statusText = parsed.status && parsed.status !== 'all' ? ` (${parsed.status})` : '';
-      let message = `🔔 Your reminders${statusText}:\n\n`;
+      const timeText = parsed.listFilter ? ` for ${parsed.listFilter}` : '';
+      let message = `🔔 *Your reminders${statusText}${timeText}:*\n`;
       
-      filteredReminders.slice(0, 20).forEach((reminder, index) => {
+      remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
         const statusIcon = reminder.active ? '🔔' : '⏸️';
-        const scheduleText = reminder.frequency ? ` (${reminder.frequency})` : '';
-        message += `${index + 1}. ${statusIcon} ${reminder.title}${scheduleText}\n`;
+        
+        // Format next time in user's timezone
+        let timeDisplay = '';
+        if (nextTime && nextTime.getTime() > 0 && userTimezone) {
+          const nextTimeInUserTz = new Date(nextTime.toLocaleString("en-US", { timeZone: userTimezone }));
+          const hours = nextTimeInUserTz.getHours();
+          const minutes = nextTimeInUserTz.getMinutes();
+          const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const dateStr = nextTimeInUserTz.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          });
+          timeDisplay = ` at ${hour12}:${String(minutes).padStart(2, '0')} ${period} on ${dateStr}`;
+        }
+        
+        message += `${index + 1}. ${statusIcon} "${reminder.title}${timeDisplay}"\n`;
       });
 
-      if (filteredReminders.length > 20) {
-        message += `\n... and ${filteredReminders.length - 20} more reminders.`;
+      if (remindersWithNextTime.length > 20) {
+        message += `\n... and ${remindersWithNextTime.length - 20} more reminders.`;
       }
 
       return {
@@ -1072,6 +1239,214 @@ export class ActionExecutor {
         message: "I'm sorry, I couldn't retrieve your reminders. Please try again.",
       };
     }
+  }
+
+  /**
+   * Check if a reminder's next occurrence is on a specific date
+   * This uses the actual next occurrence time, not just pattern matching
+   */
+  private isReminderScheduledForDate(
+    reminder: any,
+    userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date },
+    userTimezone: string
+  ): boolean {
+    try {
+      // Calculate the actual next occurrence time for this reminder
+      const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+      if (!nextTime) {
+        return false;
+      }
+
+      // Convert next occurrence to user's timezone for comparison
+      // Use Intl.DateTimeFormat to get date components in user's timezone
+      const nextTimeFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: userTimezone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      
+      const nextTimeParts = nextTimeFormatter.formatToParts(nextTime);
+      const nextYear = parseInt(nextTimeParts.find(p => p.type === 'year')?.value || '0', 10);
+      const nextMonth = parseInt(nextTimeParts.find(p => p.type === 'month')?.value || '0', 10) - 1; // Month is 0-indexed
+      const nextDay = parseInt(nextTimeParts.find(p => p.type === 'day')?.value || '0', 10);
+
+      // Check if the next occurrence is today
+      const isToday = nextYear === userLocalTime.year &&
+                      nextMonth === userLocalTime.month &&
+                      nextDay === userLocalTime.day;
+
+      return isToday;
+    } catch (error) {
+      logger.error({ error, reminderId: reminder.id }, 'Error checking if reminder is scheduled for date');
+      return false;
+    }
+  }
+
+  /**
+   * Calculate the next occurrence time for a reminder in user's timezone
+   */
+  private calculateNextReminderTime(
+    reminder: any,
+    userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date },
+    userTimezone: string
+  ): Date | null {
+    // Reuse the logic from the cron job's calculateReminderTime function
+    // This is a simplified version that calculates the next occurrence
+    try {
+      if (reminder.frequency === 'daily' && reminder.time) {
+        const [hours, minutes] = reminder.time.split(':').map(Number);
+        const todayReminder = this.createDateInUserTimezone(userLocalTime.year, userLocalTime.month, userLocalTime.day, hours, minutes, userTimezone);
+        // If reminder time today has passed, use tomorrow
+        if (todayReminder.getTime() <= userLocalTime.date.getTime()) {
+          const tomorrow = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day + 1);
+          return this.createDateInUserTimezone(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), hours, minutes, userTimezone);
+        }
+        return todayReminder;
+      } else if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0 && reminder.time) {
+        const [hours, minutes] = reminder.time.split(':').map(Number);
+        const currentDayOfWeek = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day).getDay();
+        // Find the next occurrence day
+        const sortedDays = [...reminder.daysOfWeek].sort((a, b) => a - b);
+        let daysToAdd = 0;
+        for (const day of sortedDays) {
+          if (day > currentDayOfWeek) {
+            daysToAdd = day - currentDayOfWeek;
+            break;
+          }
+        }
+        // If no day found this week, use first day of next week
+        if (daysToAdd === 0) {
+          daysToAdd = 7 - currentDayOfWeek + sortedDays[0];
+        }
+        const targetDate = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day + daysToAdd);
+        const targetReminder = this.createDateInUserTimezone(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), hours, minutes, userTimezone);
+        // If today is one of the reminder days and time hasn't passed, use today
+        if (reminder.daysOfWeek.includes(currentDayOfWeek)) {
+          const todayReminder = this.createDateInUserTimezone(userLocalTime.year, userLocalTime.month, userLocalTime.day, hours, minutes, userTimezone);
+          if (todayReminder.getTime() > userLocalTime.date.getTime()) {
+            return todayReminder;
+          }
+        }
+        return targetReminder;
+      } else if (reminder.frequency === 'monthly' && reminder.dayOfMonth) {
+        const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
+        let targetYear = userLocalTime.year;
+        let targetMonth = userLocalTime.month;
+        let targetDay = Number(reminder.dayOfMonth);
+        if (targetDay < userLocalTime.day) {
+          targetMonth += 1;
+          if (targetMonth > 11) {
+            targetMonth = 0;
+            targetYear += 1;
+          }
+        }
+        return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+      } else if (reminder.frequency === 'yearly' && reminder.month && reminder.dayOfMonth) {
+        const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
+        let targetYear = userLocalTime.year;
+        const targetMonth = Number(reminder.month) - 1; // Convert 1-12 to 0-11
+        const targetDay = Number(reminder.dayOfMonth);
+        if (targetMonth < userLocalTime.month || (targetMonth === userLocalTime.month && targetDay < userLocalTime.day)) {
+          targetYear += 1;
+        }
+        return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+      } else if (reminder.frequency === 'once') {
+        if (reminder.targetDate) {
+          const target = new Date(reminder.targetDate);
+          const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
+          return this.createDateInUserTimezone(
+            target.getUTCFullYear(),
+            target.getUTCMonth(),
+            target.getUTCDate(),
+            hours,
+            minutes,
+            userTimezone
+          );
+        } else if (reminder.daysFromNow !== undefined) {
+          const targetDate = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day + reminder.daysFromNow);
+          const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
+          return this.createDateInUserTimezone(
+            targetDate.getFullYear(),
+            targetDate.getMonth(),
+            targetDate.getDate(),
+            hours,
+            minutes,
+            userTimezone
+          );
+        }
+      }
+      return null;
+    } catch (error) {
+      logger.error({ error, reminderId: reminder.id }, 'Error calculating next reminder time');
+      return null;
+    }
+  }
+
+  /**
+   * Create a Date object representing a time in the user's local timezone
+   */
+  private createDateInUserTimezone(
+    year: number,
+    month: number,
+    day: number,
+    hours: number,
+    minutes: number,
+    timezone: string
+  ): Date {
+    // Create a date string in ISO format
+    const isoString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+    
+    // Create a date as if the time is in UTC
+    let candidate = new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+    
+    // Check what this represents in the user's timezone
+    let candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
+    
+    // Get what we got
+    let gotYear = candidateInUserTz.getFullYear();
+    let gotMonth = candidateInUserTz.getMonth();
+    let gotDay = candidateInUserTz.getDate();
+    let gotHours = candidateInUserTz.getHours();
+    let gotMinutes = candidateInUserTz.getMinutes();
+    
+    // If it matches, we're done
+    if (gotYear === year && gotMonth === month && gotDay === day && gotHours === hours && gotMinutes === minutes) {
+      return candidate;
+    }
+    
+    // Calculate the offset needed
+    const targetMs = new Date(year, month, day, hours, minutes, 0, 0).getTime();
+    const gotMs = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
+    const diff = targetMs - gotMs;
+    
+    // Adjust candidate
+    candidate = new Date(candidate.getTime() + diff);
+    
+    // Verify one more time
+    candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
+    gotYear = candidateInUserTz.getFullYear();
+    gotMonth = candidateInUserTz.getMonth();
+    gotDay = candidateInUserTz.getDate();
+    gotHours = candidateInUserTz.getHours();
+    gotMinutes = candidateInUserTz.getMinutes();
+    
+    if (
+      gotYear === year &&
+      gotMonth === month &&
+      gotDay === day &&
+      gotHours === hours &&
+      gotMinutes === minutes
+    ) {
+      return candidate;
+    }
+    
+    // Final adjustment if needed
+    const targetMs2 = new Date(year, month, day, hours, minutes, 0, 0).getTime();
+    const gotMs2 = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
+    const diff2 = targetMs2 - gotMs2;
+    
+    return new Date(candidate.getTime() + diff2);
   }
 
   /**
@@ -1348,114 +1723,17 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: reminder.id, timezone }, 'Reminder created');
 
-      // Format response message with timezone-aware time display
-      let responseMessage = `🔔 Reminder "${reminder.title}" created successfully!`;
-      
-      if (reminder.time) {
-        // Format time in user's timezone
-        // Create a date representing today in UTC, then format it in the user's timezone
-        const timeParts = reminder.time.split(':');
+      // Format response message
+      const timeParts = reminder.time ? reminder.time.split(':') : null;
+      let timeInfo = '';
+      if (timeParts) {
         const hours = parseInt(timeParts[0] || '0', 10);
         const minutes = parseInt(timeParts[1] || '0', 10);
-        
-        // Create a date for today, then format the time portion in the user's timezone
-        // We'll use Intl.DateTimeFormat to format just the time
-        const tz = timezone || 'Africa/Johannesburg';
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: tz,
-        });
-        
-        // Create a date object for today at the specified time in UTC
-        // Then adjust it so when displayed in the user's timezone, it shows the correct time
-        const now = new Date();
-        const utcDate = new Date(Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate(),
-          hours,
-          minutes,
-          0
-        ));
-        
-        // Get what this UTC time would be in the user's timezone
-        const localTimeStr = utcDate.toLocaleString('en-US', { timeZone: tz, hour12: false });
-        const localTimeParts = localTimeStr.split(', ')[1]?.split(':') || [];
-        const localHours = parseInt(localTimeParts[0] || '0', 10);
-        const localMinutes = parseInt(localTimeParts[1] || '0', 10);
-        
-        // Calculate the offset
-        const offsetHours = hours - localHours;
-        const offsetMinutes = minutes - localMinutes;
-        
-        // Create a date that, when formatted in the user's timezone, shows the desired time
-        const adjustedDate = new Date();
-        adjustedDate.setUTCHours(hours - offsetHours, minutes - offsetMinutes, 0, 0);
-        
-        // Actually, simpler approach: just format the time string directly
-        // Since reminder.time is stored as "HH:MM" in the user's intended local time,
-        // we can create a date for today and set it to that time, then format
-        const timeDate = new Date();
-        // Parse the time as if it's in the user's timezone
-        const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-        
-        // Use a simpler approach: format the time directly
         const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
         const period = hours >= 12 ? 'PM' : 'AM';
-        const formattedTime = `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
-        
-        if (reminder.frequency === 'once') {
-          if (reminder.daysFromNow !== undefined) {
-            const targetDate = new Date();
-            targetDate.setDate(targetDate.getDate() + reminder.daysFromNow);
-            const dateStr = targetDate.toLocaleDateString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              timeZone: tz,
-            });
-            responseMessage += `\n📅 ${dateStr} at ${formattedTime}`;
-          } else if (reminder.dayOfMonth) {
-            responseMessage += `\n📅 On the ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)} at ${formattedTime}`;
-          } else {
-            responseMessage += `\n⏰ ${formattedTime}`;
-          }
-        } else if (reminder.frequency === 'daily') {
-          responseMessage += `\n⏰ Daily at ${formattedTime}`;
-        } else if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
-          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          const dayName = dayNames[reminder.daysOfWeek[0]];
-          if (reminder.time) {
-            responseMessage += `\n⏰ Every ${dayName} at ${formattedTime}`;
-          } else {
-            responseMessage += `\n⏰ Every ${dayName}`;
-          }
-        } else if (reminder.frequency === 'monthly' && reminder.dayOfMonth) {
-          responseMessage += `\n⏰ Monthly on the ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)} at ${formattedTime}`;
-        } else if (reminder.frequency === 'yearly' && reminder.dayOfMonth && reminder.month) {
-          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-          const monthName = monthNames[reminder.month - 1];
-          if (reminder.time) {
-            responseMessage += `\n⏰ Every year on ${monthName} ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)} at ${formattedTime}`;
-          } else {
-            responseMessage += `\n⏰ Every year on ${monthName} ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)}`;
-          }
-        } else {
-          responseMessage += `\n⏰ ${formattedTime}`;
-        }
-      } else if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
-        // Weekly reminder without time specified
-        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dayName = dayNames[reminder.daysOfWeek[0]];
-        responseMessage += `\n⏰ Every ${dayName}`;
-      } else if (reminder.frequency === 'yearly' && reminder.dayOfMonth && reminder.month) {
-        // Yearly reminder (birthday) without time specified
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        const monthName = monthNames[reminder.month - 1];
-        responseMessage += `\n⏰ Every year on ${monthName} ${reminder.dayOfMonth}${this.getOrdinalSuffix(reminder.dayOfMonth)}`;
+        timeInfo = ` at ${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
       }
+      const responseMessage = `🔔 *Reminder created:*\n"${reminder.title}${timeInfo}"`;
 
       return {
         success: true,
@@ -1541,24 +1819,18 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: updated.id, timezone }, 'Reminder updated');
 
-      // Format response message with timezone-aware time display
-      let responseMessage = `🔔 Reminder "${updated.title || reminder.title}" updated successfully!`;
-      
-      if (updated.time || reminder.time) {
-        const timeToDisplay = updated.time || reminder.time;
-        if (timeToDisplay) {
-          const timeParts = timeToDisplay.split(':');
-          const hours = parseInt(timeParts[0] || '0', 10);
-          const minutes = parseInt(timeParts[1] || '0', 10);
-          
-          // Format time directly (since it's stored as local time)
-          const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
-          const period = hours >= 12 ? 'PM' : 'AM';
-          const formattedTime = `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
-          
-          responseMessage += `\n⏰ ${formattedTime}`;
-        }
+      // Format response message
+      const timeToDisplay = updated.time || reminder.time;
+      const timeParts = timeToDisplay ? timeToDisplay.split(':') : null;
+      let timeInfo = '';
+      if (timeParts) {
+        const hours = parseInt(timeParts[0] || '0', 10);
+        const minutes = parseInt(timeParts[1] || '0', 10);
+        const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        timeInfo = ` at ${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
       }
+      const responseMessage = `🔔 *Reminder updated:*\n"${updated.title || reminder.title}${timeInfo}"`;
 
       return {
         success: true,
@@ -1602,7 +1874,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `🔔 Reminder "${reminder.title}" deleted successfully!`,
+        message: `🔔 *Reminder deleted:*\n"${reminder.title}"`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to delete reminder');
@@ -1642,7 +1914,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `🔔 Reminder "${reminder.title}" paused successfully!`,
+        message: `⏸️ *Reminder paused:*\n"${reminder.title}"`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to pause reminder');
@@ -1682,7 +1954,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `🔔 Reminder "${reminder.title}" resumed successfully!`,
+        message: `▶️ *Reminder resumed:*\n"${reminder.title}"`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to resume reminder');
@@ -1967,9 +2239,13 @@ export class ActionExecutor {
             : queryTimeframe === 'this_month' ? 'this month'
             : 'upcoming';
           
+          const titleText = timeframeText === 'upcoming' 
+            ? 'You have no events scheduled'
+            : `You have no events scheduled ${timeframeText}`;
+          
           return {
             success: true,
-            message: `📅 You have no events scheduled ${timeframeText}.`,
+            message: `📅 *${titleText}:*\n"None"`,
           };
         }
         
@@ -1984,17 +2260,17 @@ export class ActionExecutor {
           logger.warn({ error, userId: this.userId }, 'Failed to get calendar timezone for event formatting, using default');
         }
         
-        let message = `📅 You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}`;
         const timeframeText = queryTimeframe === 'today' ? 'today' 
           : queryTimeframe === 'tomorrow' ? 'tomorrow'
           : queryTimeframe === 'this_week' ? 'this week'
           : queryTimeframe === 'this_month' ? 'this month'
-          : '';
+          : 'all';
         
-        if (timeframeText) {
-          message += ` ${timeframeText}`;
-        }
-        message += ':\n\n';
+        const titleText = timeframeText === 'all' 
+          ? `You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}`
+          : `Your events ${timeframeText}`;
+        
+        let message = `📅 *${titleText}:*\n`;
         
         // Format each event using calendar's timezone
         result.events.slice(0, 20).forEach((event: { title: string; start: Date; location?: string }, index: number) => {
@@ -2011,11 +2287,8 @@ export class ActionExecutor {
             timeZone: calendarTimezone,
           });
           
-          message += `${index + 1}. ${event.title}\n   📅 ${eventDate} at ${eventTime}`;
-          if (event.location) {
-            message += `\n   📍 ${event.location}`;
-          }
-          message += '\n';
+          const locationText = event.location ? ` at ${event.location}` : '';
+          message += `${index + 1}. "${event.title}"\n   ${eventDate} at ${eventTime}${locationText}\n`;
         });
         
         if (result.events.length > 20) {

@@ -191,6 +191,14 @@ export const remindersRouter = createTRPCRouter({
         ...input,
       });
 
+      if (!reminder) {
+        logger.error({ userId: session.user.id, reminderTitle: input.title }, "Failed to create reminder");
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create reminder",
+        });
+      }
+
       logger.info({ userId: session.user.id, reminderId: reminder.id }, "Reminder created");
       return reminder;
     }),

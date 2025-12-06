@@ -184,6 +184,10 @@ export const users = pgTable("users", {
   company: text("company"),
   avatarUrl: text("avatar_url"),
 
+  // Timezone settings
+  timezone: text("timezone"), // e.g., "America/New_York"
+  utcOffset: text("utc_offset"), // e.g., "-05:00"
+
   // Admin & metadata
   isAdmin: boolean("is_admin").default(false).notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

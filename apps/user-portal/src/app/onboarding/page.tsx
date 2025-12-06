@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useTRPC } from "@/trpc/client";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/nextjs";
 import { updateClerkOnboardingMetadata } from "@/app/actions/onboarding";
 import { Button } from "@imaginecalendar/ui/button";
@@ -55,7 +55,8 @@ const formSchema = z.object({
   mainUse: z.string().min(1, "Please select your main use"),
   howHeardAboutUs: z.string().min(1, "Please let us know how you heard about us"),
   company: z.string().optional(),
-  timezone: z.string().default("Africa/Johannesburg"),
+  timezone: z.string().min(1, "Timezone is required"),
+  utcOffset: z.string().min(1, "UTC offset is required"),
   plan: z.string().min(1, "Please select a plan").default("free"),
 });
 
@@ -66,9 +67,22 @@ export default function OnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);
   const [isAnnual, setIsAnnual] = useState(false);
+  const [timezones, setTimezones] = useState<string[]>([]);
+  const [isDetectingTimezone, setIsDetectingTimezone] = useState(true);
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const plansQueryOpts = trpc.plans.listActive.queryOptions();
   const plansQuery = useQuery(plansQueryOpts);
+
+  // Check if user is already onboarded and redirect to dashboard
+  const onboardingCheck = useQuery(trpc.auth.checkOnboarding.queryOptions());
+
+  useEffect(() => {
+    if (onboardingCheck.data && !onboardingCheck.data.needsOnboarding) {
+      // User is already onboarded, redirect to dashboard
+      router.push("/dashboard");
+    }
+  }, [onboardingCheck.data, router]);
 
   const completeOnboardingMutation = useMutation(
     trpc.auth.completeOnboarding.mutationOptions({
@@ -112,6 +126,7 @@ export default function OnboardingPage() {
       lastName: "",
       plan: "free",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      utcOffset: "",
     },
   });
 
@@ -135,6 +150,74 @@ export default function OnboardingPage() {
       .filter((plan) => Boolean(plan.id))
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
   }, [plansQuery.data]);
+
+  // Fetch timezone list on mount
+  useEffect(() => {
+    const fetchTimezones = async () => {
+      try {
+        const response = await fetch("https://worldtimeapi.org/api/timezone");
+        if (response.ok) {
+          const data = await response.json();
+          setTimezones(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch timezones:", error);
+      }
+    };
+    fetchTimezones();
+  }, []);
+
+  // Auto-detect timezone from IP on mount
+  useEffect(() => {
+    const detectTimezone = async () => {
+      setIsDetectingTimezone(true);
+      try {
+        const queryOpts = trpc.user.detectTimezone.queryOptions();
+        const result = await queryClient.fetchQuery(queryOpts);
+        if (result.timezone && result.utcOffset) {
+          setValue("timezone", result.timezone, { shouldDirty: false });
+          setValue("utcOffset", result.utcOffset, { shouldDirty: false });
+        }
+      } catch (error) {
+        console.error("Failed to detect timezone:", error);
+        // Fallback to browser timezone
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        setValue("timezone", browserTimezone, { shouldDirty: false });
+        // Try to get UTC offset for browser timezone
+        try {
+          const queryOpts = trpc.user.getTimezoneDetails.queryOptions({ timezone: browserTimezone });
+          const result = await queryClient.fetchQuery(queryOpts);
+          if (result.utcOffset) {
+            setValue("utcOffset", result.utcOffset, { shouldDirty: false });
+          }
+        } catch (err) {
+          console.error("Failed to get UTC offset for browser timezone:", err);
+        }
+      } finally {
+        setIsDetectingTimezone(false);
+      }
+    };
+    detectTimezone();
+  }, [trpc, queryClient, setValue]);
+
+  // Fetch UTC offset when timezone changes
+  const currentTimezone = watch("timezone");
+  useEffect(() => {
+    if (currentTimezone) {
+      const fetchUtcOffset = async () => {
+        try {
+          const queryOpts = trpc.user.getTimezoneDetails.queryOptions({ timezone: currentTimezone });
+          const result = await queryClient.fetchQuery(queryOpts);
+          if (result.utcOffset) {
+            setValue("utcOffset", result.utcOffset, { shouldDirty: false });
+          }
+        } catch (error) {
+          console.error("Failed to fetch UTC offset:", error);
+        }
+      };
+      fetchUtcOffset();
+    }
+  }, [currentTimezone, trpc, queryClient, setValue]);
 
   useEffect(() => {
     if (plans.length === 0) {
@@ -449,6 +532,45 @@ export default function OnboardingPage() {
                   {...register("company")}
                   placeholder="Acme Inc."
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="timezone">Timezone *</Label>
+                {isDetectingTimezone ? (
+                  <div className="text-sm text-muted-foreground py-2">
+                    Detecting your timezone...
+                  </div>
+                ) : (
+                  <Select
+                    value={watch("timezone") || ""}
+                    onValueChange={(value) => {
+                      setValue("timezone", value, { shouldValidate: true });
+                    }}
+                  >
+                    <SelectTrigger className={errors.timezone ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Select timezone" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {timezones.length > 0 ? (
+                        timezones.map((tz) => (
+                          <SelectItem key={tz} value={tz}>
+                            {tz.replace(/_/g, " ")}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value={watch("timezone") || ""} disabled>
+                          {watch("timezone") || "Loading timezones..."}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
+                {errors.timezone && (
+                  <p className="text-sm text-red-500 mt-1">{errors.timezone.message}</p>
+                )}
+                <p className="text-sm text-muted-foreground mt-1">
+                  Your timezone helps us schedule events at the right time
+                </p>
               </div>
             </CardContent>
           </Card>

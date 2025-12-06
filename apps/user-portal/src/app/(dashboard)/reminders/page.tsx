@@ -11,7 +11,6 @@ import {
   Search,
   MoreVertical,
   BellRing,
-  Clock,
   Calendar,
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
@@ -48,7 +47,7 @@ import { useToast } from "@imaginecalendar/ui/use-toast";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
 import Link from "next/link";
-import { Home, ChevronLeft } from "lucide-react";
+import { Home, ChevronLeft, Clock } from "lucide-react";
 
 // ==================== TYPES ====================
 
@@ -92,17 +91,106 @@ function pad(n: number): string {
   return n.toString().padStart(2, "0");
 }
 
-function parseTimeStringToToday(timeStr: string): Date {
+/**
+ * Create a Date object representing a specific time today in the user's timezone
+ */
+function parseTimeStringToToday(timeStr: string, timezone?: string): Date {
   const parts = timeStr.split(":").map(Number);
   const h = parts[0] ?? 0;
   const m = parts[1] ?? 0;
+
+  if (timezone) {
+    // Get current date/time in user's timezone
+    const now = new Date();
+    const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
+    const userNow = new Date(userNowString);
+
+    // Create date with today's date and the specified time in user's timezone
+    const year = userNow.getFullYear();
+    const month = userNow.getMonth();
+    const day = userNow.getDate();
+
+    // Create a date string in ISO format
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+
+    // Create date as UTC first
+    let candidate = new Date(Date.UTC(year, month, day, h, m, 0, 0));
+
+    // Check what this represents in user's timezone
+    let candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
+    let gotYear = candidateInUserTz.getFullYear();
+    let gotMonth = candidateInUserTz.getMonth();
+    let gotDay = candidateInUserTz.getDate();
+    let gotHours = candidateInUserTz.getHours();
+    let gotMinutes = candidateInUserTz.getMinutes();
+
+    // Calculate offset
+    const targetMs = new Date(year, month, day, h, m, 0, 0).getTime();
+    const gotMs = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
+    const diff = targetMs - gotMs;
+
+    return new Date(candidate.getTime() + diff);
+  }
+
   const d = new Date();
   d.setSeconds(0, 0);
   d.setHours(h, m, 0, 0);
   return d;
 }
 
-function nextForDaily(timeStr: string, from: Date = new Date()): Date {
+function nextForDaily(timeStr: string, from: Date = new Date(), timezone?: string): Date {
+  if (timezone) {
+    // Get current time in user's timezone
+    const fromInUserTz = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
+    const parts = timeStr.split(":").map(Number);
+    const h = parts[0] ?? 0;
+    const m = parts[1] ?? 0;
+
+    // Create target time today in user's timezone
+    const year = fromInUserTz.getFullYear();
+    const month = fromInUserTz.getMonth();
+    const day = fromInUserTz.getDate();
+
+    // Create date representing the target time in user's timezone
+    let candidate = new Date(Date.UTC(year, month, day, h, m, 0, 0));
+    let candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
+    let gotYear = candidateInUserTz.getFullYear();
+    let gotMonth = candidateInUserTz.getMonth();
+    let gotDay = candidateInUserTz.getDate();
+    let gotHours = candidateInUserTz.getHours();
+    let gotMinutes = candidateInUserTz.getMinutes();
+
+    const targetMs = new Date(year, month, day, h, m, 0, 0).getTime();
+    const gotMs = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
+    const diff = targetMs - gotMs;
+    const target = new Date(candidate.getTime() + diff);
+
+    // Compare times
+    if (target.getTime() <= from.getTime()) {
+      // Move to tomorrow in user's timezone
+      const tomorrowInUserTz = new Date(fromInUserTz);
+      tomorrowInUserTz.setDate(tomorrowInUserTz.getDate() + 1);
+
+      const tomorrowYear = tomorrowInUserTz.getFullYear();
+      const tomorrowMonth = tomorrowInUserTz.getMonth();
+      const tomorrowDay = tomorrowInUserTz.getDate();
+
+      candidate = new Date(Date.UTC(tomorrowYear, tomorrowMonth, tomorrowDay, h, m, 0, 0));
+      candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
+      gotYear = candidateInUserTz.getFullYear();
+      gotMonth = candidateInUserTz.getMonth();
+      gotDay = candidateInUserTz.getDate();
+      gotHours = candidateInUserTz.getHours();
+      gotMinutes = candidateInUserTz.getMinutes();
+
+      const targetMs2 = new Date(tomorrowYear, tomorrowMonth, tomorrowDay, h, m, 0, 0).getTime();
+      const gotMs2 = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
+      const diff2 = targetMs2 - gotMs2;
+      return new Date(candidate.getTime() + diff2);
+    }
+    return target;
+  }
+
   const target = parseTimeStringToToday(timeStr);
   if (target <= from) {
     const t = new Date(target);
@@ -112,7 +200,20 @@ function nextForDaily(timeStr: string, from: Date = new Date()): Date {
   return target;
 }
 
-function nextForHourly(minuteOfHour: number = 0, from: Date = new Date()): Date {
+function nextForHourly(minuteOfHour: number = 0, from: Date = new Date(), timezone?: string): Date {
+  if (timezone) {
+    const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
+    const d = new Date(fromInTimezone);
+    d.setSeconds(0, 0);
+    const minute = minuteOfHour ?? 0;
+    if (d.getMinutes() < minute) {
+      d.setMinutes(minute, 0, 0);
+    } else {
+      d.setHours(d.getHours() + 1, minute, 0, 0);
+    }
+    return d;
+  }
+
   const d = new Date(from);
   d.setSeconds(0, 0);
   const minute = minuteOfHour ?? 0;
@@ -124,24 +225,49 @@ function nextForHourly(minuteOfHour: number = 0, from: Date = new Date()): Date 
   return d;
 }
 
-function nextForMinutely(interval: number = 1, from: Date = new Date()): Date {
+function nextForMinutely(interval: number = 1, from: Date = new Date(), timezone?: string): Date {
+  if (timezone) {
+    const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
+    const d = new Date(fromInTimezone);
+    d.setSeconds(0, 0);
+    const mins = d.getMinutes();
+    const remainder = mins % interval;
+    if (remainder === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0 && fromInTimezone < d)
+      return d;
+    const add = remainder === 0 ? interval : interval - remainder;
+    d.setMinutes(mins + add, 0, 0);
+    return d;
+  }
+
   const d = new Date(from);
   d.setSeconds(0, 0);
   const mins = d.getMinutes();
   const remainder = mins % interval;
-  if (remainder === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0 && from < d) 
+  if (remainder === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0 && from < d)
     return d;
   const add = remainder === 0 ? interval : interval - remainder;
   d.setMinutes(mins + add, 0, 0);
   return d;
 }
 
-function nextForOnce(daysFromNow: number | null, targetDate: Date | null, from: Date = new Date()): Date | null {
+function nextForOnce(daysFromNow: number | null, targetDate: Date | null, from: Date = new Date(), timezone?: string): Date | null {
   if (targetDate) {
     const target = new Date(targetDate);
+    if (timezone) {
+      const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
+      const targetInTimezone = new Date(target.toLocaleString("en-US", { timeZone: timezone }));
+      return targetInTimezone > fromInTimezone ? target : null;
+    }
     return target > from ? target : null;
   }
   if (daysFromNow !== null) {
+    if (timezone) {
+      const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
+      const d = new Date(fromInTimezone);
+      d.setDate(d.getDate() + daysFromNow);
+      d.setHours(9, 0, 0, 0); // Default to 9 AM
+      return d;
+    }
     const d = new Date(from);
     d.setDate(d.getDate() + daysFromNow);
     d.setHours(9, 0, 0, 0); // Default to 9 AM
@@ -150,15 +276,39 @@ function nextForOnce(daysFromNow: number | null, targetDate: Date | null, from: 
   return null;
 }
 
-function nextForMonthly(dayOfMonth: number, time: string | null, from: Date = new Date()): Date {
+function nextForMonthly(dayOfMonth: number, time: string | null, from: Date = new Date(), timezone?: string): Date {
+  if (timezone) {
+    const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
+    const d = new Date(fromInTimezone);
+    const targetDay = Math.min(dayOfMonth, 31);
+    const [hours, minutes] = time ? time.split(":").map(Number) : [9, 0];
+
+    // Set to this month first
+    d.setDate(targetDay);
+    d.setHours(hours ?? 9, minutes ?? 0, 0, 0);
+
+    // If the date has passed this month, move to next month
+    if (d <= fromInTimezone) {
+      d.setMonth(d.getMonth() + 1);
+      // Handle edge case where day doesn't exist in next month (e.g., Feb 31)
+      const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      if (targetDay > lastDayOfMonth) {
+        d.setDate(lastDayOfMonth);
+      } else {
+        d.setDate(targetDay);
+      }
+    }
+    return d;
+  }
+
   const d = new Date(from);
   const targetDay = Math.min(dayOfMonth, 31);
   const [hours, minutes] = time ? time.split(":").map(Number) : [9, 0];
-  
+
   // Set to this month first
   d.setDate(targetDay);
   d.setHours(hours ?? 9, minutes ?? 0, 0, 0);
-  
+
   // If the date has passed this month, move to next month
   if (d <= from) {
     d.setMonth(d.getMonth() + 1);
@@ -170,21 +320,43 @@ function nextForMonthly(dayOfMonth: number, time: string | null, from: Date = ne
       d.setDate(targetDay);
     }
   }
-  
+
   return d;
 }
 
-function nextForYearly(month: number, dayOfMonth: number, time: string | null, from: Date = new Date()): Date {
+function nextForYearly(month: number, dayOfMonth: number, time: string | null, from: Date = new Date(), timezone?: string): Date {
+  if (timezone) {
+    const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
+    const d = new Date(fromInTimezone);
+    const targetDay = Math.min(dayOfMonth, 31);
+    const [hours, minutes] = time ? time.split(":").map(Number) : [9, 0];
+
+    // Set to this year first
+    d.setMonth(month - 1); // month is 1-12, setMonth expects 0-11
+    const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(targetDay, lastDayOfMonth));
+    d.setHours(hours ?? 9, minutes ?? 0, 0, 0);
+
+    // If the date has passed this year, move to next year
+    if (d <= fromInTimezone) {
+      d.setFullYear(d.getFullYear() + 1);
+      // Recalculate last day of month for next year
+      const nextYearLastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(targetDay, nextYearLastDay));
+    }
+    return d;
+  }
+
   const d = new Date(from);
   const targetDay = Math.min(dayOfMonth, 31);
   const [hours, minutes] = time ? time.split(":").map(Number) : [9, 0];
-  
+
   // Set to this year first
   d.setMonth(month - 1); // month is 1-12, setMonth expects 0-11
   const lastDayOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   d.setDate(Math.min(targetDay, lastDayOfMonth));
   d.setHours(hours ?? 9, minutes ?? 0, 0, 0);
-  
+
   // If the date has passed this year, move to next year
   if (d <= from) {
     d.setFullYear(d.getFullYear() + 1);
@@ -192,21 +364,59 @@ function nextForYearly(month: number, dayOfMonth: number, time: string | null, f
     const nextYearLastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     d.setDate(Math.min(targetDay, nextYearLastDay));
   }
-  
+
   return d;
 }
 
-function nextForWeekly(daysOfWeek: number[], time: string, from: Date = new Date()): Date | null {
+function nextForWeekly(daysOfWeek: number[], time: string, from: Date = new Date(), timezone?: string): Date | null {
   if (!daysOfWeek || daysOfWeek.length === 0 || !time) return null;
-  
+
+  if (timezone) {
+    const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
+    const [hours, minutes] = time.split(":").map(Number);
+    const currentDayOfWeek = fromInTimezone.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+    const currentTime = fromInTimezone.getHours() * 60 + fromInTimezone.getMinutes();
+    const targetTime = (hours ?? 0) * 60 + (minutes ?? 0);
+
+    // Sort days of week
+    const sortedDays = [...daysOfWeek].sort((a, b) => a - b);
+
+    // Find the next day this week
+    for (const day of sortedDays) {
+      if (day > currentDayOfWeek) {
+        const d = new Date(fromInTimezone);
+        const daysToAdd = day - currentDayOfWeek;
+        d.setDate(d.getDate() + daysToAdd);
+        d.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+        return d;
+      }
+      // If same day, check if time hasn't passed
+      if (day === currentDayOfWeek && targetTime > currentTime) {
+        const d = new Date(fromInTimezone);
+        d.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+        return d;
+      }
+    }
+
+    // If no day found this week, use the first day of next week
+    const firstDay = sortedDays[0]!;
+    const d = new Date(fromInTimezone);
+    // Calculate days until next week's first day
+    const daysUntilNextWeek = 7 - currentDayOfWeek;
+    const daysToAdd = daysUntilNextWeek + firstDay;
+    d.setDate(d.getDate() + daysToAdd);
+    d.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+    return d;
+  }
+
   const [hours, minutes] = time.split(":").map(Number);
   const currentDayOfWeek = from.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
   const currentTime = from.getHours() * 60 + from.getMinutes();
   const targetTime = (hours ?? 0) * 60 + (minutes ?? 0);
-  
+
   // Sort days of week
   const sortedDays = [...daysOfWeek].sort((a, b) => a - b);
-  
+
   // Find the next day this week
   for (const day of sortedDays) {
     if (day > currentDayOfWeek) {
@@ -223,7 +433,7 @@ function nextForWeekly(daysOfWeek: number[], time: string, from: Date = new Date
       return d;
     }
   }
-  
+
   // If no day found this week, use the first day of next week
   const firstDay = sortedDays[0]!;
   const d = new Date(from);
@@ -235,35 +445,42 @@ function nextForWeekly(daysOfWeek: number[], time: string, from: Date = new Date
   return d;
 }
 
-function computeNext(reminder: Reminder, from: Date = new Date()): Date | null {
+function computeNext(reminder: Reminder, from: Date = new Date(), timezone?: string): Date | null {
   if (!reminder.active) return null;
   switch (reminder.frequency) {
     case "daily":
-      return nextForDaily(reminder.time || "09:00", from);
+      return nextForDaily(reminder.time || "09:00", from, timezone);
     case "hourly":
-      return nextForHourly(Number(reminder.minuteOfHour ?? 0), from);
+      return nextForHourly(Number(reminder.minuteOfHour ?? 0), from, timezone);
     case "minutely":
-      return nextForMinutely(Math.max(1, Number(reminder.intervalMinutes ?? 1)), from);
+      return nextForMinutely(Math.max(1, Number(reminder.intervalMinutes ?? 1)), from, timezone);
     case "once":
-      return nextForOnce(reminder.daysFromNow, reminder.targetDate, from);
+      return nextForOnce(reminder.daysFromNow, reminder.targetDate, from, timezone);
     case "weekly":
-      return nextForWeekly(reminder.daysOfWeek || [], reminder.time || "09:00", from);
+      return nextForWeekly(reminder.daysOfWeek || [], reminder.time || "09:00", from, timezone);
     case "monthly":
-      return nextForMonthly(Number(reminder.dayOfMonth ?? 1), reminder.time, from);
+      return nextForMonthly(Number(reminder.dayOfMonth ?? 1), reminder.time, from, timezone);
     case "yearly":
       return nextForYearly(
         Number(reminder.month ?? 1),
         Number(reminder.dayOfMonth ?? 1),
         reminder.time,
-        from
+        from,
+        timezone
       );
     default:
       return null;
   }
 }
 
-function formatDateTime(d: Date | null): string {
+function formatDateTime(d: Date | null, timezone?: string): string {
   if (!d) return "";
+  if (timezone) {
+    const userTime = new Date(d.toLocaleString("en-US", { timeZone: timezone }));
+    const hh = pad(userTime.getHours());
+    const mm = pad(userTime.getMinutes());
+    return `${userTime.toLocaleDateString()} ${hh}:${mm}`;
+  }
   const hh = pad(d.getHours());
   const mm = pad(d.getMinutes());
   return `${d.toLocaleDateString()} ${hh}:${mm}`;
@@ -332,55 +549,49 @@ function getFrequencyDescription(reminder: Reminder): string {
   }
 }
 
-// ==================== CURRENT TIME DISPLAY COMPONENT ====================
+// ==================== MAIN COMPONENT ====================
 
-function CurrentTimeDisplay() {
-  const [currentTime, setCurrentTime] = useState(new Date());
+// ==================== USER TIME DISPLAY COMPONENT ====================
+
+function UserTimeDisplay({ timezone }: { timezone: string | null | undefined }) {
+  const [currentTime, setCurrentTime] = useState<string>("");
 
   useEffect(() => {
-    // Update time every second
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    if (!timezone) {
+      setCurrentTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      return;
+    }
 
-    return () => clearInterval(timer);
-  }, []);
+    const updateTime = () => {
+      const now = new Date();
+      // Use toLocaleString to get the time in the user's timezone, then create a Date from it
+      const userTimeString = now.toLocaleString("en-US", { timeZone: timezone });
+      const userTime = new Date(userTimeString);
 
-  const formatTime = (date: Date): string => {
-    return date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-    });
-  };
+      // Extract time components
+      const hoursStr = String(userTime.getHours()).padStart(2, '0');
+      const minutesStr = String(userTime.getMinutes()).padStart(2, '0');
+      const secondsStr = String(userTime.getSeconds()).padStart(2, '0');
+      setCurrentTime(`${hoursStr}:${minutesStr}:${secondsStr}`);
+    };
 
-  const formatDate = (date: Date): string => {
-    return date.toLocaleDateString([], {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [timezone]);
+
+  if (!timezone) {
+    return null;
+  }
 
   return (
-    <Card className="rounded-xl border-slate-200 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-sm">
-      <CardContent className="p-3 sm:p-4">
-        <div className="flex flex-col items-end sm:items-start gap-1">
-          <div className="flex items-center gap-2">
-            <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-            <span className="text-xs text-slate-600 font-medium">Current Time</span>
-          </div>
-          <div className="text-xl sm:text-2xl font-bold text-primary tabular-nums">
-            {formatTime(currentTime)}
-          </div>
-          <div className="text-xs text-slate-500">
-            {formatDate(currentTime)}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-lg border">
+      <Clock className="h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col">
+        <span className="text-xs text-muted-foreground">Your Time</span>
+        <span className="text-sm font-mono font-semibold">{currentTime}</span>
+      </div>
+    </div>
   );
 }
 
@@ -393,6 +604,9 @@ export default function RemindersPage() {
   const hasRemindersAccess = limits.hasReminders;
   const { toast } = useToast();
 
+  // Fetch user data to get timezone
+  const { data: user } = useQuery(trpc.user.me.queryOptions());
+
   // Fetch reminders from database
   const { data: reminders = [], isLoading, error } = useQuery(
     trpc.reminders.list.queryOptions()
@@ -402,13 +616,13 @@ export default function RemindersPage() {
   const [showForm, setShowForm] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState<string | null>(null);
-  
+
   const initialFormState: ReminderFormData = useMemo(() => {
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(9, 0, 0, 0);
-    
+
     return {
       id: null,
       title: "",
@@ -424,7 +638,7 @@ export default function RemindersPage() {
       active: true,
     };
   }, []);
-  
+
   const [form, setForm] = useState<ReminderFormData>(initialFormState);
 
   // Mutations
@@ -492,6 +706,7 @@ export default function RemindersPage() {
   );
 
   // Filter and sort reminders
+  const userTimezone = (user as any)?.timezone;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return reminders
@@ -510,9 +725,9 @@ export default function RemindersPage() {
           createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
           updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
         };
-        return { 
-          ...r, 
-          nextAt: computeNext(reminderForCompute)
+        return {
+          ...r,
+          nextAt: computeNext(reminderForCompute, new Date(), userTimezone)
         };
       })
       .filter((r) => (q ? r.title.toLowerCase().includes(q) : true))
@@ -530,7 +745,7 @@ export default function RemindersPage() {
         const bCreatedAt = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
         return bCreatedAt.getTime() - aCreatedAt.getTime();
       });
-  }, [reminders, query]);
+  }, [reminders, query, userTimezone]);
 
   const resetForm = useCallback(() => {
     setForm(initialFormState);
@@ -561,13 +776,13 @@ export default function RemindersPage() {
   }, [showForm, resetForm, openNewForm]);
 
   const openEditForm = useCallback((reminder: Reminder) => {
-    const targetDateValue = reminder.targetDate 
-      ? (reminder.targetDate instanceof Date 
-          ? reminder.targetDate 
-          : new Date(reminder.targetDate)
-        ).toISOString().slice(0, 16)
+    const targetDateValue = reminder.targetDate
+      ? (reminder.targetDate instanceof Date
+        ? reminder.targetDate
+        : new Date(reminder.targetDate)
+      ).toISOString().slice(0, 16)
       : initialFormState.targetDate;
-    
+
     setForm({
       id: reminder.id,
       title: reminder.title,
@@ -643,7 +858,7 @@ export default function RemindersPage() {
       frequency: form.frequency,
       active: form.active,
     };
-    
+
     // Add frequency-specific fields
     if (form.frequency === "daily") {
       payload.time = form.time;
@@ -668,7 +883,7 @@ export default function RemindersPage() {
       payload.dayOfMonth = form.dayOfMonth;
       if (form.time) payload.time = form.time;
     }
-    
+
     try {
       if (form.id) {
         // Update existing reminder
@@ -677,7 +892,7 @@ export default function RemindersPage() {
         // Create new reminder
         await createMutation.mutateAsync(payload);
       }
-      
+
       setShowForm(false);
       resetForm();
     } catch (error) {
@@ -692,7 +907,7 @@ export default function RemindersPage() {
 
   const removeReminder = useCallback(async () => {
     if (!reminderToDelete) return;
-    
+
     try {
       await deleteMutation.mutateAsync({ id: reminderToDelete });
       setDeleteDialogOpen(false);
@@ -705,7 +920,7 @@ export default function RemindersPage() {
   const toggleActive = useCallback(async (id: string) => {
     const reminder = reminders.find((r) => r.id === id);
     if (!reminder) return;
-    
+
     const newActive = !reminder.active;
     try {
       await toggleActiveMutation.mutateAsync({ id, active: newActive });
@@ -732,31 +947,31 @@ export default function RemindersPage() {
   }
 
   if (!hasRemindersAccess) {
-  return (
-    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Home className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <span className="font-medium">Reminders</span>
-      </div>
+    return (
+      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-sm">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Home className="h-4 w-4" />
+            Dashboard
+          </Link>
+          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+          <span className="font-medium">Reminders</span>
+        </div>
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Reminders</h1>
-        <p className="text-muted-foreground mt-2">
-          Set and manage your reminders
-        </p>
-      </div>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-primary">Reminders</h1>
+          <p className="text-muted-foreground mt-2">
+            Set and manage your reminders
+          </p>
+        </div>
 
-        <UpgradePrompt 
-          feature="WhatsApp Reminders" 
-          requiredTier="silver" 
+        <UpgradePrompt
+          feature="WhatsApp Reminders"
+          requiredTier="silver"
           variant="card"
         />
       </div>
@@ -780,14 +995,14 @@ export default function RemindersPage() {
 
       {/* Header */}
       <div className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-primary">Reminders</h1>
             <p className="text-muted-foreground mt-2">
               Create and manage recurring reminders
             </p>
           </div>
-          <CurrentTimeDisplay />
+          <UserTimeDisplay timezone={(user as any)?.timezone} />
         </div>
       </div>
 
@@ -812,41 +1027,41 @@ export default function RemindersPage() {
         </Button>
       </div>
 
-        {/* Stats */}
-        {reminders.length > 0 && (
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Card className="rounded-xl border-slate-200">
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-[hsl(var(--brand-orange))]">{reminders.length}</div>
-                <div className="text-xs text-slate-600">Total Reminders</div>
-              </CardContent>
-            </Card>
-            <Card className="rounded-xl border-slate-200">
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-green-600">
-                  {reminders.filter((r) => r.active).length}
-                </div>
-                <div className="text-xs text-slate-600">Active</div>
-              </CardContent>
-            </Card>
-            <Card className="rounded-xl border-slate-200">
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-slate-400">
-                  {reminders.filter((r) => !r.active).length}
-                </div>
-                <div className="text-xs text-slate-600">Paused</div>
-              </CardContent>
-            </Card>
-            <Card className="rounded-xl border-slate-200">
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-purple-600">
-                  {reminders.filter((r) => r.frequency === "daily").length}
-                </div>
-                <div className="text-xs text-slate-600">Daily</div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+      {/* Stats */}
+      {reminders.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Card className="rounded-xl border-slate-200">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-[hsl(var(--brand-orange))]">{reminders.length}</div>
+              <div className="text-xs text-slate-600">Total Reminders</div>
+            </CardContent>
+          </Card>
+          <Card className="rounded-xl border-slate-200">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-green-600">
+                {reminders.filter((r) => r.active).length}
+              </div>
+              <div className="text-xs text-slate-600">Active</div>
+            </CardContent>
+          </Card>
+          <Card className="rounded-xl border-slate-200">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-slate-400">
+                {reminders.filter((r) => !r.active).length}
+              </div>
+              <div className="text-xs text-slate-600">Paused</div>
+            </CardContent>
+          </Card>
+          <Card className="rounded-xl border-slate-200">
+            <CardContent className="p-4">
+              <div className="text-2xl font-bold text-purple-600">
+                {reminders.filter((r) => r.frequency === "daily").length}
+              </div>
+              <div className="text-xs text-slate-600">Daily</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Reminders Grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -868,7 +1083,7 @@ export default function RemindersPage() {
                     </div>
                     {r.active && r.nextAt && (
                       <div className="mt-2 text-xs font-medium text-green-600">
-                        Next: {getRelativeTime(r.nextAt)}
+                        Next: {formatDateTime(r.nextAt, userTimezone)} ({getRelativeTime(r.nextAt)})
                       </div>
                     )}
                   </div>
@@ -938,8 +1153,8 @@ export default function RemindersPage() {
       )}
 
       {/* Form Modal */}
-      <AlertDialog 
-        open={showForm} 
+      <AlertDialog
+        open={showForm}
         onOpenChange={(open) => {
           setShowForm(open);
           if (!open) {
@@ -951,9 +1166,8 @@ export default function RemindersPage() {
           <AlertDialogHeader className="space-y-3 pb-4 border-b">
             <AlertDialogTitle className="text-2xl font-bold flex items-center gap-3">
               <div
-                className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  form.id ? "bg-indigo-100" : "bg-blue-100"
-                }`}
+                className={`w-10 h-10 rounded-lg flex items-center justify-center ${form.id ? "bg-indigo-100" : "bg-blue-100"
+                  }`}
               >
                 {form.id ? (
                   <Pencil className="h-5 w-5 text-indigo-600" />
@@ -984,7 +1198,7 @@ export default function RemindersPage() {
                 id="title"
                 placeholder="e.g., Daily standup meeting"
                 value={form.title}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setForm({ ...form, title: e.target.value })
                 }
                 className="w-full h-11 text-base"
@@ -1044,7 +1258,7 @@ export default function RemindersPage() {
                   id="time"
                   type="time"
                   value={form.time}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setForm({ ...form, time: e.target.value })
                   }
                   className="h-11"
@@ -1213,10 +1427,9 @@ export default function RemindersPage() {
                           className={`
                             h-12 w-full rounded-lg border-2 transition-all font-semibold text-sm
                             flex items-center justify-center
-                            ${
-                              isSelected
-                                ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
-                                : "bg-white border-gray-300 hover:border-primary hover:bg-blue-50 text-gray-700 hover:scale-105"
+                            ${isSelected
+                              ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
+                              : "bg-white border-gray-300 hover:border-primary hover:bg-blue-50 text-gray-700 hover:scale-105"
                             }
                           `}
                         >
@@ -1229,9 +1442,9 @@ export default function RemindersPage() {
                     {(!form.daysOfWeek || form.daysOfWeek.length === 0)
                       ? "Select at least one day"
                       : `Selected: ${form.daysOfWeek
-                          .sort((a, b) => a - b)
-                          .map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d])
-                          .join(", ")}`}
+                        .sort((a, b) => a - b)
+                        .map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d])
+                        .join(", ")}`}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -1242,7 +1455,7 @@ export default function RemindersPage() {
                     id="time"
                     type="time"
                     value={form.time}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setForm({ ...form, time: e.target.value })
                     }
                     className="h-11"
@@ -1285,7 +1498,7 @@ export default function RemindersPage() {
                     id="time"
                     type="time"
                     value={form.time}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setForm({ ...form, time: e.target.value })
                     }
                     className="h-11"
@@ -1352,7 +1565,7 @@ export default function RemindersPage() {
                     id="time"
                     type="time"
                     value={form.time}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setForm({ ...form, time: e.target.value })
                     }
                     className="h-11"

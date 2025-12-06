@@ -14,6 +14,8 @@ export const updateUserSchema = z.object({
   phoneVerified: z.boolean().optional(),
   company: z.string().optional(),
   avatarUrl: z.string().url().optional(),
+  timezone: z.string().optional(),
+  utcOffset: z.string().optional(),
 });
 
 export const userSchema = z.object({

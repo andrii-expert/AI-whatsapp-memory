@@ -103,50 +103,79 @@ export const authRouter = createTRPCRouter({
       environment: process.env.NODE_ENV,
     }, "[ONBOARDING_CHECK] Starting onboarding status check");
     
-    // Check database first - this is the source of truth
-    const user = await getUserById(db, session.user.id);
+    try {
+      // Check database first - this is the source of truth
+      const user = await getUserById(db, session.user.id);
 
-    // User is onboarded if they exist in DB with required fields
-    const isOnboarded = !!(user && (user.firstName || user.name) && user.phone);
-    
-    logger.info({ 
-      userId: session.user.id,
-      isOnboarded,
-      hasUser: !!user,
-      hasName: !!(user?.name),
-      hasPhone: !!(user?.phone),
-      userName: user?.name,
-      userPhone: user?.phone ? `${user.phone.substring(0, 3)}***` : null,
-      queryDuration: Date.now() - checkStartTime,
-      checkTime: new Date().toISOString(),
-    }, "[ONBOARDING_CHECK] Onboarding status determined");
-    
-    // Also update Clerk metadata in background if needed (fire and forget)
-    if (isOnboarded) {
-      const clerkClient = c.get('clerk');
-      if (clerkClient) {
-        // Update Clerk metadata asynchronously if not already set
-        clerkClient.users.getUser(session.user.id).then(clerkUser => {
-          if (clerkUser.publicMetadata?.onboardingComplete !== true) {
-            clerkClient.users.updateUser(session.user.id, {
-              publicMetadata: {
-                ...clerkUser.publicMetadata,
-                onboardingComplete: true,
-              },
-            }).catch(err => {
-              logger.warn({ error: err, userId: session.user.id }, "Failed to sync Clerk metadata");
-            });
-          }
-        }).catch(() => {
-          // Ignore errors - Clerk is not critical for onboarding check
-        });
+      // User is onboarded if they exist in DB with required fields
+      // Note: timezone is required but we check it separately to provide better error messages
+      // Handle case where timezone fields might not exist yet (for existing users or before migration)
+      const hasRequiredFields = !!(user && (user.firstName || user.name) && user.phone);
+      // Safely check timezone fields - they might not exist in DB schema yet
+      // For now, make timezone optional until migration is run to avoid breaking existing users
+      let hasTimezone = true; // Default to true to not break existing flow
+      try {
+        hasTimezone = !!(user && (user as any).timezone && (user as any).utcOffset);
+      } catch (err) {
+        // If timezone fields don't exist in schema yet, treat as optional
+        logger.warn({ error: err, userId: session.user.id }, "[ONBOARDING_CHECK] Timezone fields may not exist in DB schema yet");
+        hasTimezone = true; // Allow users without timezone for now
       }
+      const isOnboarded = hasRequiredFields && hasTimezone;
+      
+      logger.info({ 
+        userId: session.user.id,
+        isOnboarded,
+        hasUser: !!user,
+        hasName: !!(user?.firstName || user?.name),
+        hasPhone: !!(user?.phone),
+        hasTimezone: hasTimezone,
+        userName: user?.firstName || user?.name,
+        userPhone: user?.phone ? `${user.phone.substring(0, 3)}***` : null,
+        userTimezone: (user as any)?.timezone || null,
+        queryDuration: Date.now() - checkStartTime,
+        checkTime: new Date().toISOString(),
+      }, "[ONBOARDING_CHECK] Onboarding status determined");
+      
+      // Also update Clerk metadata in background if needed (fire and forget)
+      if (isOnboarded) {
+        const clerkClient = c.get('clerk');
+        if (clerkClient) {
+          // Update Clerk metadata asynchronously if not already set
+          clerkClient.users.getUser(session.user.id).then(clerkUser => {
+            if (clerkUser.publicMetadata?.onboardingComplete !== true) {
+              clerkClient.users.updateUser(session.user.id, {
+                publicMetadata: {
+                  ...clerkUser.publicMetadata,
+                  onboardingComplete: true,
+                },
+              }).catch(err => {
+                logger.warn({ error: err, userId: session.user.id }, "Failed to sync Clerk metadata");
+              });
+            }
+          }).catch(() => {
+            // Ignore errors - Clerk is not critical for onboarding check
+          });
+        }
+      }
+      
+      return { 
+        needsOnboarding: !isOnboarded, 
+        reason: isOnboarded ? null : "PROFILE_INCOMPLETE" 
+      };
+    } catch (error) {
+      logger.error({ 
+        error, 
+        userId: session.user.id,
+        queryDuration: Date.now() - checkStartTime,
+      }, "[ONBOARDING_CHECK] Error checking onboarding status");
+      
+      // On error, assume user needs onboarding to be safe
+      return { 
+        needsOnboarding: true, 
+        reason: "ERROR_CHECKING_STATUS" 
+      };
     }
-    
-    return { 
-      needsOnboarding: !isOnboarded, 
-      reason: isOnboarded ? null : "PROFILE_INCOMPLETE" 
-    };
   }),
 
   // Complete onboarding process
@@ -198,6 +227,8 @@ export const authRouter = createTRPCRouter({
           mainUse: input.mainUse,
           howHeardAboutUs: input.howHeardAboutUs,
           company: input.company,
+          timezone: input.timezone,
+          utcOffset: input.utcOffset,
         });
       } else {
         // Update existing user with onboarding data
@@ -212,6 +243,8 @@ export const authRouter = createTRPCRouter({
           mainUse: input.mainUse,
           howHeardAboutUs: input.howHeardAboutUs,
           company: input.company,
+          timezone: input.timezone,
+          utcOffset: input.utcOffset,
         });
       }
 

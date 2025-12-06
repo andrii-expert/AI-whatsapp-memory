@@ -96,6 +96,8 @@ export async function createUser(
     phone?: string;
     company?: string;
     avatarUrl?: string;
+    timezone?: string;
+    utcOffset?: string;
   }
 ) {
   return withMutationLogging(
@@ -141,6 +143,8 @@ export async function updateUser(
     phoneVerified?: boolean;
     company?: string;
     avatarUrl?: string;
+    timezone?: string;
+    utcOffset?: string;
   }
 ) {
   return withMutationLogging(
@@ -198,13 +202,19 @@ export async function updateUser(
             ) || existingNumbers[0]; // Fallback to first number if no primary exists
 
             if (primaryNumber) {
+              // Check if the phone number actually changed
+              const phoneChanged = primaryNumber.phoneNumber !== normalizedPhone;
+              
               // Update the existing primary number with the new phone number
               // This handles the case when user edits their phone number
               await db
                 .update(whatsappNumbers)
                 .set({
                   phoneNumber: normalizedPhone,
-                  isVerified: data.phoneVerified ?? false, // Reset verification when phone changes
+                  // Only reset verification if phone actually changed, otherwise preserve existing status
+                  isVerified: phoneChanged 
+                    ? (data.phoneVerified !== undefined ? data.phoneVerified : false)
+                    : primaryNumber.isVerified,
                   isActive: true,
                   isPrimary: true,
                   updatedAt: new Date(),
