@@ -1053,6 +1053,7 @@ export class ActionExecutor {
       }
 
       // Filter by time if specified (today, tomorrow, this week, this month)
+      // IMPORTANT: If listFilter is set, we MUST filter by time - don't show all reminders
       if (parsed.listFilter && userTimezone) {
         const timeFilter = parsed.listFilter.toLowerCase().trim();
         const now = new Date();
@@ -1101,6 +1102,54 @@ export class ActionExecutor {
         }, 'Filtering reminders by time');
 
         filteredReminders = filteredReminders.filter(reminder => {
+          if (timeFilter === 'today' || timeFilter.includes('today')) {
+            // For "today" filter, show ALL reminders scheduled for today (including paused ones)
+            // But only filter by date, not by active status
+            const isToday = this.isReminderScheduledForDate(reminder, userLocalTime, userTimezone);
+            
+            // Calculate next occurrence to log what we're comparing
+            const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+            let nextDateStr = 'N/A';
+            if (nextTime) {
+              const nextTimeFormatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: userTimezone,
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+              });
+              nextDateStr = nextTimeFormatter.format(nextTime);
+            }
+            
+            if (!isToday) {
+              // Log why reminder was filtered out
+              logger.info({
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                active: reminder.active,
+                targetDate: reminder.targetDate ? new Date(reminder.targetDate).toISOString() : null,
+                daysFromNow: reminder.daysFromNow,
+                dayOfMonth: reminder.dayOfMonth,
+                month: reminder.month,
+                time: reminder.time,
+                nextOccurrence: nextDateStr,
+                userToday: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+                reason: 'Next occurrence is not today',
+              }, 'Reminder filtered out for today');
+            } else {
+              logger.info({
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                active: reminder.active,
+                nextOccurrence: nextDateStr,
+                userToday: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+              }, 'Reminder included for today');
+            }
+            return isToday;
+          }
+          
+          // For other filters, check active status first
           if (!reminder.active) {
             logger.debug({
               reminderId: reminder.id,
@@ -1108,32 +1157,6 @@ export class ActionExecutor {
               reason: 'Reminder is inactive',
             }, 'Reminder filtered out (inactive)');
             return false;
-          }
-          
-          if (timeFilter === 'today' || timeFilter.includes('today')) {
-            // For "today" filter, check if reminder is scheduled for today
-            const isToday = this.isReminderScheduledForDate(reminder, userLocalTime, userTimezone);
-            if (!isToday) {
-              // Log why reminder was filtered out
-              logger.debug({
-                reminderId: reminder.id,
-                reminderTitle: reminder.title,
-                frequency: reminder.frequency,
-                targetDate: reminder.targetDate ? new Date(reminder.targetDate).toISOString() : null,
-                daysFromNow: reminder.daysFromNow,
-                dayOfMonth: reminder.dayOfMonth,
-                month: reminder.month,
-                time: reminder.time,
-                reason: 'Next occurrence is not today',
-              }, 'Reminder filtered out for today');
-            } else {
-              logger.debug({
-                reminderId: reminder.id,
-                reminderTitle: reminder.title,
-                frequency: reminder.frequency,
-              }, 'Reminder included for today');
-            }
-            return isToday;
           }
           
           // For other filters, use next occurrence
@@ -1174,6 +1197,27 @@ export class ActionExecutor {
           logger.warn({ timeFilter, userId: this.userId }, 'Unknown time filter, filtering out all reminders');
           return false;
         });
+        
+        // Log final filtered count
+        logger.info({
+          userId: this.userId,
+          timeFilter: parsed.listFilter,
+          reminderCountBeforeTimeFilter: reminders.length,
+          reminderCountAfterTimeFilter: filteredReminders.length,
+          filteredReminderIds: filteredReminders.map(r => ({
+            id: r.id,
+            title: r.title,
+            frequency: r.frequency,
+            active: r.active,
+          })),
+        }, 'Time filtering completed');
+      } else if (parsed.listFilter) {
+        // listFilter is set but no timezone - log warning
+        logger.warn({
+          userId: this.userId,
+          listFilter: parsed.listFilter,
+          hasTimezone: !!userTimezone,
+        }, 'listFilter specified but no user timezone available - cannot filter by time');
       }
 
       // Log filtered results
@@ -1294,10 +1338,25 @@ export class ActionExecutor {
       const nextMonth = parseInt(nextTimeParts.find(p => p.type === 'month')?.value || '0', 10) - 1; // Month is 0-indexed
       const nextDay = parseInt(nextTimeParts.find(p => p.type === 'day')?.value || '0', 10);
 
-      // Check if the next occurrence is today
+      // Check if the next occurrence is today - strict date comparison
       const isToday = nextYear === userLocalTime.year &&
                       nextMonth === userLocalTime.month &&
                       nextDay === userLocalTime.day;
+
+      // Log detailed comparison for debugging
+      logger.debug({
+        reminderId: reminder.id,
+        reminderTitle: reminder.title,
+        frequency: reminder.frequency,
+        nextYear,
+        nextMonth: nextMonth + 1,
+        nextDay,
+        userYear: userLocalTime.year,
+        userMonth: userLocalTime.month + 1,
+        userDay: userLocalTime.day,
+        isToday,
+        nextTimeISO: nextTime.toISOString(),
+      }, 'Date comparison for reminder');
 
       return isToday;
     } catch (error) {
@@ -1384,21 +1443,30 @@ export class ActionExecutor {
       }
       
       // Check if today's date matches the target date (in user's timezone)
+      // Strict date comparison - must match exactly
       const dateMatches = targetYear === userLocalTime.year && 
                           targetMonth === userLocalTime.month && 
                           targetDay === userLocalTime.day;
       
-      if (!dateMatches) {
-        return false;
-      }
+      // Log detailed comparison for debugging
+      logger.debug({
+        reminderId: reminder.id,
+        reminderTitle: reminder.title,
+        targetYear,
+        targetMonth: targetMonth + 1,
+        targetDay,
+        userYear: userLocalTime.year,
+        userMonth: userLocalTime.month + 1,
+        userDay: userLocalTime.day,
+        dateMatches,
+        hasTargetDate: !!reminder.targetDate,
+        targetDate: reminder.targetDate ? new Date(reminder.targetDate).toISOString() : null,
+        daysFromNow: reminder.daysFromNow,
+      }, 'One-time reminder date comparison');
       
-      // Date matches, but also check if the reminder time hasn't passed yet
-      // For "today" filter, we show reminders even if the time has passed (user might want to see what happened today)
-      // But if it's a one-time reminder that has already fired, we might want to exclude it
-      // Actually, let's show it if it's scheduled for today, regardless of whether time has passed
-      // The user can see it in their "today" list
-      
-      return true;
+      // Return true only if dates match exactly
+      // For "today" filter, show all reminders scheduled for today, even if time has passed
+      return dateMatches;
     } catch (error) {
       logger.error({ error, reminderId: reminder.id }, 'Error checking if one-time reminder is scheduled for today');
       return false;
@@ -1420,9 +1488,15 @@ export class ActionExecutor {
         const [hours, minutes] = reminder.time.split(':').map(Number);
         const todayReminder = this.createDateInUserTimezone(userLocalTime.year, userLocalTime.month, userLocalTime.day, hours, minutes, userTimezone);
         // If reminder time today has passed, use tomorrow
-        if (todayReminder.getTime() <= userLocalTime.date.getTime()) {
-          const tomorrow = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day + 1);
-          return this.createDateInUserTimezone(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), hours, minutes, userTimezone);
+        // Use a more precise comparison - check if time has passed (with 1 minute tolerance)
+        const currentTimeMs = userLocalTime.date.getTime();
+        const reminderTimeMs = todayReminder.getTime();
+        const oneMinuteMs = 60 * 1000;
+        
+        if (reminderTimeMs <= currentTimeMs + oneMinuteMs) {
+          // Time has passed (or will pass within 1 minute), use tomorrow
+          const tomorrowDate = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, userLocalTime.day + 1));
+          return this.createDateInUserTimezone(tomorrowDate.getUTCFullYear(), tomorrowDate.getUTCMonth(), tomorrowDate.getUTCDate(), hours, minutes, userTimezone);
         }
         return todayReminder;
       } else if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0 && reminder.time) {
