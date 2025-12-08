@@ -1542,6 +1542,87 @@ export class ActionExecutor {
       // Default to once
       result.frequency = 'once';
       
+      // Check for relative time patterns (e.g., "in 5 mins", "in 10 minutes", "in 2 hours")
+      const relativeTimeMatch = scheduleLower.match(/in\s+(\d+)\s+(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)/i);
+      if (relativeTimeMatch && relativeTimeMatch[1] && relativeTimeMatch[2]) {
+        const amount = parseInt(relativeTimeMatch[1], 10);
+        const unit = relativeTimeMatch[2].toLowerCase();
+        
+        // Get current time
+        const now = new Date();
+        
+        // Calculate duration in milliseconds
+        let durationMs: number;
+        if (unit.startsWith('min')) {
+          durationMs = amount * 60 * 1000;
+        } else if (unit.startsWith('hour') || unit.startsWith('hr')) {
+          durationMs = amount * 60 * 60 * 1000;
+        } else if (unit.startsWith('day')) {
+          durationMs = amount * 24 * 60 * 60 * 1000;
+        } else {
+          durationMs = amount * 60 * 1000; // Default to minutes
+        }
+        
+        // Calculate target timestamp
+        const targetTimestamp = now.getTime() + durationMs;
+        const targetDate = new Date(targetTimestamp);
+        
+        if (timezone) {
+          // Get target time components in user's timezone
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false,
+          });
+          
+          const parts = formatter.formatToParts(targetDate);
+          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+          
+          const targetYear = parseInt(getPart('year'), 10);
+          const targetMonth = parseInt(getPart('month'), 10) - 1; // Month is 0-indexed
+          const targetDay = parseInt(getPart('day'), 10);
+          const targetHour = parseInt(getPart('hour'), 10);
+          const targetMinute = parseInt(getPart('minute'), 10);
+          
+          // Create target date in user's timezone using the helper method
+          const targetDateInUserTz = this.createDateInUserTimezone(
+            targetYear,
+            targetMonth,
+            targetDay,
+            targetHour,
+            targetMinute,
+            timezone
+          );
+          
+          // Set targetDate and time
+          result.targetDate = targetDateInUserTz.toISOString();
+          result.time = `${String(targetHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')}`;
+        } else {
+          // No timezone provided, use UTC as fallback
+          result.targetDate = targetDate.toISOString();
+          result.time = `${String(targetDate.getUTCHours()).padStart(2, '0')}:${String(targetDate.getUTCMinutes()).padStart(2, '0')}`;
+        }
+        
+        logger.info(
+          {
+            scheduleStr: schedule,
+            amount,
+            unit,
+            timezone,
+            targetDate: result.targetDate,
+            time: result.time,
+          },
+          'Parsed relative time reminder'
+        );
+        
+        return result;
+      }
+      
       // Check for relative dates
       if (scheduleLower.includes('tomorrow')) {
         result.daysFromNow = 1;
