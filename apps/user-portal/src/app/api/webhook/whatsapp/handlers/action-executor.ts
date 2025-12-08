@@ -195,6 +195,12 @@ export class ActionExecutor {
         const filterText = match[1].trim().toLowerCase();
         const filterParts = filterText.split(/\s+/);
         
+        logger.debug({
+          filterText,
+          filterParts,
+          originalMatch: match[1],
+        }, 'Parsing reminder list filter');
+        
         // Check for reminder type filter
         const reminderTypes: ReminderFrequency[] = ['daily', 'hourly', 'minutely', 'once', 'weekly', 'monthly', 'yearly'];
         for (const part of filterParts) {
@@ -246,6 +252,15 @@ export class ActionExecutor {
             }
           }
         }
+        
+        logger.info({
+          parsedFilter: {
+            listFilter,
+            status,
+            typeFilter,
+            filterText,
+          },
+        }, 'Parsed reminder list filter');
         
         // Default to 'all' status if not specified
         if (!status) {
@@ -390,9 +405,13 @@ export class ActionExecutor {
           } else if (parsed.resourceType === 'note') {
             return await this.listNotes(parsed);
           } else if (parsed.resourceType === 'reminder') {
-            // Get user timezone for reminder filtering
-            const user = await getUserById(this.db, this.userId);
-            const userTimezone = (user as any)?.timezone;
+            // Use the timezone passed from the caller (already fetched with calendar context)
+            // Fallback to user timezone if not provided
+            let userTimezone = timezone;
+            if (!userTimezone) {
+              const user = await getUserById(this.db, this.userId);
+              userTimezone = (user as any)?.timezone;
+            }
             return await this.listReminders(parsed, userTimezone);
           } else if (parsed.resourceType === 'event') {
             return await this.listEvents(parsed);
