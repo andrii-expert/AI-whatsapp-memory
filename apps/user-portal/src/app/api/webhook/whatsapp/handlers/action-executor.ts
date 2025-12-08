@@ -1254,6 +1254,7 @@ export class ActionExecutor {
         }
         if (reminder.daysFromNow !== null && reminder.daysFromNow !== undefined) {
           // Calculate the target date from daysFromNow
+          // Note: This uses current date, matching the reminders page logic
           const now = new Date();
           let nowInTz: Date;
           if (timezone) {
@@ -1375,10 +1376,13 @@ export class ActionExecutor {
         const userYear = getPart('year');
         const userMonth = getPart('month') - 1; // 0-indexed
         const userDay = getPart('day');
+        const userHour = getPart('hour');
+        const userMinute = getPart('minute');
+        const userSecond = getPart('second');
         
         // Create a Date object representing "now" in user's timezone
         // We'll use this as the base for date-fns functions
-        const userNow = new Date(userYear, userMonth, userDay, getPart('hour'), getPart('minute'), getPart('second'));
+        const userNow = new Date(Date.UTC(userYear, userMonth, userDay, userHour, userMinute, userSecond));
         
         // Calculate date filter range based on filter type (same as reminders page)
         let dateFilterRange: { start: Date; end: Date } | null = null;

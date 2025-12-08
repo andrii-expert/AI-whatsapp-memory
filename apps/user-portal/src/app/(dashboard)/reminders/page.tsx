@@ -18,13 +18,6 @@ import {
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, isSameDay, isWithinInterval, parseISO } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
 import { Calendar } from "@imaginecalendar/ui/calendar";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@imaginecalendar/ui/dialog";
 
 // DateRange type definition (matching react-day-picker)
 type DateRange = {
@@ -1405,14 +1398,14 @@ export default function RemindersPage() {
       </div>
       
       {/* Filter Modal */}
-      <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+      <AlertDialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+        <AlertDialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
               <Filter size={20} />
               Filter Reminders
-            </DialogTitle>
-          </DialogHeader>
+            </AlertDialogTitle>
+          </AlertDialogHeader>
           
           <div className="space-y-6 py-4">
             {/* Date Filter Section */}
@@ -1570,7 +1563,7 @@ export default function RemindersPage() {
             </div>
           </div>
           
-          <DialogFooter className="gap-2">
+          <AlertDialogFooter className="gap-2">
             <Button
               type="button"
               variant="outline"
@@ -1585,17 +1578,15 @@ export default function RemindersPage() {
               <X size={16} className="mr-2" />
               Clear All
             </Button>
-            <Button
-              type="button"
-              variant="default"
+            <AlertDialogAction
               onClick={() => setFilterDialogOpen(false)}
               className="flex-1 sm:flex-none"
             >
               Apply Filters
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Stats */}
       {reminders.length > 0 && (
