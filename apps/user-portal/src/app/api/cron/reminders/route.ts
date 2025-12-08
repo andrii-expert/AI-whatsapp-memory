@@ -718,14 +718,54 @@ function checkIfReminderShouldFire(
       if (!reminderTime) {
         return { shouldNotify: false, reason: 'Once reminder already passed or invalid' };
       }
-      // Check if reminder time is within 1 minute of now
-      const now = new Date();
-      const timeUntilReminder = reminderTime.getTime() - now.getTime();
-      const oneMinuteInMs = 60 * 1000;
-      if (timeUntilReminder > 0 && timeUntilReminder <= oneMinuteInMs) {
-        return { shouldNotify: true, reason: 'Once reminder is due', reminderTime };
+      
+      // Get reminder time components in user's timezone
+      const reminderFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: userTimezone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        hour12: false,
+      });
+      
+      const reminderParts = reminderFormatter.formatToParts(reminderTime);
+      const getReminderPart = (type: string) => reminderParts.find(p => p.type === type)?.value || '0';
+      
+      const reminderYear = parseInt(getReminderPart('year'), 10);
+      const reminderMonth = parseInt(getReminderPart('month'), 10) - 1;
+      const reminderDay = parseInt(getReminderPart('day'), 10);
+      const reminderHour = parseInt(getReminderPart('hour'), 10);
+      const reminderMinute = parseInt(getReminderPart('minute'), 10);
+      
+      // Check if we're on the same date and time (within 1 minute) in user's timezone
+      const dateMatches = reminderYear === currentYear && 
+                          reminderMonth === currentMonth && 
+                          reminderDay === currentDay;
+      
+      if (dateMatches) {
+        // Check if time matches (exact minute or 1 minute after to account for cron timing)
+        const currentTimeInMinutes = currentHour * 60 + currentMinute;
+        const reminderTimeInMinutes = reminderHour * 60 + reminderMinute;
+        const minuteDiff = currentTimeInMinutes - reminderTimeInMinutes;
+        
+        // Fire if we're at the exact minute (0) or 1 minute after (1)
+        if (minuteDiff >= 0 && minuteDiff <= 1) {
+          return { shouldNotify: true, reason: 'Once reminder is due', reminderTime };
+        }
+        
+        return { 
+          shouldNotify: false, 
+          reason: `Date matches but time doesn't: current ${currentHour}:${String(currentMinute).padStart(2, '0')}, reminder ${String(reminderHour).padStart(2, '0')}:${String(reminderMinute).padStart(2, '0')}, diff ${minuteDiff}` 
+        };
       }
-      return { shouldNotify: false, reason: `Once reminder not due yet: ${Math.round(timeUntilReminder / 1000)}s until reminder` };
+      
+      return { 
+        shouldNotify: false, 
+        reason: `Date doesn't match: current ${currentYear}-${currentMonth + 1}-${currentDay}, reminder ${reminderYear}-${reminderMonth + 1}-${reminderDay}` 
+      };
     }
 
     return { shouldNotify: false, reason: `Unknown frequency: ${reminder.frequency}` };
@@ -746,27 +786,54 @@ function calculateReminderTime(reminder: any, userLocalTime: { year: number; mon
   try {
     if (reminder.frequency === 'once') {
       if (reminder.targetDate) {
+        // targetDate is already a Date object that was created using createDateInUserTimezone
+        // It represents the exact moment in time when the reminder should fire
+        // We just need to use it directly, but if reminder.time is specified, we should use that time instead
         const target = new Date(reminder.targetDate);
-        // targetDate is already a Date object, we need to interpret the time in user's timezone
-        const targetYear = target.getUTCFullYear();
-        const targetMonth = target.getUTCMonth();
-        const targetDay = target.getUTCDate();
+        
+        // Get the date components in user's timezone
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+          hour12: false,
+        });
+        
+        const parts = formatter.formatToParts(target);
+        const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+        
+        const targetYear = parseInt(getPart('year'), 10);
+        const targetMonth = parseInt(getPart('month'), 10) - 1; // Month is 0-indexed
+        const targetDay = parseInt(getPart('day'), 10);
+        
+        // Use the time from reminder.time if specified, otherwise use the time from targetDate
+        let hours: number;
+        let minutes: number;
         
         if (reminder.time) {
           const timeParts = reminder.time.split(':');
-          const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
-          const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
-          const reminderTimeUtc = createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
-          // If target date is in the past (more than 1 minute), return null (reminder already passed)
-          const oneMinuteAgo = new Date(userLocalTime.date.getTime() - 60 * 1000);
-          if (reminderTimeUtc < oneMinuteAgo) {
-            return null;
-          }
-          return reminderTimeUtc;
+          hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+          minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
         } else {
-          // If no time specified, set to midnight in user's timezone
-          return createDateInUserTimezone(targetYear, targetMonth, targetDay, 0, 0, userTimezone);
+          // Extract time from targetDate in user's timezone
+          hours = parseInt(getPart('hour'), 10);
+          minutes = parseInt(getPart('minute'), 10);
         }
+        
+        // Create the reminder time in user's timezone
+        const reminderTime = createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+        
+        // If reminder time is in the past (more than 1 minute), return null
+        const oneMinuteAgo = new Date(userLocalTime.date.getTime() - 60 * 1000);
+        if (reminderTime < oneMinuteAgo) {
+          return null;
+        }
+        
+        return reminderTime;
       } else if (reminder.daysFromNow !== undefined) {
         const nextDay = userLocalTime.day + reminder.daysFromNow;
         const nextDate = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, nextDay));
