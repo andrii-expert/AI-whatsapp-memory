@@ -173,41 +173,42 @@ async function analyzeAndRespond(
     logger.warn({ error, userId }, 'Failed to retrieve message history, continuing without history');
   }
 
+  // Get user's calendar timezone for accurate date/time context (used for AI analysis and list operations)
+  let userTimezone = 'Africa/Johannesburg'; // Default fallback
+  try {
+    const calendarConnection = await getPrimaryCalendar(db, userId);
+    if (calendarConnection) {
+      const calendarService = new CalendarService(db);
+      // Access the private getUserTimezone method using bracket notation
+      // This method will fetch timezone from calendar, fallback to user preferences, then default
+      userTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+    }
+  } catch (error) {
+    logger.warn({ error, userId }, 'Failed to get user timezone, using default');
+  }
+
   // Step 1: Analyze message with merged prompt
   let aiResponse: string;
   try {
-    // Get user's calendar timezone for accurate date/time context
-    let userTimezone = 'Africa/Johannesburg'; // Default fallback
-    try {
-      const calendarConnection = await getPrimaryCalendar(db, userId);
-      if (calendarConnection) {
-        const calendarService = new CalendarService(db);
-        // Access the private getUserTimezone method using bracket notation
-        // This method will fetch timezone from calendar, fallback to user preferences, then default
-        userTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
-      }
-    } catch (error) {
-      logger.warn({ error, userId }, 'Failed to get user timezone, using default');
-    }
-    
-    const currentDate = new Date();
-    
-    logger.info(
-      {
-        userId,
-        messageText: text.substring(0, 100),
-        historyCount: messageHistory.length,
-        currentDate: currentDate.toISOString(),
-        timezone: userTimezone,
-      },
-      'Analyzing message with merged prompt'
-    );
+      
+      const currentDate = new Date();
+      
+      logger.info(
+        {
+          userId,
+          messageText: text.substring(0, 100),
+          historyCount: messageHistory.length,
+          currentDate: currentDate.toISOString(),
+          timezone: userTimezone,
+        },
+        'Analyzing message with merged prompt'
+      );
 
-    aiResponse = (await analyzer.analyzeMessage(text, { 
-      messageHistory,
-      currentDate,
-      timezone: userTimezone,
-    })).trim();
+      aiResponse = (await analyzer.analyzeMessage(text, { 
+        messageHistory,
+        currentDate,
+        timezone: userTimezone,
+      })).trim();
 
     logger.debug(
       {
@@ -219,7 +220,7 @@ async function analyzeAndRespond(
     );
 
     // Process the AI response in main workflow (workflow will send appropriate response to user)
-    await processAIResponse(aiResponse, recipient, userId, db, whatsappService, text);
+    await processAIResponse(aiResponse, recipient, userId, db, whatsappService, text, userTimezone);
 
   } catch (error) {
     logger.error(
@@ -265,7 +266,8 @@ async function processAIResponse(
   userId: string,
   db: Database,
   whatsappService: WhatsAppService,
-  originalUserText?: string
+  originalUserText?: string,
+  userTimezone?: string
 ): Promise<void> {
   try {
     // Parse the Title from response
@@ -367,7 +369,25 @@ async function processAIResponse(
             'Parsed list operation, executing'
           );
           
-          const result = await executor.executeAction(parsed);
+          // Get timezone for list operations (needed for reminder filtering)
+          let listTimezone = userTimezone || 'Africa/Johannesburg';
+          if (parsed.resourceType === 'reminder' || parsed.resourceType === 'event') {
+            if (!userTimezone) {
+              try {
+                const calendarConnection = await getPrimaryCalendar(db, userId);
+                if (calendarConnection) {
+                  const calendarService = new CalendarService(db);
+                  listTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+                }
+              } catch (error) {
+                logger.warn({ error, userId }, 'Failed to get timezone for list operation, using default');
+              }
+            } else {
+              listTimezone = userTimezone;
+            }
+          }
+          
+          const result = await executor.executeAction(parsed, listTimezone);
           
           logger.info(
             {
@@ -572,10 +592,45 @@ async function processAIResponse(
       
       if (isList) {
         // List reminders is handled by action executor
+        // Send AI response to user for debugging
+        try {
+          await whatsappService.sendTextMessage(
+            recipient,
+            `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
+          );
+          // Log outgoing message
+          try {
+            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+            if (whatsappNumber) {
+              await logOutgoingWhatsAppMessage(db, {
+                whatsappNumberId: whatsappNumber.id,
+                userId,
+                messageType: 'text',
+                messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
+                isFreeMessage: true,
+              });
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to log outgoing AI response message');
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to send AI response to user');
+        }
+        
         const parsed = executor.parseAction(actionTemplate);
         if (parsed) {
           parsed.resourceType = 'reminder';
-          const result = await executor.executeAction(parsed);
+          
+          logger.info({
+            userId,
+            parsedAction: parsed,
+            listFilter: parsed.listFilter,
+            status: parsed.status,
+            typeFilter: parsed.typeFilter,
+            calendarTimezone,
+          }, 'Parsed reminder list action');
+          
+          const result = await executor.executeAction(parsed, calendarTimezone);
           
           try {
             const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
