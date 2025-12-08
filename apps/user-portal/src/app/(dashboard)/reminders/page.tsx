@@ -632,6 +632,14 @@ export default function RemindersPage() {
   type DateFilterType = "all" | "today" | "tomorrow" | "thisWeek" | "thisMonth" | "custom";
   const [dateFilter, setDateFilter] = useState<DateFilterType>("all");
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
+  
+  // Active/Inactive filter state
+  type StatusFilterType = "all" | "active" | "inactive";
+  const [statusFilter, setStatusFilter] = useState<StatusFilterType>("all");
+  
+  // Reminder type (frequency) filter state
+  type TypeFilterType = "all" | ReminderFrequency;
+  const [typeFilter, setTypeFilter] = useState<TypeFilterType>("all");
 
   const initialFormState: ReminderFormData = useMemo(() => {
     const now = new Date();
@@ -785,6 +793,21 @@ export default function RemindersPage() {
           return false;
         }
         
+        // Status filter (active/inactive)
+        if (statusFilter !== "all") {
+          if (statusFilter === "active" && !r.active) {
+            return false;
+          }
+          if (statusFilter === "inactive" && r.active) {
+            return false;
+          }
+        }
+        
+        // Reminder type (frequency) filter
+        if (typeFilter !== "all" && r.frequency !== typeFilter) {
+          return false;
+        }
+        
         // Date filter
         if (dateFilter !== "all" && dateFilterRange && r.nextAt) {
           // For "today" filter, also include paused reminders scheduled for today
@@ -835,7 +858,7 @@ export default function RemindersPage() {
         const bCreatedAt = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
         return bCreatedAt.getTime() - aCreatedAt.getTime();
       });
-  }, [reminders, query, userTimezone, dateFilter, customDateRange]);
+  }, [reminders, query, userTimezone, dateFilter, customDateRange, statusFilter, typeFilter]);
 
   const resetForm = useCallback(() => {
     setForm(initialFormState);
@@ -1111,120 +1134,192 @@ export default function RemindersPage() {
           <Button
             onClick={openNewForm}
             type="button"
-            variant="orange-primary"
+            variant="default"
             className="w-full sm:w-auto"
           >
             <Plus size={18} className="mr-2" /> New Reminder
           </Button>
         </div>
         
-        {/* Professional Date Filter */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Filter size={16} />
-            <span className="font-medium">Filter by date:</span>
+        {/* Filters Section */}
+        <div className="space-y-3">
+          {/* Date Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Filter size={16} />
+              <span className="font-medium">Date:</span>
+            </div>
+            
+            {/* Quick filter buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              {(["all", "today", "tomorrow", "thisWeek", "thisMonth"] as DateFilterType[]).map((filter) => {
+                const isActive = dateFilter === filter;
+                const labels: Record<DateFilterType, string> = {
+                  all: "All",
+                  today: "Today",
+                  tomorrow: "Tomorrow",
+                  thisWeek: "This Week",
+                  thisMonth: "This Month",
+                  custom: "Custom",
+                };
+                
+                return (
+                  <Button
+                    key={filter}
+                    type="button"
+                    variant={isActive ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setDateFilter(filter);
+                      if (filter !== "custom") {
+                        setCustomDateRange(undefined);
+                      }
+                    }}
+                    className="h-8 text-xs sm:text-sm"
+                  >
+                    {labels[filter]}
+                  </Button>
+                );
+              })}
+              
+              {/* Custom date range picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={dateFilter === "custom" ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 text-xs sm:text-sm"
+                  >
+                    <CalendarIcon size={14} className="mr-1.5" />
+                    Custom Range
+                    {customDateRange?.from && customDateRange?.to && (
+                      <span className="ml-1.5 text-xs opacity-70">
+                        ({format(customDateRange.from, "MMM d")} - {format(customDateRange.to, "MMM d")})
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={customDateRange?.from}
+                    selected={customDateRange}
+                    onSelect={(range: DateRange | undefined) => {
+                      if (range?.from && range?.to) {
+                        setCustomDateRange(range);
+                        setDateFilter("custom");
+                      } else if (range?.from) {
+                        setCustomDateRange({ from: range.from, to: undefined });
+                        setDateFilter("custom");
+                      } else {
+                        setCustomDateRange(undefined);
+                      }
+                    }}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
           
-          {/* Quick filter buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            {(["all", "today", "tomorrow", "thisWeek", "thisMonth"] as DateFilterType[]).map((filter) => {
-              const isActive = dateFilter === filter;
-              const labels: Record<DateFilterType, string> = {
-                all: "All",
-                today: "Today",
-                tomorrow: "Tomorrow",
-                thisWeek: "This Week",
-                thisMonth: "This Month",
-                custom: "Custom",
-              };
-              
-              return (
+          {/* Status and Type Filters */}
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Status Filter (Active/Inactive) */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Filter size={16} />
+                <span className="font-medium">Status:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {(["all", "active", "inactive"] as StatusFilterType[]).map((filter) => {
+                  const isActive = statusFilter === filter;
+                  const labels: Record<StatusFilterType, string> = {
+                    all: "All",
+                    active: "Active",
+                    inactive: "Paused",
+                  };
+                  
+                  return (
+                    <Button
+                      key={filter}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setStatusFilter(filter)}
+                      className="h-8 text-xs sm:text-sm"
+                    >
+                      {labels[filter]}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            
+            {/* Reminder Type Filter */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Filter size={16} />
+                <span className="font-medium">Type:</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
-                  key={filter}
                   type="button"
-                  variant={isActive ? "default" : "outline"}
+                  variant={typeFilter === "all" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => {
-                    setDateFilter(filter);
-                    if (filter !== "custom") {
-                      setCustomDateRange(undefined);
-                    }
-                  }}
+                  onClick={() => setTypeFilter("all")}
                   className="h-8 text-xs sm:text-sm"
                 >
-                  {labels[filter]}
+                  All
                 </Button>
-              );
-            })}
-            
-            {/* Custom date range picker */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant={dateFilter === "custom" ? "default" : "outline"}
-                  size="sm"
-                  className="h-8 text-xs sm:text-sm"
-                >
-                  <CalendarIcon size={14} className="mr-1.5" />
-                  Custom Range
-                  {customDateRange?.from && customDateRange?.to && (
-                    <span className="ml-1.5 text-xs opacity-70">
-                      ({format(customDateRange.from, "MMM d")} - {format(customDateRange.to, "MMM d")})
-                    </span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={customDateRange?.from}
-                  selected={customDateRange}
-                  onSelect={(range: DateRange | undefined) => {
-                    if (range?.from && range?.to) {
-                      setCustomDateRange(range);
-                      setDateFilter("custom");
-                    } else if (range?.from) {
-                      setCustomDateRange({ from: range.from, to: undefined });
-                      setDateFilter("custom");
-                    } else {
-                      setCustomDateRange(undefined);
-                    }
-                  }}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
-            
-            {/* Clear filter button */}
-            {(dateFilter !== "all" || customDateRange) && (
+                {(["daily", "hourly", "minutely", "once", "weekly", "monthly", "yearly"] as ReminderFrequency[]).map((frequency) => {
+                  const isActive = typeFilter === frequency;
+                  const labels: Record<ReminderFrequency, string> = {
+                    daily: "Daily",
+                    hourly: "Hourly",
+                    minutely: "Minutely",
+                    once: "Once",
+                    weekly: "Weekly",
+                    monthly: "Monthly",
+                    yearly: "Yearly",
+                  };
+                  
+                  return (
+                    <Button
+                      key={frequency}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTypeFilter(frequency)}
+                      className="h-8 text-xs sm:text-sm"
+                    >
+                      {labels[frequency]}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          
+          {/* Clear All Filters Button */}
+          {(dateFilter !== "all" || statusFilter !== "all" || typeFilter !== "all" || customDateRange) && (
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setDateFilter("all");
+                  setStatusFilter("all");
+                  setTypeFilter("all");
                   setCustomDateRange(undefined);
                 }}
                 className="h-8 text-xs sm:text-sm text-muted-foreground hover:text-foreground"
               >
                 <X size={14} className="mr-1.5" />
-                Clear
+                Clear All Filters
               </Button>
-            )}
-          </div>
-          
-          {/* Active filter indicator */}
-          {dateFilter !== "all" && (
-            <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary" className="text-xs">
-                {dateFilter === "custom" && customDateRange?.from && customDateRange?.to
-                  ? `${format(customDateRange.from, "MMM d")} - ${format(customDateRange.to, "MMM d, yyyy")}`
-                  : dateFilter === "custom" && customDateRange?.from
-                  ? `From ${format(customDateRange.from, "MMM d, yyyy")}`
-                  : dateFilter.charAt(0).toUpperCase() + dateFilter.slice(1)}
-              </Badge>
             </div>
           )}
         </div>
@@ -1809,7 +1904,7 @@ export default function RemindersPage() {
               </Button>
               <Button
                 type="submit"
-                variant="blue-primary"
+                variant="default"
                 className="flex-1 sm:flex-none h-11 min-w-[140px]"
               >
                 {form.id ? "Update Reminder" : "Add Reminder"}
