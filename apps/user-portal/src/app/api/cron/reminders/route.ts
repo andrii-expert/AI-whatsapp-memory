@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDb } from '@imaginecalendar/database/client';
-import { getActiveReminders, logOutgoingWhatsAppMessage, getUserById, getUserWhatsAppNumbers } from '@imaginecalendar/database/queries';
+import { getActiveReminders, logOutgoingWhatsAppMessage, getUserById, getUserWhatsAppNumbers, toggleReminderActive } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 
@@ -349,9 +349,34 @@ export async function GET(req: NextRequest) {
                   reminderId: reminder.id,
                   reminderTitle: reminder.title,
                   reminderTime: reminderTime.toISOString(),
+                  frequency: reminder.frequency,
                 },
                 'Reminder notification sent successfully'
               );
+              
+              // Deactivate one-time reminders after they fire
+              if (reminder.frequency === 'once') {
+                try {
+                  await toggleReminderActive(db, reminder.id, user.id, false);
+                  logger.info(
+                    {
+                      userId: user.id,
+                      reminderId: reminder.id,
+                      reminderTitle: reminder.title,
+                    },
+                    'One-time reminder deactivated after firing'
+                  );
+                } catch (deactivateError) {
+                  logger.error(
+                    {
+                      error: deactivateError,
+                      userId: user.id,
+                      reminderId: reminder.id,
+                    },
+                    'Failed to deactivate one-time reminder after firing'
+                  );
+                }
+              }
             } catch (sendError) {
               logger.error(
                 {
@@ -713,58 +738,192 @@ function checkIfReminderShouldFire(
       }
       return { shouldNotify: false, reason: `Date doesn't match: current ${currentMonth + 1}/${currentDay}, reminder ${month}/${dayOfMonth}` };
     } else if (reminder.frequency === 'once') {
-      // For once reminders, calculate the next occurrence and check if it's now
-      const reminderTime = calculateReminderTime(reminder, userLocalTime, userTimezone);
-      if (!reminderTime) {
-        return { shouldNotify: false, reason: 'Once reminder already passed or invalid' };
-      }
+      // For once reminders, check if today's date matches the target date and time
+      logger.debug(
+        {
+          reminderId: reminder.id,
+          reminderTitle: reminder.title,
+          hasTargetDate: !!reminder.targetDate,
+          targetDate: reminder.targetDate ? new Date(reminder.targetDate).toISOString() : null,
+          daysFromNow: reminder.daysFromNow,
+          dayOfMonth: reminder.dayOfMonth,
+          month: reminder.month,
+          time: reminder.time,
+          currentYear,
+          currentMonth,
+          currentDay,
+          currentHour,
+          currentMinute,
+        },
+        'Checking one-time reminder'
+      );
       
-      // Get reminder time components in user's timezone
-      const reminderFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: userTimezone,
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-        hour12: false,
-      });
+      let targetYear: number;
+      let targetMonth: number; // 0-11
+      let targetDay: number;
+      let targetHours: number;
+      let targetMinutes: number;
       
-      const reminderParts = reminderFormatter.formatToParts(reminderTime);
-      const getReminderPart = (type: string) => reminderParts.find(p => p.type === type)?.value || '0';
-      
-      const reminderYear = parseInt(getReminderPart('year'), 10);
-      const reminderMonth = parseInt(getReminderPart('month'), 10) - 1;
-      const reminderDay = parseInt(getReminderPart('day'), 10);
-      const reminderHour = parseInt(getReminderPart('hour'), 10);
-      const reminderMinute = parseInt(getReminderPart('minute'), 10);
-      
-      // Check if we're on the same date and time (within 1 minute) in user's timezone
-      const dateMatches = reminderYear === currentYear && 
-                          reminderMonth === currentMonth && 
-                          reminderDay === currentDay;
-      
-      if (dateMatches) {
-        // Check if time matches (exact minute or 1 minute after to account for cron timing)
-        const currentTimeInMinutes = currentHour * 60 + currentMinute;
-        const reminderTimeInMinutes = reminderHour * 60 + reminderMinute;
-        const minuteDiff = currentTimeInMinutes - reminderTimeInMinutes;
+      if (reminder.targetDate) {
+        // Get target date components in user's timezone
+        const targetDateFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+          hour12: false,
+        });
         
-        // Fire if we're at the exact minute (0) or 1 minute after (1)
-        if (minuteDiff >= 0 && minuteDiff <= 1) {
-          return { shouldNotify: true, reason: 'Once reminder is due', reminderTime };
+        const targetParts = targetDateFormatter.formatToParts(new Date(reminder.targetDate));
+        const getPart = (type: string) => targetParts.find(p => p.type === type)?.value || '0';
+        
+        targetYear = parseInt(getPart('year'), 10);
+        targetMonth = parseInt(getPart('month'), 10) - 1; // Convert to 0-11
+        targetDay = parseInt(getPart('day'), 10);
+        
+        // Use reminder.time if specified, otherwise use time from targetDate
+        if (reminder.time) {
+          const [hours, minutes] = reminder.time.split(':').map(Number);
+          targetHours = hours;
+          targetMinutes = minutes;
+        } else {
+          targetHours = parseInt(getPart('hour'), 10);
+          targetMinutes = parseInt(getPart('minute'), 10);
+        }
+      } else if (reminder.daysFromNow !== undefined) {
+        // Calculate target date from daysFromNow
+        // daysFromNow is relative to when the reminder was created
+        // Use createdAt if available, otherwise use current date as fallback
+        const reminderCreatedAt = (reminder as any).createdAt ? new Date((reminder as any).createdAt) : userLocalTime.date;
+        
+        // Get creation date components in user's timezone
+        const createdFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour12: false,
+        });
+        
+        const createdParts = createdFormatter.formatToParts(reminderCreatedAt);
+        const getCreatedPart = (type: string) => createdParts.find(p => p.type === type)?.value || '0';
+        
+        const createdYear = parseInt(getCreatedPart('year'), 10);
+        const createdMonth = parseInt(getCreatedPart('month'), 10) - 1; // Convert to 0-11
+        const createdDay = parseInt(getCreatedPart('day'), 10);
+        
+        // Calculate target date by adding daysFromNow to creation date
+        // Create a date object in user's timezone, add days, then extract components
+        const targetDateObj = new Date(Date.UTC(createdYear, createdMonth, createdDay + reminder.daysFromNow));
+        targetYear = targetDateObj.getUTCFullYear();
+        targetMonth = targetDateObj.getUTCMonth();
+        targetDay = targetDateObj.getUTCDate();
+        
+        // Use reminder.time if specified, otherwise default to 9:00 AM
+        if (reminder.time) {
+          const [hours, minutes] = reminder.time.split(':').map(Number);
+          targetHours = hours;
+          targetMinutes = minutes;
+        } else {
+          targetHours = 9;
+          targetMinutes = 0;
+        }
+      } else if (reminder.dayOfMonth && reminder.month) {
+        // Specific date (month + dayOfMonth)
+        targetYear = currentYear;
+        targetMonth = reminder.month - 1; // Convert 1-12 to 0-11
+        targetDay = reminder.dayOfMonth;
+        
+        // Check if this year's date has passed
+        const thisYearDate = createDateInUserTimezone(targetYear, targetMonth, targetDay, 9, 0, userTimezone);
+        if (thisYearDate < userLocalTime.date) {
+          targetYear += 1;
         }
         
+        // Use reminder.time if specified, otherwise default to 9:00 AM
+        if (reminder.time) {
+          const [hours, minutes] = reminder.time.split(':').map(Number);
+          targetHours = hours;
+          targetMinutes = minutes;
+        } else {
+          targetHours = 9;
+          targetMinutes = 0;
+        }
+      } else {
+        return { shouldNotify: false, reason: 'Once reminder missing targetDate, daysFromNow, or dayOfMonth/month' };
+      }
+      
+      // Check if today's date matches the target date (in user's timezone)
+      const dateMatches = targetYear === currentYear && 
+                          targetMonth === currentMonth && 
+                          targetDay === currentDay;
+      
+      logger.debug(
+        {
+          reminderId: reminder.id,
+          targetYear,
+          targetMonth: targetMonth + 1,
+          targetDay,
+          targetHours,
+          targetMinutes,
+          currentYear,
+          currentMonth: currentMonth + 1,
+          currentDay,
+          currentHour,
+          currentMinute,
+          dateMatches,
+        },
+        'One-time reminder date check'
+      );
+      
+      if (!dateMatches) {
         return { 
           shouldNotify: false, 
-          reason: `Date matches but time doesn't: current ${currentHour}:${String(currentMinute).padStart(2, '0')}, reminder ${String(reminderHour).padStart(2, '0')}:${String(reminderMinute).padStart(2, '0')}, diff ${minuteDiff}` 
+          reason: `Date doesn't match: current ${currentYear}-${currentMonth + 1}-${currentDay}, target ${targetYear}-${targetMonth + 1}-${targetDay}` 
         };
+      }
+      
+      // Date matches, now check if time matches (using same logic as daily reminders)
+      const currentTimeInMinutes = currentHour * 60 + currentMinute;
+      const targetTimeInMinutes = targetHours * 60 + targetMinutes;
+      const timeDiff = currentTimeInMinutes - targetTimeInMinutes;
+      
+      logger.debug(
+        {
+          reminderId: reminder.id,
+          currentTimeInMinutes,
+          targetTimeInMinutes,
+          timeDiff,
+          willFire: timeDiff >= 0 && timeDiff <= 1,
+        },
+        'One-time reminder time check'
+      );
+      
+      // Fire if we're at the exact time (0) or 1 minute after (1) to account for cron timing
+      if (timeDiff >= 0 && timeDiff <= 1) {
+        const reminderTime = createDateInUserTimezone(targetYear, targetMonth, targetDay, targetHours, targetMinutes, userTimezone);
+        logger.info(
+          {
+            reminderId: reminder.id,
+            reminderTitle: reminder.title,
+            targetYear,
+            targetMonth: targetMonth + 1,
+            targetDay,
+            targetHours,
+            targetMinutes,
+            reminderTime: reminderTime.toISOString(),
+          },
+          'One-time reminder is due - will fire'
+        );
+        return { shouldNotify: true, reason: 'Once reminder date and time match', reminderTime };
       }
       
       return { 
         shouldNotify: false, 
-        reason: `Date doesn't match: current ${currentYear}-${currentMonth + 1}-${currentDay}, reminder ${reminderYear}-${reminderMonth + 1}-${reminderDay}` 
+        reason: `Date matches but time doesn't: current ${currentHour}:${String(currentMinute).padStart(2, '0')}, target ${String(targetHours).padStart(2, '0')}:${String(targetMinutes).padStart(2, '0')}, diff ${timeDiff}` 
       };
     }
 
