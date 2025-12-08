@@ -11,8 +11,19 @@ import {
   Search,
   MoreVertical,
   BellRing,
-  Calendar,
+  Calendar as CalendarIcon,
+  Filter,
+  X,
 } from "lucide-react";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, isSameDay, isWithinInterval, parseISO } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
+import { Calendar } from "@imaginecalendar/ui/calendar";
+
+// DateRange type definition (matching react-day-picker)
+type DateRange = {
+  from: Date | undefined;
+  to: Date | undefined;
+};
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
 import { Input } from "@imaginecalendar/ui/input";
@@ -616,6 +627,11 @@ export default function RemindersPage() {
   const [showForm, setShowForm] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState<string | null>(null);
+  
+  // Date filter state
+  type DateFilterType = "all" | "today" | "tomorrow" | "thisWeek" | "thisMonth" | "custom";
+  const [dateFilter, setDateFilter] = useState<DateFilterType>("all");
+  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
 
   const initialFormState: ReminderFormData = useMemo(() => {
     const now = new Date();
@@ -709,6 +725,39 @@ export default function RemindersPage() {
   const userTimezone = (user as any)?.timezone;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const now = new Date();
+    
+    // Calculate date filter range based on filter type
+    let dateFilterRange: { start: Date; end: Date } | null = null;
+    
+    if (dateFilter === "today") {
+      dateFilterRange = {
+        start: startOfDay(now),
+        end: endOfDay(now),
+      };
+    } else if (dateFilter === "tomorrow") {
+      const tomorrow = addDays(now, 1);
+      dateFilterRange = {
+        start: startOfDay(tomorrow),
+        end: endOfDay(tomorrow),
+      };
+    } else if (dateFilter === "thisWeek") {
+      dateFilterRange = {
+        start: startOfWeek(now, { weekStartsOn: 0 }), // Sunday
+        end: endOfWeek(now, { weekStartsOn: 0 }),
+      };
+    } else if (dateFilter === "thisMonth") {
+      dateFilterRange = {
+        start: startOfMonth(now),
+        end: endOfMonth(now),
+      };
+    } else if (dateFilter === "custom" && customDateRange?.from && customDateRange?.to) {
+      dateFilterRange = {
+        start: startOfDay(customDateRange.from),
+        end: endOfDay(customDateRange.to),
+      };
+    }
+    
     return reminders
       .map((r) => {
         // Prepare reminder object for compute function
@@ -730,7 +779,48 @@ export default function RemindersPage() {
           nextAt: computeNext(reminderForCompute, new Date(), userTimezone)
         };
       })
-      .filter((r) => (q ? r.title.toLowerCase().includes(q) : true))
+      .filter((r) => {
+        // Text search filter
+        if (q && !r.title.toLowerCase().includes(q)) {
+          return false;
+        }
+        
+        // Date filter
+        if (dateFilter !== "all" && dateFilterRange && r.nextAt) {
+          // For "today" filter, also include paused reminders scheduled for today
+          // For other filters, only include active reminders
+          if (dateFilter === "today") {
+            // Check if reminder is scheduled for today (regardless of active status)
+            const nextDate = r.nextAt;
+            const nextDateInUserTz = userTimezone 
+              ? new Date(nextDate.toLocaleString("en-US", { timeZone: userTimezone }))
+              : nextDate;
+            
+            const nextYear = nextDateInUserTz.getFullYear();
+            const nextMonth = nextDateInUserTz.getMonth();
+            const nextDay = nextDateInUserTz.getDate();
+            const today = now;
+            const todayInUserTz = userTimezone
+              ? new Date(today.toLocaleString("en-US", { timeZone: userTimezone }))
+              : today;
+            
+            const isToday = nextYear === todayInUserTz.getFullYear() &&
+                           nextMonth === todayInUserTz.getMonth() &&
+                           nextDay === todayInUserTz.getDate();
+            
+            return isToday;
+          } else {
+            // For other filters, check if next occurrence is within the range
+            if (!r.active) return false;
+            return isWithinInterval(r.nextAt, {
+              start: dateFilterRange.start,
+              end: dateFilterRange.end,
+            });
+          }
+        }
+        
+        return true;
+      })
       .sort((a, b) => {
         // Active reminders first, sorted by next occurrence
         if (a.active && b.active) {
@@ -745,7 +835,7 @@ export default function RemindersPage() {
         const bCreatedAt = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
         return bCreatedAt.getTime() - aCreatedAt.getTime();
       });
-  }, [reminders, query, userTimezone]);
+  }, [reminders, query, userTimezone, dateFilter, customDateRange]);
 
   const resetForm = useCallback(() => {
     setForm(initialFormState);
@@ -1006,25 +1096,138 @@ export default function RemindersPage() {
         </div>
       </div>
 
-      {/* Search and Add Button */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-sm md:max-w-md lg:max-w-lg">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-          <Input
-            value={query}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-            placeholder="Search reminders..."
-            className="pl-10"
-          />
+      {/* Search, Filter and Add Button */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-sm md:max-w-md lg:max-w-lg">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+            <Input
+              value={query}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+              placeholder="Search reminders..."
+              className="pl-10"
+            />
+          </div>
+          <Button
+            onClick={openNewForm}
+            type="button"
+            variant="orange-primary"
+            className="w-full sm:w-auto"
+          >
+            <Plus size={18} className="mr-2" /> New Reminder
+          </Button>
         </div>
-        <Button
-          onClick={openNewForm}
-          type="button"
-          variant="orange-primary"
-          className="w-full sm:w-auto"
-        >
-          <Plus size={18} className="mr-2" /> New Reminder
-        </Button>
+        
+        {/* Professional Date Filter */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Filter size={16} />
+            <span className="font-medium">Filter by date:</span>
+          </div>
+          
+          {/* Quick filter buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            {(["all", "today", "tomorrow", "thisWeek", "thisMonth"] as DateFilterType[]).map((filter) => {
+              const isActive = dateFilter === filter;
+              const labels: Record<DateFilterType, string> = {
+                all: "All",
+                today: "Today",
+                tomorrow: "Tomorrow",
+                thisWeek: "This Week",
+                thisMonth: "This Month",
+                custom: "Custom",
+              };
+              
+              return (
+                <Button
+                  key={filter}
+                  type="button"
+                  variant={isActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setDateFilter(filter);
+                    if (filter !== "custom") {
+                      setCustomDateRange(undefined);
+                    }
+                  }}
+                  className="h-8 text-xs sm:text-sm"
+                >
+                  {labels[filter]}
+                </Button>
+              );
+            })}
+            
+            {/* Custom date range picker */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant={dateFilter === "custom" ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-xs sm:text-sm"
+                >
+                  <CalendarIcon size={14} className="mr-1.5" />
+                  Custom Range
+                  {customDateRange?.from && customDateRange?.to && (
+                    <span className="ml-1.5 text-xs opacity-70">
+                      ({format(customDateRange.from, "MMM d")} - {format(customDateRange.to, "MMM d")})
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={customDateRange?.from}
+                  selected={customDateRange}
+                  onSelect={(range: DateRange | undefined) => {
+                    if (range?.from && range?.to) {
+                      setCustomDateRange(range);
+                      setDateFilter("custom");
+                    } else if (range?.from) {
+                      setCustomDateRange({ from: range.from, to: undefined });
+                      setDateFilter("custom");
+                    } else {
+                      setCustomDateRange(undefined);
+                    }
+                  }}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+            
+            {/* Clear filter button */}
+            {(dateFilter !== "all" || customDateRange) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDateFilter("all");
+                  setCustomDateRange(undefined);
+                }}
+                className="h-8 text-xs sm:text-sm text-muted-foreground hover:text-foreground"
+              >
+                <X size={14} className="mr-1.5" />
+                Clear
+              </Button>
+            )}
+          </div>
+          
+          {/* Active filter indicator */}
+          {dateFilter !== "all" && (
+            <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="secondary" className="text-xs">
+                {dateFilter === "custom" && customDateRange?.from && customDateRange?.to
+                  ? `${format(customDateRange.from, "MMM d")} - ${format(customDateRange.to, "MMM d, yyyy")}`
+                  : dateFilter === "custom" && customDateRange?.from
+                  ? `From ${format(customDateRange.from, "MMM d, yyyy")}`
+                  : dateFilter.charAt(0).toUpperCase() + dateFilter.slice(1)}
+              </Badge>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
