@@ -45,6 +45,7 @@ export interface ParsedAction {
   newName?: string;
   status?: string;
   listFilter?: string; // For list operations: 'all', folder name, status, etc.
+  typeFilter?: ReminderFrequency; // For reminder type filtering: 'daily', 'hourly', etc.
   missingFields: string[];
 }
 
@@ -78,6 +79,7 @@ export class ActionExecutor {
     let newName: string | undefined;
     let status: string | undefined;
     let listFilter: string | undefined;
+    let typeFilter: ReminderFrequency | undefined;
 
     // Task operations
     if (trimmed.startsWith('Create a task:')) {
@@ -185,17 +187,59 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('List reminders:')) {
       action = 'list';
       resourceType = 'reminder';
-      // Match: "List reminders: {all|active|paused|today|tomorrow|this week|this month}"
+      // Match: "List reminders: {all|active|paused|today|tomorrow|this week|this month|daily|hourly|weekly|monthly|yearly|once|minutely}"
+      // Also supports combinations like "active daily" or "daily today"
       const match = trimmed.match(/^List reminders:\s*(.+)$/i);
       if (match) {
         const filterText = match[1].trim().toLowerCase();
-        // Check if it's a status filter
-        if (filterText === 'active' || filterText === 'paused' || filterText === 'all') {
-          status = filterText;
-        } else {
-          // It's a time-based filter (today, tomorrow, etc.)
-          listFilter = filterText;
-          status = 'all'; // Default status when using time filter
+        const filterParts = filterText.split(/\s+/);
+        
+        // Check for reminder type filter
+        const reminderTypes: ReminderFrequency[] = ['daily', 'hourly', 'minutely', 'once', 'weekly', 'monthly', 'yearly'];
+        for (const part of filterParts) {
+          const matchedType = reminderTypes.find(type => part === type || part.includes(type));
+          if (matchedType) {
+            typeFilter = matchedType;
+            break;
+          }
+        }
+        
+        // Check for status filter
+        if (filterParts.includes('active')) {
+          status = 'active';
+        } else if (filterParts.includes('paused') || filterParts.includes('inactive')) {
+          status = 'paused';
+        } else if (filterParts.includes('all')) {
+          status = 'all';
+        }
+        
+        // Check for time-based filter (today, tomorrow, this week, this month)
+        const timeFilters = ['today', 'tomorrow', 'this week', 'this month'];
+        for (const timeFilter of timeFilters) {
+          if (filterText.includes(timeFilter)) {
+            listFilter = timeFilter;
+            break;
+          }
+        }
+        
+        // If no specific filters found, check if the whole text is a single filter
+        if (!typeFilter && !status && !listFilter) {
+          if (filterText === 'active' || filterText === 'paused' || filterText === 'all') {
+            status = filterText;
+          } else if (timeFilters.some(tf => filterText === tf)) {
+            listFilter = filterText;
+          } else {
+            // Try to match as reminder type
+            const matchedType = reminderTypes.find(type => filterText === type);
+            if (matchedType) {
+              typeFilter = matchedType;
+            }
+          }
+        }
+        
+        // Default to 'all' status if not specified
+        if (!status) {
+          status = 'all';
         }
       } else {
         status = 'all'; // Default to all
@@ -312,6 +356,7 @@ export class ActionExecutor {
       newName,
       status,
       listFilter,
+      typeFilter,
       missingFields,
     };
   }
@@ -1051,6 +1096,11 @@ export class ActionExecutor {
         const isActive = parsed.status === 'active';
         filteredReminders = reminders.filter(r => r.active === isActive);
       }
+      
+      // Filter by reminder type if specified
+      if (parsed.typeFilter) {
+        filteredReminders = filteredReminders.filter(r => r.frequency === parsed.typeFilter);
+      }
 
       // Filter by time if specified (today, tomorrow, this week, this month)
       // IMPORTANT: If listFilter is set, we MUST filter by time - don't show all reminders
@@ -1231,9 +1281,10 @@ export class ActionExecutor {
       if (filteredReminders.length === 0) {
         const statusText = parsed.status && parsed.status !== 'all' ? ` (${parsed.status})` : '';
         const timeText = parsed.listFilter ? ` for ${parsed.listFilter}` : '';
+        const typeText = parsed.typeFilter ? ` (${parsed.typeFilter})` : '';
         return {
           success: true,
-          message: `🔔 *You have no reminders${statusText}${timeText}:*\n"None"`,
+          message: `🔔 *You have no reminders${statusText}${typeText}${timeText}:*\n"None"`,
         };
       }
 
@@ -1263,7 +1314,8 @@ export class ActionExecutor {
 
       const statusText = parsed.status && parsed.status !== 'all' ? ` (${parsed.status})` : '';
       const timeText = parsed.listFilter ? ` for ${parsed.listFilter}` : '';
-      let message = `🔔 *Your reminders${statusText}${timeText}:*\n`;
+      const typeText = parsed.typeFilter ? ` (${parsed.typeFilter})` : '';
+      let message = `🔔 *Your reminders${statusText}${typeText}${timeText}:*\n`;
       
       remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
         const statusIcon = reminder.active ? '🔔' : '⏸️';
