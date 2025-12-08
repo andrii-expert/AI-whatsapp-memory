@@ -1384,6 +1384,55 @@ export class ActionExecutor {
   }
 
   /**
+   * Get current time components in user's timezone
+   */
+  private getCurrentTimeInTimezone(timezone?: string): {
+    year: number;
+    month: number;
+    day: number;
+    hour: number;
+    minute: number;
+    second: number;
+  } {
+    const now = new Date();
+    
+    if (timezone) {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        hour12: false,
+      });
+      
+      const parts = formatter.formatToParts(now);
+      const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+      
+      return {
+        year: parseInt(getPart('year'), 10),
+        month: parseInt(getPart('month'), 10) - 1, // Month is 0-indexed
+        day: parseInt(getPart('day'), 10),
+        hour: parseInt(getPart('hour'), 10),
+        minute: parseInt(getPart('minute'), 10),
+        second: parseInt(getPart('second'), 10),
+      };
+    } else {
+      // No timezone, use UTC as fallback
+      return {
+        year: now.getUTCFullYear(),
+        month: now.getUTCMonth(),
+        day: now.getUTCDate(),
+        hour: now.getUTCHours(),
+        minute: now.getUTCMinutes(),
+        second: now.getUTCSeconds(),
+      };
+    }
+  }
+
+  /**
    * Create a Date object representing a time in the user's local timezone
    */
   private createDateInUserTimezone(
@@ -1550,26 +1599,12 @@ export class ActionExecutor {
         
         if (timezone) {
           // Get current time components in user's timezone
-          const now = new Date();
-          const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: timezone,
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            second: 'numeric',
-            hour12: false,
-          });
-          
-          const parts = formatter.formatToParts(now);
-          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
-          
-          const currentYear = parseInt(getPart('year'), 10);
-          const currentMonth = parseInt(getPart('month'), 10) - 1; // Month is 0-indexed
-          const currentDay = parseInt(getPart('day'), 10);
-          const currentHour = parseInt(getPart('hour'), 10);
-          const currentMinute = parseInt(getPart('minute'), 10);
+          const currentTime = this.getCurrentTimeInTimezone(timezone);
+          const currentYear = currentTime.year;
+          const currentMonth = currentTime.month;
+          const currentDay = currentTime.day;
+          const currentHour = currentTime.hour;
+          const currentMinute = currentTime.minute;
           
           // Calculate target time by adding duration
           let targetYear = currentYear;
@@ -1651,31 +1686,94 @@ export class ActionExecutor {
       
       // Check for relative dates
       if (scheduleLower.includes('tomorrow')) {
-        result.daysFromNow = 1;
-        // Extract time based on time of day or explicit time
-        if (scheduleLower.includes('morning')) {
-          result.time = '09:00';
-        } else if (scheduleLower.includes('afternoon')) {
-          result.time = '14:00';
-        } else if (scheduleLower.includes('evening') || scheduleLower.includes('night')) {
-          result.time = '18:00';
-        } else {
-          const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-          if (timeMatch && timeMatch[1]) {
-            result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+        if (timezone) {
+          // Calculate tomorrow in user's timezone
+          const currentTime = this.getCurrentTimeInTimezone(timezone);
+          let targetTime = '09:00'; // Default time
+          
+          // Extract time based on time of day or explicit time
+          if (scheduleLower.includes('morning')) {
+            targetTime = '09:00';
+          } else if (scheduleLower.includes('afternoon')) {
+            targetTime = '14:00';
+          } else if (scheduleLower.includes('evening') || scheduleLower.includes('night')) {
+            targetTime = '18:00';
           } else {
-            // Default to 9am for tomorrow if no time specified
+            const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+            if (timeMatch && timeMatch[1]) {
+              targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+            }
+          }
+          
+          const [hours, minutes] = targetTime.split(':').map(Number);
+          const tomorrowDate = new Date(currentTime.year, currentTime.month, currentTime.day + 1);
+          
+          result.targetDate = this.createDateInUserTimezone(
+            tomorrowDate.getFullYear(),
+            tomorrowDate.getMonth(),
+            tomorrowDate.getDate(),
+            hours,
+            minutes,
+            timezone
+          );
+          result.time = targetTime;
+        } else {
+          result.daysFromNow = 1;
+          // Extract time based on time of day or explicit time
+          if (scheduleLower.includes('morning')) {
             result.time = '09:00';
+          } else if (scheduleLower.includes('afternoon')) {
+            result.time = '14:00';
+          } else if (scheduleLower.includes('evening') || scheduleLower.includes('night')) {
+            result.time = '18:00';
+          } else {
+            const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+            if (timeMatch && timeMatch[1]) {
+              result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+            } else {
+              // Default to 9am for tomorrow if no time specified
+              result.time = '09:00';
+            }
           }
         }
       } else if (scheduleLower.includes('today') || scheduleLower.includes('tonight')) {
-        result.daysFromNow = 0;
-        if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
-          result.time = '18:00';
+        if (timezone) {
+          // Calculate today in user's timezone
+          const currentTime = this.getCurrentTimeInTimezone(timezone);
+          let targetTime: string | undefined;
+          
+          if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
+            targetTime = '18:00';
+          } else {
+            const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+            if (timeMatch && timeMatch[1]) {
+              targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+            }
+          }
+          
+          if (targetTime) {
+            const [hours, minutes] = targetTime.split(':').map(Number);
+            result.targetDate = this.createDateInUserTimezone(
+              currentTime.year,
+              currentTime.month,
+              currentTime.day,
+              hours,
+              minutes,
+              timezone
+            );
+            result.time = targetTime;
+          } else {
+            result.daysFromNow = 0;
+          }
         } else {
-          const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-          if (timeMatch && timeMatch[1]) {
-            result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+          result.daysFromNow = 0;
+          if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
+            result.time = '18:00';
+          } else {
+            const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+            if (timeMatch && timeMatch[1]) {
+              result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+            }
           }
         }
       } else if (scheduleLower.includes('later')) {
@@ -1685,23 +1783,55 @@ export class ActionExecutor {
         // Extract time
         const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
         if (timeMatch && timeMatch[1]) {
-          result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+          const parsedTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+          result.time = parsedTime;
+          
+          // If time is specified and we have timezone, calculate targetDate for today
+          if (timezone) {
+            const currentTime = this.getCurrentTimeInTimezone(timezone);
+            const [hours, minutes] = parsedTime.split(':').map(Number);
+            result.targetDate = this.createDateInUserTimezone(
+              currentTime.year,
+              currentTime.month,
+              currentTime.day,
+              hours,
+              minutes,
+              timezone
+            );
+          }
         }
         
         // Check for specific date (e.g., "on the 1st")
         const dayMatch = scheduleLower.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
         if (dayMatch && dayMatch[1]) {
           const dayNum = parseInt(dayMatch[1], 10);
-          const now = new Date();
-          const currentDay = now.getDate();
           if (dayNum >= 1 && dayNum <= 31) {
-            // If day is in the past this month, schedule for next month
-            if (dayNum < currentDay) {
-              result.dayOfMonth = dayNum;
-              result.month = now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2;
+            if (timezone) {
+              const currentTime = this.getCurrentTimeInTimezone(timezone);
+              const currentDay = currentTime.day;
+              const currentMonth = currentTime.month; // 0-indexed (0-11)
+              
+              // If day is in the past this month, schedule for next month
+              if (dayNum < currentDay) {
+                result.dayOfMonth = dayNum;
+                // Next month (currentMonth + 1), convert to 1-12 for database
+                result.month = currentMonth + 2 > 11 ? 1 : currentMonth + 2;
+              } else {
+                result.dayOfMonth = dayNum;
+                // Current month (currentMonth + 1), convert to 1-12 for database
+                result.month = currentMonth + 1;
+              }
             } else {
-              result.dayOfMonth = dayNum;
-              result.month = now.getMonth() + 1;
+              const now = new Date();
+              const currentDay = now.getDate();
+              // If day is in the past this month, schedule for next month
+              if (dayNum < currentDay) {
+                result.dayOfMonth = dayNum;
+                result.month = now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2;
+              } else {
+                result.dayOfMonth = dayNum;
+                result.month = now.getMonth() + 1;
+              }
             }
           }
         }
