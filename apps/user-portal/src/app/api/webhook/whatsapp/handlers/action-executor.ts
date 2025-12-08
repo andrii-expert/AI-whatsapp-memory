@@ -1101,19 +1101,37 @@ export class ActionExecutor {
         }, 'Filtering reminders by time');
 
         filteredReminders = filteredReminders.filter(reminder => {
-          if (!reminder.active) return false;
+          if (!reminder.active) {
+            logger.debug({
+              reminderId: reminder.id,
+              reminderTitle: reminder.title,
+              reason: 'Reminder is inactive',
+            }, 'Reminder filtered out (inactive)');
+            return false;
+          }
           
           if (timeFilter === 'today' || timeFilter.includes('today')) {
             // For "today" filter, check if reminder is scheduled for today
             const isToday = this.isReminderScheduledForDate(reminder, userLocalTime, userTimezone);
             if (!isToday) {
               // Log why reminder was filtered out
-              logger.info({
+              logger.debug({
                 reminderId: reminder.id,
                 reminderTitle: reminder.title,
                 frequency: reminder.frequency,
+                targetDate: reminder.targetDate ? new Date(reminder.targetDate).toISOString() : null,
+                daysFromNow: reminder.daysFromNow,
+                dayOfMonth: reminder.dayOfMonth,
+                month: reminder.month,
+                time: reminder.time,
                 reason: 'Next occurrence is not today',
               }, 'Reminder filtered out for today');
+            } else {
+              logger.debug({
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+              }, 'Reminder included for today');
             }
             return isToday;
           }
@@ -1251,7 +1269,12 @@ export class ActionExecutor {
     userTimezone: string
   ): boolean {
     try {
-      // Calculate the actual next occurrence time for this reminder
+      // For one-time reminders, check directly if they're scheduled for today
+      if (reminder.frequency === 'once') {
+        return this.isOnceReminderScheduledForToday(reminder, userLocalTime, userTimezone);
+      }
+
+      // For recurring reminders, calculate the actual next occurrence time
       const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
       if (!nextTime) {
         return false;
@@ -1279,6 +1302,105 @@ export class ActionExecutor {
       return isToday;
     } catch (error) {
       logger.error({ error, reminderId: reminder.id }, 'Error checking if reminder is scheduled for date');
+      return false;
+    }
+  }
+
+  /**
+   * Check if a one-time reminder is scheduled for today
+   */
+  private isOnceReminderScheduledForToday(
+    reminder: any,
+    userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date },
+    userTimezone: string
+  ): boolean {
+    try {
+      // Skip inactive reminders
+      if (!reminder.active) {
+        return false;
+      }
+
+      let targetYear: number;
+      let targetMonth: number; // 0-11
+      let targetDay: number;
+      
+      if (reminder.targetDate) {
+        // Get target date components in user's timezone
+        const targetDateFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+          hour12: false,
+        });
+        
+        const targetParts = targetDateFormatter.formatToParts(new Date(reminder.targetDate));
+        const getPart = (type: string) => targetParts.find(p => p.type === type)?.value || '0';
+        
+        targetYear = parseInt(getPart('year'), 10);
+        targetMonth = parseInt(getPart('month'), 10) - 1; // Convert to 0-11
+        targetDay = parseInt(getPart('day'), 10);
+      } else if (reminder.daysFromNow !== undefined) {
+        // Calculate target date from daysFromNow using reminder's creation date
+        const reminderCreatedAt = (reminder as any).createdAt ? new Date((reminder as any).createdAt) : userLocalTime.date;
+        
+        // Get creation date components in user's timezone
+        const createdFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour12: false,
+        });
+        
+        const createdParts = createdFormatter.formatToParts(reminderCreatedAt);
+        const getCreatedPart = (type: string) => createdParts.find(p => p.type === type)?.value || '0';
+        
+        const createdYear = parseInt(getCreatedPart('year'), 10);
+        const createdMonth = parseInt(getCreatedPart('month'), 10) - 1; // Convert to 0-11
+        const createdDay = parseInt(getCreatedPart('day'), 10);
+        
+        // Calculate target date by adding daysFromNow to creation date
+        const targetDateObj = new Date(Date.UTC(createdYear, createdMonth, createdDay + reminder.daysFromNow));
+        targetYear = targetDateObj.getUTCFullYear();
+        targetMonth = targetDateObj.getUTCMonth();
+        targetDay = targetDateObj.getUTCDate();
+      } else if (reminder.dayOfMonth && reminder.month) {
+        // Specific date (month + dayOfMonth)
+        targetYear = userLocalTime.year;
+        targetMonth = reminder.month - 1; // Convert 1-12 to 0-11
+        targetDay = reminder.dayOfMonth;
+        
+        // Check if this year's date has already passed
+        const thisYearDate = this.createDateInUserTimezone(targetYear, targetMonth, targetDay, 9, 0, userTimezone);
+        if (thisYearDate < userLocalTime.date) {
+          targetYear += 1;
+        }
+      } else {
+        return false;
+      }
+      
+      // Check if today's date matches the target date (in user's timezone)
+      const dateMatches = targetYear === userLocalTime.year && 
+                          targetMonth === userLocalTime.month && 
+                          targetDay === userLocalTime.day;
+      
+      if (!dateMatches) {
+        return false;
+      }
+      
+      // Date matches, but also check if the reminder time hasn't passed yet
+      // For "today" filter, we show reminders even if the time has passed (user might want to see what happened today)
+      // But if it's a one-time reminder that has already fired, we might want to exclude it
+      // Actually, let's show it if it's scheduled for today, regardless of whether time has passed
+      // The user can see it in their "today" list
+      
+      return true;
+    } catch (error) {
+      logger.error({ error, reminderId: reminder.id }, 'Error checking if one-time reminder is scheduled for today');
       return false;
     }
   }
@@ -1351,29 +1473,138 @@ export class ActionExecutor {
           targetYear += 1;
         }
         return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+      } else if (reminder.frequency === 'hourly' && reminder.minuteOfHour !== undefined && reminder.minuteOfHour !== null) {
+        let targetYear = userLocalTime.year;
+        let targetMonth = userLocalTime.month;
+        let targetDay = userLocalTime.day;
+        let targetHour = userLocalTime.hours;
+        const targetMinute = reminder.minuteOfHour;
+        
+        // Check if this hour's minute has passed
+        if (userLocalTime.minutes >= targetMinute) {
+          // Move to next hour
+          targetHour += 1;
+          if (targetHour >= 24) {
+            targetHour = 0;
+            targetDay += 1;
+            // Handle day overflow
+            const daysInMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+            if (targetDay > daysInMonth) {
+              targetDay = 1;
+              targetMonth += 1;
+              if (targetMonth > 11) {
+                targetMonth = 0;
+                targetYear += 1;
+              }
+            }
+          }
+        }
+        
+        return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, targetHour, targetMinute, userTimezone);
+      } else if (reminder.frequency === 'minutely' && reminder.intervalMinutes !== undefined && reminder.intervalMinutes !== null) {
+        const interval = reminder.intervalMinutes;
+        const currentMinutes = userLocalTime.hours * 60 + userLocalTime.minutes;
+        const nextMinutes = currentMinutes + interval;
+        
+        let targetYear = userLocalTime.year;
+        let targetMonth = userLocalTime.month;
+        let targetDay = userLocalTime.day;
+        let targetHour = Math.floor(nextMinutes / 60);
+        const targetMinute = nextMinutes % 60;
+        
+        // Handle hour/day overflow
+        if (targetHour >= 24) {
+          targetHour = targetHour % 24;
+          targetDay += 1;
+          const daysInMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+          if (targetDay > daysInMonth) {
+            targetDay = 1;
+            targetMonth += 1;
+            if (targetMonth > 11) {
+              targetMonth = 0;
+              targetYear += 1;
+            }
+          }
+        }
+        
+        return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, targetHour, targetMinute, userTimezone);
       } else if (reminder.frequency === 'once') {
         if (reminder.targetDate) {
-          const target = new Date(reminder.targetDate);
-          const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
-          return this.createDateInUserTimezone(
-            target.getUTCFullYear(),
-            target.getUTCMonth(),
-            target.getUTCDate(),
-            hours,
-            minutes,
-            userTimezone
-          );
+          // Get target date components in user's timezone
+          const targetDateFormatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: userTimezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false,
+          });
+          
+          const targetParts = targetDateFormatter.formatToParts(new Date(reminder.targetDate));
+          const getPart = (type: string) => targetParts.find(p => p.type === type)?.value || '0';
+          
+          const targetYear = parseInt(getPart('year'), 10);
+          const targetMonth = parseInt(getPart('month'), 10) - 1; // Convert to 0-11
+          const targetDay = parseInt(getPart('day'), 10);
+          
+          // Use reminder.time if specified, otherwise use time from targetDate
+          let hours: number;
+          let minutes: number;
+          if (reminder.time) {
+            const timeParts = reminder.time.split(':');
+            hours = timeParts[0] ? parseInt(timeParts[0], 10) : 0;
+            minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+          } else {
+            hours = parseInt(getPart('hour'), 10);
+            minutes = parseInt(getPart('minute'), 10);
+          }
+          
+          return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
         } else if (reminder.daysFromNow !== undefined) {
-          const targetDate = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day + reminder.daysFromNow);
+          // Calculate target date from daysFromNow using reminder's creation date
+          const reminderCreatedAt = (reminder as any).createdAt ? new Date((reminder as any).createdAt) : userLocalTime.date;
+          
+          // Get creation date components in user's timezone
+          const createdFormatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: userTimezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour12: false,
+          });
+          
+          const createdParts = createdFormatter.formatToParts(reminderCreatedAt);
+          const getCreatedPart = (type: string) => createdParts.find(p => p.type === type)?.value || '0';
+          
+          const createdYear = parseInt(getCreatedPart('year'), 10);
+          const createdMonth = parseInt(getCreatedPart('month'), 10) - 1; // Convert to 0-11
+          const createdDay = parseInt(getCreatedPart('day'), 10);
+          
+          // Calculate target date by adding daysFromNow to creation date
+          const targetDateObj = new Date(Date.UTC(createdYear, createdMonth, createdDay + reminder.daysFromNow));
+          const targetYear = targetDateObj.getUTCFullYear();
+          const targetMonth = targetDateObj.getUTCMonth();
+          const targetDay = targetDateObj.getUTCDate();
+          
+          // Use reminder.time if specified, otherwise default to 9:00 AM
           const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
-          return this.createDateInUserTimezone(
-            targetDate.getFullYear(),
-            targetDate.getMonth(),
-            targetDate.getDate(),
-            hours,
-            minutes,
-            userTimezone
-          );
+          return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+        } else if (reminder.dayOfMonth && reminder.month) {
+          // Specific date (month + dayOfMonth)
+          let targetYear = userLocalTime.year;
+          const targetMonth = reminder.month - 1; // Convert 1-12 to 0-11
+          const targetDay = reminder.dayOfMonth;
+          
+          // Check if this year's date has already passed
+          const [hours, minutes] = (reminder.time || '09:00').split(':').map(Number);
+          const thisYearDate = this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+          if (thisYearDate < userLocalTime.date) {
+            targetYear += 1;
+          }
+          
+          return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
         }
       }
       return null;
