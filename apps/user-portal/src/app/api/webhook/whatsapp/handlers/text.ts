@@ -369,6 +369,31 @@ async function processAIResponse(
             'Parsed list operation, executing'
           );
           
+          // Send AI response to user (for debugging/transparency)
+          try {
+            await whatsappService.sendTextMessage(
+              recipient,
+              `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
+            );
+            // Log outgoing message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'text',
+                  messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to log outgoing AI response message');
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to send AI response to user');
+          }
+          
           // Get timezone for list operations (needed for reminder filtering)
           let listTimezone = userTimezone || 'Africa/Johannesburg';
           if (parsed.resourceType === 'reminder' || parsed.resourceType === 'event') {
