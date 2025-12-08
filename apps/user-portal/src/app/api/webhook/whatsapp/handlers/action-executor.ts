@@ -1548,27 +1548,9 @@ export class ActionExecutor {
         const amount = parseInt(relativeTimeMatch[1], 10);
         const unit = relativeTimeMatch[2].toLowerCase();
         
-        // Get current time
-        const now = new Date();
-        
-        // Calculate duration in milliseconds
-        let durationMs: number;
-        if (unit.startsWith('min')) {
-          durationMs = amount * 60 * 1000;
-        } else if (unit.startsWith('hour') || unit.startsWith('hr')) {
-          durationMs = amount * 60 * 60 * 1000;
-        } else if (unit.startsWith('day')) {
-          durationMs = amount * 24 * 60 * 60 * 1000;
-        } else {
-          durationMs = amount * 60 * 1000; // Default to minutes
-        }
-        
-        // Calculate target timestamp
-        const targetTimestamp = now.getTime() + durationMs;
-        const targetDate = new Date(targetTimestamp);
-        
         if (timezone) {
-          // Get target time components in user's timezone
+          // Get current time components in user's timezone
+          const now = new Date();
           const formatter = new Intl.DateTimeFormat('en-US', {
             timeZone: timezone,
             year: 'numeric',
@@ -1580,14 +1562,41 @@ export class ActionExecutor {
             hour12: false,
           });
           
-          const parts = formatter.formatToParts(targetDate);
+          const parts = formatter.formatToParts(now);
           const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
           
-          const targetYear = parseInt(getPart('year'), 10);
-          const targetMonth = parseInt(getPart('month'), 10) - 1; // Month is 0-indexed
-          const targetDay = parseInt(getPart('day'), 10);
-          const targetHour = parseInt(getPart('hour'), 10);
-          const targetMinute = parseInt(getPart('minute'), 10);
+          const currentYear = parseInt(getPart('year'), 10);
+          const currentMonth = parseInt(getPart('month'), 10) - 1; // Month is 0-indexed
+          const currentDay = parseInt(getPart('day'), 10);
+          const currentHour = parseInt(getPart('hour'), 10);
+          const currentMinute = parseInt(getPart('minute'), 10);
+          
+          // Calculate target time by adding duration
+          let targetYear = currentYear;
+          let targetMonth = currentMonth;
+          let targetDay = currentDay;
+          let targetHour = currentHour;
+          let targetMinute = currentMinute;
+          
+          // Add duration based on unit
+          if (unit.startsWith('min')) {
+            targetMinute += amount;
+          } else if (unit.startsWith('hour') || unit.startsWith('hr')) {
+            targetHour += amount;
+          } else if (unit.startsWith('day')) {
+            targetDay += amount;
+          }
+          
+          // Handle overflow
+          if (targetMinute >= 60) {
+            targetHour += Math.floor(targetMinute / 60);
+            targetMinute = targetMinute % 60;
+          }
+          if (targetHour >= 24) {
+            targetDay += Math.floor(targetHour / 24);
+            targetHour = targetHour % 24;
+          }
+          // Note: Day/month overflow is handled by createDateInUserTimezone
           
           // Create target date in user's timezone using the helper method
           const targetDateInUserTz = this.createDateInUserTimezone(
@@ -1599,12 +1608,29 @@ export class ActionExecutor {
             timezone
           );
           
-          // Set targetDate and time
-          result.targetDate = targetDateInUserTz.toISOString();
+          // Set targetDate and time (targetDate must be a Date object, not a string)
+          result.targetDate = targetDateInUserTz;
           result.time = `${String(targetHour).padStart(2, '0')}:${String(targetMinute).padStart(2, '0')}`;
         } else {
           // No timezone provided, use UTC as fallback
-          result.targetDate = targetDate.toISOString();
+          const now = new Date();
+          
+          // Calculate duration in milliseconds
+          let durationMs: number;
+          if (unit.startsWith('min')) {
+            durationMs = amount * 60 * 1000;
+          } else if (unit.startsWith('hour') || unit.startsWith('hr')) {
+            durationMs = amount * 60 * 60 * 1000;
+          } else if (unit.startsWith('day')) {
+            durationMs = amount * 24 * 60 * 60 * 1000;
+          } else {
+            durationMs = amount * 60 * 1000; // Default to minutes
+          }
+          
+          // Calculate target timestamp
+          const targetDate = new Date(now.getTime() + durationMs);
+          
+          result.targetDate = targetDate;
           result.time = `${String(targetDate.getUTCHours()).padStart(2, '0')}:${String(targetDate.getUTCMinutes()).padStart(2, '0')}`;
         }
         
@@ -1718,6 +1744,18 @@ export class ActionExecutor {
 
   private async createReminder(parsed: ParsedAction, timezone?: string): Promise<{ success: boolean; message: string }> {
     try {
+      logger.info(
+        {
+          userId: this.userId,
+          parsed,
+          taskName: parsed.taskName,
+          listFilter: parsed.listFilter,
+          status: parsed.status,
+          timezone,
+        },
+        'createReminder called'
+      );
+
       if (!parsed.taskName) {
         return {
           success: false,
@@ -1726,6 +1764,15 @@ export class ActionExecutor {
       }
 
       const scheduleStr = parsed.listFilter || 'once';
+      logger.info(
+        {
+          userId: this.userId,
+          scheduleStr,
+          timezone,
+        },
+        'Parsing reminder schedule'
+      );
+
       const scheduleData = this.parseReminderSchedule(scheduleStr, timezone);
       
       // Auto-detect birthday and set to yearly
@@ -1800,6 +1847,17 @@ export class ActionExecutor {
         active: parsed.status === 'paused' ? false : true,
       };
 
+      logger.info(
+        {
+          userId: this.userId,
+          reminderInput: {
+            ...reminderInput,
+            targetDate: reminderInput.targetDate?.toISOString(),
+          },
+        },
+        'Creating reminder with input'
+      );
+
       const reminder = await createReminder(this.db, reminderInput);
 
       logger.info({ userId: this.userId, reminderId: reminder.id, timezone }, 'Reminder created');
@@ -1821,7 +1879,19 @@ export class ActionExecutor {
         message: responseMessage,
       };
     } catch (error) {
-      logger.error({ error, userId: this.userId }, 'Failed to create reminder');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      logger.error(
+        {
+          error,
+          errorMessage,
+          errorStack,
+          userId: this.userId,
+          parsed,
+          timezone,
+        },
+        'Failed to create reminder'
+      );
       return {
         success: false,
         message: "I'm sorry, I couldn't create your reminder. Please try again.",
