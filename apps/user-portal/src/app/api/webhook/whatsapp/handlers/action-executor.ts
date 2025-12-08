@@ -1372,38 +1372,51 @@ export class ActionExecutor {
       }
 
       // Filter by time if specified (today, tomorrow, this week, this month)
-      // Use the same filtering logic as the reminders page
+      // Calculate date ranges based on user's timezone (not server timezone)
       if (parsed.listFilter && userTimezone) {
         const timeFilter = parsed.listFilter.toLowerCase().trim();
-        const now = new Date();
         
-        // Calculate date filter range based on filter type (same as reminders page)
-        // Use date-fns functions directly - canReminderOccurInRange will handle timezone conversion
+        // Get current date/time in user's timezone
+        const now = new Date();
+        const userNowString = now.toLocaleString("en-US", { timeZone: userTimezone });
+        const userNow = new Date(userNowString);
+        
+        // Log user timezone calculation for debugging
+        logger.debug({
+          userId: this.userId,
+          serverTime: now.toISOString(),
+          userTimezone,
+          userNowString,
+          userNowISO: userNow.toISOString(),
+          userNowLocal: userNow.toLocaleString("en-US", { timeZone: userTimezone }),
+        }, 'Calculated user time for date filtering');
+        
+        // Calculate date filter range based on filter type using user's timezone
         let dateFilterRange: { start: Date; end: Date } | null = null;
         
         if (timeFilter === 'today' || timeFilter.includes('today')) {
           dateFilterRange = {
-            start: startOfDay(now),
-            end: endOfDay(now),
+            start: startOfDay(userNow),
+            end: endOfDay(userNow),
           };
         } else if (timeFilter === 'tomorrow' || timeFilter.includes('tomorrow')) {
-          const tomorrow = addDays(now, 1);
+          const tomorrow = addDays(userNow, 1);
           dateFilterRange = {
             start: startOfDay(tomorrow),
             end: endOfDay(tomorrow),
           };
         } else if (timeFilter.includes('this week') || timeFilter.includes('week')) {
           dateFilterRange = {
-            start: startOfWeek(now, { weekStartsOn: 0 }), // Sunday
-            end: endOfWeek(now, { weekStartsOn: 0 }),
+            start: startOfWeek(userNow, { weekStartsOn: 0 }), // Sunday
+            end: endOfWeek(userNow, { weekStartsOn: 0 }),
           };
         } else if (timeFilter.includes('this month') || timeFilter.includes('month')) {
           dateFilterRange = {
-            start: startOfMonth(now),
-            end: endOfMonth(now),
+            start: startOfMonth(userNow),
+            end: endOfMonth(userNow),
           };
         } else if (timeFilter.includes('next week')) {
-          const nextWeekStart = addDays(startOfWeek(now, { weekStartsOn: 0 }), 7);
+          const nextWeekStart = addDays(startOfWeek(userNow, { weekStartsOn: 0 }), 7);
           dateFilterRange = {
             start: startOfDay(nextWeekStart),
             end: endOfDay(endOfWeek(nextWeekStart, { weekStartsOn: 0 })),
