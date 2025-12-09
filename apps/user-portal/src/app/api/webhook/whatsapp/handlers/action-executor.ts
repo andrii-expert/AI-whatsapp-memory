@@ -86,12 +86,20 @@ export class ActionExecutor {
     if (trimmed.startsWith('Create a shopping item:')) {
       action = 'create_shopping_item';
       resourceType = 'task';
-      const match = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
-      if (match) {
-        taskName = match[1].trim();
-        folderRoute = match[2].trim(); // Should be "Shopping List"
+      // Try full format first: "Create a shopping item: {item} - on folder: Shopping List"
+      const fullMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      if (fullMatch) {
+        taskName = fullMatch[1].trim();
+        folderRoute = fullMatch[2].trim();
       } else {
-        missingFields.push('item name');
+        // Fallback: just extract the item name after "Create a shopping item:"
+        const simpleMatch = trimmed.match(/^Create a shopping item:\s*(.+)$/i);
+        if (simpleMatch) {
+          taskName = simpleMatch[1].trim();
+          folderRoute = 'Shopping List'; // Default to Shopping List
+        } else {
+          missingFields.push('item name');
+        }
       }
     }
     // Task operations
