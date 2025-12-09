@@ -486,10 +486,33 @@ async function processAIResponse(
     
     // Handle non-list task operations
     if (titleType === 'task') {
-      const parsed = executor.parseAction(actionTemplate);
-      if (parsed) {
-        const result = await executor.executeAction(parsed);
-        await whatsappService.sendTextMessage(recipient, result.message);
+      // Split action template into individual lines for multi-item support (e.g., shopping list)
+      const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      const results: string[] = [];
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const actionLine of actionLines) {
+        const parsed = executor.parseAction(actionLine);
+        if (parsed) {
+          const result = await executor.executeAction(parsed);
+          if (result.success) {
+            successCount++;
+            results.push(result.message);
+          } else {
+            failCount++;
+            results.push(result.message);
+          }
+        } else {
+          logger.warn({ userId, actionLine }, 'Failed to parse action line');
+        }
+      }
+      
+      // Send combined results to user
+      if (results.length > 0) {
+        const combinedMessage = results.join('\n');
+        await whatsappService.sendTextMessage(recipient, combinedMessage);
         
         // Log outgoing message
         try {
@@ -499,15 +522,17 @@ async function processAIResponse(
               whatsappNumberId: whatsappNumber.id,
               userId,
               messageType: 'text',
-              messageContent: result.message,
+              messageContent: combinedMessage,
               isFreeMessage: true,
             });
           }
         } catch (error) {
           logger.warn({ error, userId }, 'Failed to log outgoing message');
         }
+        
+        logger.info({ userId, successCount, failCount, totalLines: actionLines.length }, 'Processed task operations');
       } else {
-        logger.info({ userId, titleType }, 'Action parsing failed, user already received AI response');
+        logger.info({ userId, titleType }, 'No actions parsed from template');
       }
       return; // Exit early after handling task operation
     }
