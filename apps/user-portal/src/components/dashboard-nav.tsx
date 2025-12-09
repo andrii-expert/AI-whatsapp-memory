@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Circle,
   X,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { Button } from "@imaginecalendar/ui/button";
@@ -34,6 +35,7 @@ const navigation = [
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Notes", href: "/notes", icon: StickyNote, goldOnly: true },
   { name: "Reminders", href: "/reminders", icon: Bell },
+  { name: "Storage", href: "/storage", icon: FolderOpen },
 ];
 
 export function DashboardNav() {
@@ -47,6 +49,7 @@ export function DashboardNav() {
   const { data: allTasks = [] } = useQuery(trpc.tasks.list.queryOptions({}));
   const { data: allNotes = [] } = useQuery(trpc.notes.list.queryOptions({}));
   const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
+  const { data: storageStats } = useQuery(trpc.storage.stats.queryOptions());
 
   // Check verification status
   const hasVerifiedWhatsApp = whatsappNumbers?.some(number => number.isVerified) || false;
@@ -182,6 +185,8 @@ export function DashboardNav() {
                           itemCount = calendars?.length || 0;
                         } else if (item.href === "/tasks") {
                           itemCount = allTasks.length;
+                        } else if (item.href === "/storage") {
+                          itemCount = storageStats?.filesCount || 0;
                         }
                         
                         return (

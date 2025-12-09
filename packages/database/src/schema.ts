@@ -1161,3 +1161,44 @@ export const remindersRelations = relations(reminders, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// ============================================
+// User Files / Storage
+// ============================================
+
+export const userFiles = pgTable("user_files", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // File metadata
+  title: text("title").notNull(),
+  description: text("description"),
+  
+  // File info
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type").notNull(), // MIME type
+  fileSize: integer("file_size").notNull(), // Size in bytes
+  fileExtension: text("file_extension"), // e.g., 'pdf', 'jpg', 'png'
+  
+  // Cloudflare storage
+  cloudflareId: text("cloudflare_id").notNull(), // Cloudflare file ID
+  cloudflareUrl: text("cloudflare_url").notNull(), // Public URL
+  thumbnailUrl: text("thumbnail_url"), // Thumbnail URL for images
+  
+  // Organization
+  sortOrder: integer("sort_order").default(0).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_files_user_id_idx").on(table.userId),
+  fileTypeIdx: index("user_files_file_type_idx").on(table.fileType),
+  createdAtIdx: index("user_files_created_at_idx").on(table.createdAt),
+}));
+
+export const userFilesRelations = relations(userFiles, ({ one }) => ({
+  user: one(users, {
+    fields: [userFiles.userId],
+    references: [users.id],
+  }),
+}));
