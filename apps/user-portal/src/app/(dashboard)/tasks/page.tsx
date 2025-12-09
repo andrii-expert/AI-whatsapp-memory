@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown, Users, Eye, Edit3, MoreVertical, Share2 } from "lucide-react";
+import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown, Users, Eye, Edit3, MoreVertical, Share2, ShoppingCart } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -182,11 +182,18 @@ export default function TasksPage() {
         .sort((a, b) => {
           const aIsGeneral = a.name.toLowerCase() === "general";
           const bIsGeneral = b.name.toLowerCase() === "general";
+          const aIsShoppingList = a.name.toLowerCase() === "shopping list";
+          const bIsShoppingList = b.name.toLowerCase() === "shopping list";
           
+          // General always comes first
           if (aIsGeneral && !bIsGeneral) return -1;
           if (!aIsGeneral && bIsGeneral) return 1;
           
-          // If neither or both are "General", maintain original order
+          // Shopping List comes second (after General)
+          if (aIsShoppingList && !bIsShoppingList && !bIsGeneral) return -1;
+          if (!aIsShoppingList && bIsShoppingList && !aIsGeneral) return 1;
+          
+          // If neither or both are special folders, maintain original order
           return 0;
         })
         .map(folder => ({
@@ -1131,7 +1138,11 @@ export default function TasksPage() {
                 onClick={() => handleFolderSelect(folder.id)}
                 className="flex items-center gap-2 flex-1 text-left min-w-0"
               >
-                <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                {folder.icon === "shopping-cart" || folder.name.toLowerCase() === "shopping list" ? (
+                  <ShoppingCart className="h-4 w-4 flex-shrink-0" />
+                ) : (
+                  <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                )}
                 <span className="font-medium truncate">{folder.name}</span>
                 {/* Shared indicator badge - clickable to view who shared this */}
                 {isSharedFolder && (
@@ -1229,8 +1240,8 @@ export default function TasksPage() {
                     <span>Add subfolder</span>
                   </DropdownMenuItem>
                 )}
-                {/* Delete button - only for owned folders (not shared) and not General */}
-                {isOwner && folder.name.toLowerCase() !== "general" && (
+                {/* Delete button - only for owned folders (not shared) and not General or Shopping List */}
+                {isOwner && folder.name.toLowerCase() !== "general" && folder.name.toLowerCase() !== "shopping list" && (
                   <DropdownMenuItem
                     onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
@@ -1480,7 +1491,11 @@ export default function TasksPage() {
                           : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
                       )}
                     >
-                      <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                      {folder.icon === "shopping-cart" || folder.name.toLowerCase() === "shopping list" ? (
+                        <ShoppingCart className="h-4 w-4 flex-shrink-0" />
+                      ) : (
+                        <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                      )}
                       <span className="flex-1 text-left truncate">
                         {folder.name}
                       </span>
@@ -1626,7 +1641,11 @@ export default function TasksPage() {
                             : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
                         )}
                       >
-                        <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                        {folder.icon === "shopping-cart" || folder.name.toLowerCase() === "shopping list" ? (
+                          <ShoppingCart className="h-4 w-4 flex-shrink-0" />
+                        ) : (
+                          <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                        )}
                         <span className="flex-1 text-left truncate">
                           {folder.name}
                         </span>
@@ -2595,7 +2614,11 @@ export default function TasksPage() {
                             onClick={() => setSelectedMoveToFolderId(folder.id)}
                             className="flex items-center gap-2 flex-1 min-w-0 text-left"
                           >
-                            <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                            {folder.icon === "shopping-cart" || folder.name.toLowerCase() === "shopping list" ? (
+                              <ShoppingCart className="h-4 w-4 flex-shrink-0" />
+                            ) : (
+                              <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                            )}
                             <span className="font-medium truncate">
                               {folder.name}
                             </span>
