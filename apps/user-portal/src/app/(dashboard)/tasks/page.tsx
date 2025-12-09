@@ -146,11 +146,6 @@ export default function TasksPage() {
     });
   }, [sharedResources]);
 
-  // Special Shopping List folder
-  const shoppingFolder = useMemo(() => {
-    return folders.find((f: any) => f.name.toLowerCase() === "shopping list");
-  }, [folders]);
-  
   // Calculate total shared task count (deduplicated)
   const totalSharedTaskCount = useMemo(() => {
     // Combine all shared tasks
@@ -209,6 +204,16 @@ export default function TasksPage() {
     
     return sortFoldersRecursive(folders);
   }, [folders]);
+
+  // Special Shopping List folder
+  const shoppingFolder = useMemo(() => {
+    return folders.find((f: any) => f.name.toLowerCase() === "shopping list");
+  }, [folders]);
+
+  const shoppingTaskCount = useMemo(() => {
+    if (!shoppingFolder) return 0;
+    return getTotalTaskCount(shoppingFolder);
+  }, [shoppingFolder, allTasks]);
 
   // Update folders ref when allOwnedFolders changes
   useEffect(() => {
