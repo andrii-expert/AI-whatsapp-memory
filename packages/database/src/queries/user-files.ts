@@ -46,6 +46,7 @@ export async function createUserFile(
     fileSize: number;
     fileExtension?: string;
     cloudflareId: string;
+    cloudflareKey?: string;
     cloudflareUrl: string;
     thumbnailUrl?: string;
   }

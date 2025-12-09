@@ -21,8 +21,9 @@ const createFileSchema = z.object({
   fileSize: z.number().positive(),
   fileExtension: z.string().optional(),
   cloudflareId: z.string().min(1),
-  cloudflareUrl: z.string().url(),
-  thumbnailUrl: z.string().url().optional(),
+  cloudflareKey: z.string().optional(), // R2 object key
+  cloudflareUrl: z.string().min(1), // Allow data URLs too
+  thumbnailUrl: z.string().optional(),
 });
 
 const updateFileSchema = z.object({
@@ -104,12 +105,13 @@ export const storageRouter = createTRPCRouter({
           message: "File not found",
         });
       }
-
-      // TODO: Also delete from Cloudflare
-      // This would require the Cloudflare API call
       
-      logger.info({ userId: session.user.id, fileId: input.id, cloudflareId: file.cloudflareId }, "File deleted");
-      return { success: true, cloudflareId: file.cloudflareId };
+      logger.info({ userId: session.user.id, fileId: input.id, cloudflareKey: file.cloudflareKey }, "File deleted");
+      return { 
+        success: true, 
+        cloudflareId: file.cloudflareId,
+        cloudflareKey: file.cloudflareKey,
+      };
     }),
 
   // Get storage stats

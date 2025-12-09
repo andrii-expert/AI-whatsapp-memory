@@ -13,8 +13,9 @@ CREATE TABLE IF NOT EXISTS "user_files" (
   "file_size" integer NOT NULL,
   "file_extension" text,
   
-  -- Cloudflare storage
+  -- Cloudflare R2 storage
   "cloudflare_id" text NOT NULL,
+  "cloudflare_key" text,
   "cloudflare_url" text NOT NULL,
   "thumbnail_url" text,
   

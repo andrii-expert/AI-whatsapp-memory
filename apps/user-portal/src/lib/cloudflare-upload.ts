@@ -3,6 +3,7 @@
 interface UploadResult {
   success: boolean;
   id?: string;
+  key?: string; // R2 object key for deletion
   url?: string;
   thumbnailUrl?: string;
   error?: string;
@@ -31,6 +32,7 @@ export async function uploadToCloudflare(file: File, _userId: string): Promise<U
     return {
       success: true,
       id: result.id,
+      key: result.key, // R2 object key
       url: result.url,
       thumbnailUrl: result.thumbnailUrl,
     };
@@ -46,9 +48,9 @@ export async function uploadToCloudflare(file: File, _userId: string): Promise<U
 /**
  * Delete file via server-side API
  */
-export async function deleteFromCloudflare(cloudflareId: string): Promise<boolean> {
+export async function deleteFromCloudflare(cloudflareKey: string): Promise<boolean> {
   try {
-    const response = await fetch(`/api/storage/delete?id=${encodeURIComponent(cloudflareId)}`, {
+    const response = await fetch(`/api/storage/delete?key=${encodeURIComponent(cloudflareKey)}`, {
       method: 'DELETE',
     });
     

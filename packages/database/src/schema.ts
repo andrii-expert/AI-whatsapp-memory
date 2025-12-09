@@ -1180,8 +1180,9 @@ export const userFiles = pgTable("user_files", {
   fileSize: integer("file_size").notNull(), // Size in bytes
   fileExtension: text("file_extension"), // e.g., 'pdf', 'jpg', 'png'
   
-  // Cloudflare storage
-  cloudflareId: text("cloudflare_id").notNull(), // Cloudflare file ID
+  // Cloudflare R2 storage
+  cloudflareId: text("cloudflare_id").notNull(), // File ID
+  cloudflareKey: text("cloudflare_key"), // R2 object key for deletion
   cloudflareUrl: text("cloudflare_url").notNull(), // Public URL
   thumbnailUrl: text("thumbnail_url"), // Thumbnail URL for images
   

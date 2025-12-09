@@ -1,22 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth } from "@clerk/nextjs/server";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-// Cloudflare configuration - stored securely on server
-const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN || "OPOOJV50EcUypSt-DSXsUyCWCMzEhMlbI4LbpQgf";
-const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || "";
+// Cloudflare R2 configuration (must be provided via env)
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || "imaginecalendar";
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || (R2_ACCOUNT_ID ? `https://pub-${R2_ACCOUNT_ID}.r2.dev` : undefined);
+
+function getS3Client() {
+  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+    throw new Error("Missing R2 credentials. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY.");
+  }
+
+  return new S3Client({
+    region: "auto",
+    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: R2_ACCESS_KEY_ID,
+      secretAccessKey: R2_SECRET_ACCESS_KEY,
+    },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await auth();
-    if (!session?.user?.id) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
-
-    const userId = session.user.id;
     const formData = await request.formData();
     const file = formData.get("file") as File;
 
@@ -36,62 +53,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique file ID
+    // Generate unique file key
     const timestamp = Date.now();
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const fileKey = `users/${userId}/${timestamp}-${sanitizedFileName}`;
     const fileId = `${userId}_${timestamp}_${sanitizedFileName}`;
 
-    const isImage = file.type.startsWith("image/");
-
-    // Try Cloudflare Images API for images
-    if (isImage && CLOUDFLARE_ACCOUNT_ID && CLOUDFLARE_API_TOKEN) {
-      const cloudflareFormData = new FormData();
-      cloudflareFormData.append("file", file);
-      cloudflareFormData.append("id", fileId);
-
-      const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/images/v1`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}`,
-          },
-          body: cloudflareFormData,
-        }
-      );
-
-      const result = await response.json();
-
-      if (result.success) {
-        return NextResponse.json({
-          success: true,
-          id: result.result.id,
-          url: result.result.variants?.[0] || result.result.url,
-          thumbnailUrl:
-            result.result.variants?.find((v: string) =>
-              v.includes("thumbnail")
-            ) || result.result.variants?.[0],
-        });
-      }
-      
-      // If Cloudflare fails, fall back to base64
-      console.warn("Cloudflare upload failed, falling back to base64:", result.errors);
+    if (!R2_PUBLIC_URL) {
+      throw new Error("Missing R2_PUBLIC_URL. Set it to your public R2 endpoint (e.g., https://pub-<ACCOUNT_ID>.r2.dev).");
     }
 
-    // Fallback: Convert to base64 data URL
-    // This is temporary storage - in production, use Cloudflare R2 for non-images
+    // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString("base64");
-    const mimeType = file.type || "application/octet-stream";
-    const dataUrl = `data:${mimeType};base64,${base64}`;
 
-    return NextResponse.json({
-      success: true,
-      id: fileId,
-      url: dataUrl,
-      thumbnailUrl: isImage ? dataUrl : undefined,
-    });
+    try {
+      // Upload to R2
+      const s3Client = getS3Client();
+      const command = new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: fileKey,
+        Body: buffer,
+        ContentType: file.type || "application/octet-stream",
+        Metadata: {
+          originalName: file.name,
+          userId: userId,
+          uploadedAt: new Date().toISOString(),
+        },
+      });
+
+      await s3Client.send(command);
+
+      // Generate public URL
+      const publicUrl = `${R2_PUBLIC_URL}/${fileKey}`;
+      
+      // For images, the same URL serves as thumbnail (R2 doesn't have built-in transforms)
+      const isImage = file.type.startsWith("image/");
+      const thumbnailUrl = isImage ? publicUrl : undefined;
+
+      return NextResponse.json({
+        success: true,
+        id: fileId,
+        key: fileKey,
+        url: publicUrl,
+        thumbnailUrl,
+      });
+    } catch (r2Error) {
+      console.error("R2 upload error:", r2Error);
+      
+      // Fallback: Convert to base64 data URL if R2 fails
+      const base64 = buffer.toString("base64");
+      const mimeType = file.type || "application/octet-stream";
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+      const isImage = file.type.startsWith("image/");
+
+      return NextResponse.json({
+        success: true,
+        id: fileId,
+        url: dataUrl,
+        thumbnailUrl: isImage ? dataUrl : undefined,
+        warning: "Stored locally - R2 upload failed",
+      });
+    }
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json(
@@ -109,4 +132,3 @@ export const config = {
     bodyParser: false,
   },
 };
-

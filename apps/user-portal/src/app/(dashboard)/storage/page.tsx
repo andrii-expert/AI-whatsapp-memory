@@ -69,6 +69,7 @@ import { Badge } from "@imaginecalendar/ui/badge";
 import { Progress } from "@imaginecalendar/ui/progress";
 import {
   uploadToCloudflare,
+  deleteFromCloudflare,
   formatFileSize,
   getFileExtension,
   getFileTypeIcon,
@@ -89,6 +90,7 @@ interface FileItem {
   fileSize: number;
   fileExtension: string | null;
   cloudflareId: string;
+  cloudflareKey: string | null;
   cloudflareUrl: string;
   thumbnailUrl: string | null;
   createdAt: Date;
@@ -208,7 +210,16 @@ export default function StoragePage() {
 
   const deleteFileMutation = useMutation(
     trpc.storage.delete.mutationOptions({
-      onSuccess: () => {
+      onSuccess: async (result) => {
+        // Also delete from R2 storage
+        if (result.cloudflareKey) {
+          try {
+            await deleteFromCloudflare(result.cloudflareKey);
+          } catch (e) {
+            console.warn("Failed to delete from R2:", e);
+          }
+        }
+        
         queryClient.invalidateQueries({ queryKey: trpc.storage.list.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.storage.stats.queryKey() });
         toast({
@@ -299,6 +310,7 @@ export default function StoragePage() {
         fileSize: selectedFile.size,
         fileExtension: getFileExtension(selectedFile.name) || undefined,
         cloudflareId: result.id!,
+        cloudflareKey: result.key, // R2 object key for deletion
         cloudflareUrl: result.url!,
         thumbnailUrl: result.thumbnailUrl,
       });
