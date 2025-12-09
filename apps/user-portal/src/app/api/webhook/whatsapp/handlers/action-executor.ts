@@ -1513,12 +1513,19 @@ export class ActionExecutor {
       }, 'Reminder filtering complete');
 
       if (filteredReminders.length === 0) {
-        const statusText = parsed.status && parsed.status !== 'all' ? ` (${parsed.status})` : '';
-        const timeText = parsed.listFilter ? ` for ${parsed.listFilter}` : '';
-        const typeText = parsed.typeFilter ? ` (${parsed.typeFilter})` : '';
+        // Format filter name for title
+        let filterTitle = 'Reminders';
+        if (parsed.listFilter) {
+          const filter = parsed.listFilter.toLowerCase();
+          if (filter === 'today') filterTitle = "Todays Reminders";
+          else if (filter === 'tomorrow') filterTitle = "Tomorrows Reminders";
+          else if (filter.includes('week')) filterTitle = "This Weeks Reminders";
+          else if (filter.includes('month')) filterTitle = "This Months Reminders";
+          else filterTitle = `Reminders for ${parsed.listFilter}`;
+        }
         return {
           success: true,
-          message: `🔔 *You have no reminders${statusText}${typeText}${timeText}:*\n"None"`,
+          message: `🔔 ${filterTitle}\n\n"None"`,
         };
       }
 
@@ -1546,14 +1553,20 @@ export class ActionExecutor {
         remindersWithNextTime = filteredReminders.map(reminder => ({ reminder, nextTime: new Date(0) }));
       }
 
-      const statusText = parsed.status && parsed.status !== 'all' ? ` (${parsed.status})` : '';
-      const timeText = parsed.listFilter ? ` for ${parsed.listFilter}` : '';
-      const typeText = parsed.typeFilter ? ` (${parsed.typeFilter})` : '';
-      let message = `🔔 *Your reminders${statusText}${typeText}${timeText}:*\n`;
+      // Format filter name for title
+      let filterTitle = 'Reminders';
+      if (parsed.listFilter) {
+        const filter = parsed.listFilter.toLowerCase();
+        if (filter === 'today') filterTitle = "Todays Reminders";
+        else if (filter === 'tomorrow') filterTitle = "Tomorrows Reminders";
+        else if (filter.includes('week')) filterTitle = "This Weeks Reminders";
+        else if (filter.includes('month')) filterTitle = "This Months Reminders";
+        else filterTitle = `Reminders for ${parsed.listFilter}`;
+      }
+      
+      let message = `🔔 ${filterTitle}\n\n`;
       
       remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
-        const statusIcon = reminder.active ? '🔔' : '⏸️';
-        
         // Format next time in user's timezone
         let timeDisplay = '';
         if (nextTime && nextTime.getTime() > 0 && userTimezone) {
@@ -1566,14 +1579,18 @@ export class ActionExecutor {
             month: 'short',
             day: 'numeric',
           });
-          timeDisplay = ` at ${hour12}:${String(minutes).padStart(2, '0')} ${period} on ${dateStr}`;
+          timeDisplay = `${hour12}:${String(minutes).padStart(2, '0')} ${period} on ${dateStr}`;
         }
         
-        message += `${index + 1}. ${statusIcon} "${reminder.title}${timeDisplay}"\n`;
+        // Format: number, title on one line, time/date on next line (indented with spaces)
+        message += `${index + 1}. "${reminder.title}"\n`;
+        if (timeDisplay) {
+          message += `   ${timeDisplay}\n`;
+        }
       });
 
       if (remindersWithNextTime.length > 20) {
-        message += `\n... and ${remindersWithNextTime.length - 20} more reminders.`;
+        message += `... and ${remindersWithNextTime.length - 20} more reminders.`;
       }
 
       return {

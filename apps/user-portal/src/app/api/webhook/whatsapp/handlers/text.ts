@@ -871,21 +871,26 @@ async function handleEventOperation(
     let responseMessage: string;
     if (result.success) {
       if (result.action === 'CREATE' && result.event) {
+        // Format time as lowercase am/pm
         const eventTime = result.event.start.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
           timeZone: calendarTimezone,
-        });
+        }).toLowerCase();
+        
+        // Format date as "Tue, Dec 9"
         const eventDate = result.event.start.toLocaleDateString('en-US', {
           weekday: 'short',
           month: 'short',
           day: 'numeric',
           timeZone: calendarTimezone,
         });
-        responseMessage = `✅ Event "${result.event.title}" created successfully!\n📅 ${eventDate} at ${eventTime}`;
+        
+        // New format: Title, date/time on one line, event name on next line (indented)
+        responseMessage = `✅ Event Created Successfully\n   ${eventDate}, ${eventTime}\n   ${result.event.title}`;
         if (result.event.location) {
-          responseMessage += `\n📍 ${result.event.location}`;
+          responseMessage += `\n   📍 ${result.event.location}`;
         }
       } else if (result.action === 'UPDATE' && result.event) {
         responseMessage = `✅ Event "${result.event.title}" updated successfully!`;
