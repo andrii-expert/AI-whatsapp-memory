@@ -914,7 +914,7 @@ async function handleEventOperation(
               day: 'numeric',
               timeZone: calendarTimezone,
             });
-            responseMessage += `${index + 1}. ${event.title}\n   ${eventDate} at ${eventTime}\n`;
+            responseMessage += `*${index + 1}.* ${event.title}\n   ${eventDate} at ${eventTime}\n\n`;
           });
           if (result.events.length > 10) {
             responseMessage += `\n... and ${result.events.length - 10} more events.`;

@@ -1047,7 +1047,7 @@ export class ActionExecutor {
       
       tasks.slice(0, 20).forEach((task, index) => {
         const statusIcon = task.status === 'completed' ? '✅' : '⏳';
-        message += `${index + 1}. ${statusIcon} "${task.title}"\n`;
+        message += `*${index + 1}.* ${statusIcon} "${task.title}"\n\n`;
       });
 
       if (tasks.length > 20) {
@@ -1095,7 +1095,7 @@ export class ActionExecutor {
       
       notes.slice(0, 20).forEach((note, index) => {
         const contentPreview = note.content ? (note.content.length > 50 ? note.content.substring(0, 50) + '...' : note.content) : '(no content)';
-        message += `${index + 1}. "${note.title}"\n   ${contentPreview}\n`;
+        message += `*${index + 1}.* "${note.title}"\n   ${contentPreview}\n\n`;
       });
 
       if (notes.length > 20) {
@@ -1583,10 +1583,11 @@ export class ActionExecutor {
         }
         
         // Format: number, title on one line, time/date on next line (indented with spaces)
-        message += `${index + 1}. "${reminder.title}"\n`;
+        message += `*${index + 1}.* "${reminder.title}"\n`;
         if (timeDisplay) {
           message += `   ${timeDisplay}\n`;
         }
+        message += '\n';
       });
 
       if (remindersWithNextTime.length > 20) {
@@ -3177,7 +3178,7 @@ export class ActionExecutor {
           });
           
           const locationText = event.location ? ` at ${event.location}` : '';
-          message += `${index + 1}. "${event.title}"\n   ${eventDate} at ${eventTime}${locationText}\n`;
+          message += `*${index + 1}.* "${event.title}"\n   ${eventDate} at ${eventTime}${locationText}\n\n`;
         });
         
         if (result.events.length > 20) {
