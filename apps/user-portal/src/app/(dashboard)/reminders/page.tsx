@@ -1205,10 +1205,19 @@ export default function RemindersPage() {
       return;
     }
 
+    // Build payload with all schedule fields nulled by default to avoid stale data when editing
     const payload: any = {
       title: form.title,
       frequency: form.frequency,
       active: form.active,
+      time: null,
+      minuteOfHour: null,
+      intervalMinutes: null,
+      daysFromNow: null,
+      targetDate: null,
+      dayOfMonth: null,
+      month: null,
+      daysOfWeek: null,
     };
 
     // Add frequency-specific fields
