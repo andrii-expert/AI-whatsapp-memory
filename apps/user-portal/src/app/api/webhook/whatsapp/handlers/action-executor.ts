@@ -1133,11 +1133,7 @@ export class ActionExecutor {
       let message = `${headerIcon} ${headerText}\n`;
       
       tasks.slice(0, 20).forEach((task, index) => {
-        // Shopping list uses cart/check icons, regular tasks use status icons
-        const statusIcon = isShoppingList
-          ? (task.status === 'completed' ? '✅' : '🛒')
-          : (task.status === 'completed' ? '✅' : '⏳');
-        message += `*${index + 1}.* ${statusIcon} ${task.title}\n`;
+        message += `*${index + 1}.* ${task.title}\n`;
       });
 
       if (tasks.length > 20) {
