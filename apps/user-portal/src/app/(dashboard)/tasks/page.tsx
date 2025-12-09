@@ -145,7 +145,7 @@ export default function TasksPage() {
       };
     });
   }, [sharedResources]);
-
+  
   // Calculate total shared task count (deduplicated)
   const totalSharedTaskCount = useMemo(() => {
     // Combine all shared tasks
@@ -207,7 +207,7 @@ export default function TasksPage() {
 
   // Special Shopping List folder
   const shoppingFolder = useMemo(() => {
-    return folders.find((f: any) => f.name.toLowerCase() === "shopping list");
+    return folders.find((f: any) => f.name?.toLowerCase() === "shopping list");
   }, [folders]);
 
   const shoppingTaskCount = useMemo(() => {
@@ -1087,11 +1087,6 @@ export default function TasksPage() {
     return count;
   };
 
-  const shoppingTaskCount = useMemo(() => {
-    if (!shoppingFolder) return 0;
-    return getTotalTaskCount(shoppingFolder);
-  }, [shoppingFolder, allTasks]);
-
   // Recursive folder rendering component
   const renderFolder = (folder: any, level: number = 0) => {
     const isExpanded = expandedFolders.has(folder.id);
@@ -1440,7 +1435,7 @@ export default function TasksPage() {
               </span>
             </button>
 
-            {/* Shopping List quick access */}
+            {/* Shopping List quick access (below All Tasks) */}
             {shoppingFolder && (
               <button
                 onClick={() => handleFolderSelect(shoppingFolder.id)}
@@ -1609,24 +1604,24 @@ export default function TasksPage() {
                 </span>
               </button>
 
-              {/* Shopping List quick access */}
-              {shoppingFolder && (
-                <button
-                  onClick={() => handleFolderSelect(shoppingFolder.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                    selectedFolderId === shoppingFolder.id && !viewAllTasks
-                      ? "bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-900 border-2 border-emerald-300"
-                      : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                  )}
-                >
-                  <ShoppingCart className="h-4 w-4 flex-shrink-0" />
-                  <span className="flex-1 text-left">Shopping List</span>
-                  <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                    {shoppingTaskCount}
-                  </span>
-                </button>
-              )}
+            {/* Shopping List quick access (below All Tasks) */}
+            {shoppingFolder && (
+              <button
+                onClick={() => handleFolderSelect(shoppingFolder.id)}
+                className={cn(
+                  "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                  selectedFolderId === shoppingFolder.id && !viewAllTasks
+                    ? "bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-900 border-2 border-emerald-300"
+                    : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                )}
+              >
+                <ShoppingCart className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 text-left">Shopping List</span>
+                <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
+                  {shoppingTaskCount}
+                </span>
+              </button>
+            )}
 
               {folders.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm">
