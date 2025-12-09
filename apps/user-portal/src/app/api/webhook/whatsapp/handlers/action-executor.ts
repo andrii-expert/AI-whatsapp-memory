@@ -573,7 +573,8 @@ export class ActionExecutor {
         const folder = await createFolder(this.db, {
           userId: this.userId,
           name: shoppingFolderName,
-          icon: '🛒',
+          color: '#10B981', // Green color
+          icon: 'shopping-cart',
         });
         folderId = folder.id;
         logger.info({ userId: this.userId, folderId }, 'Auto-created Shopping List folder');
@@ -596,7 +597,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `🛒 Added "${parsed.taskName}" to your shopping list.`,
+        message: `✓ Added "${parsed.taskName}" to Shopping List`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
