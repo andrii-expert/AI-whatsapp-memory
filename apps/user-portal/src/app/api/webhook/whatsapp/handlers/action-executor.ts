@@ -1107,26 +1107,42 @@ export class ActionExecutor {
         status: statusFilter,
       });
 
+      // Check if this is a Shopping List
+      const isShoppingList = parsed.folderRoute?.toLowerCase() === 'shopping list';
+      
       if (tasks.length === 0) {
         const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
         const statusText = statusFilter ? ` (${statusFilter})` : '';
+        const headerIcon = isShoppingList ? '🛒' : '📋';
+        const emptyText = isShoppingList ? 'Your shopping list is empty' : `You have no tasks${folderText}${statusText}`;
         return {
           success: true,
-          message: `📋 *You have no tasks${folderText}${statusText}:*\n"None"`,
+          message: `${headerIcon} *${emptyText}*`,
         };
       }
 
       const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
       const statusText = statusFilter ? ` (${statusFilter})` : '';
-      let message = `📋 *Your tasks${folderText}${statusText}:*\n`;
+      
+      // Use different icons for Shopping List vs regular tasks
+      const headerIcon = isShoppingList ? '🛒' : '📋';
+      const headerText = isShoppingList 
+        ? `*Shopping List${statusText}:*` 
+        : `*Your tasks${folderText}${statusText}:*`;
+      
+      let message = `${headerIcon} ${headerText}\n`;
       
       tasks.slice(0, 20).forEach((task, index) => {
-        const statusIcon = task.status === 'completed' ? '✅' : '⏳';
-        message += `*${index + 1}.* ${statusIcon} "${task.title}"\n\n`;
+        // Shopping list uses cart/check icons, regular tasks use status icons
+        const statusIcon = isShoppingList
+          ? (task.status === 'completed' ? '✅' : '🛒')
+          : (task.status === 'completed' ? '✅' : '⏳');
+        message += `*${index + 1}.* ${statusIcon} ${task.title}\n`;
       });
 
       if (tasks.length > 20) {
-        message += `\n... and ${tasks.length - 20} more tasks.`;
+        const moreText = isShoppingList ? 'more items' : 'more tasks';
+        message += `\n... and ${tasks.length - 20} ${moreText}.`;
       }
 
       return {
