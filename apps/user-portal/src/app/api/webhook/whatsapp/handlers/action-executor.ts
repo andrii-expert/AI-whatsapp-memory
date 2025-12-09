@@ -82,8 +82,20 @@ export class ActionExecutor {
     let listFilter: string | undefined;
     let typeFilter: ReminderFrequency | undefined;
 
+    // Shopping item operations (check before regular task)
+    if (trimmed.startsWith('Create a shopping item:')) {
+      action = 'create_shopping_item';
+      resourceType = 'task';
+      const match = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim();
+        folderRoute = match[2].trim(); // Should be "Shopping List"
+      } else {
+        missingFields.push('item name');
+      }
+    }
     // Task operations
-    if (trimmed.startsWith('Create a task:')) {
+    else if (trimmed.startsWith('Create a task:')) {
       action = 'create';
       resourceType = 'task';
       const match = trimmed.match(/^Create a task:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
@@ -420,6 +432,8 @@ export class ActionExecutor {
             success: false,
             message: "I'm sorry, I couldn't understand what you want to list.",
           };
+        case 'create_shopping_item':
+          return await this.createShoppingItem(parsed);
         case 'create':
           if (parsed.resourceType === 'task') {
             return await this.createTask(parsed);
@@ -529,6 +543,58 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't create the task "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  private async createShoppingItem(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know what item you'd like to add to your shopping list. Please specify the item.",
+      };
+    }
+
+    // Always use "Shopping List" folder for shopping items
+    const shoppingFolderName = 'Shopping List';
+    let folderId = await this.resolveFolderRoute(shoppingFolderName);
+    
+    // Auto-create Shopping List folder if it doesn't exist
+    if (!folderId) {
+      try {
+        const folder = await createFolder(this.db, {
+          userId: this.userId,
+          name: shoppingFolderName,
+          icon: '🛒',
+        });
+        folderId = folder.id;
+        logger.info({ userId: this.userId, folderId }, 'Auto-created Shopping List folder');
+      } catch (error) {
+        logger.error({ error, userId: this.userId }, 'Failed to auto-create Shopping List folder');
+        return {
+          success: false,
+          message: "I couldn't create the Shopping List folder. Please try again.",
+        };
+      }
+    }
+
+    try {
+      await createTask(this.db, {
+        userId: this.userId,
+        folderId,
+        title: parsed.taskName,
+        status: 'open',
+      });
+
+      return {
+        success: true,
+        message: `🛒 Added "${parsed.taskName}" to your shopping list.`,
+      };
+    } catch (error) {
+      logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't add "${parsed.taskName}" to your shopping list. Please try again.`,
       };
     }
   }
