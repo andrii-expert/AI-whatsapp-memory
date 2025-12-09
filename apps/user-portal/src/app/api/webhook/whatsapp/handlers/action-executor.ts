@@ -619,7 +619,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ Folder "${parsed.folderRoute}" has been shared successfully with ${parsed.recipient}.`,
+        message: `✅ *Folder Shared Successfully*\n   "${parsed.folderRoute}" with ${parsed.recipient}`,
       };
     } catch (error) {
       logger.error(
@@ -700,7 +700,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ Task "${parsed.taskName}" has been shared successfully with ${parsed.recipient}.`,
+        message: `✅ *Task Shared Successfully*\n   "${parsed.taskName}" with ${parsed.recipient}`,
       };
     } catch (error) {
       logger.error(
@@ -903,7 +903,7 @@ export class ActionExecutor {
       const sourceFolderText = parsed.folderRoute ? ` from "${parsed.folderRoute}"` : '';
       return {
         success: true,
-        message: `✅ Task "${parsed.taskName}" has been moved${sourceFolderText} to the "${parsed.targetFolderRoute}" folder.`,
+        message: `✅ *Task Moved Successfully*\n   "${parsed.taskName}"${sourceFolderText} to "${parsed.targetFolderRoute}"`,
       };
     } catch (error) {
       logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to move task');
@@ -937,7 +937,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ Folder "${parsed.folderRoute}" has been renamed to "${parsed.newName}".`,
+        message: `✅ *Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, folderId, userId: this.userId }, 'Failed to update folder');
@@ -968,7 +968,7 @@ export class ActionExecutor {
       await deleteFolder(this.db, folderId, this.userId);
       return {
         success: true,
-        message: `✅ Folder "${parsed.folderRoute}" has been deleted successfully.`,
+        message: `✅ *Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
       };
     } catch (error) {
       logger.error({ error, folderId, userId: this.userId }, 'Failed to delete folder');
@@ -1525,7 +1525,7 @@ export class ActionExecutor {
         }
         return {
           success: true,
-          message: `🔔 ${filterTitle}\n\n"None"`,
+          message: `🔔 *${filterTitle}*\n\n"None"`,
         };
       }
 
@@ -1564,7 +1564,7 @@ export class ActionExecutor {
         else filterTitle = `Reminders for ${parsed.listFilter}`;
       }
       
-      let message = `🔔 ${filterTitle}\n\n`;
+      let message = `🔔 *${filterTitle}*\n\n`;
       
       remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
         // Format next time in user's timezone

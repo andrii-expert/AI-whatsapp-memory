@@ -888,19 +888,19 @@ async function handleEventOperation(
         });
         
         // New format: Title, date/time on one line, event name on next line (indented)
-        responseMessage = `✅ Event Created Successfully\n   ${eventDate}, ${eventTime}\n   ${result.event.title}`;
+        responseMessage = `✅ *Event Created Successfully*\n   ${eventDate}, ${eventTime}\n   ${result.event.title}`;
         if (result.event.location) {
           responseMessage += `\n   📍 ${result.event.location}`;
         }
       } else if (result.action === 'UPDATE' && result.event) {
-        responseMessage = `✅ Event "${result.event.title}" updated successfully!`;
+        responseMessage = `✅ *Event Updated Successfully*\n   ${result.event.title}`;
       } else if (result.action === 'DELETE' && result.event) {
-        responseMessage = `✅ Event "${result.event.title}" deleted successfully!`;
+        responseMessage = `✅ *Event Deleted Successfully*\n   ${result.event.title}`;
       } else if (result.action === 'QUERY' && result.events) {
         if (result.events.length === 0) {
-          responseMessage = "📅 You have no events scheduled.";
+          responseMessage = "📅 *You have no events scheduled.*";
         } else {
-          responseMessage = `📅 You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}:\n\n`;
+          responseMessage = `📅 *You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}:*\n\n`;
           result.events.slice(0, 10).forEach((event: { title: string; start: Date }, index: number) => {
             const eventTime = event.start.toLocaleTimeString('en-US', {
               hour: 'numeric',
@@ -964,7 +964,7 @@ async function handleEventOperation(
 
     try {
       // Send detailed error message to user for debugging
-      const errorResponse = `❌ Error processing event request:\n\n${errorMessage}\n\nPlease check the logs for more details or try again.`;
+      const errorResponse = `❌ *Error Processing Event Request*\n\n${errorMessage}\n\nPlease check the logs for more details or try again.`;
       await whatsappService.sendTextMessage(recipient, errorResponse);
       
       // Log outgoing error message
