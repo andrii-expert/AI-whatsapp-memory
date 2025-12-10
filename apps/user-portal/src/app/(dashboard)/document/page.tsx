@@ -395,6 +395,7 @@ export default function DocumentPage() {
 
   // Download file
   const [resolvedViewUrl, setResolvedViewUrl] = useState<string | null>(null);
+  const [isResolvingUrl, setIsResolvingUrl] = useState(false);
 
   const getResolvedUrl = async (file: FileItem) => {
     const key = file.cloudflareKey || extractKeyFromUrl(file.cloudflareUrl);
@@ -417,23 +418,47 @@ export default function DocumentPage() {
   };
 
   useEffect(() => {
+    let active = true;
     if (!isViewModalOpen || !viewingFile) {
       setResolvedViewUrl(null);
+      setIsResolvingUrl(false);
       return;
     }
 
-    getResolvedUrl(viewingFile).then(setResolvedViewUrl).catch(() => setResolvedViewUrl(viewingFile.cloudflareUrl));
+    setIsResolvingUrl(true);
+    getResolvedUrl(viewingFile)
+      .then((url) => {
+        if (active) setResolvedViewUrl(url);
+      })
+      .catch(() => {
+        if (active) setResolvedViewUrl(viewingFile.cloudflareUrl);
+      })
+      .finally(() => {
+        if (active) setIsResolvingUrl(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [isViewModalOpen, viewingFile]);
 
   const downloadFile = async (file: FileItem) => {
-    const href = await getResolvedUrl(file);
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = file.fileName;
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const href = await getResolvedUrl(file);
+      if (!href) {
+        toast({ title: "Download failed", description: "No download URL available.", variant: "error" });
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = file.fileName;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      toast({ title: "Download failed", description: "Could not fetch download URL.", variant: "error" });
+    }
   };
 
   return (
@@ -851,8 +876,10 @@ export default function DocumentPage() {
           <div className="space-y-4">
             {viewingFile && (
               <>
-                <div className="bg-muted rounded-lg overflow-hidden">
-                  {viewingFile.fileType.startsWith("image/") ? (
+                <div className="bg-muted rounded-lg overflow-hidden min-h-[200px] flex items-center justify-center">
+                  {isResolvingUrl ? (
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  ) : viewingFile.fileType.startsWith("image/") ? (
                     <img
                       src={resolvedViewUrl || viewingFile.cloudflareUrl}
                       alt={viewingFile.title}
