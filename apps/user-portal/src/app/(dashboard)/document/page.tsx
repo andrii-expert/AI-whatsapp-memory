@@ -443,7 +443,8 @@ export default function DocumentPage() {
       const entries: Array<[string, string]> = [];
       await Promise.all(
         files.map(async (file: FileItem) => {
-          if (!file.fileType.startsWith("image/")) return;
+          const isPreviewable = file.fileType.startsWith("image/") || file.fileType === "application/pdf";
+          if (!isPreviewable) return;
           const key = getThumbnailKey(file);
           if (!key) return;
           try {
@@ -677,6 +678,16 @@ export default function DocumentPage() {
                       (e.currentTarget as HTMLImageElement).src = file.thumbnailUrl || file.cloudflareUrl;
                     }}
                   />
+                ) : file.fileType === "application/pdf" ? (
+                  <object
+                    data={`${getCardImageSrc(file)}#toolbar=0&navpanes=0&scrollbar=0`}
+                    type="application/pdf"
+                    className="w-full h-full"
+                  >
+                    <div className="p-8 flex items-center justify-center">
+                      {getFileIcon(file.fileType)}
+                    </div>
+                  </object>
                 ) : (
                   <div className="p-8">
                     {getFileIcon(file.fileType)}
@@ -763,6 +774,16 @@ export default function DocumentPage() {
                           (e.currentTarget as HTMLImageElement).src = file.thumbnailUrl || file.cloudflareUrl;
                         }}
                       />
+                    ) : file.fileType === "application/pdf" ? (
+                      <object
+                        data={`${getCardImageSrc(file)}#toolbar=0&navpanes=0&scrollbar=0`}
+                        type="application/pdf"
+                        className="w-12 h-12 rounded overflow-hidden"
+                      >
+                        <div className="w-12 h-12 flex items-center justify-center">
+                          {getFileIcon(file.fileType)}
+                        </div>
+                      </object>
                     ) : (
                       getFileIcon(file.fileType)
                     )}
