@@ -35,7 +35,7 @@ const navigation = [
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Notes", href: "/notes", icon: StickyNote, goldOnly: true },
   { name: "Reminders", href: "/reminders", icon: Bell },
-  { name: "Storage", href: "/storage", icon: FolderOpen },
+  // { name: "Documents", href: "/document", icon: FolderOpen },
 ];
 
 export function DashboardNav() {
@@ -185,7 +185,7 @@ export function DashboardNav() {
                           itemCount = calendars?.length || 0;
                         } else if (item.href === "/tasks") {
                           itemCount = allTasks.length;
-                        } else if (item.href === "/storage") {
+                        } else if (item.href === "/document") {
                           itemCount = storageStats?.filesCount || 0;
                         }
                         
