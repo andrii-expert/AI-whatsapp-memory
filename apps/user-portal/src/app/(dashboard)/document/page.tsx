@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import {
   Home,
@@ -49,14 +49,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@imaginecalendar/ui/dialog";
 import { Label } from "@imaginecalendar/ui/label";
 import {
   DropdownMenu,
@@ -95,6 +87,17 @@ interface FileItem {
   thumbnailUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+function extractKeyFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    // Expect /bucket-or-path/<key>
+    // e.g. https://xxx.r2.cloudflarestorage.com/users/... or https://pub-xxx.r2.dev/users/...
+    return parsed.pathname.startsWith("/") ? parsed.pathname.slice(1) : parsed.pathname;
+  } catch {
+    return null;
+  }
 }
 
 function getFileIcon(fileType: string) {
@@ -391,9 +394,41 @@ export default function DocumentPage() {
     });
 
   // Download file
-  const downloadFile = (file: FileItem) => {
+  const [resolvedViewUrl, setResolvedViewUrl] = useState<string | null>(null);
+
+  const getResolvedUrl = async (file: FileItem) => {
+    const key = file.cloudflareKey || extractKeyFromUrl(file.cloudflareUrl);
+    if (key) {
+      try {
+        const res = await fetch(`/api/storage/download?key=${encodeURIComponent(key)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) {
+            return data.url as string;
+          }
+        } else {
+          console.warn("Signed URL request failed", await res.text());
+        }
+      } catch (err) {
+        console.warn("Failed to get signed URL, falling back to stored URL", err);
+      }
+    }
+    return file.cloudflareUrl;
+  };
+
+  useEffect(() => {
+    if (!isViewModalOpen || !viewingFile) {
+      setResolvedViewUrl(null);
+      return;
+    }
+
+    getResolvedUrl(viewingFile).then(setResolvedViewUrl).catch(() => setResolvedViewUrl(viewingFile.cloudflareUrl));
+  }, [isViewModalOpen, viewingFile]);
+
+  const downloadFile = async (file: FileItem) => {
+    const href = await getResolvedUrl(file);
     const link = document.createElement("a");
-    link.href = file.cloudflareUrl;
+    link.href = href;
     link.download = file.fileName;
     link.target = "_blank";
     document.body.appendChild(link);
@@ -693,14 +728,14 @@ export default function DocumentPage() {
       )}
 
       {/* Upload Modal */}
-      <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Upload File</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Upload File</AlertDialogTitle>
+            <AlertDialogDescription>
               Add a title and description for your file
-            </DialogDescription>
-          </DialogHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <div className="space-y-4">
             {selectedFile && (
               <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
@@ -741,11 +776,11 @@ export default function DocumentPage() {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={resetUploadForm} disabled={isUploading}>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={resetUploadForm} disabled={isUploading}>
               Cancel
-            </Button>
-            <Button onClick={handleUpload} disabled={!uploadTitle.trim() || isUploading}>
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleUpload} disabled={!uploadTitle.trim() || isUploading}>
               {isUploading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -757,20 +792,20 @@ export default function DocumentPage() {
                   Upload
                 </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit File</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit File</AlertDialogTitle>
+            <AlertDialogDescription>
               Update the file title and description
-            </DialogDescription>
-          </DialogHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-title">Title *</Label>
@@ -792,40 +827,40 @@ export default function DocumentPage() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsEditModalOpen(false)}>
               Cancel
-            </Button>
-            <Button onClick={handleEdit} disabled={!editTitle.trim()}>
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleEdit} disabled={!editTitle.trim()}>
               <Check className="h-4 w-4 mr-2" />
               Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* View Modal */}
-      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{viewingFile?.title}</DialogTitle>
+      <AlertDialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <AlertDialogContent className="sm:max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{viewingFile?.title}</AlertDialogTitle>
             {viewingFile?.description && (
-              <DialogDescription>{viewingFile.description}</DialogDescription>
+              <AlertDialogDescription>{viewingFile.description}</AlertDialogDescription>
             )}
-          </DialogHeader>
+          </AlertDialogHeader>
           <div className="space-y-4">
             {viewingFile && (
               <>
                 <div className="bg-muted rounded-lg overflow-hidden">
                   {viewingFile.fileType.startsWith("image/") ? (
                     <img
-                      src={viewingFile.cloudflareUrl}
+                      src={resolvedViewUrl || viewingFile.cloudflareUrl}
                       alt={viewingFile.title}
                       className="w-full max-h-96 object-contain"
                     />
                   ) : viewingFile.fileType === "application/pdf" ? (
                     <iframe
-                      src={viewingFile.cloudflareUrl}
+                      src={resolvedViewUrl || viewingFile.cloudflareUrl}
                       className="w-full h-96"
                       title={viewingFile.title}
                     />
@@ -848,8 +883,11 @@ export default function DocumentPage() {
               </>
             )}
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => openEditModal(viewingFile!)}>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={() => setIsViewModalOpen(false)}>
+              Close
+            </AlertDialogCancel>
+            <Button variant="outline" onClick={() => { setIsViewModalOpen(false); openEditModal(viewingFile!); }}>
               <Edit2 className="h-4 w-4 mr-2" />
               Edit
             </Button>
@@ -857,9 +895,9 @@ export default function DocumentPage() {
               <Download className="h-4 w-4 mr-2" />
               Download
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
