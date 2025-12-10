@@ -396,6 +396,7 @@ export default function DocumentPage() {
   // Download file
   const [resolvedViewUrl, setResolvedViewUrl] = useState<string | null>(null);
   const [isResolvingUrl, setIsResolvingUrl] = useState(false);
+  const [resolvedThumbs, setResolvedThumbs] = useState<Record<string, string>>({});
 
   const getResolvedUrl = async (file: FileItem) => {
     const key = file.cloudflareKey || extractKeyFromUrl(file.cloudflareUrl);
@@ -416,6 +417,56 @@ export default function DocumentPage() {
     }
     return file.cloudflareUrl;
   };
+
+  const getThumbnailKey = (file: FileItem) => {
+    if (file.thumbnailUrl) {
+      const thumbKey = extractKeyFromUrl(file.thumbnailUrl);
+      if (thumbKey) return thumbKey;
+    }
+    const fallbackKey = file.cloudflareKey || extractKeyFromUrl(file.cloudflareUrl);
+    return fallbackKey;
+  };
+
+  const getCardImageSrc = (file: FileItem) => {
+    return (
+      resolvedThumbs[file.id] ||
+      file.thumbnailUrl ||
+      resolvedViewUrl ||
+      file.cloudflareUrl
+    );
+  };
+
+  // Resolve signed URLs for thumbnails so images render without 400s
+  useEffect(() => {
+    let active = true;
+    const fetchThumbs = async () => {
+      const entries: Array<[string, string]> = [];
+      await Promise.all(
+        files.map(async (file: FileItem) => {
+          if (!file.fileType.startsWith("image/")) return;
+          const key = getThumbnailKey(file);
+          if (!key) return;
+          try {
+            const res = await fetch(`/api/storage/download?key=${encodeURIComponent(key)}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data?.url) {
+              entries.push([file.id, data.url as string]);
+            }
+          } catch {
+            // ignore and fall back
+          }
+        })
+      );
+      if (!active) return;
+      setResolvedThumbs((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+    };
+
+    fetchThumbs();
+    return () => {
+      active = false;
+    };
+  }, [files]);
 
   useEffect(() => {
     let active = true;
@@ -617,11 +668,14 @@ export default function DocumentPage() {
               onClick={() => openViewModal(file)}
             >
               <div className="aspect-square bg-muted/50 flex items-center justify-center relative overflow-hidden">
-                {file.fileType.startsWith("image/") && file.thumbnailUrl ? (
+                {file.fileType.startsWith("image/") ? (
                   <img
-                    src={file.thumbnailUrl}
+                    src={getCardImageSrc(file)}
                     alt={file.title}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = file.thumbnailUrl || file.cloudflareUrl;
+                    }}
                   />
                 ) : (
                   <div className="p-8">
@@ -700,11 +754,14 @@ export default function DocumentPage() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   <div className="flex-shrink-0">
-                    {file.fileType.startsWith("image/") && file.thumbnailUrl ? (
+                    {file.fileType.startsWith("image/") ? (
                       <img
-                        src={file.thumbnailUrl}
+                        src={getCardImageSrc(file)}
                         alt={file.title}
                         className="w-12 h-12 object-cover rounded"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src = file.thumbnailUrl || file.cloudflareUrl;
+                        }}
                       />
                     ) : (
                       getFileIcon(file.fileType)
