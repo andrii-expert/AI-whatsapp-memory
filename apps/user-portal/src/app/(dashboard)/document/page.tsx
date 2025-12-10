@@ -428,12 +428,14 @@ export default function DocumentPage() {
   };
 
   const getCardImageSrc = (file: FileItem) => {
-    return (
-      resolvedThumbs[file.id] ||
-      file.thumbnailUrl ||
-      resolvedViewUrl ||
-      file.cloudflareUrl
-    );
+    // Prefer signed thumbnail/download URL we fetched. For PDFs we rely solely on this.
+    const signed = resolvedThumbs[file.id];
+    if (signed) return signed;
+    // Fallback: only allow stored thumbnail/data URLs for images; avoid raw R2 URLs for PDFs to prevent 400s
+    if (file.fileType.startsWith("image/")) {
+      return file.thumbnailUrl || file.cloudflareUrl;
+    }
+    return null;
   };
 
   // Resolve signed URLs for thumbnails so images render without 400s
@@ -671,7 +673,7 @@ export default function DocumentPage() {
               <div className="aspect-square bg-muted/50 flex items-center justify-center relative overflow-hidden">
                 {file.fileType.startsWith("image/") ? (
                   <img
-                    src={getCardImageSrc(file)}
+                    src={getCardImageSrc(file) || ""}
                     alt={file.title}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -679,15 +681,21 @@ export default function DocumentPage() {
                     }}
                   />
                 ) : file.fileType === "application/pdf" ? (
-                  <object
-                    data={`${getCardImageSrc(file)}#toolbar=0&navpanes=0&scrollbar=0`}
-                    type="application/pdf"
-                    className="w-full h-full"
-                  >
+                  getCardImageSrc(file) ? (
+                    <object
+                      data={`${getCardImageSrc(file)}#toolbar=0&navpanes=0&scrollbar=0`}
+                      type="application/pdf"
+                      className="w-full h-full"
+                    >
+                      <div className="p-8 flex items-center justify-center">
+                        {getFileIcon(file.fileType)}
+                      </div>
+                    </object>
+                  ) : (
                     <div className="p-8 flex items-center justify-center">
-                      {getFileIcon(file.fileType)}
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
-                  </object>
+                  )
                 ) : (
                   <div className="p-8">
                     {getFileIcon(file.fileType)}
@@ -765,16 +773,17 @@ export default function DocumentPage() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   <div className="flex-shrink-0">
-                    {file.fileType.startsWith("image/") ? (
-                      <img
-                        src={getCardImageSrc(file)}
-                        alt={file.title}
-                        className="w-12 h-12 object-cover rounded"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = file.thumbnailUrl || file.cloudflareUrl;
-                        }}
-                      />
-                    ) : file.fileType === "application/pdf" ? (
+                  {file.fileType.startsWith("image/") ? (
+                    <img
+                      src={getCardImageSrc(file) || ""}
+                      alt={file.title}
+                      className="w-12 h-12 object-cover rounded"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = file.thumbnailUrl || file.cloudflareUrl;
+                      }}
+                    />
+                  ) : file.fileType === "application/pdf" ? (
+                    getCardImageSrc(file) ? (
                       <object
                         data={`${getCardImageSrc(file)}#toolbar=0&navpanes=0&scrollbar=0`}
                         type="application/pdf"
@@ -785,8 +794,13 @@ export default function DocumentPage() {
                         </div>
                       </object>
                     ) : (
-                      getFileIcon(file.fileType)
-                    )}
+                      <div className="w-12 h-12 flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                    )
+                  ) : (
+                    getFileIcon(file.fileType)
+                  )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium truncate">{file.title}</h3>
