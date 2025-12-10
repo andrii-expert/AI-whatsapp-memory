@@ -951,26 +951,32 @@ export default function DocumentPage() {
                       className="w-full max-h-96 object-contain"
                     />
                   ) : viewingFile.fileType === "application/pdf" ? (
-                    <object
-                      data={`${(resolvedViewUrl || viewingFile.cloudflareUrl) ?? ""}#toolbar=1&navpanes=1&scrollbar=1`}
-                      type="application/pdf"
-                      className="w-full h-[70vh] sm:h-[80vh] rounded border"
-                    >
-                      <iframe
-                        src={resolvedViewUrl || viewingFile.cloudflareUrl}
-                        className="w-full h-[70vh] sm:h-[80vh]"
-                        title={viewingFile.title}
-                      />
-                      <p className="p-4 text-sm text-muted-foreground">
-                        PDF preview unavailable.{" "}
-                        <button
-                          className="underline"
-                          onClick={() => viewingFile && downloadFile(viewingFile)}
-                        >
-                          Download instead
-                        </button>
-                      </p>
-                    </object>
+                    isResolvingUrl && !resolvedViewUrl ? (
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    ) : (
+                      <object
+                        key={resolvedViewUrl || viewingFile.cloudflareUrl}
+                        data={`${(resolvedViewUrl || viewingFile.cloudflareUrl) ?? ""}#toolbar=1&navpanes=1&scrollbar=1`}
+                        type="application/pdf"
+                        className="w-full h-[70vh] sm:h-[80vh] rounded border"
+                      >
+                        <iframe
+                          key={`iframe-${resolvedViewUrl || viewingFile.cloudflareUrl}`}
+                          src={resolvedViewUrl || viewingFile.cloudflareUrl}
+                          className="w-full h-[70vh] sm:h-[80vh]"
+                          title={viewingFile.title}
+                        />
+                        <p className="p-4 text-sm text-muted-foreground">
+                          PDF preview unavailable.{" "}
+                          <button
+                            className="underline"
+                            onClick={() => viewingFile && downloadFile(viewingFile)}
+                          >
+                            Download instead
+                          </button>
+                        </p>
+                      </object>
+                    )
                   ) : (
                     <div className="py-12 flex flex-col items-center justify-center">
                       {getFileIcon(viewingFile.fileType)}
