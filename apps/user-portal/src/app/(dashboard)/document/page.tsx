@@ -811,7 +811,7 @@ export default function DocumentPage() {
 
       {/* Upload Modal */}
       <AlertDialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-        <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogContent className="sm:max-w-md w-full max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle>Upload File</AlertDialogTitle>
             <AlertDialogDescription>
@@ -823,7 +823,7 @@ export default function DocumentPage() {
               <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
                 {getFileIcon(selectedFile.type)}
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{selectedFile.name}</p>
+                  <p className="font-medium break-words">{selectedFile.name}</p>
                   <p className="text-sm text-muted-foreground">
                     {formatFileSize(selectedFile.size)}
                   </p>
@@ -858,11 +858,19 @@ export default function DocumentPage() {
               </div>
             )}
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={resetUploadForm} disabled={isUploading}>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3">
+            <AlertDialogCancel
+              className="w-full sm:w-auto"
+              onClick={resetUploadForm}
+              disabled={isUploading}
+            >
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={handleUpload} disabled={!uploadTitle.trim() || isUploading}>
+            <AlertDialogAction
+              className="w-full sm:w-auto"
+              onClick={handleUpload}
+              disabled={!uploadTitle.trim() || isUploading}
+            >
               {isUploading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -943,11 +951,26 @@ export default function DocumentPage() {
                       className="w-full max-h-96 object-contain"
                     />
                   ) : viewingFile.fileType === "application/pdf" ? (
-                    <iframe
-                      src={resolvedViewUrl || viewingFile.cloudflareUrl}
-                      className="w-full h-96"
-                      title={viewingFile.title}
-                    />
+                    <object
+                      data={`${(resolvedViewUrl || viewingFile.cloudflareUrl) ?? ""}#toolbar=1&navpanes=1&scrollbar=1`}
+                      type="application/pdf"
+                      className="w-full h-[70vh] sm:h-[80vh] rounded border"
+                    >
+                      <iframe
+                        src={resolvedViewUrl || viewingFile.cloudflareUrl}
+                        className="w-full h-[70vh] sm:h-[80vh]"
+                        title={viewingFile.title}
+                      />
+                      <p className="p-4 text-sm text-muted-foreground">
+                        PDF preview unavailable.{" "}
+                        <button
+                          className="underline"
+                          onClick={() => viewingFile && downloadFile(viewingFile)}
+                        >
+                          Download instead
+                        </button>
+                      </p>
+                    </object>
                   ) : (
                     <div className="py-12 flex flex-col items-center justify-center">
                       {getFileIcon(viewingFile.fileType)}
