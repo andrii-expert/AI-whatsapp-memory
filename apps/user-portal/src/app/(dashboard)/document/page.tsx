@@ -787,15 +787,26 @@ export default function DocumentPage() {
         toast({ title: "Download failed", description: "No download URL available.", variant: "error" });
         return;
       }
+      
+      // Fetch the file as a blob to ensure proper download
+      const response = await fetch(href);
+      if (!response.ok) {
+        throw new Error("Failed to fetch file");
+      }
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      
       const link = document.createElement("a");
-      link.href = href;
+      link.href = blobUrl;
       link.download = file.fileName;
-      link.target = "_blank";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      toast({ title: "Download failed", description: "Could not fetch download URL.", variant: "error" });
+      toast({ title: "Download failed", description: "Could not download file.", variant: "error" });
     }
   };
 
@@ -2088,21 +2099,21 @@ export default function DocumentPage() {
 
       {/* View Modal */}
       <AlertDialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <AlertDialogContent className="sm:max-w-2xl">
+        <AlertDialogContent className="max-w-[90vw] max-h-[90vh] w-full overflow-hidden flex flex-col">
           <AlertDialogHeader>
             <AlertDialogTitle>{viewingFile?.title}</AlertDialogTitle>
           </AlertDialogHeader>
-          <div className="space-y-4">
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
             {viewingFile && (
               <>
-                <div className="bg-muted rounded-lg overflow-hidden min-h-[200px] flex items-center justify-center">
+                <div className="bg-muted rounded-lg overflow-hidden flex-1 flex items-center justify-center min-h-0">
                   {isResolvingUrl ? (
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   ) : viewingFile.fileType.startsWith("image/") ? (
                     <img
                       src={resolvedViewUrl || viewingFile.cloudflareUrl}
                       alt={viewingFile.title}
-                      className="w-full max-h-96 object-contain"
+                      className="w-full h-full max-h-[calc(90vh-250px)] object-contain"
                     />
                   ) : viewingFile.fileType === "application/pdf" ? (
                     isResolvingUrl && !resolvedViewUrl ? (
@@ -2112,12 +2123,12 @@ export default function DocumentPage() {
                         key={resolvedViewUrl || viewingFile.cloudflareUrl}
                         data={`${(resolvedViewUrl || viewingFile.cloudflareUrl) ?? ""}#toolbar=1&navpanes=1&scrollbar=1`}
                         type="application/pdf"
-                        className="w-full h-[70vh] sm:h-[80vh] rounded border"
+                        className="w-full h-full max-h-[calc(90vh-250px)] rounded border"
                       >
                         <iframe
                           key={`iframe-${resolvedViewUrl || viewingFile.cloudflareUrl}`}
-                          src={resolvedViewUrl || viewingFile.cloudflareUrl}
-                          className="w-full h-[70vh] sm:h-[80vh]"
+                          src={`${resolvedViewUrl || viewingFile.cloudflareUrl}#toolbar=1&navpanes=1&scrollbar=1`}
+                          className="w-full h-full max-h-[calc(90vh-250px)] rounded border"
                           title={viewingFile.title}
                         />
                         <p className="p-4 text-sm text-muted-foreground">
@@ -2140,7 +2151,7 @@ export default function DocumentPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mt-4">
                   <Badge variant="secondary">{viewingFile.fileExtension?.toUpperCase() || "FILE"}</Badge>
                   <Badge variant="outline">{formatFileSize(viewingFile.fileSize)}</Badge>
                   <Badge variant="outline">
