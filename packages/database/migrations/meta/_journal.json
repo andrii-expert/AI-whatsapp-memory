@@ -155,6 +155,13 @@
       "when": 1764948937704,
       "tag": "0021_harsh_pandemic",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1765465942144,
+      "tag": "0022_gifted_retro_girl",
+      "breakpoints": true
     }
   ]
 }

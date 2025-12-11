@@ -215,6 +215,12 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   tasks: many(tasks),
   noteFolders: many(noteFolders),
   notes: many(notes),
+  userFileFolders: many(userFileFolders),
+  userFiles: many(userFiles),
+  sharesGiven: many(taskShares, { relationName: "sharesGiven" }),
+  sharesReceived: many(taskShares, { relationName: "sharesReceived" }),
+  fileSharesGiven: many(fileShares, { relationName: "fileSharesGiven" }),
+  fileSharesReceived: many(fileShares, { relationName: "fileSharesReceived" }),
 }));
 
 // ============================================
