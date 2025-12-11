@@ -1166,9 +1166,21 @@ export const remindersRelations = relations(reminders, ({ one }) => ({
 // User Files / Storage
 // ============================================
 
+export const userFileFolders = pgTable("user_file_folders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_file_folders_user_id_idx").on(table.userId),
+  uniquePerUserIdx: uniqueIndex("user_file_folders_unique_per_user").on(table.userId, table.name),
+}));
+
 export const userFiles = pgTable("user_files", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  folderId: uuid("folder_id").references(() => userFileFolders.id, { onDelete: "set null" }),
   
   // File metadata
   title: text("title").notNull(),
@@ -1193,6 +1205,7 @@ export const userFiles = pgTable("user_files", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   userIdIdx: index("user_files_user_id_idx").on(table.userId),
+  folderIdIdx: index("user_files_folder_id_idx").on(table.folderId),
   fileTypeIdx: index("user_files_file_type_idx").on(table.fileType),
   createdAtIdx: index("user_files_created_at_idx").on(table.createdAt),
 }));
@@ -1202,4 +1215,16 @@ export const userFilesRelations = relations(userFiles, ({ one }) => ({
     fields: [userFiles.userId],
     references: [users.id],
   }),
+  folder: one(userFileFolders, {
+    fields: [userFiles.folderId],
+    references: [userFileFolders.id],
+  }),
+}));
+
+export const userFileFoldersRelations = relations(userFileFolders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [userFileFolders.userId],
+    references: [users.id],
+  }),
+  files: many(userFiles),
 }));

@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Home,
   ChevronLeft,
+  ChevronRight,
   Plus,
   Search,
   Edit2,
@@ -30,6 +31,7 @@ import {
   SortDesc,
   Calendar,
   Loader2,
+  Folder,
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -60,6 +62,13 @@ import {
 import { Badge } from "@imaginecalendar/ui/badge";
 import { Progress } from "@imaginecalendar/ui/progress";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@imaginecalendar/ui/select";
+import {
   uploadToCloudflare,
   deleteFromCloudflare,
   formatFileSize,
@@ -81,6 +90,7 @@ interface FileItem {
   fileType: string;
   fileSize: number;
   fileExtension: string | null;
+   folderId: string | null;
   cloudflareId: string;
   cloudflareKey: string | null;
   cloudflareUrl: string;
@@ -150,15 +160,24 @@ export default function DocumentPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadDescription, setUploadDescription] = useState("");
+  const [uploadFolderId, setUploadFolderId] = useState<string | null>(null);
   const [editingFile, setEditingFile] = useState<FileItem | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editFolderId, setEditFolderId] = useState<string | null>(null);
   const [viewingFile, setViewingFile] = useState<FileItem | null>(null);
   const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [newFolderName, setNewFolderName] = useState("");
 
   // Fetch files
   const { data: files = [], isLoading } = useQuery(
     trpc.storage.list.queryOptions()
+  );
+
+  // Fetch folders
+  const { data: folders = [] } = useQuery(
+    trpc.storage.folders.list.queryOptions()
   );
 
   // Fetch storage stats
@@ -183,6 +202,23 @@ export default function DocumentPage() {
         toast({
           title: "Upload failed",
           description: error.message || "Failed to upload file. Please try again.",
+          variant: "error",
+        });
+      },
+    })
+  );
+
+  const createFolderMutation = useMutation(
+    trpc.storage.folders.create.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.storage.folders.list.queryKey() });
+        toast({ title: "Folder created", variant: "success" });
+        setNewFolderName("");
+      },
+      onError: (error) => {
+        toast({
+          title: "Folder create failed",
+          description: error.message || "Could not create folder",
           variant: "error",
         });
       },
@@ -243,11 +279,42 @@ export default function DocumentPage() {
     })
   );
 
+  const folderMap = useMemo(() => {
+    const map = new Map<string, string>();
+    folders.forEach((f: any) => map.set(f.id, f.name));
+    return map;
+  }, [folders]);
+
+  const folderOptions = useMemo(
+    () => [
+      { id: null, name: "Uncategorized" },
+      ...folders.map((f: any) => ({ id: f.id as string, name: f.name as string })),
+    ],
+    [folders]
+  );
+
+  const getFolderName = (folderId: string | null) => {
+    if (!folderId) return "Uncategorized";
+    return folderMap.get(folderId) || "Uncategorized";
+  };
+
+  const handleCreateFolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    createFolderMutation.mutate({ name: newFolderName.trim() });
+  };
+
+  const handleFolderSelect = (folderId: string | null) => {
+    setSelectedFolderId(folderId);
+    setUploadFolderId(folderId);
+  };
+
   // Reset upload form
   const resetUploadForm = () => {
     setSelectedFile(null);
     setUploadTitle("");
     setUploadDescription("");
+    setUploadFolderId(selectedFolderId);
     setIsUploadModalOpen(false);
     setUploadProgress(0);
   };
@@ -277,6 +344,7 @@ export default function DocumentPage() {
 
     setSelectedFile(file);
     setUploadTitle(file.name.replace(/\.[^/.]+$/, "")); // Remove extension for title
+    setUploadFolderId(selectedFolderId);
     setIsUploadModalOpen(true);
   };
 
@@ -312,6 +380,7 @@ export default function DocumentPage() {
         fileType: selectedFile.type,
         fileSize: selectedFile.size,
         fileExtension: getFileExtension(selectedFile.name) || undefined,
+        folderId: uploadFolderId || null,
         cloudflareId: result.id!,
         cloudflareKey: result.key, // R2 object key for deletion
         cloudflareUrl: result.url!,
@@ -336,6 +405,7 @@ export default function DocumentPage() {
     setEditingFile(file);
     setEditTitle(file.title);
     setEditDescription(file.description || "");
+    setEditFolderId(file.folderId || null);
     setIsEditModalOpen(true);
   };
 
@@ -346,6 +416,7 @@ export default function DocumentPage() {
       id: editingFile.id,
       title: editTitle.trim(),
       description: editDescription.trim() || undefined,
+      folderId: editFolderId,
     });
   };
 
@@ -367,7 +438,12 @@ export default function DocumentPage() {
   };
 
   // Filter and sort files
-  const filteredFiles = files
+  const folderFilteredFiles = files.filter((file: FileItem) => {
+    if (!selectedFolderId) return true;
+    return file.folderId === selectedFolderId;
+  });
+
+  const filteredFiles = folderFilteredFiles
     .filter((file: FileItem) => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -576,6 +652,54 @@ export default function DocumentPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Folders */}
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Folders</h2>
+              <p className="text-sm text-muted-foreground">Double click to open</p>
+            </div>
+            <form className="flex w-full sm:w-auto gap-2" onSubmit={handleCreateFolder}>
+              <Input
+                placeholder="New folder"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                className="flex-1"
+              />
+              <Button type="submit" variant="outline" disabled={createFolderMutation.isPending}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={selectedFolderId === null ? "default" : "outline"}
+              onClick={() => handleFolderSelect(null)}
+              onDoubleClick={() => handleFolderSelect(null)}
+              className="flex items-center gap-2"
+            >
+              <Folder className="h-4 w-4" />
+              All documents
+            </Button>
+            {folderOptions
+              .filter((f) => f.id !== null)
+              .map((folder) => (
+                <Button
+                  key={folder.id}
+                  variant={selectedFolderId === folder.id ? "default" : "outline"}
+                  onClick={() => setSelectedFolderId(folder.id as string)}
+                  onDoubleClick={() => handleFolderSelect(folder.id as string)}
+                  className="flex items-center gap-2"
+                >
+                  <Folder className="h-4 w-4" />
+                  {folder.name}
+                </Button>
+              ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -875,6 +999,24 @@ export default function DocumentPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label>Folder</Label>
+              <Select
+                value={uploadFolderId ?? "none"}
+                onValueChange={(value) => setUploadFolderId(value === "none" ? null : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select folder" />
+                </SelectTrigger>
+                <SelectContent>
+                  {folderOptions.map((folder) => (
+                    <SelectItem key={folder.id ?? "none"} value={folder.id ?? "none"}>
+                      {folder.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
@@ -940,6 +1082,24 @@ export default function DocumentPage() {
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="Enter file title"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Folder</Label>
+              <Select
+                value={editFolderId ?? "none"}
+                onValueChange={(value) => setEditFolderId(value === "none" ? null : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select folder" />
+                </SelectTrigger>
+                <SelectContent>
+                  {folderOptions.map((folder) => (
+                    <SelectItem key={folder.id ?? "none"} value={folder.id ?? "none"}>
+                      {folder.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-description">Description</Label>

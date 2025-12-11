@@ -7,6 +7,10 @@ import {
   deleteUserFile,
   getUserFilesCount,
   getUserStorageUsed,
+  getUserFileFolders,
+  createUserFileFolder,
+  updateUserFileFolder,
+  deleteUserFileFolder,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
@@ -16,6 +20,7 @@ import { z } from "zod";
 const createFileSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
   description: z.string().max(1000).optional(),
+  folderId: z.string().uuid().nullable().optional(),
   fileName: z.string().min(1),
   fileType: z.string().min(1),
   fileSize: z.number().positive(),
@@ -30,10 +35,53 @@ const updateFileSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).optional(),
+  folderId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().optional(),
 });
 
+const folderSchema = z.object({
+  name: z.string().min(1, "Folder name is required").max(100),
+});
+
+const updateFolderSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100).optional(),
+});
+
 export const storageRouter = createTRPCRouter({
+  // Folders (single depth)
+  folders: createTRPCRouter({
+    list: protectedProcedure.query(async ({ ctx: { db, session } }) => {
+      return getUserFileFolders(db, session.user.id);
+    }),
+
+    create: protectedProcedure
+      .input(folderSchema)
+      .mutation(async ({ ctx: { db, session }, input }) => {
+        logger.info({ userId: session.user.id, name: input.name }, "Creating storage folder");
+        const folder = await createUserFileFolder(db, { userId: session.user.id, name: input.name });
+        return folder;
+      }),
+
+    update: protectedProcedure
+      .input(updateFolderSchema)
+      .mutation(async ({ ctx: { db, session }, input }) => {
+        const { id, ...data } = input;
+        const folder = await updateUserFileFolder(db, id, session.user.id, data);
+        if (!folder) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Folder not found" });
+        }
+        return folder;
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .mutation(async ({ ctx: { db, session }, input }) => {
+        await deleteUserFileFolder(db, input.id, session.user.id);
+        return { success: true };
+      }),
+  }),
+
   // Get all user files
   list: protectedProcedure.query(async ({ ctx: { db, session } }) => {
     return getUserFiles(db, session.user.id);
