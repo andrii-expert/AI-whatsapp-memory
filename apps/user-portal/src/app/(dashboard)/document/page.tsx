@@ -960,8 +960,7 @@ export default function DocumentPage() {
                           <div className="flex items-center gap-1 flex-shrink-0">
                             {/* Share button */}
                             <ShareButton
-                              onClick={(e) => {
-                                e.stopPropagation();
+                              onClick={() => {
                                 if (isShared) {
                                   openShareDetails("file_folder", folder.id, folder.name);
                                 } else {
@@ -1157,8 +1156,7 @@ export default function DocumentPage() {
                             <div className="flex items-center gap-1 flex-shrink-0">
                               {/* Share button */}
                               <ShareButton
-                                onClick={(e) => {
-                                  e.stopPropagation();
+                                onClick={() => {
                                   if (isShared) {
                                     openShareDetails("file_folder", folder.id, folder.name);
                                   } else {
@@ -1757,8 +1755,7 @@ export default function DocumentPage() {
                           {/* Share button - only for owned files */}
                           {!file.isSharedWithMe && (
                             <ShareButton
-                              onClick={(e) => {
-                                e.stopPropagation();
+                              onClick={() => {
                                 const shareCount = getShareCount("file", file.id);
                                 if (shareCount > 0) {
                                   openShareDetails("file", file.id, file.title);
@@ -1884,8 +1881,7 @@ export default function DocumentPage() {
                           {/* Share button - only for owned files */}
                           {!file.isSharedWithMe && (
                             <ShareButton
-                              onClick={(e) => {
-                                e.stopPropagation();
+                              onClick={() => {
                                 const shareCount = getShareCount("file", file.id);
                                 if (shareCount > 0) {
                                   openShareDetails("file", file.id, file.title);
