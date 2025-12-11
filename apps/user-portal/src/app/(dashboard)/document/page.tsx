@@ -728,7 +728,7 @@ export default function DocumentPage() {
     const fetchThumbs = async () => {
       const entries: Array<[string, string]> = [];
       await Promise.all(
-        files.map(async (file: FileItem) => {
+        allFiles.map(async (file: FileItem) => {
           const isPreviewable = file.fileType.startsWith("image/") || file.fileType === "application/pdf";
           if (!isPreviewable) return;
           const key = getThumbnailKey(file);
@@ -753,7 +753,7 @@ export default function DocumentPage() {
     return () => {
       active = false;
     };
-  }, [files]);
+  }, [allFiles]);
 
   useEffect(() => {
     let active = true;
@@ -2115,12 +2115,12 @@ export default function DocumentPage() {
                         key={resolvedViewUrl || viewingFile.cloudflareUrl}
                         data={`${(resolvedViewUrl || viewingFile.cloudflareUrl) ?? ""}#toolbar=1&navpanes=1&scrollbar=1`}
                         type="application/pdf"
-                        className="w-full h-full max-h-[calc(90vh-250px)] rounded border"
+                        className="w-full h-[90vh] rounded border"
                       >
                         <iframe
                           key={`iframe-${resolvedViewUrl || viewingFile.cloudflareUrl}`}
                           src={`${resolvedViewUrl || viewingFile.cloudflareUrl}#toolbar=1&navpanes=1&scrollbar=1`}
-                          className="w-full h-full max-h-[calc(90vh-250px)] rounded border"
+                          className="w-full h-[90vh] rounded border"
                           title={viewingFile.title}
                         />
                         <p className="p-4 text-sm text-muted-foreground">
