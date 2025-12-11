@@ -19,6 +19,7 @@ export * from "./notes";
 export * from "./note-sharing";
 export * from "./reminders";
 export * from "./user-files";
+export * from "./file-sharing";
 export * from "./user-file-folders";
 
 // Re-export utility functions

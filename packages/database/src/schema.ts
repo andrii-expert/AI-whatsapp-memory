@@ -918,7 +918,9 @@ export const shareResourceTypeEnum = pgEnum("share_resource_type", [
   "task",
   "task_folder",
   "note",
-  "note_folder"
+  "note_folder",
+  "file",
+  "file_folder"
 ]);
 
 export const taskFolders = pgTable("task_folders", {
@@ -1226,4 +1228,52 @@ export const userFileFoldersRelations = relations(userFileFolders, ({ one, many 
     references: [users.id],
   }),
   files: many(userFiles),
+}));
+
+// ============================================
+// File and Folder Sharing
+// ============================================
+
+export const fileShares = pgTable("file_shares", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  
+  // Owner who is sharing
+  ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // User being shared with
+  sharedWithUserId: text("shared_with_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // Resource being shared
+  resourceType: shareResourceTypeEnum("resource_type").notNull(),
+  resourceId: uuid("resource_id").notNull(), // Can be userFiles.id or userFileFolders.id
+  
+  // Permission level
+  permission: sharePermissionEnum("permission").default("view").notNull(),
+  
+  // Metadata
+  sharedAt: timestamp("shared_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  ownerIdIdx: index("file_shares_owner_id_idx").on(table.ownerId),
+  sharedWithUserIdIdx: index("file_shares_shared_with_user_id_idx").on(table.sharedWithUserId),
+  resourceIdx: index("file_shares_resource_idx").on(table.resourceType, table.resourceId),
+  uniqueShare: uniqueIndex("file_shares_unique_share_idx").on(
+    table.ownerId, 
+    table.sharedWithUserId, 
+    table.resourceType, 
+    table.resourceId
+  ),
+}));
+
+export const fileSharesRelations = relations(fileShares, ({ one }) => ({
+  owner: one(users, {
+    fields: [fileShares.ownerId],
+    references: [users.id],
+    relationName: "fileSharesGiven",
+  }),
+  sharedWithUser: one(users, {
+    fields: [fileShares.sharedWithUserId],
+    references: [users.id],
+    relationName: "fileSharesReceived",
+  }),
 }));

@@ -28,7 +28,7 @@ import { useState } from "react";
 interface ShareDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  resourceType: "task" | "task_folder" | "note" | "note_folder";
+  resourceType: "task" | "task_folder" | "note" | "note_folder" | "file" | "file_folder";
   resourceId: string;
   resourceName: string;
 }
@@ -52,11 +52,17 @@ export function ShareDetailsModal({
 
   // Determine which sharing router to use based on resource type
   const isNoteResource = resourceType === "note" || resourceType === "note_folder";
+  const isFileResource = resourceType === "file" || resourceType === "file_folder";
 
   // Fetch shares for this resource (only works if you're the owner)
   const { data: shares = [], isLoading, isError } = useQuery(
     isNoteResource
       ? trpc.noteSharing.getResourceShares.queryOptions({
+          resourceType,
+          resourceId,
+        })
+      : isFileResource
+      ? trpc.fileSharing.getResourceShares.queryOptions({
           resourceType,
           resourceId,
         })
@@ -71,6 +77,8 @@ export function ShareDetailsModal({
   const { data: sharedResources } = useQuery(
     (isNoteResource 
         ? trpc.noteSharing.getSharedWithMe.queryOptions() 
+        : isFileResource
+        ? trpc.fileSharing.getSharedWithMe.queryOptions()
         : trpc.taskSharing.getSharedWithMe.queryOptions()) as any
   );
 
@@ -78,7 +86,7 @@ export function ShareDetailsModal({
   const sharedResourceInfo = isError && sharedResources ? (() => {
     const sharedData: any = sharedResources;
     const allShared = [
-      ...(sharedData.tasks || sharedData.notes || []),
+      ...(sharedData.tasks || sharedData.notes || sharedData.files || []),
       ...(sharedData.folders || [])
     ];
     const resource = allShared.find((r: any) => r.id === resourceId);
@@ -95,6 +103,25 @@ export function ShareDetailsModal({
   const createShareMutation = useMutation(
     (isNoteResource
       ? trpc.noteSharing.createShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "User added",
+              description: "User has been added successfully",
+            });
+            setSearchTerm("");
+            setSearchResults([]);
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to add user",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
+      : isFileResource
+      ? trpc.fileSharing.createShare.mutationOptions({
           onSuccess: () => {
             queryClient.invalidateQueries();
             toast({
@@ -150,6 +177,23 @@ export function ShareDetailsModal({
             });
           },
         })
+      : isFileResource
+      ? trpc.fileSharing.updatePermission.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "Permission updated",
+              description: "Share permission has been updated",
+            });
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to update permission",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
       : trpc.taskSharing.updatePermission.mutationOptions({
           onSuccess: () => {
             queryClient.invalidateQueries();
@@ -171,6 +215,24 @@ export function ShareDetailsModal({
   const deleteShareMutation = useMutation(
     (isNoteResource
       ? trpc.noteSharing.deleteShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "Share removed",
+              description: "User no longer has access",
+            });
+            setShareToDelete(null);
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to remove share",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
+      : isFileResource
+      ? trpc.fileSharing.deleteShare.mutationOptions({
           onSuccess: () => {
             queryClient.invalidateQueries();
             toast({
@@ -230,6 +292,10 @@ export function ShareDetailsModal({
       const results = await queryClient.fetchQuery(
         isNoteResource
           ? trpc.noteSharing.searchUsers.queryOptions({
+              searchTerm: searchTerm.trim(),
+            })
+          : isFileResource
+          ? trpc.fileSharing.searchUsers.queryOptions({
               searchTerm: searchTerm.trim(),
             })
           : trpc.taskSharing.searchUsers.queryOptions({

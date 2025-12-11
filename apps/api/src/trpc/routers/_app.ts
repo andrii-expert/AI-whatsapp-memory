@@ -19,6 +19,7 @@ import { notesRouter } from "./notes";
 import { noteSharingRouter } from "./note-sharing";
 import { remindersRouter } from "./reminders";
 import { storageRouter } from "./storage";
+import { fileSharingRouter } from "./file-sharing";
 
 export const appRouter = createTRPCRouter({
   admin: adminRouter,
@@ -40,6 +41,7 @@ export const appRouter = createTRPCRouter({
   noteSharing: noteSharingRouter,
   reminders: remindersRouter,
   storage: storageRouter,
+  fileSharing: fileSharingRouter,
 });
 
 // export type definition of API

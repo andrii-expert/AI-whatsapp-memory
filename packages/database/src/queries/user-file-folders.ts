@@ -16,6 +16,21 @@ export async function getUserFileFolders(db: Database, userId: string) {
   );
 }
 
+export async function getUserFileFolderById(db: Database, folderId: string, userId: string) {
+  return withQueryLogging(
+    "getUserFileFolderById",
+    { folderId, userId },
+    async () => {
+      return db.query.userFileFolders.findFirst({
+        where: and(
+          eq(userFileFolders.id, folderId),
+          eq(userFileFolders.userId, userId)
+        ),
+      });
+    }
+  );
+}
+
 export async function createUserFileFolder(db: Database, data: { userId: string; name: string }) {
   return withMutationLogging(
     "createUserFileFolder",
