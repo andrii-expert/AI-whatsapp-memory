@@ -782,29 +782,21 @@ export default function DocumentPage() {
 
   const downloadFile = async (file: FileItem) => {
     try {
-      const href = await getResolvedUrl(file);
-      if (!href) {
-        toast({ title: "Download failed", description: "No download URL available.", variant: "error" });
+      const key = file.cloudflareKey || extractKeyFromUrl(file.cloudflareUrl);
+      if (!key) {
+        toast({ title: "Download failed", description: "No file key available.", variant: "error" });
         return;
       }
-      
-      // Fetch the file as a blob to ensure proper download
-      const response = await fetch(href);
-      if (!response.ok) {
-        throw new Error("Failed to fetch file");
-      }
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
+
+      // Use the proxy endpoint to avoid CORS issues
+      const downloadUrl = `/api/storage/download-file?key=${encodeURIComponent(key)}&fileName=${encodeURIComponent(file.fileName)}`;
       
       const link = document.createElement("a");
-      link.href = blobUrl;
+      link.href = downloadUrl;
       link.download = file.fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      // Clean up the blob URL
-      window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       toast({ title: "Download failed", description: "Could not download file.", variant: "error" });
     }
