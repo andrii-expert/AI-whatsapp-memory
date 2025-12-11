@@ -19,7 +19,6 @@ import { z } from "zod";
 // File schemas
 const createFileSchema = z.object({
   title: z.string().min(1, "Title is required").max(200),
-  description: z.string().max(1000).optional(),
   folderId: z.string().uuid().nullable().optional(),
   fileName: z.string().min(1),
   fileType: z.string().min(1),
@@ -34,7 +33,6 @@ const createFileSchema = z.object({
 const updateFileSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).optional(),
   folderId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().optional(),
 });

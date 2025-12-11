@@ -40,7 +40,6 @@ export async function createUserFile(
   data: {
     userId: string;
     title: string;
-    description?: string;
     folderId?: string | null;
     fileName: string;
     fileType: string;
@@ -68,7 +67,6 @@ export async function updateUserFile(
   userId: string,
   data: {
     title?: string;
-    description?: string;
     folderId?: string | null;
     sortOrder?: number;
   }

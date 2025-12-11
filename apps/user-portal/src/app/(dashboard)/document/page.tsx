@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
-import { Textarea } from "@imaginecalendar/ui/textarea";
 import { Card, CardContent } from "@imaginecalendar/ui/card";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -85,7 +84,6 @@ type SortOrder = "asc" | "desc";
 interface FileItem {
   id: string;
   title: string;
-  description: string | null;
   fileName: string;
   fileType: string;
   fileSize: number;
@@ -159,11 +157,9 @@ export default function DocumentPage() {
   // Form states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadDescription, setUploadDescription] = useState("");
   const [uploadFolderId, setUploadFolderId] = useState<string | null>(null);
   const [editingFile, setEditingFile] = useState<FileItem | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  const [editDescription, setEditDescription] = useState("");
   const [editFolderId, setEditFolderId] = useState<string | null>(null);
   const [viewingFile, setViewingFile] = useState<FileItem | null>(null);
   const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
@@ -313,7 +309,6 @@ export default function DocumentPage() {
   const resetUploadForm = () => {
     setSelectedFile(null);
     setUploadTitle("");
-    setUploadDescription("");
     setUploadFolderId(selectedFolderId);
     setIsUploadModalOpen(false);
     setUploadProgress(0);
@@ -375,7 +370,6 @@ export default function DocumentPage() {
       // Create file record in database
       await createFileMutation.mutateAsync({
         title: uploadTitle.trim(),
-        description: uploadDescription.trim() || undefined,
         fileName: selectedFile.name,
         fileType: selectedFile.type,
         fileSize: selectedFile.size,
@@ -404,7 +398,6 @@ export default function DocumentPage() {
   const openEditModal = (file: FileItem) => {
     setEditingFile(file);
     setEditTitle(file.title);
-    setEditDescription(file.description || "");
     setEditFolderId(file.folderId || null);
     setIsEditModalOpen(true);
   };
@@ -415,7 +408,6 @@ export default function DocumentPage() {
     updateFileMutation.mutate({
       id: editingFile.id,
       title: editTitle.trim(),
-      description: editDescription.trim() || undefined,
       folderId: editFolderId,
     });
   };
@@ -449,8 +441,7 @@ export default function DocumentPage() {
       const query = searchQuery.toLowerCase();
       return (
         file.title.toLowerCase().includes(query) ||
-        file.fileName.toLowerCase().includes(query) ||
-        file.description?.toLowerCase().includes(query)
+        file.fileName.toLowerCase().includes(query)
       );
     })
     .sort((a: FileItem, b: FileItem) => {
@@ -929,7 +920,7 @@ export default function DocumentPage() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium truncate">{file.title}</h3>
                     <p className="text-sm text-muted-foreground truncate">
-                      {file.description || file.fileName}
+                      {file.fileName}
                     </p>
                   </div>
                   <div className="text-right text-sm text-muted-foreground hidden sm:block">
@@ -974,7 +965,7 @@ export default function DocumentPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Upload File</AlertDialogTitle>
             <AlertDialogDescription>
-              Add a title and description for your file
+              Add a title for your file
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4">
@@ -1015,16 +1006,6 @@ export default function DocumentPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={uploadDescription}
-                onChange={(e) => setUploadDescription(e.target.value)}
-                placeholder="Enter file description (optional)"
-                rows={3}
-              />
             </div>
             {isUploading && (
               <div className="space-y-2">
@@ -1070,7 +1051,7 @@ export default function DocumentPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Edit File</AlertDialogTitle>
             <AlertDialogDescription>
-              Update the file title and description
+              Update the file title
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-4">
@@ -1101,16 +1082,6 @@ export default function DocumentPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="Enter file description (optional)"
-                rows={3}
-              />
-            </div>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setIsEditModalOpen(false)}>
@@ -1129,9 +1100,6 @@ export default function DocumentPage() {
         <AlertDialogContent className="sm:max-w-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle>{viewingFile?.title}</AlertDialogTitle>
-            {viewingFile?.description && (
-              <AlertDialogDescription>{viewingFile.description}</AlertDialogDescription>
-            )}
           </AlertDialogHeader>
           <div className="space-y-4">
             {viewingFile && (

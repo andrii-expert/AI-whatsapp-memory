@@ -1184,7 +1184,6 @@ export const userFiles = pgTable("user_files", {
   
   // File metadata
   title: text("title").notNull(),
-  description: text("description"),
   
   // File info
   fileName: text("file_name").notNull(),
