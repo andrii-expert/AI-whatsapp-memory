@@ -228,9 +228,10 @@ export default function DocumentPage() {
         isSharedWithMe: true,
         sharePermission: folderPermission,
         ownerId: folder.shareInfo?.ownerId,
-        // Add permission to all files in this folder
+        // Add permission to all files in this folder and ensure folderId is set
         files: (folder.files || []).map((file: any) => ({
           ...file,
+          folderId: folder.id, // Ensure folderId is set correctly
           isSharedWithMe: true,
           sharePermission: folderPermission,
           sharedViaFolder: true,
@@ -626,6 +627,12 @@ export default function DocumentPage() {
     return Array.from(allFilesMap.values());
   }, [files, sharedFiles, sharedFolders]);
 
+  // Check if selected folder is a shared folder
+  const isSelectedFolderShared = useMemo(() => {
+    if (!selectedFolderId) return false;
+    return sharedFolders.some((f: any) => f.id === selectedFolderId);
+  }, [selectedFolderId, sharedFolders]);
+
   // Filter and sort files
   const folderFilteredFiles = allFiles.filter((file: FileItem) => {
     if (viewAllShared) {
@@ -635,6 +642,13 @@ export default function DocumentPage() {
       return !file.isSharedWithMe; // Only show owned files in "All Documents"
     }
     if (!selectedFolderId) return !file.folderId && !file.isSharedWithMe; // Uncategorized owned files
+    
+    // If selected folder is shared, show all files in that folder (including shared ones)
+    if (isSelectedFolderShared) {
+      return file.folderId === selectedFolderId;
+    }
+    
+    // If selected folder is owned, only show owned files
     return file.folderId === selectedFolderId && !file.isSharedWithMe;
   });
 
