@@ -177,6 +177,10 @@ export default function DocumentPage() {
   const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editFolderName, setEditFolderName] = useState("");
+  const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleteFolderDialogOpen, setIsDeleteFolderDialogOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [viewAllDocuments, setViewAllDocuments] = useState(true);
   const [viewAllShared, setViewAllShared] = useState(false);
@@ -291,6 +295,47 @@ export default function DocumentPage() {
     })
   );
 
+  const updateFolderMutation = useMutation(
+    trpc.storage.folders.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.storage.folders.list.queryKey() });
+        toast({ title: "Folder updated", variant: "success" });
+        setEditingFolderId(null);
+        setEditFolderName("");
+      },
+      onError: (error) => {
+        toast({
+          title: "Folder update failed",
+          description: error.message || "Could not update folder",
+          variant: "error",
+        });
+      },
+    })
+  );
+
+  const deleteFolderMutation = useMutation(
+    trpc.storage.folders.delete.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.storage.folders.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.storage.list.queryKey() });
+        toast({ title: "Folder deleted", variant: "success" });
+        setIsDeleteFolderDialogOpen(false);
+        setFolderToDelete(null);
+        if (selectedFolderId === folderToDelete?.id) {
+          setSelectedFolderId(null);
+          setViewAllDocuments(true);
+        }
+      },
+      onError: (error) => {
+        toast({
+          title: "Folder delete failed",
+          description: error.message || "Could not delete folder",
+          variant: "error",
+        });
+      },
+    })
+  );
+
   const updateFileMutation = useMutation(
     trpc.storage.update.mutationOptions({
       onSuccess: () => {
@@ -372,6 +417,31 @@ export default function DocumentPage() {
         setNewFolderName("");
       }
     });
+  };
+
+  const handleEditFolder = (folderId: string, currentName: string) => {
+    setEditingFolderId(folderId);
+    setEditFolderName(currentName);
+  };
+
+  const handleSaveFolder = (folderId: string) => {
+    if (!editFolderName.trim()) {
+      setEditingFolderId(null);
+      setEditFolderName("");
+      return;
+    }
+    updateFolderMutation.mutate({ id: folderId, name: editFolderName.trim() });
+  };
+
+  const handleDeleteFolder = (folderId: string, folderName: string) => {
+    setFolderToDelete({ id: folderId, name: folderName });
+    setIsDeleteFolderDialogOpen(true);
+  };
+
+  const confirmDeleteFolder = () => {
+    if (folderToDelete) {
+      deleteFolderMutation.mutate({ id: folderToDelete.id });
+    }
   };
 
   const handleFolderSelect = (folderId: string | null) => {
@@ -845,24 +915,137 @@ export default function DocumentPage() {
                 <div className="h-px bg-gray-200 my-2" />
 
                 {/* Individual Folders */}
-                {folders.map((folder: any) => (
-                  <button
-                    key={folder.id}
-                    onClick={() => handleFolderSelect(folder.id)}
-                    className={cn(
-                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                      selectedFolderId === folder.id && !viewAllDocuments
-                        ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                    )}
-                  >
-                    <FolderClosed className="h-4 w-4 flex-shrink-0" />
-                    <span className="flex-1 text-left truncate">{folder.name}</span>
-                    <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                      {getFileCount(folder.id)}
-                    </span>
-                  </button>
-                ))}
+                {folders.map((folder: any) => {
+                  const isEditing = editingFolderId === folder.id;
+                  const shareCount = getShareCount("file_folder", folder.id);
+                  const isShared = shareCount > 0;
+                  
+                  return (
+                    <div
+                      key={folder.id}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
+                        selectedFolderId === folder.id && !viewAllDocuments && !viewAllShared
+                          ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      {isEditing ? (
+                        <Input
+                          value={editFolderName}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setEditFolderName(e.target.value)
+                          }
+                          onBlur={() => handleSaveFolder(folder.id)}
+                          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                            if (e.key === "Enter") handleSaveFolder(folder.id);
+                            if (e.key === "Escape") {
+                              setEditingFolderId(null);
+                              setEditFolderName("");
+                            }
+                          }}
+                          autoFocus
+                          className="flex-1 h-7 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleFolderSelect(folder.id)}
+                            className="flex items-center gap-2 flex-1 text-left min-w-0"
+                          >
+                            <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                            <span className="flex-1 truncate">{folder.name}</span>
+                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* Share button */}
+                            <ShareButton
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isShared) {
+                                  openShareDetails("file_folder", folder.id, folder.name);
+                                } else {
+                                  openShareModal("file_folder", folder.id, folder.name);
+                                }
+                              }}
+                              isShared={isShared}
+                              shareCount={shareCount}
+                              size="sm"
+                            />
+                            {/* Dropdown menu */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Folder options"
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    if (isShared) {
+                                      openShareDetails("file_folder", folder.id, folder.name);
+                                    } else {
+                                      openShareModal("file_folder", folder.id, folder.name);
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  {isShared ? (
+                                    <>
+                                      <Users className="h-4 w-4" />
+                                      <span>Shared</span>
+                                      <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                        {shareCount}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Users className="h-4 w-4" />
+                                      <span>Share</span>
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleEditFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleDeleteFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
+                            {getFileCount(folder.id)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </>
             )}
           </div>
@@ -929,41 +1112,137 @@ export default function DocumentPage() {
                   <div className="h-px bg-gray-200 my-2" />
 
                   {/* Individual Folders */}
-                  {folders.map((folder: any) => (
-                    <button
-                      key={folder.id}
-                      onClick={() => handleFolderSelect(folder.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                        selectedFolderId === folder.id && !viewAllDocuments && !viewAllShared
-                          ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                      )}
-                    >
-                      <FolderClosed className="h-4 w-4 flex-shrink-0" />
-                      <span className="flex-1 text-left truncate">{folder.name}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openShareDetails(
-                            "file_folder",
-                            folder.id,
-                            folder.name
-                          );
-                        }}
-                        className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
-                        title="View who shared this folder with you"
+                  {folders.map((folder: any) => {
+                    const isEditing = editingFolderId === folder.id;
+                    const shareCount = getShareCount("file_folder", folder.id);
+                    const isShared = shareCount > 0;
+                    
+                    return (
+                      <div
+                        key={folder.id}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
+                          selectedFolderId === folder.id && !viewAllDocuments && !viewAllShared
+                            ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
+                            : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                        )}
                       >
-                        <Users className="h-2.5 w-2.5" />
-                        <span className="hidden sm:inline">
-                          {getShareCount("file_folder", folder.id) > 0 ? "Shared" : ""}
-                        </span>
-                      </button>
-                      <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                        {getFileCount(folder.id)}
-                      </span>
-                    </button>
-                  ))}
+                        {isEditing ? (
+                          <Input
+                            value={editFolderName}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                              setEditFolderName(e.target.value)
+                            }
+                            onBlur={() => handleSaveFolder(folder.id)}
+                            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                              if (e.key === "Enter") handleSaveFolder(folder.id);
+                              if (e.key === "Escape") {
+                                setEditingFolderId(null);
+                                setEditFolderName("");
+                              }
+                            }}
+                            autoFocus
+                            className="flex-1 h-7 text-sm"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleFolderSelect(folder.id)}
+                              className="flex items-center gap-2 flex-1 text-left min-w-0"
+                            >
+                              <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                              <span className="flex-1 truncate">{folder.name}</span>
+                            </button>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {/* Share button */}
+                              <ShareButton
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isShared) {
+                                    openShareDetails("file_folder", folder.id, folder.name);
+                                  } else {
+                                    openShareModal("file_folder", folder.id, folder.name);
+                                  }
+                                }}
+                                isShared={isShared}
+                                shareCount={shareCount}
+                                size="sm"
+                              />
+                              {/* Dropdown menu */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Folder options"
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                    }}
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      if (isShared) {
+                                        openShareDetails("file_folder", folder.id, folder.name);
+                                      } else {
+                                        openShareModal("file_folder", folder.id, folder.name);
+                                      }
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer"
+                                  >
+                                    {isShared ? (
+                                      <>
+                                        <Users className="h-4 w-4" />
+                                        <span>Shared</span>
+                                        <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                          {shareCount}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Users className="h-4 w-4" />
+                                        <span>Share</span>
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      handleEditFolder(folder.id, folder.name);
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                    <span>Edit</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      handleDeleteFolder(folder.id, folder.name);
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    <span>Delete</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                            <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
+                              {getFileCount(folder.id)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </>
               )}
 
@@ -1003,11 +1282,10 @@ export default function DocumentPage() {
                   {/* Shared Folders */}
                   {sharedFolders.length > 0 &&
                     sharedFolders.map((folder: any) => (
-                      <button
+                      <div
                         key={folder.id}
-                        onClick={() => handleFolderSelect(folder.id)}
                         className={cn(
-                          "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                          "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
                           selectedFolderId === folder.id &&
                             !viewAllDocuments &&
                             !viewAllShared
@@ -1015,10 +1293,15 @@ export default function DocumentPage() {
                             : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
                         )}
                       >
-                        <FolderClosed className="h-4 w-4 flex-shrink-0" />
-                        <span className="flex-1 text-left truncate">
-                          {folder.name}
-                        </span>
+                        <button
+                          onClick={() => handleFolderSelect(folder.id)}
+                          className="flex items-center gap-2 flex-1 text-left min-w-0"
+                        >
+                          <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                          <span className="flex-1 text-left truncate">
+                            {folder.name}
+                          </span>
+                        </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1041,7 +1324,7 @@ export default function DocumentPage() {
                             {folder.files.length}
                           </span>
                         )}
-                      </button>
+                      </div>
                     ))}
                 </>
               )}
@@ -1897,33 +2180,55 @@ export default function DocumentPage() {
 
       {/* Share Modal */}
       <ShareModal
-        open={isShareModalOpen}
-        onOpenChange={setIsShareModalOpen}
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
         resourceType={shareResourceType}
         resourceId={shareResourceId || ""}
         resourceName={shareResourceName}
-        onShareCreated={() => {
-          queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getMyShares.queryKey() });
-          queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getSharedWithMe.queryKey() });
-        }}
       />
 
       {/* Share Details Modal */}
       <ShareDetailsModal
-        open={isShareDetailsModalOpen}
-        onOpenChange={setIsShareDetailsModalOpen}
+        isOpen={isShareDetailsModalOpen}
+        onClose={() => setIsShareDetailsModalOpen(false)}
         resourceType={shareResourceType}
         resourceId={shareResourceId || ""}
         resourceName={shareResourceName}
-        onShareUpdated={() => {
-          queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getMyShares.queryKey() });
-          queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getSharedWithMe.queryKey() });
-        }}
-        onShareDeleted={() => {
-          queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getMyShares.queryKey() });
-          queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getSharedWithMe.queryKey() });
-        }}
       />
+
+      {/* Delete Folder Dialog */}
+      <AlertDialog open={isDeleteFolderDialogOpen} onOpenChange={setIsDeleteFolderDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Folder</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{folderToDelete?.name}"? All files in this folder will be moved to uncategorized. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteFolderDialogOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteFolder}
+              disabled={deleteFolderMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteFolderMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
