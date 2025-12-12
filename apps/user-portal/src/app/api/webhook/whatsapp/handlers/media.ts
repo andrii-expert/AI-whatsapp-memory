@@ -8,7 +8,10 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, getWhatsAppConfig, getWhatsAppApiUrl } from '@imaginecalendar/whatsapp';
 import type { WebhookProcessingSummary } from '../types';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { createUserFile, getUserFileFolders } from '@imaginecalendar/database/queries';
+import { createUserFile, getUserFileFolders, getRecentMessageHistory, getPrimaryCalendar } from '@imaginecalendar/database/queries';
+import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
+import { ActionExecutor } from './action-executor';
+import { CalendarService } from './calendar-service';
 
 // Cloudflare R2 configuration
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
@@ -33,66 +36,151 @@ function getS3Client() {
 }
 
 /**
- * Parse caption to extract file name and folder
- * Examples:
- * - "save this as mobile_design" -> { fileName: "mobile_design", folderName: null }
- * - "save this document as bill" -> { fileName: "bill", folderName: null }
- * - "save this as mobile_design in Work folder" -> { fileName: "mobile_design", folderName: "Work" }
- * - "save as invoice in Documents" -> { fileName: "invoice", folderName: "Documents" }
+ * Analyze caption using AI to extract file name and folder
  */
-function parseCaption(caption: string | undefined): { fileName: string | null; folderName: string | null } {
-  if (!caption) return { fileName: null, folderName: null };
-
-  const trimmed = caption.trim();
-  
-  // Patterns to match folder specification:
-  // - "save this as {name} in {folder} folder"
-  // - "save this as {name} in {folder}"
-  // - "save as {name} in {folder}"
-  // - "save {name} in {folder}"
-  
-  const folderPatterns = [
-    /save\s+this\s+(?:document|image|file|photo|picture)?\s+as\s+([^]+?)\s+in\s+(.+?)(?:\s+folder)?$/i,
-    /save\s+as\s+([^]+?)\s+in\s+(.+?)(?:\s+folder)?$/i,
-    /save\s+([^]+?)\s+in\s+(.+?)(?:\s+folder)?$/i,
-  ];
-
-  for (const pattern of folderPatterns) {
-    const match = trimmed.match(pattern);
-    if (match && match[1] && match[2]) {
-      return {
-        fileName: match[1].trim(),
-        folderName: match[2].trim(),
-      };
-    }
+async function analyzeCaption(
+  caption: string,
+  db: Database,
+  userId: string
+): Promise<{ fileName: string | null; folderName: string | null }> {
+  if (!caption || !caption.trim()) {
+    return { fileName: null, folderName: null };
   }
 
-  // Patterns to match just file name (no folder):
-  // - "save this as {name}"
-  // - "save this document as {name}"
-  // - "save this image as {name}"
-  // - "save as {name}"
-  // - "save {name}"
-  // - "as {name}"
-  
-  const fileNamePatterns = [
-    /save\s+this\s+(?:document|image|file|photo|picture)?\s+as\s+(.+)/i,
-    /save\s+as\s+(.+)/i,
-    /save\s+(.+)/i,
-    /as\s+(.+)/i,
-  ];
-
-  for (const pattern of fileNamePatterns) {
-    const match = trimmed.match(pattern);
-    if (match && match[1]) {
-      return {
-        fileName: match[1].trim(),
-        folderName: null,
-      };
+  try {
+    // Get message history for context
+    let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+    try {
+      const history = await getRecentMessageHistory(db, userId, 10);
+      messageHistory = history
+        .filter(msg => msg.content && msg.content.trim().length > 0)
+        .slice(0, 10)
+        .map(msg => ({
+          direction: msg.direction,
+          content: msg.content,
+        }));
+    } catch (error) {
+      logger.warn({ error, userId }, 'Failed to retrieve message history for caption analysis');
     }
-  }
 
-  return { fileName: null, folderName: null };
+    // Get user's calendar timezone
+    let userTimezone = 'Africa/Johannesburg';
+    try {
+      const calendarConnection = await getPrimaryCalendar(db, userId);
+      if (calendarConnection) {
+        const calendarService = new CalendarService(db);
+        userTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+      }
+    } catch (error) {
+      logger.warn({ error, userId }, 'Failed to get user timezone, using default');
+    }
+
+    // Analyze caption using AI
+    const analyzer = new WhatsappTextAnalysisService();
+    const currentDate = new Date();
+    
+    logger.info(
+      {
+        userId,
+        caption: caption.substring(0, 100),
+        historyCount: messageHistory.length,
+      },
+      'Analyzing caption with AI'
+    );
+
+    const aiResponse = (await analyzer.analyzeMessage(caption, {
+      messageHistory,
+      currentDate,
+      timezone: userTimezone,
+    })).trim();
+
+    logger.debug(
+      {
+        responseLength: aiResponse.length,
+        responsePreview: aiResponse.substring(0, 200),
+        userId,
+      },
+      'Got AI response for caption'
+    );
+
+    // Parse AI response to extract file name and folder
+    // Expected format: "Title: document\nCreate a file: {file_name} - on folder: {folder_route}"
+    const titleMatch = aiResponse.match(/^Title:\s*(document|normal)/i);
+    if (!titleMatch || titleMatch[1].toLowerCase() !== 'document') {
+      logger.warn(
+        {
+          userId,
+          caption,
+          aiResponse: aiResponse.substring(0, 200),
+        },
+        'AI did not recognize caption as document operation'
+      );
+      return { fileName: null, folderName: null };
+    }
+
+    // Extract action template
+    const actionLines = aiResponse
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.startsWith('Title:'));
+    
+    const actionTemplate = actionLines.join('\n');
+
+    // Parse "Create a file: {file_name} - on folder: {folder_route}"
+    // Handle variations like:
+    // - "Create a file: mobile - on folder: aaa"
+    // - "Create a file: mobile_design"
+    // - "Create a file: mobile - on folder: Uncategorized"
+    const createFileMatch = actionTemplate.match(/Create\s+a\s+file:\s*(.+?)(?:\s+-\s+on\s+folder:\s*(.+))?$/i);
+    if (createFileMatch) {
+      let fileName = createFileMatch[1]?.trim() || null;
+      let folderName = createFileMatch[2]?.trim() || null;
+      
+      // Clean up folder name (remove "folder" suffix if present)
+      if (folderName) {
+        folderName = folderName.replace(/\s+folder\s*$/i, '').trim();
+      }
+      
+      // If folder is "Uncategorized", set to null
+      if (folderName && folderName.toLowerCase() === 'uncategorized') {
+        folderName = null;
+      }
+      
+      logger.info(
+        {
+          userId,
+          fileName,
+          folderName,
+          caption,
+          actionTemplate,
+        },
+        'Parsed file name and folder from AI response'
+      );
+
+      return { fileName, folderName };
+    }
+
+    logger.warn(
+      {
+        userId,
+        actionTemplate,
+        caption,
+      },
+      'Could not parse file creation action from AI response'
+    );
+
+    return { fileName: null, folderName: null };
+  } catch (error) {
+    logger.error(
+      {
+        error,
+        userId,
+        caption,
+      },
+      'Failed to analyze caption with AI'
+    );
+    return { fileName: null, folderName: null };
+  }
 }
 
 /**
@@ -313,8 +401,8 @@ export async function handleMediaMessage(
       'Media downloaded successfully'
     );
 
-    // Step 2: Parse file name and folder from caption
-    const { fileName: parsedFileName, folderName } = parseCaption(caption);
+    // Step 2: Analyze caption using AI to extract file name and folder
+    const { fileName: parsedFileName, folderName } = await analyzeCaption(caption, db, whatsappNumber.userId);
     let fileName = parsedFileName;
     
     if (!fileName) {
