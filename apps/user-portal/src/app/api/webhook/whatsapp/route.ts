@@ -9,6 +9,7 @@ import { handleAudioMessage } from './handlers/audio';
 import { handleTextMessage } from './handlers/text';
 import { handleInteractiveMessage } from './handlers/interactive';
 import { handleVerificationMessage } from './verification';
+import { handleMediaMessage } from './handlers/media';
 
 // WhatsApp webhook verification for development
 export async function GET(req: NextRequest) {
@@ -142,6 +143,10 @@ export async function POST(req: NextRequest) {
               break;
             case 'interactive':
               await handleInteractiveMessage(message, db, summary);
+              break;
+            case 'image':
+            case 'document':
+              await handleMediaMessage(message, db, summary);
               break;
             default:
               logger.warn({

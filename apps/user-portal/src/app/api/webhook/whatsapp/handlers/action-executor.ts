@@ -49,6 +49,8 @@ import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { CalendarService } from './calendar-service';
 import type { CalendarIntent } from '@imaginecalendar/ai-services';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface ParsedAction {
   action: string;
@@ -1587,13 +1589,98 @@ export class ActionExecutor {
       };
     }
 
-    const fileSizeMB = (file.fileSize / (1024 * 1024)).toFixed(2);
-    const folderText = file.folderId ? ` in folder "${parsed.folderRoute || 'Unknown'}"` : ' (Uncategorized)';
-    
-    return {
-      success: true,
-      message: `📄 *File Details:*\n"${file.title}"\n\nType: ${file.fileType}\nSize: ${fileSizeMB} MB${folderText}\n\nTo view the file, please open it in the web interface.`,
-    };
+    try {
+      // Get signed URL for the file
+      const key = file.cloudflareKey || this.extractKeyFromUrl(file.cloudflareUrl);
+      let fileUrl = file.cloudflareUrl;
+      
+      if (key) {
+        try {
+          // Generate signed URL directly using S3 client
+          fileUrl = await this.getSignedFileUrl(key);
+        } catch (error) {
+          logger.warn({ error, fileId: file.id, key }, 'Failed to get signed URL, using cloudflareUrl');
+          // Fallback to cloudflareUrl if signed URL generation fails
+        }
+      }
+
+      // Determine media type based on file type
+      const isImage = file.fileType.startsWith('image/');
+      const mediaType: 'image' | 'document' = isImage ? 'image' : 'document';
+      
+      // Send file via WhatsApp
+      await this.whatsappService.sendMediaFile(
+        this.recipient,
+        fileUrl,
+        mediaType,
+        file.title, // Caption
+        isImage ? undefined : file.fileName // Filename for documents only
+      );
+
+      const fileSizeMB = (file.fileSize / (1024 * 1024)).toFixed(2);
+      
+      return {
+        success: true,
+        message: `📄 *File sent:*\n"${file.title}" (${fileSizeMB} MB)`,
+      };
+    } catch (error) {
+      logger.error({ error, fileId: file.id, userId: this.userId }, 'Failed to send file via WhatsApp');
+      
+      // Fallback to showing file details if sending fails
+      const fileSizeMB = (file.fileSize / (1024 * 1024)).toFixed(2);
+      const folderText = file.folderId ? ` in folder "${parsed.folderRoute || 'Unknown'}"` : ' (Uncategorized)';
+      
+      return {
+        success: false,
+        message: `📄 *File Details:*\n"${file.title}"\n\nType: ${file.fileType}\nSize: ${fileSizeMB} MB${folderText}\n\nI couldn't send the file via WhatsApp. Please open it in the web interface.`,
+      };
+    }
+  }
+
+  /**
+   * Get signed URL for a file from Cloudflare R2
+   */
+  private async getSignedFileUrl(key: string): Promise<string> {
+    const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+    const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+    const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+    const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || "imaginecalendar";
+
+    if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+      throw new Error("Missing R2 credentials");
+    }
+
+    const s3Client = new S3Client({
+      region: "auto",
+      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const command = new GetObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+    });
+
+    // Generate signed URL valid for 1 hour (enough time for WhatsApp to download)
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+    return signedUrl;
+  }
+
+  /**
+   * Extract key from Cloudflare URL
+   */
+  private extractKeyFromUrl(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      // Expect /bucket-or-path/<key>
+      // e.g. https://xxx.r2.cloudflarestorage.com/users/... or https://pub-xxx.r2.dev/users/...
+      return parsed.pathname.startsWith("/") ? parsed.pathname.slice(1) : parsed.pathname;
+    } catch {
+      return null;
+    }
   }
 
   private async moveFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {

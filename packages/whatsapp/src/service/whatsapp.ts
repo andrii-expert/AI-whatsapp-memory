@@ -530,6 +530,77 @@ export class WhatsAppService {
   }
 
   /**
+   * Send a media file (image or document) via WhatsApp
+   */
+  async sendMediaFile(
+    to: string,
+    mediaUrl: string,
+    mediaType: 'image' | 'document',
+    caption?: string,
+    filename?: string
+  ): Promise<WhatsAppMessageResponse> {
+    const config = getWhatsAppConfig();
+    try {
+      const payload: any = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: normalizePhoneForWhatsApp(to),
+        type: mediaType,
+        [mediaType]: {
+          link: mediaUrl,
+        },
+      };
+
+      // Add caption for images
+      if (mediaType === 'image' && caption) {
+        payload.image.caption = caption.substring(0, 1024); // Max 1024 chars
+      }
+
+      // Add filename and caption for documents
+      if (mediaType === 'document') {
+        if (filename) {
+          payload.document.filename = filename;
+        }
+        if (caption) {
+          payload.document.caption = caption.substring(0, 1024); // Max 1024 chars
+        }
+      }
+
+      const response = await axios.post<WhatsAppMessageResponse>(
+        `${getWhatsAppApiUrl()}/${config.phoneNumberId}/messages`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${config.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      logger.info({
+        to: normalizePhoneForWhatsApp(to),
+        mediaType,
+        filename,
+        messageId: response.data.messages?.[0]?.id
+      }, 'WhatsApp media file sent successfully');
+
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        logger.error({
+          error,
+          to: normalizePhoneForWhatsApp(to),
+          mediaType,
+          apiError: error.response?.data
+        }, 'WhatsApp media file API Error');
+        throw new Error(`WhatsApp API Error: ${error.message}`);
+      }
+      logger.error({ error, to, mediaType }, 'Unknown WhatsApp media file error');
+      throw error;
+    }
+  }
+
+  /**
    * Verify webhook token
    */
   verifyWebhookToken(token: string): boolean {
