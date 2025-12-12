@@ -5,9 +5,10 @@ import { buildWhatsappTaskPrompt, type TaskPromptOptions } from './task-prompts'
 import { buildWhatsappReminderPrompt, type ReminderPromptOptions } from './reminder-prompts';
 import { buildWhatsappNotePrompt, type NotePromptOptions } from './note-prompts';
 import { buildWhatsappEventPrompt, type EventPromptOptions } from './event-prompts';
+import { buildWhatsappDocumentPrompt, type DocumentPromptOptions } from './document-prompts';
 import { buildMergedWhatsappPrompt, type MergedPromptOptions } from './merged-prompts';
 
-export type WhatsappTextIntent = 'task' | 'reminder' | 'note' | 'event';
+export type WhatsappTextIntent = 'task' | 'reminder' | 'note' | 'event' | 'document';
 
 export class WhatsappTextAnalysisService {
   private model;
@@ -55,6 +56,11 @@ export class WhatsappTextAnalysisService {
   async analyzeEvent(text: string, options?: EventPromptOptions & { messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }> }): Promise<string> {
     const prompt = buildWhatsappEventPrompt(text, options);
     return this.generate(prompt, 'event');
+  }
+
+  async analyzeDocument(text: string, options?: DocumentPromptOptions & { messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }> }): Promise<string> {
+    const prompt = buildWhatsappDocumentPrompt(text, options);
+    return this.generate(prompt, 'document');
   }
 
   private async generate(prompt: string, intent: string): Promise<string> {

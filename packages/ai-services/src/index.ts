@@ -30,6 +30,8 @@ export {
   type NotePromptOptions,
   buildWhatsappEventPrompt,
   type EventPromptOptions,
+  buildWhatsappDocumentPrompt,
+  type DocumentPromptOptions,
   WhatsappTextAnalysisService,
   type WhatsappTextIntent,
   WhatsappIntentRouterService,

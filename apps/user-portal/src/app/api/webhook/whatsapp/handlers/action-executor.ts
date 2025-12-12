@@ -29,6 +29,21 @@ import {
   getUserByPhone,
   normalizePhoneNumber,
 } from '@imaginecalendar/database/queries';
+import {
+  getUserFiles,
+  getUserFileById,
+  createUserFile,
+  updateUserFile,
+  deleteUserFile,
+  getUserFileFolders,
+  createUserFileFolder,
+  updateUserFileFolder,
+  deleteUserFileFolder,
+} from '@imaginecalendar/database/queries';
+import {
+  createFileShare,
+  searchUsersForFileSharing,
+} from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { CalendarService } from './calendar-service';
@@ -37,7 +52,7 @@ import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
 
 export interface ParsedAction {
   action: string;
-  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event';
+  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document';
   taskName?: string;
   folderName?: string;
   folderRoute?: string;
@@ -48,6 +63,7 @@ export interface ParsedAction {
   listFilter?: string; // For list operations: 'all', folder name, status, etc.
   typeFilter?: ReminderFrequency; // For reminder type filtering: 'daily', 'hourly', etc.
   missingFields: string[];
+  isFileFolder?: boolean; // True if this is a file folder operation (vs task folder)
 }
 
 export class ActionExecutor {
@@ -328,6 +344,121 @@ export class ActionExecutor {
         'Parsed List events action'
       );
     }
+    // Document operations
+    else if (trimmed.startsWith('Create a file:')) {
+      action = 'create';
+      resourceType = 'document';
+      const match = trimmed.match(/^Create a file:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim(); // Reuse taskName for fileName
+        folderRoute = match[2].trim();
+      } else {
+        missingFields.push('file name or folder');
+      }
+    } else if (trimmed.startsWith('Edit a file:')) {
+      action = 'edit';
+      resourceType = 'document';
+      const match = trimmed.match(/^Edit a file:\s*(.+?)\s*-\s*to:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim(); // Reuse taskName for fileName
+        newName = match[2].trim();
+        folderRoute = match[3].trim();
+      } else {
+        missingFields.push('file name, new name, or folder');
+      }
+    } else if (trimmed.startsWith('Delete a file:')) {
+      action = 'delete';
+      resourceType = 'document';
+      const match = trimmed.match(/^Delete a file:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim(); // Reuse taskName for fileName
+        folderRoute = match[2].trim();
+      } else {
+        missingFields.push('file name or folder');
+      }
+    } else if (trimmed.startsWith('View a file:')) {
+      action = 'view';
+      resourceType = 'document';
+      const match = trimmed.match(/^View a file:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim(); // Reuse taskName for fileName
+        folderRoute = match[2].trim();
+      } else {
+        missingFields.push('file name or folder');
+      }
+    } else if (trimmed.startsWith('Move a file:')) {
+      action = 'move';
+      resourceType = 'document';
+      const match = trimmed.match(/^Move a file:\s*(.+?)\s*-\s*to folder:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim(); // Reuse taskName for fileName
+        targetFolderRoute = match[2].trim();
+      } else {
+        missingFields.push('file name or target folder');
+      }
+    } else if (trimmed.startsWith('Share a file:')) {
+      action = 'share';
+      resourceType = 'document';
+      const match = trimmed.match(/^Share a file:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim(); // Reuse taskName for fileName
+        recipient = match[2].trim();
+        folderRoute = match[3].trim();
+      } else {
+        missingFields.push('file name, recipient, or folder');
+      }
+    } else if (trimmed.startsWith('List files:')) {
+      action = 'list';
+      resourceType = 'document';
+      const match = trimmed.match(/^List files:\s*(.+)$/i);
+      if (match) {
+        const folderOrAll = match[1].trim();
+        folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+      } else {
+        missingFields.push('folder or "all"');
+      }
+    } else if (trimmed.startsWith('Create a file folder:')) {
+      action = 'create';
+      resourceType = 'folder';
+      const match = trimmed.match(/^Create a file folder:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+      } else {
+        missingFields.push('folder name');
+      }
+    } else if (trimmed.startsWith('Edit a file folder:')) {
+      action = 'edit';
+      resourceType = 'folder';
+      const match = trimmed.match(/^Edit a file folder:\s*(.+?)\s*-\s*to:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+        newName = match[2].trim();
+      } else {
+        missingFields.push('folder name or new name');
+      }
+      // Mark as file folder operation - will be handled in return statement
+    } else if (trimmed.startsWith('Delete a file folder:')) {
+      action = 'delete';
+      resourceType = 'folder';
+      const match = trimmed.match(/^Delete a file folder:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+      } else {
+        missingFields.push('folder name');
+      }
+      // Mark as file folder operation - will be handled in return statement
+    } else if (trimmed.startsWith('Share a file folder:')) {
+      action = 'share';
+      resourceType = 'folder';
+      const match = trimmed.match(/^Share a file folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+        recipient = match[2].trim();
+      } else {
+        missingFields.push('folder name or recipient');
+      }
+      // Mark as file folder operation - will be handled in return statement
+    }
     // Folder operations
     else if (trimmed.startsWith('Create a task folder:')) {
       action = 'create';
@@ -390,6 +521,12 @@ export class ActionExecutor {
       missingFields.push('new name or details');
     }
 
+    // Determine if this is a file folder operation
+    const isFileFolder = trimmed.startsWith('Create a file folder:') ||
+      trimmed.startsWith('Edit a file folder:') ||
+      trimmed.startsWith('Delete a file folder:') ||
+      trimmed.startsWith('Share a file folder:');
+
     return {
       action,
       resourceType,
@@ -403,6 +540,7 @@ export class ActionExecutor {
       listFilter,
       typeFilter,
       missingFields,
+      ...(isFileFolder ? { isFileFolder: true } : {}),
     };
   }
 
@@ -435,6 +573,8 @@ export class ActionExecutor {
             return await this.listReminders(parsed, userTimezone);
           } else if (parsed.resourceType === 'event') {
             return await this.listEvents(parsed);
+          } else if (parsed.resourceType === 'document') {
+            return await this.listFiles(parsed);
           }
           return {
             success: false,
@@ -447,6 +587,8 @@ export class ActionExecutor {
             return await this.createTask(parsed);
           } else if (parsed.resourceType === 'reminder') {
             return await this.createReminder(parsed, timezone);
+          } else if (parsed.resourceType === 'document') {
+            return await this.createFile(parsed);
           } else {
             return await this.createFolder(parsed);
           }
@@ -455,6 +597,8 @@ export class ActionExecutor {
             return await this.editTask(parsed);
           } else if (parsed.resourceType === 'reminder') {
             return await this.updateReminder(parsed, timezone);
+          } else if (parsed.resourceType === 'document') {
+            return await this.editFile(parsed);
           } else {
             return await this.editFolder(parsed);
           }
@@ -463,6 +607,8 @@ export class ActionExecutor {
             return await this.deleteTask(parsed);
           } else if (parsed.resourceType === 'reminder') {
             return await this.deleteReminder(parsed);
+          } else if (parsed.resourceType === 'document') {
+            return await this.deleteFile(parsed);
           } else {
             return await this.deleteFolder(parsed);
           }
@@ -485,13 +631,26 @@ export class ActionExecutor {
         case 'complete':
           return await this.completeTask(parsed);
         case 'move':
+          if (parsed.resourceType === 'document') {
+            return await this.moveFile(parsed);
+          }
           return await this.moveTask(parsed);
         case 'share':
           if (parsed.resourceType === 'task') {
             return await this.shareTask(parsed);
+          } else if (parsed.resourceType === 'document') {
+            return await this.shareFile(parsed);
           } else {
             return await this.shareFolder(parsed);
           }
+        case 'view':
+          if (parsed.resourceType === 'document') {
+            return await this.viewFile(parsed);
+          }
+          return {
+            success: false,
+            message: "I'm sorry, I couldn't understand what you want to view.",
+          };
         case 'create_subfolder':
           return await this.createSubfolder(parsed);
         default:
@@ -616,6 +775,55 @@ export class ActionExecutor {
       };
     }
 
+    // Check if folder already exists in file folders
+    const existingFileFolder = (await getUserFileFolders(this.db, this.userId))
+      .find(f => f.name.toLowerCase() === parsed.folderRoute.toLowerCase());
+    
+    if (existingFileFolder) {
+      return {
+        success: false,
+        message: `A file folder named "${parsed.folderRoute}" already exists.`,
+      };
+    }
+
+    // Check if it's a task folder
+    const existingTaskFolder = (await getUserFolders(this.db, this.userId))
+      .find(f => f.name.toLowerCase() === parsed.folderRoute.toLowerCase());
+    
+    if (existingTaskFolder) {
+      return {
+        success: false,
+        message: `A folder named "${parsed.folderRoute}" already exists.`,
+      };
+    }
+
+    // Check if this is a file folder operation (from isFileFolder flag or folder name)
+    const folderNameLower = parsed.folderRoute.toLowerCase();
+    const isFileFolderContext = parsed.isFileFolder || 
+      folderNameLower.includes('file') || 
+      folderNameLower.includes('document');
+    
+    if (isFileFolderContext) {
+      try {
+        const folder = await createUserFileFolder(this.db, {
+          userId: this.userId,
+          name: parsed.folderRoute,
+        });
+
+        return {
+          success: true,
+          message: `📁 *New File Folder created:*\n"${parsed.folderRoute}"`,
+        };
+      } catch (error) {
+        logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create file folder');
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't create the folder "${parsed.folderRoute}". Please try again.`,
+        };
+      }
+    }
+
+    // Default to task folder
     try {
       const folder = await createFolder(this.db, {
         userId: this.userId,
@@ -624,7 +832,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `📁 *New Notes Folder created:*\n"${parsed.folderRoute}"`,
+        message: `📁 *New Folder created:*\n"${parsed.folderRoute}"`,
       };
     } catch (error) {
       logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create folder');
@@ -648,6 +856,119 @@ export class ActionExecutor {
         success: false,
         message: "I need to know who you'd like to share with. Please specify the recipient name.",
       };
+    }
+
+    // Check if it's a file folder first (using isFileFolder flag or by checking if folder exists)
+    if (parsed.isFileFolder) {
+      const fileFolderId = await this.resolveFileFolderRoute(parsed.folderRoute);
+      if (!fileFolderId) {
+        return {
+          success: false,
+          message: `I couldn't find the file folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+      
+      const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+      if (!sharedWithUserId) {
+        // Check if recipient looks like email or phone
+        const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
+        const hasDigits = /\d/.test(parsed.recipient);
+        const isPhone = hasDigits && (parsed.recipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(parsed.recipient.replace(/\+/g, '')));
+        
+        if (isEmail) {
+          return {
+            success: false,
+            message: `I couldn't find a user with the email address "${parsed.recipient}". Please check the email address and make sure the person has a CrackOn account.`,
+          };
+        } else if (isPhone) {
+          return {
+            success: false,
+            message: `I couldn't find a user with the phone number "${parsed.recipient}". Please check the phone number and make sure the person has a CrackOn account.`,
+          };
+        } else {
+          return {
+            success: false,
+            message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+          };
+        }
+      }
+
+      try {
+        await createFileShare(this.db, {
+          resourceType: 'file_folder',
+          resourceId: fileFolderId,
+          ownerId: this.userId,
+          sharedWithUserId,
+          permission: 'view',
+        });
+
+        return {
+          success: true,
+          message: `✅ *File Folder Shared Successfully*\n   "${parsed.folderRoute}" with ${parsed.recipient}`,
+        };
+      } catch (error) {
+        logger.error(
+          { error, folderRoute: parsed.folderRoute, recipient: parsed.recipient, userId: this.userId },
+          'Failed to share file folder'
+        );
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't share the folder "${parsed.folderRoute}" with ${parsed.recipient}. Please try again.`,
+        };
+      }
+    }
+
+    // Check if it's a file folder by name (for backward compatibility)
+    const fileFolderId = await this.resolveFileFolderRoute(parsed.folderRoute);
+    if (fileFolderId) {
+      const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+      if (!sharedWithUserId) {
+        // Check if recipient looks like email or phone
+        const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
+        const hasDigits = /\d/.test(parsed.recipient);
+        const isPhone = hasDigits && (parsed.recipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(parsed.recipient.replace(/\+/g, '')));
+        
+        if (isEmail) {
+          return {
+            success: false,
+            message: `I couldn't find a user with the email address "${parsed.recipient}". Please check the email address and make sure the person has a CrackOn account.`,
+          };
+        } else if (isPhone) {
+          return {
+            success: false,
+            message: `I couldn't find a user with the phone number "${parsed.recipient}". Please check the phone number and make sure the person has a CrackOn account.`,
+          };
+        } else {
+          return {
+            success: false,
+            message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+          };
+        }
+      }
+
+      try {
+        await createFileShare(this.db, {
+          resourceType: 'file_folder',
+          resourceId: fileFolderId,
+          ownerId: this.userId,
+          sharedWithUserId,
+          permission: 'view',
+        });
+
+        return {
+          success: true,
+          message: `✅ *File Folder Shared Successfully*\n   "${parsed.folderRoute}" with ${parsed.recipient}`,
+        };
+      } catch (error) {
+        logger.error(
+          { error, folderRoute: parsed.folderRoute, recipient: parsed.recipient, userId: this.userId },
+          'Failed to share file folder'
+        );
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't share the folder "${parsed.folderRoute}" with ${parsed.recipient}. Please try again.`,
+        };
+      }
     }
 
     const folderId = await this.resolveFolderRoute(parsed.folderRoute);
@@ -997,6 +1318,55 @@ export class ActionExecutor {
       };
     }
 
+    // Check if it's a file folder first (using isFileFolder flag or by checking if folder exists in file folders)
+    if (parsed.isFileFolder) {
+      const fileFolderId = await this.resolveFileFolderRoute(parsed.folderRoute);
+      if (!fileFolderId) {
+        return {
+          success: false,
+          message: `I couldn't find the file folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+      
+      try {
+        await updateUserFileFolder(this.db, fileFolderId, this.userId, {
+          name: parsed.newName,
+        });
+
+        return {
+          success: true,
+          message: `✅ *File Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
+        };
+      } catch (error) {
+        logger.error({ error, folderId: fileFolderId, userId: this.userId }, 'Failed to update file folder');
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't update the folder "${parsed.folderRoute}". Please try again.`,
+        };
+      }
+    }
+
+    // Check if it's a file folder by name (for backward compatibility)
+    const fileFolderId = await this.resolveFileFolderRoute(parsed.folderRoute);
+    if (fileFolderId) {
+      try {
+        await updateUserFileFolder(this.db, fileFolderId, this.userId, {
+          name: parsed.newName,
+        });
+
+        return {
+          success: true,
+          message: `✅ *File Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
+        };
+      } catch (error) {
+        logger.error({ error, folderId: fileFolderId, userId: this.userId }, 'Failed to update file folder');
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't update the folder "${parsed.folderRoute}". Please try again.`,
+        };
+      }
+    }
+
     const folderId = await this.resolveFolderRoute(parsed.folderRoute);
     if (!folderId) {
       return {
@@ -1031,6 +1401,49 @@ export class ActionExecutor {
       };
     }
 
+    // Check if it's a file folder first (using isFileFolder flag or by checking if folder exists)
+    if (parsed.isFileFolder) {
+      const fileFolderId = await this.resolveFileFolderRoute(parsed.folderRoute);
+      if (!fileFolderId) {
+        return {
+          success: false,
+          message: `I couldn't find the file folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+      
+      try {
+        await deleteUserFileFolder(this.db, fileFolderId, this.userId);
+        return {
+          success: true,
+          message: `✅ *File Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
+        };
+      } catch (error) {
+        logger.error({ error, folderId: fileFolderId, userId: this.userId }, 'Failed to delete file folder');
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't delete the folder "${parsed.folderRoute}". Please try again.`,
+        };
+      }
+    }
+
+    // Check if it's a file folder by name (for backward compatibility)
+    const fileFolderId = await this.resolveFileFolderRoute(parsed.folderRoute);
+    if (fileFolderId) {
+      try {
+        await deleteUserFileFolder(this.db, fileFolderId, this.userId);
+        return {
+          success: true,
+          message: `✅ *File Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
+        };
+      } catch (error) {
+        logger.error({ error, folderId: fileFolderId, userId: this.userId }, 'Failed to delete file folder');
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't delete the folder "${parsed.folderRoute}". Please try again.`,
+        };
+      }
+    }
+
     const folderId = await this.resolveFolderRoute(parsed.folderRoute);
     if (!folderId) {
       return {
@@ -1050,6 +1463,358 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't delete the folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  // ============================================
+  // Document File Operations
+  // ============================================
+
+  private async createFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know what file you'd like to create. Please specify the file name.",
+      };
+    }
+
+    const folderId = parsed.folderRoute 
+      ? await this.resolveFileFolderRoute(parsed.folderRoute) 
+      : null;
+
+    // Note: File creation via WhatsApp requires file upload, which isn't possible via text
+    // This method creates a placeholder or informs the user they need to upload via web
+    return {
+      success: false,
+      message: `To create a file "${parsed.taskName}", please upload it through the web interface. WhatsApp doesn't support file uploads via text messages.`,
+    };
+  }
+
+  private async editFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName || !parsed.newName) {
+      return {
+        success: false,
+        message: "I need to know which file to edit and what the new name should be. Please specify both.",
+      };
+    }
+
+    const folderId = parsed.folderRoute 
+      ? await this.resolveFileFolderRoute(parsed.folderRoute) 
+      : null;
+
+    const file = await this.findFileByName(parsed.taskName, folderId);
+    if (!file) {
+      const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+      return {
+        success: false,
+        message: `I couldn't find the file "${parsed.taskName}"${folderText}. Please make sure the file exists.`,
+      };
+    }
+
+    try {
+      await updateUserFile(this.db, file.id, this.userId, {
+        title: parsed.newName === 'unspecified' ? parsed.taskName : parsed.newName,
+      });
+
+      return {
+        success: true,
+        message: `✏️ *File updated:*\n"${parsed.newName === 'unspecified' ? parsed.taskName : parsed.newName}"`,
+      };
+    } catch (error) {
+      logger.error({ error, fileId: file.id, userId: this.userId }, 'Failed to update file');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't update the file "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  private async deleteFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which file you'd like to delete. Please specify the file name.",
+      };
+    }
+
+    const folderId = parsed.folderRoute 
+      ? await this.resolveFileFolderRoute(parsed.folderRoute) 
+      : null;
+
+    const file = await this.findFileByName(parsed.taskName, folderId);
+    if (!file) {
+      const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+      return {
+        success: false,
+        message: `I couldn't find the file "${parsed.taskName}"${folderText}. Please make sure the file exists.`,
+      };
+    }
+
+    try {
+      await deleteUserFile(this.db, file.id, this.userId);
+      return {
+        success: true,
+        message: `🗑️ *File deleted:*\n"${parsed.taskName}"`,
+      };
+    } catch (error) {
+      logger.error({ error, fileId: file.id, userId: this.userId }, 'Failed to delete file');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't delete the file "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  private async viewFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which file you'd like to view. Please specify the file name.",
+      };
+    }
+
+    const folderId = parsed.folderRoute 
+      ? await this.resolveFileFolderRoute(parsed.folderRoute) 
+      : null;
+
+    const file = await this.findFileByName(parsed.taskName, folderId);
+    if (!file) {
+      const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+      return {
+        success: false,
+        message: `I couldn't find the file "${parsed.taskName}"${folderText}. Please make sure the file exists.`,
+      };
+    }
+
+    const fileSizeMB = (file.fileSize / (1024 * 1024)).toFixed(2);
+    const folderText = file.folderId ? ` in folder "${parsed.folderRoute || 'Unknown'}"` : ' (Uncategorized)';
+    
+    return {
+      success: true,
+      message: `📄 *File Details:*\n"${file.title}"\n\nType: ${file.fileType}\nSize: ${fileSizeMB} MB${folderText}\n\nTo view the file, please open it in the web interface.`,
+    };
+  }
+
+  private async moveFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which file you'd like to move. Please specify the file name.",
+      };
+    }
+
+    if (!parsed.targetFolderRoute) {
+      return {
+        success: false,
+        message: "I need to know where you'd like to move the file. Please specify the target folder.",
+      };
+    }
+
+    const sourceFolderId = parsed.folderRoute 
+      ? await this.resolveFileFolderRoute(parsed.folderRoute) 
+      : null;
+
+    const file = await this.findFileByName(parsed.taskName, sourceFolderId);
+    if (!file) {
+      const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+      return {
+        success: false,
+        message: `I couldn't find the file "${parsed.taskName}"${folderText}. Please make sure the file exists.`,
+      };
+    }
+
+    const targetFolderId = await this.resolveFileFolderRoute(parsed.targetFolderRoute);
+    if (!targetFolderId) {
+      return {
+        success: false,
+        message: `I couldn't find the target folder "${parsed.targetFolderRoute}". Please make sure the folder exists.`,
+      };
+    }
+
+    try {
+      await updateUserFile(this.db, file.id, this.userId, {
+        folderId: targetFolderId,
+      });
+
+      return {
+        success: true,
+        message: `📁 *File moved:*\n"${parsed.taskName}" to "${parsed.targetFolderRoute}"`,
+      };
+    } catch (error) {
+      logger.error({ error, fileId: file.id, userId: this.userId }, 'Failed to move file');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't move the file "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  private async shareFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which file you'd like to share. Please specify the file name.",
+      };
+    }
+
+    if (!parsed.recipient) {
+      return {
+        success: false,
+        message: "I need to know who you'd like to share with. Please specify the recipient.",
+      };
+    }
+
+    const folderId = parsed.folderRoute 
+      ? await this.resolveFileFolderRoute(parsed.folderRoute) 
+      : null;
+
+    const file = await this.findFileByName(parsed.taskName, folderId);
+    if (!file) {
+      const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+      return {
+        success: false,
+        message: `I couldn't find the file "${parsed.taskName}"${folderText}. Please make sure the file exists.`,
+      };
+    }
+
+    // Try to find user by email or phone, or search by name
+    let sharedWithUserId: string | null = null;
+    
+    // Check if recipient looks like an email address
+    const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
+    
+    // Check if recipient looks like a phone number
+    const hasDigits = /\d/.test(parsed.recipient);
+    const isPhone = hasDigits && (parsed.recipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(parsed.recipient.replace(/\+/g, '')));
+    
+    if (isEmail) {
+      try {
+        const user = await getUserByEmail(this.db, parsed.recipient.toLowerCase());
+        if (user && user.id !== this.userId) {
+          sharedWithUserId = user.id;
+        }
+      } catch (error) {
+        logger.error({ error, recipient: parsed.recipient }, 'Error looking up user by email');
+      }
+    } else if (isPhone) {
+      try {
+        const normalizedPhone = normalizePhoneNumber(parsed.recipient);
+        const user = await getUserByPhone(this.db, normalizedPhone, this.userId);
+        if (user) {
+          sharedWithUserId = user.id;
+        }
+      } catch (error) {
+        logger.error({ error, recipient: parsed.recipient }, 'Error looking up user by phone');
+      }
+    } else {
+      // Try searching by name
+      const users = await searchUsersForFileSharing(this.db, parsed.recipient, this.userId);
+      if (users.length > 0) {
+        sharedWithUserId = users[0].id;
+      }
+    }
+
+    if (!sharedWithUserId) {
+      if (isEmail) {
+        return {
+          success: false,
+          message: `I couldn't find a user with the email address "${parsed.recipient}". Please check the email address and make sure the person has a CrackOn account.`,
+        };
+      } else if (isPhone) {
+        return {
+          success: false,
+          message: `I couldn't find a user with the phone number "${parsed.recipient}". Please check the phone number and make sure the person has a CrackOn account.`,
+        };
+      } else {
+        return {
+          success: false,
+          message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+        };
+      }
+    }
+
+    try {
+      await createFileShare(this.db, {
+        resourceType: 'file',
+        resourceId: file.id,
+        ownerId: this.userId,
+        sharedWithUserId,
+        permission: 'view',
+      });
+
+      return {
+        success: true,
+        message: `✅ *File Shared Successfully*\n   "${parsed.taskName}" with ${parsed.recipient}`,
+      };
+    } catch (error) {
+      logger.error(
+        { error, fileName: parsed.taskName, recipient: parsed.recipient, userId: this.userId },
+        'Failed to share file'
+      );
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't share the file "${parsed.taskName}" with ${parsed.recipient}. Please try again.`,
+      };
+    }
+  }
+
+  private async listFiles(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      // Handle "all" case - folderRoute will be undefined when user says "all"
+      const folderRoute = parsed.folderRoute || parsed.listFilter;
+      const isAll = !folderRoute || folderRoute.toLowerCase() === 'all';
+      
+      const folderId = !isAll && folderRoute
+        ? await this.resolveFileFolderRoute(folderRoute) 
+        : null;
+      
+      if (!isAll && folderRoute && !folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the folder "${folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      const allFiles = await getUserFiles(this.db, this.userId);
+      const files = folderId 
+        ? allFiles.filter(f => f.folderId === folderId)
+        : allFiles;
+
+      if (files.length === 0) {
+        const folderText = !isAll && folderRoute
+          ? ` in the "${folderRoute}" folder` 
+          : '';
+        return {
+          success: true,
+          message: `📄 *You have no files${folderText}*`,
+        };
+      }
+
+      const folderText = !isAll && folderRoute
+        ? ` in "${folderRoute}"` 
+        : '';
+      
+      let message = `📄 *Your files${folderText}:*\n`;
+      
+      files.slice(0, 20).forEach((file, index) => {
+        const fileSizeMB = (file.fileSize / (1024 * 1024)).toFixed(2);
+        message += `*${index + 1}.* ${file.title} (${fileSizeMB} MB)\n`;
+      });
+
+      if (files.length > 20) {
+        message += `\n... and ${files.length - 20} more files.`;
+      }
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId, folderRoute: parsed.folderRoute }, 'Failed to list files');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't retrieve your files. Please try again.",
       };
     }
   }
@@ -3371,6 +4136,40 @@ export class ActionExecutor {
   private async findTaskByName(taskName: string, folderId: string) {
     const tasks = await getUserTasks(this.db, this.userId, { folderId });
     return tasks.find(t => t.title.toLowerCase() === taskName.toLowerCase());
+  }
+
+  /**
+   * Resolve file folder route (e.g., "Documents" or "Work/Projects") to folder ID
+   */
+  private async resolveFileFolderRoute(folderRoute: string): Promise<string | null> {
+    const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
+    const folders = await getUserFileFolders(this.db, this.userId);
+    
+    // If only one part is provided, search for folder by name
+    if (parts.length === 1) {
+      const folderName = parts[0].toLowerCase();
+      const folder = folders.find(f => f.name.toLowerCase() === folderName);
+      return folder ? folder.id : null;
+    }
+    
+    // Multiple parts: navigate through path (file folders don't have subfolders, so this is for future compatibility)
+    const folderName = parts[parts.length - 1].toLowerCase();
+    const folder = folders.find(f => f.name.toLowerCase() === folderName);
+    return folder ? folder.id : null;
+  }
+
+  /**
+   * Find file by name in a folder (or all folders if folderId is null)
+   */
+  private async findFileByName(fileName: string, folderId: string | null) {
+    const files = await getUserFiles(this.db, this.userId);
+    if (folderId) {
+      return files.find(f => 
+        f.title.toLowerCase() === fileName.toLowerCase() && 
+        f.folderId === folderId
+      );
+    }
+    return files.find(f => f.title.toLowerCase() === fileName.toLowerCase());
   }
 
   /**

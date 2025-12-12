@@ -1190,7 +1190,7 @@ export default function DocumentPage() {
                                   <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="h-6 w-6 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="h-6 w-6 hover:bg-gray-200 transition-opacity"
                                     title="Folder options"
                                     onClick={(e: React.MouseEvent) => {
                                       e.stopPropagation();

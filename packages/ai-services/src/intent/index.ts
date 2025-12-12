@@ -22,6 +22,10 @@ export {
   type EventPromptOptions,
 } from './event-prompts';
 export {
+  buildWhatsappDocumentPrompt,
+  type DocumentPromptOptions,
+} from './document-prompts';
+export {
   buildMergedWhatsappPrompt,
   type MergedPromptOptions,
 } from './merged-prompts';

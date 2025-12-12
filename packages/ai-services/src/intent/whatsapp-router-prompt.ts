@@ -5,6 +5,7 @@ const intentDescriptions: Record<WhatsappTextIntent, string> = {
   reminder: 'Reminder or alarm style requests such as creating, updating, pausing, resuming, or deleting reminders/alerts.',
   note: 'Notes workspace requests such as creating, editing, moving, sharing, or deleting notes/note folders.',
   event: 'Calendar or meeting scheduling such as creating, updating, moving, cancelling events or referencing calendars.',
+  document: 'Document/file management requests including: creating files/folders, uploading files, editing files/folders, deleting files/folders, viewing files, moving files, SHARING files or folders (e.g., "share file X with Y", "share folder Z with Y"), listing files/folders. Keywords: file, document, upload, photo, image, pdf, spreadsheet, presentation, folder.',
 };
 
 export function buildWhatsappIntentRouterPrompt(userMessage: string): string {
@@ -45,7 +46,7 @@ export function buildWhatsappIntentRouterPrompt(userMessage: string): string {
     '5. SHARING tasks or folders = TASK intent (always).',
     '',
     'Respond strictly as JSON using this schema:',
-    '{ "intents": ["task" | "reminder" | "note" | "event"] }',
+    '{ "intents": ["task" | "reminder" | "note" | "event" | "document"] }',
     '',
     'User message:',
     `"""${userMessage.trim()}"""`,
