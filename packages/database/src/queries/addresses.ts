@@ -196,7 +196,14 @@ export async function createAddress(
     'createAddress',
     { userId: data.userId, name: data.name },
     async () => {
-      const [address] = await db.insert(addresses).values(data).returning();
+      // Normalize empty strings and invalid values to null as a safety net
+      const normalizedData = {
+        ...data,
+        folderId: (data.folderId === "" || data.folderId === "uncategorized") ? null : data.folderId,
+        connectedUserId: data.connectedUserId === "" ? null : data.connectedUserId,
+      };
+      
+      const [address] = await db.insert(addresses).values(normalizedData).returning();
       return address;
     }
   );
@@ -219,9 +226,29 @@ export async function updateAddress(
     'updateAddress',
     { addressId, userId, ...data },
     async () => {
+      // Normalize empty strings to null as a safety net
+      const normalizedData: {
+        name?: string;
+        folderId?: string | null;
+        connectedUserId?: string | null;
+        updatedAt: Date;
+      } = {
+        updatedAt: new Date(),
+      };
+      
+      if (data.name !== undefined) {
+        normalizedData.name = data.name;
+      }
+      if (data.folderId !== undefined) {
+        normalizedData.folderId = (data.folderId === "" || data.folderId === "uncategorized") ? null : data.folderId;
+      }
+      if (data.connectedUserId !== undefined) {
+        normalizedData.connectedUserId = data.connectedUserId === "" ? null : data.connectedUserId;
+      }
+      
       const [address] = await db
         .update(addresses)
-        .set({ ...data, updatedAt: new Date() })
+        .set(normalizedData)
         .where(and(
           eq(addresses.id, addressId),
           eq(addresses.userId, userId)

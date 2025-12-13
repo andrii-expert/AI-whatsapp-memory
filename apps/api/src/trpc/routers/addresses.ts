@@ -16,15 +16,29 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 // Helper to transform empty strings to null for optional UUID fields
+// Handles: empty string -> null, valid UUID -> pass through, null/undefined -> pass through
 const nullableUuidSchema = z.preprocess(
-  (val) => (val === "" ? null : val),
-  z.string().uuid().nullable().optional()
+  (val) => {
+    if (val === "" || val === undefined) return null;
+    return val;
+  },
+  z.union([
+    z.string().uuid(),
+    z.null(),
+  ]).optional()
 );
 
 // Helper to transform empty strings to null for optional string fields
+// Handles: empty string -> null, valid string -> pass through, null/undefined -> pass through
 const nullableStringSchema = z.preprocess(
-  (val) => (val === "" ? null : val),
-  z.string().optional().nullable()
+  (val) => {
+    if (val === "" || val === undefined) return null;
+    return val;
+  },
+  z.union([
+    z.string(),
+    z.null(),
+  ]).optional()
 );
 
 // Address schemas
