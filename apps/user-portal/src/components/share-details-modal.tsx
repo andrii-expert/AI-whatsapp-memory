@@ -28,7 +28,7 @@ import { useState } from "react";
 interface ShareDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  resourceType: "task" | "task_folder" | "note" | "note_folder" | "file" | "file_folder";
+  resourceType: "task" | "task_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder";
   resourceId: string;
   resourceName: string;
 }
@@ -53,6 +53,7 @@ export function ShareDetailsModal({
   // Determine which sharing router to use based on resource type
   const isNoteResource = resourceType === "note" || resourceType === "note_folder";
   const isFileResource = resourceType === "file" || resourceType === "file_folder";
+  const isAddressResource = resourceType === "address" || resourceType === "address_folder";
 
   // Fetch shares for this resource (only works if you're the owner)
   const { data: shares = [], isLoading, isError } = useQuery(
@@ -63,6 +64,11 @@ export function ShareDetailsModal({
         })
       : isFileResource
       ? trpc.fileSharing.getResourceShares.queryOptions({
+          resourceType,
+          resourceId,
+        })
+      : isAddressResource
+      ? trpc.addressSharing.getResourceShares.queryOptions({
           resourceType,
           resourceId,
         })
@@ -79,6 +85,8 @@ export function ShareDetailsModal({
         ? trpc.noteSharing.getSharedWithMe.queryOptions() 
         : isFileResource
         ? trpc.fileSharing.getSharedWithMe.queryOptions()
+        : isAddressResource
+        ? trpc.addressSharing.getSharedWithMe.queryOptions()
         : trpc.taskSharing.getSharedWithMe.queryOptions()) as any
   );
 
@@ -86,7 +94,7 @@ export function ShareDetailsModal({
   const sharedResourceInfo = isError && sharedResources ? (() => {
     const sharedData: any = sharedResources;
     const allShared = [
-      ...(sharedData.tasks || sharedData.notes || sharedData.files || []),
+      ...(sharedData.tasks || sharedData.notes || sharedData.files || sharedData.addresses || []),
       ...(sharedData.folders || [])
     ];
     const resource = allShared.find((r: any) => r.id === resourceId);
@@ -122,6 +130,25 @@ export function ShareDetailsModal({
         })
       : isFileResource
       ? trpc.fileSharing.createShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "User added",
+              description: "User has been added successfully",
+            });
+            setSearchTerm("");
+            setSearchResults([]);
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to add user",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
+      : isAddressResource
+      ? trpc.addressSharing.createShare.mutationOptions({
           onSuccess: () => {
             queryClient.invalidateQueries();
             toast({
@@ -194,6 +221,23 @@ export function ShareDetailsModal({
             });
           },
         })
+      : isAddressResource
+      ? trpc.addressSharing.updateSharePermission.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "Permission updated",
+              description: "Share permission has been updated",
+            });
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to update permission",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
       : trpc.taskSharing.updatePermission.mutationOptions({
           onSuccess: () => {
             queryClient.invalidateQueries();
@@ -233,6 +277,24 @@ export function ShareDetailsModal({
         })
       : isFileResource
       ? trpc.fileSharing.deleteShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+            toast({
+              title: "Share removed",
+              description: "User no longer has access",
+            });
+            setShareToDelete(null);
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to remove share",
+              description: error.message || "An error occurred",
+              variant: "destructive",
+            });
+          },
+        })
+      : isAddressResource
+      ? trpc.addressSharing.deleteShare.mutationOptions({
           onSuccess: () => {
             queryClient.invalidateQueries();
             toast({
@@ -296,6 +358,10 @@ export function ShareDetailsModal({
             })
           : isFileResource
           ? trpc.fileSharing.searchUsers.queryOptions({
+              searchTerm: searchTerm.trim(),
+            })
+          : isAddressResource
+          ? trpc.addresses.searchUsers.queryOptions({
               searchTerm: searchTerm.trim(),
             })
           : trpc.taskSharing.searchUsers.queryOptions({

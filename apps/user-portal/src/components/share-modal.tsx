@@ -26,7 +26,7 @@ import { cn } from "@imaginecalendar/ui/cn";
 interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
-  resourceType: "task" | "task_folder" | "note" | "note_folder" | "file" | "file_folder";
+  resourceType: "task" | "task_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder";
   resourceId: string;
   resourceName: string;
 }
@@ -53,6 +53,7 @@ export function ShareModal({
   // Determine which sharing router to use based on resource type
   const isNoteResource = resourceType === "note" || resourceType === "note_folder";
   const isFileResource = resourceType === "file" || resourceType === "file_folder";
+  const isAddressResource = resourceType === "address" || resourceType === "address_folder";
   
   const createShareMutation = useMutation(
     (isNoteResource 
@@ -70,6 +71,19 @@ export function ShareModal({
         })
       : isFileResource
       ? trpc.fileSharing.createShare.mutationOptions({
+          onSuccess: () => {
+            queryClient.invalidateQueries();
+          },
+          onError: (error) => {
+            toast({
+              title: "Failed to share",
+              description: error.message || "An error occurred while sharing",
+              variant: "destructive",
+            });
+          },
+        })
+      : isAddressResource
+      ? trpc.addressSharing.createShare.mutationOptions({
           onSuccess: () => {
             queryClient.invalidateQueries();
           },
@@ -111,9 +125,15 @@ export function ShareModal({
         )
       );
 
+      const resourceName = isAddressResource 
+        ? (resourceType === "address" ? "Address" : "Address folder")
+        : resourceType === "task" || resourceType === "file" || resourceType === "note"
+        ? (resourceType === "task" ? "Task" : resourceType === "file" ? "File" : "Note")
+        : "Folder";
+      
       toast({
         title: "Shared successfully",
-        description: `${resourceType === "task" || resourceType === "file" ? (resourceType === "task" ? "Task" : "File") : "Folder"} shared with ${pendingShares.length} ${pendingShares.length === 1 ? "person" : "people"}`,
+        description: `${resourceName} shared with ${pendingShares.length} ${pendingShares.length === 1 ? "person" : "people"}`,
       });
       
       setSearchTerm("");
@@ -141,6 +161,10 @@ export function ShareModal({
             })
           : isFileResource
           ? trpc.fileSharing.searchUsers.queryOptions({
+              searchTerm: searchTerm.trim(),
+            })
+          : isAddressResource
+          ? trpc.addresses.searchUsers.queryOptions({
               searchTerm: searchTerm.trim(),
             })
           : trpc.taskSharing.searchUsers.queryOptions({

@@ -217,10 +217,15 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   notes: many(notes),
   userFileFolders: many(userFileFolders),
   userFiles: many(userFiles),
+  addressFolders: many(addressFolders),
+  addresses: many(addresses),
+  connectedAddresses: many(addresses, { relationName: "connectedAddresses" }),
   sharesGiven: many(taskShares, { relationName: "sharesGiven" }),
   sharesReceived: many(taskShares, { relationName: "sharesReceived" }),
   fileSharesGiven: many(fileShares, { relationName: "fileSharesGiven" }),
   fileSharesReceived: many(fileShares, { relationName: "fileSharesReceived" }),
+  addressSharesGiven: many(addressShares, { relationName: "addressSharesGiven" }),
+  addressSharesReceived: many(addressShares, { relationName: "addressSharesReceived" }),
 }));
 
 // ============================================
@@ -926,7 +931,9 @@ export const shareResourceTypeEnum = pgEnum("share_resource_type", [
   "note",
   "note_folder",
   "file",
-  "file_folder"
+  "file_folder",
+  "address",
+  "address_folder"
 ]);
 
 export const taskFolders = pgTable("task_folders", {
@@ -1281,5 +1288,115 @@ export const fileSharesRelations = relations(fileShares, ({ one }) => ({
     fields: [fileShares.sharedWithUserId],
     references: [users.id],
     relationName: "fileSharesReceived",
+  }),
+}));
+
+// ============================================
+// Address Book
+// ============================================
+
+export const addressFolders = pgTable("address_folders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("address_folders_user_id_idx").on(table.userId),
+  uniquePerUserIdx: uniqueIndex("address_folders_unique_per_user").on(table.userId, table.name),
+}));
+
+export const addresses = pgTable("addresses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  folderId: uuid("folder_id").references(() => addressFolders.id, { onDelete: "set null" }),
+  
+  // Address name
+  name: text("name").notNull(),
+  
+  // Connected user (if linked to another user account)
+  connectedUserId: text("connected_user_id").references(() => users.id, { onDelete: "set null" }),
+  
+  // Organization
+  sortOrder: integer("sort_order").default(0).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("addresses_user_id_idx").on(table.userId),
+  folderIdIdx: index("addresses_folder_id_idx").on(table.folderId),
+  connectedUserIdIdx: index("addresses_connected_user_id_idx").on(table.connectedUserId),
+  sortOrderIdx: index("addresses_sort_order_idx").on(table.sortOrder),
+}));
+
+export const addressesRelations = relations(addresses, ({ one }) => ({
+  user: one(users, {
+    fields: [addresses.userId],
+    references: [users.id],
+  }),
+  folder: one(addressFolders, {
+    fields: [addresses.folderId],
+    references: [addressFolders.id],
+  }),
+  connectedUser: one(users, {
+    fields: [addresses.connectedUserId],
+    references: [users.id],
+    relationName: "connectedAddresses",
+  }),
+}));
+
+export const addressFoldersRelations = relations(addressFolders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [addressFolders.userId],
+    references: [users.id],
+  }),
+  addresses: many(addresses),
+}));
+
+// ============================================
+// Address Sharing
+// ============================================
+
+export const addressShares = pgTable("address_shares", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  
+  // Owner who is sharing
+  ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // User being shared with
+  sharedWithUserId: text("shared_with_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // Resource being shared
+  resourceType: shareResourceTypeEnum("resource_type").notNull(),
+  resourceId: uuid("resource_id").notNull(), // Can be addresses.id or addressFolders.id
+  
+  // Permission level
+  permission: sharePermissionEnum("permission").default("view").notNull(),
+  
+  // Metadata
+  sharedAt: timestamp("shared_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  ownerIdIdx: index("address_shares_owner_id_idx").on(table.ownerId),
+  sharedWithUserIdIdx: index("address_shares_shared_with_user_id_idx").on(table.sharedWithUserId),
+  resourceIdx: index("address_shares_resource_idx").on(table.resourceType, table.resourceId),
+  uniqueShare: uniqueIndex("address_shares_unique_share_idx").on(
+    table.ownerId, 
+    table.sharedWithUserId, 
+    table.resourceType, 
+    table.resourceId
+  ),
+}));
+
+export const addressSharesRelations = relations(addressShares, ({ one }) => ({
+  owner: one(users, {
+    fields: [addressShares.ownerId],
+    references: [users.id],
+    relationName: "addressSharesGiven",
+  }),
+  sharedWithUser: one(users, {
+    fields: [addressShares.sharedWithUserId],
+    references: [users.id],
+    relationName: "addressSharesReceived",
   }),
 }));
