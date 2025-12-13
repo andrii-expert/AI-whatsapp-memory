@@ -15,18 +15,30 @@ import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+// Helper to transform empty strings to null for optional UUID fields
+const nullableUuidSchema = z.preprocess(
+  (val) => (val === "" ? null : val),
+  z.string().uuid().nullable().optional()
+);
+
+// Helper to transform empty strings to null for optional string fields
+const nullableStringSchema = z.preprocess(
+  (val) => (val === "" ? null : val),
+  z.string().optional().nullable()
+);
+
 // Address schemas
 const createAddressSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
-  folderId: z.string().uuid().nullable().optional(),
-  connectedUserId: z.string().optional().nullable(),
+  folderId: nullableUuidSchema,
+  connectedUserId: nullableStringSchema,
 });
 
 const updateAddressSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(200).optional(),
-  folderId: z.string().uuid().nullable().optional(),
-  connectedUserId: z.string().optional().nullable(),
+  folderId: nullableUuidSchema,
+  connectedUserId: nullableStringSchema,
 });
 
 const folderSchema = z.object({
