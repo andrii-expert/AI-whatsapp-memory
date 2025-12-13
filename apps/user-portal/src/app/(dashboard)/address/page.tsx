@@ -51,14 +51,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@imaginecalendar/ui/dialog";
 import { Label } from "@imaginecalendar/ui/label";
 import {
   DropdownMenu,
@@ -976,200 +968,219 @@ export default function AddressPage() {
       </div>
 
       {/* Add/Edit Address Modal */}
-      <Dialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{addressModalMode === "add" ? "Add Address" : "Edit Address"}</DialogTitle>
-            <DialogDescription>
-              {addressModalMode === "add"
-                ? "Create a new address entry. You can optionally connect it to a user account."
-                : "Update the address details."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="address-name">Address Name *</Label>
-              <Input
-                id="address-name"
-                value={addressModalName}
-                onChange={(e) => setAddressModalName(e.target.value)}
-                placeholder="e.g., John Doe, Company Name"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="address-folder">Folder</Label>
-              <Select
-                value={addressModalFolderId || "uncategorized"}
-                onValueChange={(value) => setAddressModalFolderId(value === "uncategorized" ? null : value)}
-              >
-                <SelectTrigger id="address-folder">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                  {folders.map((folder: any) => (
-                    <SelectItem key={folder.id} value={folder.id}>
-                      {folder.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Connect to User (Optional)</Label>
-              {addressModalConnectedUser ? (
-                <div className="border rounded-lg p-3 flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">
-                      {addressModalConnectedUser.firstName || addressModalConnectedUser.name || "User"}
-                    </div>
-                    {addressModalConnectedUser.email && (
-                      <div className="text-sm text-muted-foreground">{addressModalConnectedUser.email}</div>
-                    )}
-                    {addressModalConnectedUser.phone && (
-                      <div className="text-sm text-muted-foreground">{addressModalConnectedUser.phone}</div>
-                    )}
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={handleRemoveConnectedUser}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <AlertDialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
+        <AlertDialogContent className="max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{addressModalMode === "add" ? "Add Address" : "Edit Address"}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <p className="mb-4">
+                  {addressModalMode === "add"
+                    ? "Create a new address entry. You can optionally connect it to a user account."
+                    : "Update the address details."}
+                </p>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="address-name">Address Name *</Label>
                     <Input
-                      placeholder="Search by email or phone number..."
-                      value={userSearchTerm}
-                      onChange={(e) => {
-                        setUserSearchTerm(e.target.value);
-                        if (e.target.value.length >= 2) {
-                          handleSearchUsers(e.target.value);
-                        } else {
-                          setUserSearchResults([]);
-                        }
-                      }}
-                      className="pl-10"
+                      id="address-name"
+                      value={addressModalName}
+                      onChange={(e) => setAddressModalName(e.target.value)}
+                      placeholder="e.g., John Doe, Company Name"
                     />
                   </div>
-                  {isSearchingUsers && (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    </div>
-                  )}
-                  {userSearchResults.length > 0 && (
-                    <div className="border rounded-lg max-h-48 overflow-y-auto">
-                      {userSearchResults.map((user) => (
-                        <div
-                          key={user.id}
-                          className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
-                          onClick={() => handleSelectUser(user)}
-                        >
+
+                  <div className="space-y-2">
+                    <Label htmlFor="address-folder">Folder</Label>
+                    <Select
+                      value={addressModalFolderId || "uncategorized"}
+                      onValueChange={(value) => setAddressModalFolderId(value === "uncategorized" ? null : value)}
+                    >
+                      <SelectTrigger id="address-folder">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                        {folders.map((folder: any) => (
+                          <SelectItem key={folder.id} value={folder.id}>
+                            {folder.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Connect to User (Optional)</Label>
+                    {addressModalConnectedUser ? (
+                      <div className="border rounded-lg p-3 flex items-center justify-between">
+                        <div>
                           <div className="font-medium">
-                            {user.firstName || user.name || "User"}
+                            {addressModalConnectedUser.firstName || addressModalConnectedUser.name || "User"}
                           </div>
-                          {user.email && (
-                            <div className="text-sm text-muted-foreground">{user.email}</div>
+                          {addressModalConnectedUser.email && (
+                            <div className="text-sm text-muted-foreground">{addressModalConnectedUser.email}</div>
                           )}
-                          {user.phone && (
-                            <div className="text-sm text-muted-foreground">{user.phone}</div>
+                          {addressModalConnectedUser.phone && (
+                            <div className="text-sm text-muted-foreground">{addressModalConnectedUser.phone}</div>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {userSearchTerm.length >= 2 && !isSearchingUsers && userSearchResults.length === 0 && (
-                    <div className="text-sm text-muted-foreground text-center py-4">
-                      No users found
-                    </div>
-                  )}
+                        <Button variant="ghost" size="icon" onClick={handleRemoveConnectedUser}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Search by email or phone number..."
+                            value={userSearchTerm}
+                            onChange={(e) => {
+                              setUserSearchTerm(e.target.value);
+                              if (e.target.value.length >= 2) {
+                                handleSearchUsers(e.target.value);
+                              } else {
+                                setUserSearchResults([]);
+                              }
+                            }}
+                            className="pl-10"
+                          />
+                        </div>
+                        {isSearchingUsers && (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          </div>
+                        )}
+                        {userSearchResults.length > 0 && (
+                          <div className="border rounded-lg max-h-48 overflow-y-auto">
+                            {userSearchResults.map((user) => (
+                              <div
+                                key={user.id}
+                                className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
+                                onClick={() => handleSelectUser(user)}
+                              >
+                                <div className="font-medium">
+                                  {user.firstName || user.name || "User"}
+                                </div>
+                                {user.email && (
+                                  <div className="text-sm text-muted-foreground">{user.email}</div>
+                                )}
+                                {user.phone && (
+                                  <div className="text-sm text-muted-foreground">{user.phone}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {userSearchTerm.length >= 2 && !isSearchingUsers && userSearchResults.length === 0 && (
+                          <div className="text-sm text-muted-foreground text-center py-4">
+                            No users found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
               setIsAddressModalOpen(false);
               resetAddressModal();
             }}>
               Cancel
-            </Button>
-            <Button
-              onClick={addressModalMode === "add" ? handleCreateAddress : handleUpdateAddress}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (addressModalMode === "add") {
+                  handleCreateAddress();
+                } else {
+                  handleUpdateAddress();
+                }
+              }}
               disabled={!addressModalName.trim() || createAddressMutation.isPending || updateAddressMutation.isPending}
             >
               {addressModalMode === "add" ? "Create" : "Update"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* View Address Modal */}
-      <Dialog open={isViewAddressModalOpen} onOpenChange={setIsViewAddressModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{viewAddressData?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {viewAddressData?.connectedUser && (
-              <div className="space-y-2">
-                <Label>Connected User</Label>
-                <div className="border rounded-lg p-3">
-                  <div className="font-medium">
-                    {viewAddressData.connectedUser.firstName || viewAddressData.connectedUser.name || "User"}
+      <AlertDialog open={isViewAddressModalOpen} onOpenChange={setIsViewAddressModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{viewAddressData?.name}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                {viewAddressData?.connectedUser && (
+                  <div className="space-y-2">
+                    <Label>Connected User</Label>
+                    <div className="border rounded-lg p-3">
+                      <div className="font-medium">
+                        {viewAddressData.connectedUser.firstName || viewAddressData.connectedUser.name || "User"}
+                      </div>
+                      {viewAddressData.connectedUser.email && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          <Mail className="h-3 w-3 inline mr-1" />
+                          {viewAddressData.connectedUser.email}
+                        </div>
+                      )}
+                      {viewAddressData.connectedUser.phone && (
+                        <div className="text-sm text-muted-foreground mt-1">
+                          <Phone className="h-3 w-3 inline mr-1" />
+                          {viewAddressData.connectedUser.phone}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {viewAddressData.connectedUser.email && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      <Mail className="h-3 w-3 inline mr-1" />
-                      {viewAddressData.connectedUser.email}
+                )}
+                {viewAddressData?.folderId && (
+                  <div className="space-y-2">
+                    <Label>Folder</Label>
+                    <div className="text-sm">
+                      {allFolders.find((f: any) => f.id === viewAddressData.folderId)?.name || "Unknown"}
                     </div>
-                  )}
-                  {viewAddressData.connectedUser.phone && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      <Phone className="h-3 w-3 inline mr-1" />
-                      {viewAddressData.connectedUser.phone}
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            )}
-            {viewAddressData?.folderId && (
-              <div className="space-y-2">
-                <Label>Folder</Label>
-                <div className="text-sm">
-                  {allFolders.find((f: any) => f.id === viewAddressData.folderId)?.name || "Unknown"}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             {!viewAddressData?.isSharedWithMe && (
               <>
-                <Button variant="outline" onClick={() => {
-                  setIsViewAddressModalOpen(false);
-                  if (viewAddressData) openEditAddressModal(viewAddressData);
-                }}>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsViewAddressModalOpen(false);
+                    if (viewAddressData) openEditAddressModal(viewAddressData);
+                  }}
+                  className="w-full sm:w-auto"
+                >
                   Edit
                 </Button>
-                <Button onClick={() => {
-                  setIsViewAddressModalOpen(false);
-                  if (viewAddressData) {
-                    openShareModal("address", viewAddressData.id, viewAddressData.name);
-                  }
-                }}>
+                <Button
+                  onClick={() => {
+                    setIsViewAddressModalOpen(false);
+                    if (viewAddressData) {
+                      openShareModal("address", viewAddressData.id, viewAddressData.name);
+                    }
+                  }}
+                  className="w-full sm:w-auto"
+                >
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </Button>
               </>
             )}
-            <Button variant="outline" onClick={() => setIsViewAddressModalOpen(false)}>
+            <AlertDialogCancel onClick={() => setIsViewAddressModalOpen(false)} className="w-full sm:w-auto">
               Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Address Confirmation Dialog */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
