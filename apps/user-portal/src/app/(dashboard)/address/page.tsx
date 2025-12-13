@@ -337,6 +337,68 @@ export default function AddressPage() {
     setUserSearchResults([]);
   };
 
+  const handleCreateFolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    createFolderMutation.mutate({ name: newFolderName.trim() }, {
+      onSuccess: () => {
+        setNewFolderName("");
+      }
+    });
+  };
+
+  const handleEditFolder = (folderId: string, currentName: string) => {
+    setEditingFolderId(folderId);
+    setEditFolderName(currentName);
+  };
+
+  const handleSaveFolder = (folderId: string) => {
+    if (!editFolderName.trim()) {
+      setEditingFolderId(null);
+      setEditFolderName("");
+      return;
+    }
+    updateFolderMutation.mutate({ id: folderId, name: editFolderName.trim() });
+  };
+
+  const handleDeleteFolder = (folderId: string, folderName: string) => {
+    setFolderToDelete({ id: folderId, name: folderName });
+    setIsDeleteFolderDialogOpen(true);
+  };
+
+  const confirmDeleteFolder = () => {
+    if (folderToDelete) {
+      deleteFolderMutation.mutate({ id: folderToDelete.id });
+    }
+  };
+
+  const handleFolderSelect = (folderId: string | null) => {
+    setSelectedFolderId(folderId);
+    setViewAllAddresses(false);
+    setViewAllShared(false);
+    setIsMobileSidebarOpen(false);
+  };
+
+  const handleViewAllAddresses = () => {
+    setSelectedFolderId(null);
+    setViewAllAddresses(true);
+    setViewAllShared(false);
+    setIsMobileSidebarOpen(false);
+  };
+
+  const handleViewAllShared = () => {
+    setSelectedFolderId(null);
+    setViewAllAddresses(false);
+    setViewAllShared(true);
+    setIsMobileSidebarOpen(false);
+  };
+
+  // Get share count for a resource
+  const getShareCount = (resourceType: "address" | "address_folder", resourceId: string): number => {
+    return myShares.filter(
+      (share: any) => share.resourceType === resourceType && share.resourceId === resourceId
+    ).length;
+  };
 
   const handleCreateAddress = () => {
     if (!addressModalName.trim()) {
