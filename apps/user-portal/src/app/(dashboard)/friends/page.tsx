@@ -63,7 +63,7 @@ import { ShareButton } from "@/components/share-button";
 import { ShareModal } from "@/components/share-modal";
 import { ShareDetailsModal } from "@/components/share-details-modal";
 
-export default function AddressPage() {
+export default function FriendsPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -572,7 +572,7 @@ export default function AddressPage() {
             Dashboard
           </Link>
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">Address Book</span>
+          <span className="font-medium">My Friends</span>
         </div>
 
         <Button
@@ -581,7 +581,7 @@ export default function AddressPage() {
           className="flex-shrink-0 lg:hidden"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add Address
+          Add Friend
         </Button>
       </div>
 
@@ -648,7 +648,7 @@ export default function AddressPage() {
               )}
             >
               <Folder className="h-4 w-4 flex-shrink-0" />
-              <span className="flex-1 text-left">All Addresses</span>
+              <span className="flex-1 text-left">All Friends</span>
               <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                 {allAddressesCount}
               </span>
@@ -927,7 +927,7 @@ export default function AddressPage() {
                   )}
                 >
                   <Folder className="h-4 w-4 flex-shrink-0" />
-                  <span className="flex-1 text-left">All Addresses</span>
+                  <span className="flex-1 text-left">All Friends</span>
                   <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                     {allAddressesCount}
                   </span>
@@ -1172,7 +1172,7 @@ export default function AddressPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search addresses..."
+                  placeholder="Search friends..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -1211,12 +1211,12 @@ export default function AddressPage() {
               <div className="text-center py-12">
                 <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                 <p className="text-muted-foreground">
-                  {searchQuery ? "No addresses found matching your search." : "No addresses yet."}
+                  {searchQuery ? "No friends found matching your search." : "No friends yet."}
                 </p>
                 {!searchQuery && (
                   <Button onClick={() => openAddAddressModal()} className="mt-4">
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Your First Address
+                    Add Your First Friend
                   </Button>
                 )}
               </div>
@@ -1298,17 +1298,17 @@ export default function AddressPage() {
       <AlertDialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
         <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>{addressModalMode === "add" ? "Add Address" : "Edit Address"}</AlertDialogTitle>
+            <AlertDialogTitle>{addressModalMode === "add" ? "Add Friend" : "Edit Friend"}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
                 <p className="mb-4">
                   {addressModalMode === "add"
-                    ? "Create a new address entry. You can optionally connect it to a user account."
-                    : "Update the address details."}
+                    ? "Create a new friend entry. You can optionally connect it to a user account."
+                    : "Update the friend details."}
                 </p>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="address-name">Address Name *</Label>
+                    <Label htmlFor="address-name">Friend Name *</Label>
                     <Input
                       id="address-name"
                       value={addressModalName}
@@ -1513,7 +1513,7 @@ export default function AddressPage() {
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Address?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Friend?</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{itemToDelete?.name}"? This action cannot be undone.
             </AlertDialogDescription>

@@ -102,7 +102,7 @@ export function UserAvatarMenu() {
           
           <DropdownMenuItem asChild>
             <Link 
-              href="/address" 
+              href="/friends" 
               className="flex items-center gap-3 px-3 py-1.5 rounded-md cursor-pointer transition-colors hover:bg-accent"
             >
               <div className="flex items-center justify-center w-8 h-8 rounded-md">
