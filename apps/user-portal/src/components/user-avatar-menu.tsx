@@ -108,7 +108,7 @@ export function UserAvatarMenu() {
               <div className="flex items-center justify-center w-8 h-8 rounded-md">
                 <BookOpen className="h-5 w-5" />
               </div>
-              <span className="text-sm font-medium">Address Book</span>
+              <span className="text-sm font-medium">My Friends</span>
             </Link>
           </DropdownMenuItem>
           
