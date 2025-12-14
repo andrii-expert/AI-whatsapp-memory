@@ -1164,6 +1164,7 @@ export default function FriendsPage() {
                 )}
               </div>
             </div>
+          </div>
 
         {/* Right Panel - Friends */}
         <div className="space-y-4">
