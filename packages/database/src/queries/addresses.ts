@@ -190,6 +190,14 @@ export async function createAddress(
     name: string;
     folderId?: string | null;
     connectedUserId?: string | null;
+    addressType?: "home" | "office" | "parents_house" | null;
+    street?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    country?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
   }
 ) {
   return withMutationLogging(
@@ -201,6 +209,11 @@ export async function createAddress(
         ...data,
         folderId: (data.folderId === "" || data.folderId === "uncategorized") ? null : data.folderId,
         connectedUserId: data.connectedUserId === "" ? null : data.connectedUserId,
+        street: data.street === "" ? null : data.street,
+        city: data.city === "" ? null : data.city,
+        state: data.state === "" ? null : data.state,
+        zip: data.zip === "" ? null : data.zip,
+        country: data.country === "" ? null : data.country,
       };
       
       const [address] = await db.insert(addresses).values(normalizedData).returning();
@@ -220,6 +233,14 @@ export async function updateAddress(
     name?: string;
     folderId?: string | null;
     connectedUserId?: string | null;
+    addressType?: "home" | "office" | "parents_house" | null;
+    street?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    country?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
   }
 ) {
   return withMutationLogging(
@@ -231,6 +252,14 @@ export async function updateAddress(
         name?: string;
         folderId?: string | null;
         connectedUserId?: string | null;
+        addressType?: "home" | "office" | "parents_house" | null;
+        street?: string | null;
+        city?: string | null;
+        state?: string | null;
+        zip?: string | null;
+        country?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
         updatedAt: Date;
       } = {
         updatedAt: new Date(),
@@ -244,6 +273,30 @@ export async function updateAddress(
       }
       if (data.connectedUserId !== undefined) {
         normalizedData.connectedUserId = data.connectedUserId === "" ? null : data.connectedUserId;
+      }
+      if (data.addressType !== undefined) {
+        normalizedData.addressType = data.addressType;
+      }
+      if (data.street !== undefined) {
+        normalizedData.street = data.street === "" ? null : data.street;
+      }
+      if (data.city !== undefined) {
+        normalizedData.city = data.city === "" ? null : data.city;
+      }
+      if (data.state !== undefined) {
+        normalizedData.state = data.state === "" ? null : data.state;
+      }
+      if (data.zip !== undefined) {
+        normalizedData.zip = data.zip === "" ? null : data.zip;
+      }
+      if (data.country !== undefined) {
+        normalizedData.country = data.country === "" ? null : data.country;
+      }
+      if (data.latitude !== undefined) {
+        normalizedData.latitude = data.latitude;
+      }
+      if (data.longitude !== undefined) {
+        normalizedData.longitude = data.longitude;
       }
       
       const [address] = await db

@@ -46,6 +46,14 @@ const createAddressSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
   folderId: nullableUuidSchema,
   connectedUserId: nullableStringSchema,
+  addressType: z.enum(["home", "office", "parents_house"]).optional(),
+  street: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
+  country: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 const updateAddressSchema = z.object({
@@ -53,6 +61,14 @@ const updateAddressSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   folderId: nullableUuidSchema,
   connectedUserId: nullableStringSchema,
+  addressType: z.enum(["home", "office", "parents_house"]).optional(),
+  street: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
+  country: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 const folderSchema = z.object({

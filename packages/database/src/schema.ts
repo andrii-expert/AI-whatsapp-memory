@@ -936,6 +936,12 @@ export const shareResourceTypeEnum = pgEnum("share_resource_type", [
   "address_folder"
 ]);
 
+export const addressTypeEnum = pgEnum("address_type", [
+  "home",
+  "office",
+  "parents_house"
+]);
+
 export const taskFolders = pgTable("task_folders", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -1314,6 +1320,20 @@ export const addresses = pgTable("addresses", {
   // Address name
   name: text("name").notNull(),
   
+  // Address type (home, office, parents_house)
+  addressType: addressTypeEnum("address_type"),
+  
+  // Physical address fields
+  street: text("street"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
+  country: text("country"),
+  
+  // Google Maps coordinates
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  
   // Connected user (if linked to another user account)
   connectedUserId: text("connected_user_id").references(() => users.id, { onDelete: "set null" }),
   
@@ -1327,6 +1347,7 @@ export const addresses = pgTable("addresses", {
   folderIdIdx: index("addresses_folder_id_idx").on(table.folderId),
   connectedUserIdIdx: index("addresses_connected_user_id_idx").on(table.connectedUserId),
   sortOrderIdx: index("addresses_sort_order_idx").on(table.sortOrder),
+  addressTypeIdx: index("addresses_address_type_idx").on(table.addressType),
 }));
 
 export const addressesRelations = relations(addresses, ({ one }) => ({

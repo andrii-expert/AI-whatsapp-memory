@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Home,
@@ -27,6 +27,7 @@ import {
   Mail,
   Phone,
   Loader2,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -85,6 +86,26 @@ export default function AddressPage() {
   const [addressModalFolderId, setAddressModalFolderId] = useState<string | null>(null);
   const [addressModalConnectedUserId, setAddressModalConnectedUserId] = useState<string | null>(null);
   const [addressModalConnectedUser, setAddressModalConnectedUser] = useState<any>(null);
+  
+  // Address fields
+  const [addressModalType, setAddressModalType] = useState<"home" | "office" | "parents_house" | "">("");
+  const [addressModalStreet, setAddressModalStreet] = useState("");
+  const [addressModalCity, setAddressModalCity] = useState("");
+  const [addressModalState, setAddressModalState] = useState("");
+  const [addressModalZip, setAddressModalZip] = useState("");
+  const [addressModalCountry, setAddressModalCountry] = useState("");
+  const [addressModalLatitude, setAddressModalLatitude] = useState<number | null>(null);
+  const [addressModalLongitude, setAddressModalLongitude] = useState<number | null>(null);
+  const [addressSearchQuery, setAddressSearchQuery] = useState("");
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const autocompleteRef = useRef<HTMLInputElement>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
+  const viewMapRef = useRef<HTMLDivElement>(null);
+  const viewMapInstanceRef = useRef<google.maps.Map | null>(null);
+  const viewMarkerRef = useRef<google.maps.Marker | null>(null);
   
   // User search states
   const [userSearchTerm, setUserSearchTerm] = useState("");
@@ -327,6 +348,32 @@ export default function AddressPage() {
     setAddressModalConnectedUser(null);
     setUserSearchTerm("");
     setUserSearchResults([]);
+    setAddressModalType("");
+    setAddressModalStreet("");
+    setAddressModalCity("");
+    setAddressModalState("");
+    setAddressModalZip("");
+    setAddressModalCountry("");
+    setAddressModalLatitude(null);
+    setAddressModalLongitude(null);
+    setAddressSearchQuery("");
+    if (autocompleteRef.current) {
+      autocompleteRef.current.value = "";
+    }
+    if (markerRef.current) {
+      markerRef.current.setMap(null);
+      markerRef.current = null;
+    }
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current = null;
+    }
+    if (viewMarkerRef.current) {
+      viewMarkerRef.current.setMap(null);
+      viewMarkerRef.current = null;
+    }
+    if (viewMapInstanceRef.current) {
+      viewMapInstanceRef.current = null;
+    }
   };
 
   const handleCreateFolder = (e: React.FormEvent) => {
@@ -405,6 +452,14 @@ export default function AddressPage() {
       name: addressModalName.trim(),
       folderId: addressModalFolderId || null,
       connectedUserId: addressModalConnectedUserId || null,
+      addressType: addressModalType || undefined,
+      street: addressModalStreet.trim() || undefined,
+      city: addressModalCity.trim() || undefined,
+      state: addressModalState.trim() || undefined,
+      zip: addressModalZip.trim() || undefined,
+      country: addressModalCountry.trim() || undefined,
+      latitude: addressModalLatitude || undefined,
+      longitude: addressModalLongitude || undefined,
     });
   };
 
@@ -415,6 +470,14 @@ export default function AddressPage() {
       name: addressModalName.trim(),
       folderId: addressModalFolderId || null,
       connectedUserId: addressModalConnectedUserId || null,
+      addressType: addressModalType || undefined,
+      street: addressModalStreet.trim() || undefined,
+      city: addressModalCity.trim() || undefined,
+      state: addressModalState.trim() || undefined,
+      zip: addressModalZip.trim() || undefined,
+      country: addressModalCountry.trim() || undefined,
+      latitude: addressModalLatitude || undefined,
+      longitude: addressModalLongitude || undefined,
     });
   };
 
@@ -471,6 +534,19 @@ export default function AddressPage() {
     setAddressModalFolderId(address.folderId || null);
     setAddressModalConnectedUserId(address.connectedUserId || null);
     setAddressModalConnectedUser(address.connectedUser || null);
+    setAddressModalType(address.addressType || "");
+    setAddressModalStreet(address.street || "");
+    setAddressModalCity(address.city || "");
+    setAddressModalState(address.state || "");
+    setAddressModalZip(address.zip || "");
+    setAddressModalCountry(address.country || "");
+    setAddressModalLatitude(address.latitude || null);
+    setAddressModalLongitude(address.longitude || null);
+    setAddressSearchQuery(
+      [address.street, address.city, address.state, address.zip, address.country]
+        .filter(Boolean)
+        .join(", ") || ""
+    );
     setIsAddressModalOpen(true);
   };
 
@@ -508,6 +584,191 @@ export default function AddressPage() {
   }, [sharedAddresses, sharedFolders]);
 
   const isLoading = isLoadingFolders || isLoadingAddresses;
+
+  // Load Google Maps script
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      console.warn("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set");
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      setIsGoogleMapsLoaded(true);
+    };
+    script.onerror = () => {
+      console.error("Failed to load Google Maps script");
+      toast({
+        title: "Error",
+        description: "Failed to load Google Maps. Please check your API key.",
+        variant: "destructive",
+      });
+    };
+
+    if (!document.querySelector(`script[src="${script.src}"]`)) {
+      document.head.appendChild(script);
+    } else {
+      // Script already exists, check if maps is loaded
+      if (window.google?.maps) {
+        setIsGoogleMapsLoaded(true);
+      }
+    }
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, [toast]);
+
+  // Initialize autocomplete when Google Maps is loaded and modal is open
+  useEffect(() => {
+    if (!isGoogleMapsLoaded || !isAddressModalOpen || !autocompleteRef.current || !window.google?.maps?.places) {
+      return;
+    }
+
+    if (!window.google?.maps) return;
+
+    const autocompleteInstance = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
+      types: ["address"],
+      fields: ["address_components", "geometry", "formatted_address"],
+    });
+
+    autocompleteInstance.addListener("place_changed", () => {
+      const place = autocompleteInstance.getPlace();
+      
+      if (!place.geometry || !place.geometry.location) {
+        return;
+      }
+
+      const lat = place.geometry.location.lat();
+      const lng = place.geometry.location.lng();
+      
+      setAddressModalLatitude(lat);
+      setAddressModalLongitude(lng);
+
+      // Parse address components
+      let street = "";
+      let city = "";
+      let state = "";
+      let zip = "";
+      let country = "";
+
+      if (place.address_components) {
+        place.address_components.forEach((component: google.maps.places.AddressComponent) => {
+          const types = component.types;
+          
+          if (types.includes("street_number")) {
+            street = component.long_name + " ";
+          }
+          if (types.includes("route")) {
+            street += component.long_name;
+          }
+          if (types.includes("locality")) {
+            city = component.long_name;
+          }
+          if (types.includes("administrative_area_level_1")) {
+            state = component.short_name;
+          }
+          if (types.includes("postal_code")) {
+            zip = component.long_name;
+          }
+          if (types.includes("country")) {
+            country = component.long_name;
+          }
+        });
+      }
+
+      setAddressModalStreet(street.trim());
+      setAddressModalCity(city);
+      setAddressModalState(state);
+      setAddressModalZip(zip);
+      setAddressModalCountry(country);
+      setAddressSearchQuery(place.formatted_address || "");
+    });
+
+    setAutocomplete(autocompleteInstance);
+
+    return () => {
+      if (autocompleteInstance && window.google?.maps?.event) {
+        window.google.maps.event.clearInstanceListeners(autocompleteInstance);
+      }
+    };
+  }, [isGoogleMapsLoaded, isAddressModalOpen]);
+
+  // Initialize map when coordinates are available in edit modal
+  useEffect(() => {
+    if (!isGoogleMapsLoaded || !mapRef.current || !isAddressModalOpen || !window.google?.maps) return;
+
+    const hasCoordinates = addressModalLatitude !== null && addressModalLongitude !== null;
+    if (!hasCoordinates) return;
+
+    const lat = addressModalLatitude;
+    const lng = addressModalLongitude;
+
+    if (!lat || !lng) return;
+
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+        center: { lat, lng },
+        zoom: 15,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+    } else {
+      mapInstanceRef.current.setCenter({ lat, lng });
+    }
+
+    // Add or update marker
+    if (markerRef.current) {
+      markerRef.current.setPosition({ lat, lng });
+    } else {
+      markerRef.current = new window.google.maps.Marker({
+        position: { lat, lng },
+        map: mapInstanceRef.current,
+      });
+    }
+  }, [isGoogleMapsLoaded, addressModalLatitude, addressModalLongitude, isAddressModalOpen]);
+
+  // Initialize map for view modal
+  useEffect(() => {
+    if (!isGoogleMapsLoaded || !viewMapRef.current || !isViewAddressModalOpen || !window.google?.maps) return;
+
+    const hasCoordinates = viewAddressData?.latitude && viewAddressData?.longitude;
+    if (!hasCoordinates) return;
+
+    const lat = viewAddressData.latitude;
+    const lng = viewAddressData.longitude;
+
+    if (!lat || !lng) return;
+
+    if (!viewMapInstanceRef.current) {
+      viewMapInstanceRef.current = new window.google.maps.Map(viewMapRef.current, {
+        center: { lat, lng },
+        zoom: 15,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+    } else {
+      viewMapInstanceRef.current.setCenter({ lat, lng });
+    }
+
+    // Add or update marker
+    if (viewMarkerRef.current) {
+      viewMarkerRef.current.setPosition({ lat, lng });
+    } else {
+      viewMarkerRef.current = new window.google.maps.Marker({
+        position: { lat, lng },
+        map: viewMapInstanceRef.current,
+      });
+    }
+  }, [isGoogleMapsLoaded, isViewAddressModalOpen, viewAddressData]);
 
   return (
     <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
@@ -649,7 +910,7 @@ export default function AddressPage() {
                           }}
                           autoFocus
                           className="flex-1 h-7 text-sm"
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
                         />
                       ) : (
                         <>
@@ -928,7 +1189,7 @@ export default function AddressPage() {
                               }}
                               autoFocus
                               className="flex-1 h-7 text-sm"
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
                             />
                           ) : (
                             <>
@@ -1087,7 +1348,7 @@ export default function AddressPage() {
                             </span>
                           </button>
                           <button
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
                               openShareDetailsModal(
                                 "address_folder",
@@ -1116,138 +1377,149 @@ export default function AddressPage() {
             </div>
           </div>
 
-          {/* Main Content */}
-          <div className="flex-1 min-w-0">
-            {/* Search and Sort */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search addresses..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                    <SelectItem value="date">Date</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                >
-                  {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
-                </Button>
-              </div>
-              <Button onClick={() => openAddAddressModal(selectedFolderId)} className="md:hidden">
-                <Plus className="h-4 w-4 mr-2" />
-                Add
+        {/* Main Content */}
+        <div className="flex-1 min-w-0">
+          {/* Search and Sort */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search addresses..."
+                value={searchQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
+                  <SelectItem value="date">Date</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              >
+                {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
               </Button>
             </div>
-
-            {/* Addresses List */}
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredAddresses.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">
-                  {searchQuery ? "No addresses found matching your search." : "No addresses yet."}
-                </p>
-                {!searchQuery && (
-                  <Button onClick={() => openAddAddressModal()} className="mt-4">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Your First Address
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredAddresses.map((address: any) => (
-                  <div
-                    key={address.id}
-                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-lg">{address.name}</h3>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openViewAddressModal(address)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View
-                          </DropdownMenuItem>
-                          {!address.isSharedWithMe && (
-                            <>
-                              <DropdownMenuItem onClick={() => openEditAddressModal(address)}>
-                                <Edit3 className="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openShareModal("address", address.id, address.name)}>
-                                <Share2 className="h-4 w-4 mr-2" />
-                                Share
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setItemToDelete({ type: "address", id: address.id, name: address.name });
-                                  setDeleteConfirmOpen(true);
-                                }}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    {address.connectedUser && (
-                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                        {address.connectedUser.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-3 w-3" />
-                            <span>{address.connectedUser.email}</span>
-                          </div>
-                        )}
-                        {address.connectedUser.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-3 w-3" />
-                            <span>{address.connectedUser.phone}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {address.isSharedWithMe && (
-                      <div className="mt-2">
-                        <span className="text-xs text-muted-foreground">Shared with you</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <Button onClick={() => openAddAddressModal(selectedFolderId)} className="md:hidden">
+              <Plus className="h-4 w-4 mr-2" />
+              Add
+            </Button>
           </div>
+
+          {/* Addresses List */}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredAddresses.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">
+                {searchQuery ? "No addresses found matching your search." : "No addresses yet."}
+              </p>
+              {!searchQuery && (
+                <Button onClick={() => openAddAddressModal()} className="mt-4">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Your First Address
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredAddresses.map((address: any) => (
+                <div
+                  key={address.id}
+                  className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-lg">{address.name}</h3>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openViewAddressModal(address)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          View
+                        </DropdownMenuItem>
+                        {!address.isSharedWithMe && (
+                          <>
+                            <DropdownMenuItem onClick={() => openEditAddressModal(address)}>
+                              <Edit3 className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openShareModal("address", address.id, address.name)}>
+                              <Share2 className="h-4 w-4 mr-2" />
+                              Share
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setItemToDelete({ type: "address", id: address.id, name: address.name });
+                                setDeleteConfirmOpen(true);
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  {(address.street || address.city || address.state || address.zip) && (
+                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3 w-3" />
+                        <span>
+                          {[address.street, address.city, address.state, address.zip]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {address.connectedUser && (
+                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      {address.connectedUser.email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-3 w-3" />
+                          <span>{address.connectedUser.email}</span>
+                        </div>
+                      )}
+                      {address.connectedUser.phone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-3 w-3" />
+                          <span>{address.connectedUser.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {address.isSharedWithMe && (
+                    <div className="mt-2">
+                      <span className="text-xs text-muted-foreground">Shared with you</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Add/Edit Address Modal */}
       <AlertDialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
-        <AlertDialogContent className="max-w-2xl">
+        <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>{addressModalMode === "add" ? "Add Address" : "Edit Address"}</AlertDialogTitle>
             <AlertDialogDescription asChild>
@@ -1259,12 +1531,12 @@ export default function AddressPage() {
                 </p>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="address-name">Address Name *</Label>
+                    <Label htmlFor="address-name">Title *</Label>
                     <Input
                       id="address-name"
                       value={addressModalName}
-                      onChange={(e) => setAddressModalName(e.target.value)}
-                      placeholder="e.g., John Doe, Company Name"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddressModalName(e.target.value)}
+                      placeholder="e.g., John Doe, Company Name, Home Address"
                     />
                   </div>
 
@@ -1287,6 +1559,103 @@ export default function AddressPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="address-type">Address Type</Label>
+                    <Select
+                      value={addressModalType || ""}
+                      onValueChange={(value) => setAddressModalType(value as "home" | "office" | "parents_house" | "")}
+                    >
+                      <SelectTrigger id="address-type">
+                        <SelectValue placeholder="Select address type (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="home">Home</SelectItem>
+                        <SelectItem value="office">Office</SelectItem>
+                        <SelectItem value="parents_house">Parents House</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="address-search">Search Address (Google Maps) *</Label>
+                    <Input
+                      ref={autocompleteRef}
+                      id="address-search"
+                      value={addressSearchQuery}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddressSearchQuery(e.target.value)}
+                      placeholder="Start typing an address..."
+                      disabled={!isGoogleMapsLoaded}
+                    />
+                    {!isGoogleMapsLoaded && (
+                      <p className="text-xs text-muted-foreground">
+                        Loading Google Maps...
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="address-street">Street</Label>
+                      <Input
+                        id="address-street"
+                        value={addressModalStreet}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddressModalStreet(e.target.value)}
+                        placeholder="Street address"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address-city">City</Label>
+                      <Input
+                        id="address-city"
+                        value={addressModalCity}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddressModalCity(e.target.value)}
+                        placeholder="City"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="address-state">State/Province</Label>
+                      <Input
+                        id="address-state"
+                        value={addressModalState}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddressModalState(e.target.value)}
+                        placeholder="State"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address-zip">ZIP/Postal Code</Label>
+                      <Input
+                        id="address-zip"
+                        value={addressModalZip}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddressModalZip(e.target.value)}
+                        placeholder="ZIP"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="address-country">Country</Label>
+                      <Input
+                        id="address-country"
+                        value={addressModalCountry}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddressModalCountry(e.target.value)}
+                        placeholder="Country"
+                      />
+                    </div>
+                  </div>
+
+                  {(addressModalLatitude !== null && addressModalLongitude !== null) && (
+                    <div className="space-y-2">
+                      <Label>Map Preview</Label>
+                      <div
+                        ref={mapRef}
+                        className="w-full h-64 rounded-lg border overflow-hidden"
+                        style={{ minHeight: "256px" }}
+                      />
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label>Connect to User (Optional)</Label>
@@ -1314,7 +1683,7 @@ export default function AddressPage() {
                           <Input
                             placeholder="Search by email or phone number..."
                             value={userSearchTerm}
-                            onChange={(e) => {
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                               setUserSearchTerm(e.target.value);
                               if (e.target.value.length >= 2) {
                                 handleSearchUsers(e.target.value);
@@ -1388,11 +1757,52 @@ export default function AddressPage() {
 
       {/* View Address Modal */}
       <AlertDialog open={isViewAddressModalOpen} onOpenChange={setIsViewAddressModalOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>{viewAddressData?.name}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-4">
+                {viewAddressData?.addressType && (
+                  <div className="space-y-2">
+                    <Label>Address Type</Label>
+                    <div className="text-sm capitalize">
+                      {viewAddressData.addressType.replace("_", " ")}
+                    </div>
+                  </div>
+                )}
+                
+                {(viewAddressData?.street || viewAddressData?.city || viewAddressData?.state || viewAddressData?.zip || viewAddressData?.country) && (
+                  <div className="space-y-2">
+                    <Label>Address</Label>
+                    <div className="border rounded-lg p-3 space-y-1">
+                      {viewAddressData.street && (
+                        <div className="text-sm">{viewAddressData.street}</div>
+                      )}
+                      <div className="text-sm">
+                        {[
+                          viewAddressData.city,
+                          viewAddressData.state,
+                          viewAddressData.zip
+                        ].filter(Boolean).join(", ")}
+                      </div>
+                      {viewAddressData.country && (
+                        <div className="text-sm">{viewAddressData.country}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {(viewAddressData?.latitude && viewAddressData?.longitude) && (
+                  <div className="space-y-2">
+                    <Label>Location Map</Label>
+                    <div
+                      ref={viewMapRef}
+                      className="w-full h-64 rounded-lg border overflow-hidden"
+                      style={{ minHeight: "256px" }}
+                    />
+                  </div>
+                )}
+
                 {viewAddressData?.connectedUser && (
                   <div className="space-y-2">
                     <Label>Connected User</Label>
