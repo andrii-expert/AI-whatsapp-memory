@@ -510,81 +510,359 @@ export default function AddressPage() {
   const isLoading = isLoadingFolders || isLoadingAddresses;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-6 max-w-7xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="icon">
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">Address Book</h1>
-              <p className="text-muted-foreground text-sm">Manage your contacts and addresses</p>
-            </div>
-          </div>
-          <Button onClick={() => openAddAddressModal()} className="hidden md:flex">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Address
-          </Button>
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center gap-2 text-sm justify-between">
+        <div className="flex items-center justify-center gap-2">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Home className="h-4 w-4" />
+            Dashboard
+          </Link>
+          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+          <span className="font-medium">Address Book</span>
         </div>
 
-        <div className="flex gap-6">
-          {/* Sidebar - Folders */}
-          <div className={cn(
-            "w-64 flex-shrink-0 hidden md:block",
-            "border-r pr-6"
-          )}>
-            <div className="space-y-4">
-              {/* View Options */}
-              <div className="space-y-2">
-                <Button
-                  variant={viewAllAddresses ? "secondary" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => {
-                    setViewAllAddresses(true);
-                    setViewAllShared(false);
-                    setSelectedFolderId(null);
-                  }}
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  All Addresses
-                </Button>
-                <Button
-                  variant={viewAllShared ? "secondary" : "ghost"}
-                  className="w-full justify-start"
-                  onClick={() => {
-                    setViewAllShared(true);
-                    setViewAllAddresses(false);
-                    setSelectedFolderId(null);
-                  }}
-                >
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Shared with Me
-                </Button>
-              </div>
+        <Button
+          onClick={() => openAddAddressModal()}
+          variant="orange-primary"
+          className="flex-shrink-0 lg:hidden"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Address
+        </Button>
+      </div>
 
-              {/* New Folder Input */}
-              <form onSubmit={handleCreateFolder} className="flex gap-2 mb-4">
-                <Input
-                  placeholder="New folder"
-                  value={newFolderName}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setNewFolderName(e.target.value)
-                  }
-                  className="flex-1"
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  variant="outline"
-                  disabled={createFolderMutation.isPending}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </form>
+      {/* Mobile Sidebar Overlay */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden mt-0"
+          style={{ margin: 0 }}
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <div
+        className={cn(
+          "fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto m-0",
+          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+        style={{ margin: 0 }}
+      >
+        <div className="p-4">
+          {/* Close Button */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Folders</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMobileSidebarOpen(false)}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* New Folder Input */}
+          <form onSubmit={handleCreateFolder} className="flex gap-2 mb-4">
+            <Input
+              placeholder="New folder"
+              value={newFolderName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setNewFolderName(e.target.value)
+              }
+              className="flex-1"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              variant="outline"
+              disabled={createFolderMutation.isPending}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </form>
+
+          {/* Folders List */}
+          <div className="space-y-1">
+            {/* All Addresses Button - Always show */}
+            <button
+              onClick={handleViewAllAddresses}
+              className={cn(
+                "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                viewAllAddresses
+                  ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
+                  : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+              )}
+            >
+              <Folder className="h-4 w-4 flex-shrink-0" />
+              <span className="flex-1 text-left">All Addresses</span>
+              <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
+                {allAddressesCount}
+              </span>
+            </button>
+
+            {folders.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 text-sm">
+                <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p>No folders yet.</p>
+                <p className="text-xs mt-1">
+                  Create a folder above to get started.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Divider */}
+                <div className="h-px bg-gray-200 my-2" />
+
+                {/* Individual Folders */}
+                {folders.map((folder: any) => {
+                  const isEditing = editingFolderId === folder.id;
+                  const shareCount = getShareCount("address_folder", folder.id);
+                  const isShared = shareCount > 0;
+                  
+                  return (
+                    <div
+                      key={folder.id}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
+                        selectedFolderId === folder.id && !viewAllAddresses && !viewAllShared
+                          ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      {isEditing ? (
+                        <Input
+                          value={editFolderName}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setEditFolderName(e.target.value)
+                          }
+                          onBlur={() => handleSaveFolder(folder.id)}
+                          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                            if (e.key === "Enter") handleSaveFolder(folder.id);
+                            if (e.key === "Escape") {
+                              setEditingFolderId(null);
+                              setEditFolderName("");
+                            }
+                          }}
+                          autoFocus
+                          className="flex-1 h-7 text-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleFolderSelect(folder.id)}
+                            className="flex items-center gap-2 flex-1 text-left min-w-0"
+                          >
+                            <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                            <span className="flex-1 truncate">{folder.name}</span>
+                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* Share button */}
+                            <ShareButton
+                              onClick={() => {
+                                if (isShared) {
+                                  openShareDetailsModal("address_folder", folder.id, folder.name);
+                                } else {
+                                  openShareModal("address_folder", folder.id, folder.name);
+                                }
+                              }}
+                              isShared={isShared}
+                              shareCount={shareCount}
+                              size="sm"
+                            />
+                            {/* Dropdown menu */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 hover:bg-gray-200 transition-opacity"
+                                  title="Folder options"
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    if (isShared) {
+                                      openShareDetailsModal("address_folder", folder.id, folder.name);
+                                    } else {
+                                      openShareModal("address_folder", folder.id, folder.name);
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  {isShared ? (
+                                    <>
+                                      <Users className="h-4 w-4" />
+                                      <span>Shared</span>
+                                      <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                        {shareCount}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Users className="h-4 w-4" />
+                                      <span>Share</span>
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleEditFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleDeleteFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
+                            {getFolderAddressCount(folder.id)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Shared Section */}
+            {(sharedAddresses.length > 0 || sharedFolders.length > 0) && (
+              <>
+                {/* Divider */}
+                <div className="h-px bg-gray-200 my-2" />
+
+                {/* Shared Section Header */}
+                <div className="px-2 py-2">
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5" />
+                    Shared with me
+                  </h3>
+                </div>
+
+                {/* All Shared Addresses Button */}
+                {totalSharedAddressCount > 0 && (
+                  <button
+                    onClick={handleViewAllShared}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                      viewAllShared && !selectedFolderId
+                        ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300"
+                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                    )}
+                  >
+                    <Folder className="h-4 w-4 flex-shrink-0" />
+                    <span className="flex-1 text-left">All Shared</span>
+                    <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
+                      {totalSharedAddressCount}
+                    </span>
+                  </button>
+                )}
+
+                {/* Shared Folders */}
+                {sharedFolders.length > 0 &&
+                  sharedFolders.map((folder: any) => (
+                    <div
+                      key={folder.id}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
+                        selectedFolderId === folder.id &&
+                          !viewAllAddresses &&
+                          !viewAllShared
+                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300"
+                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                      )}
+                    >
+                      <button
+                        onClick={() => handleFolderSelect(folder.id)}
+                        className="flex items-center gap-2 flex-1 text-left min-w-0"
+                      >
+                        <FolderClosed className="h-4 w-4 flex-shrink-0" />
+                        <span className="flex-1 text-left truncate">
+                          {folder.name}
+                        </span>
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openShareDetailsModal(
+                            "address_folder",
+                            folder.id,
+                            folder.name
+                          );
+                        }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
+                        title="View who shared this folder with you"
+                      >
+                        <Users className="h-2.5 w-2.5" />
+                        <span className="hidden sm:inline">
+                          {folder.sharePermission === "view" ? "View" : "Edit"}
+                        </span>
+                      </button>
+                      {folder.addresses && folder.addresses.length > 0 && (
+                        <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
+                          {folder.addresses.length}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content - Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+        {/* Desktop Left Panel - Folders */}
+        <div className="hidden lg:block space-y-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Folders</h2>
+
+            {/* New Folder Input */}
+            <form onSubmit={handleCreateFolder} className="flex gap-2 mb-4">
+              <Input
+                placeholder="New folder"
+                value={newFolderName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setNewFolderName(e.target.value)
+                }
+                className="flex-1"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                variant="outline"
+                disabled={createFolderMutation.isPending}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </form>
 
               {/* Folders List */}
               <div className="space-y-1">
