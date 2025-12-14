@@ -1,0 +1,10 @@
+CREATE TYPE "public"."address_type" AS ENUM('home', 'office', 'parents_house');--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "address_type" "address_type";--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "street" text;--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "city" text;--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "state" text;--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "zip" text;--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "country" text;--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "latitude" real;--> statement-breakpoint
+ALTER TABLE "addresses" ADD COLUMN "longitude" real;--> statement-breakpoint
+CREATE INDEX "addresses_address_type_idx" ON "addresses" USING btree ("address_type");
