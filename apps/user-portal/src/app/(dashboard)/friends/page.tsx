@@ -1165,22 +1165,94 @@ export default function FriendsPage() {
               </div>
             </div>
 
-        {/* Main Content */}
-        <div className="flex-1 min-w-0">
-            {/* Search and Sort */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        {/* Right Panel - Friends */}
+        <div className="space-y-4">
+          <div>
+            {/* Desktop - Folder breadcrumb and Add button */}
+            <div className="flex items-center justify-between mb-4 gap-4">
+              {viewAllAddresses ? (
+                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                  <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
+                  <span className="font-bold text-gray-900">All Friends</span>
+                </div>
+              ) : viewAllShared ? (
+                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                  <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                  <span className="font-bold text-gray-900">All Shared</span>
+                </div>
+              ) : selectedFolder && sharedFolders.find((f: any) => f.id === selectedFolderId) ? (
+                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                  <FolderClosed className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                  <span className="font-bold text-gray-900">
+                    {sharedFolders.find((f: any) => f.id === selectedFolderId)?.name}
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                    <Users className="h-3 w-3" />
+                    Shared
+                  </span>
+                  <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
+                    {filteredAddresses.length}
+                  </span>
+                </div>
+              ) : selectedFolder ? (
+                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                  <FolderClosed className="h-6 w-6 flex-shrink-0" />
+                  <span className="font-bold text-gray-900">{selectedFolder.name}</span>
+                  <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
+                    {getFolderAddressCount(selectedFolder.id)}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex-1" />
+              )}
+
+              {/* Add Button - enabled for all folders */}
+              <Button
+                onClick={() => openAddAddressModal(selectedFolderId)}
+                variant="orange-primary"
+                className="flex-shrink-0 hidden lg:flex"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Friend
+              </Button>
+              {/* Mobile - Folder Menu and Add Button */}
+              <div className="lg:hidden flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsMobileSidebarOpen(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
+                >
+                  <Menu className="h-4 w-4" />
+                  <span className="font-medium">Folders</span>
+                </Button>
+                <Button
+                  onClick={() => openAddAddressModal(selectedFolderId)}
+                  variant="orange-primary"
+                  className="flex-shrink-0"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="mb-4 w-full justify-between flex gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search friends..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="pr-10 h-11"
                 />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               </div>
+              {/* Sort Controls */}
               <div className="flex gap-2">
                 <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[140px] h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1192,17 +1264,14 @@ export default function FriendsPage() {
                   variant="outline"
                   size="icon"
                   onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                  className="h-11 w-11"
                 >
                   {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
                 </Button>
               </div>
-              <Button onClick={() => openAddAddressModal(selectedFolderId)} className="md:hidden">
-                <Plus className="h-4 w-4 mr-2" />
-                Add
-              </Button>
             </div>
 
-            {/* Addresses List */}
+            {/* Friends List */}
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -1294,7 +1363,7 @@ export default function FriendsPage() {
         </div>
       </div>
 
-      {/* Add/Edit Address Modal */}
+      {/* Add/Edit Friend Modal */}
       <AlertDialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
         <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
