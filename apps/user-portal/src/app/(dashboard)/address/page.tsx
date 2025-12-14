@@ -1563,14 +1563,20 @@ export default function AddressPage() {
                   <div className="space-y-2">
                     <Label htmlFor="address-type">Address Type</Label>
                     <Select
-                      value={addressModalType || ""}
-                      onValueChange={(value) => setAddressModalType(value as "home" | "office" | "parents_house" | "")}
+                      value={addressModalType || "none"}
+                      onValueChange={(value) => {
+                        if (value === "none") {
+                          setAddressModalType("");
+                        } else {
+                          setAddressModalType(value as "home" | "office" | "parents_house");
+                        }
+                      }}
                     >
                       <SelectTrigger id="address-type">
                         <SelectValue placeholder="Select address type (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         <SelectItem value="home">Home</SelectItem>
                         <SelectItem value="office">Office</SelectItem>
                         <SelectItem value="parents_house">Parents House</SelectItem>
