@@ -434,8 +434,10 @@ async function processAIResponse(
             'List operation executed, sending response'
           );
           
-          // Send success/error message to user
-          await whatsappService.sendTextMessage(recipient, result.message);
+          // Send success/error message to user (skip if empty, e.g., when button was already sent)
+          if (result.message.trim().length > 0) {
+            await whatsappService.sendTextMessage(recipient, result.message);
+          }
           
           // Log outgoing message
           try {
@@ -520,9 +522,10 @@ async function processAIResponse(
         }
       }
       
-      // Send combined results to user
-      if (results.length > 0) {
-        const combinedMessage = results.join('\n');
+      // Send combined results to user (filter out empty messages from button sends)
+      const nonEmptyResults = results.filter(r => r.trim().length > 0);
+      if (nonEmptyResults.length > 0) {
+        const combinedMessage = nonEmptyResults.join('\n');
         await whatsappService.sendTextMessage(recipient, combinedMessage);
         
         // Log outgoing message
@@ -598,9 +601,10 @@ async function processAIResponse(
         }
       }
       
-      // Send combined results to user
-      if (results.length > 0) {
-        const combinedMessage = results.join('\n');
+      // Send combined results to user (filter out empty messages from button sends)
+      const nonEmptyResults = results.filter(r => r.trim().length > 0);
+      if (nonEmptyResults.length > 0) {
+        const combinedMessage = nonEmptyResults.join('\n');
         await whatsappService.sendTextMessage(recipient, combinedMessage);
         
         // Log outgoing message
@@ -786,7 +790,10 @@ async function processAIResponse(
             logger.warn({ error: logError, userId }, 'Failed to log outgoing reminder list message');
           }
           
-          await whatsappService.sendTextMessage(recipient, result.message);
+          // Skip if empty (e.g., when button was already sent)
+          if (result.message.trim().length > 0) {
+            await whatsappService.sendTextMessage(recipient, result.message);
+          }
         }
       } else {
         // For create/update/delete/pause/resume, parse and execute with timezone
@@ -808,7 +815,10 @@ async function processAIResponse(
           logger.warn({ error: logError, userId }, 'Failed to log outgoing reminder message');
         }
         
-        await whatsappService.sendTextMessage(recipient, result.message);
+        // Skip if empty (e.g., when button was already sent)
+        if (result.message.trim().length > 0) {
+          await whatsappService.sendTextMessage(recipient, result.message);
+        }
       }
     } else if (titleType === 'address') {
       // Handle address operations (create, update, delete, get, list)
@@ -835,9 +845,10 @@ async function processAIResponse(
         }
       }
       
-      // Send combined results to user
-      if (results.length > 0) {
-        const combinedMessage = results.join('\n');
+      // Send combined results to user (filter out empty messages from button sends)
+      const nonEmptyResults = results.filter(r => r.trim().length > 0);
+      if (nonEmptyResults.length > 0) {
+        const combinedMessage = nonEmptyResults.join('\n');
         await whatsappService.sendTextMessage(recipient, combinedMessage);
         
         // Log outgoing message

@@ -4470,13 +4470,38 @@ export class ActionExecutor {
         responseParts.push(`Pin: No coordinates available`);
       }
       
-      // Add Google Maps link at the bottom (separate line, WhatsApp will auto-link)
-      if (mapsUrl) {
-        responseParts.push(''); // Empty line before link
-        responseParts.push(mapsUrl);
-      }
-      
       const response = responseParts.join('\n');
+      
+      // Send Google Maps link as button if URL is available
+      if (mapsUrl) {
+        try {
+          await this.whatsappService.sendCTAButtonMessage(this.recipient, {
+            bodyText: response,
+            buttonText: 'Open in Google Maps',
+            buttonUrl: mapsUrl,
+          });
+          // Return empty message since button message already contains the full content
+          return {
+            success: true,
+            message: '',
+          };
+        } catch (error) {
+          logger.error(
+            {
+              error,
+              userId: this.userId,
+              addressName: parsed.addressName,
+              mapsUrl,
+            },
+            'Failed to send Google Maps button'
+          );
+          // Fallback to text message with URL if button fails
+          return {
+            success: true,
+            message: `${response}\n\n${mapsUrl}`,
+          };
+        }
+      }
       
       return {
         success: true,
@@ -4574,13 +4599,43 @@ export class ActionExecutor {
         }
       }
 
-      // Format: *✅️ New Location Added*\nName: {name}\n\n{url} (link at bottom)
-      const linkPart = mapsUrl ? `\n${mapsUrl}` : '';
-      const message = `*✅️ New Location Added*\nName: ${name}${linkPart}`;
+      // Format: *✅️ New Location Added*\nName: {name}
+      const messageText = `*✅️ New Location Added*\nName: ${name}`;
+
+      // Send Google Maps link as button if URL is available
+      if (mapsUrl) {
+        try {
+          await this.whatsappService.sendCTAButtonMessage(this.recipient, {
+            bodyText: messageText,
+            buttonText: 'Open in Google Maps',
+            buttonUrl: mapsUrl,
+          });
+          // Return empty message since button message already contains the content
+          return {
+            success: true,
+            message: '',
+          };
+        } catch (error) {
+          logger.error(
+            {
+              error,
+              userId: this.userId,
+              addressName: name,
+              mapsUrl,
+            },
+            'Failed to send Google Maps button'
+          );
+          // Fallback to text message with URL if button fails
+          return {
+            success: true,
+            message: `${messageText}\n\n${mapsUrl}`,
+          };
+        }
+      }
 
       return {
         success: true,
-        message,
+        message: messageText,
       };
     } catch (error) {
       logger.error(
