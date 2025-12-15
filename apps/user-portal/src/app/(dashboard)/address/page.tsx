@@ -939,11 +939,11 @@ export default function AddressPage() {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Saved addresses</h1>
               <Button
                 onClick={handleOpenAddModal}
-                className="bg-blue-600 hover:bg-blue-700 w-full"
-                size="sm"
+                type="button"
+                variant="default"
+                className="w-full sm:w-auto"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Add address
+                <Plus size={18} className="mr-2" /> New Address
               </Button>
             </div>
             <p className="text-sm sm:text-base text-gray-600">
@@ -969,11 +969,11 @@ export default function AddressPage() {
               <div className="lg:hidden mb-4">
                 <Button
                   onClick={handleOpenAddModal}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  size="sm"
+                  type="button"
+                  variant="default"
+                  className="w-full"
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add address
+                  <Plus size={18} className="mr-2" /> New Address
                 </Button>
               </div>
 
