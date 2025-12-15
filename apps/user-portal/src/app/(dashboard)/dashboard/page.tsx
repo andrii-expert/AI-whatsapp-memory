@@ -30,6 +30,7 @@ import {
   X,
   Search,
   ExternalLink,
+  ShoppingCart,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
@@ -72,6 +73,7 @@ export default function DashboardPage() {
   const { data: allTasks = [] } = useQuery(trpc.tasks.list.queryOptions({}));
   const { data: allNotes = [] } = useQuery(trpc.notes.list.queryOptions({}));
   const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
+  const { data: folders = [] } = useQuery(trpc.tasks.folders.list.queryOptions());
 
   // Get all active calendars (like the calendar page does)
   const activeCalendars = useMemo(() => 
@@ -206,9 +208,32 @@ export default function DashboardPage() {
     return searched.slice(0, 10);
   }, [reminders, searchQuery]);
 
-  // Filter tasks - show 10 most recent (sorted by createdAt)
+  // Find Shopping List folder
+  const shoppingListFolder = useMemo(() => {
+    return folders.find((f: any) => f.name.toLowerCase() === "shopping list");
+  }, [folders]);
+
+  // Filter shopping list items
+  const shoppingListItems = useMemo(() => {
+    if (!shoppingListFolder) return [];
+    const filtered = allTasks.filter((t) => 
+      t.status === "open" && t.folderId === shoppingListFolder.id
+    );
+    const sorted = [...filtered].sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA; // Most recent first
+    });
+    const searched = filterItems(sorted);
+    return searched.slice(0, 10); // Show up to 10 items
+  }, [allTasks, shoppingListFolder, searchQuery]);
+
+  // Filter tasks - show 10 most recent (sorted by createdAt), EXCLUDING shopping list items
   const pendingTasks = useMemo(() => {
-    const filtered = allTasks.filter((t) => t.status === "open");
+    const shoppingListFolderId = shoppingListFolder?.id;
+    const filtered = allTasks.filter((t) => 
+      t.status === "open" && t.folderId !== shoppingListFolderId
+    );
     const sorted = [...filtered].sort((a, b) => {
       const dateA = new Date(a.createdAt || 0).getTime();
       const dateB = new Date(b.createdAt || 0).getTime();
@@ -216,7 +241,7 @@ export default function DashboardPage() {
     });
     const searched = filterItems(sorted);
     return searched.slice(0, 10); // Show up to 10 tasks
-  }, [allTasks, searchQuery]);
+  }, [allTasks, shoppingListFolder, searchQuery]);
 
   // Get quick notes - show latest 10
   const quickNotes = useMemo(() => {
@@ -472,9 +497,20 @@ export default function DashboardPage() {
   }, [reminders, searchQuery]);
   
   const totalPendingTasks = useMemo(() => {
-    const filtered = allTasks.filter((t) => t.status === "open");
+    const shoppingListFolderId = shoppingListFolder?.id;
+    const filtered = allTasks.filter((t) => 
+      t.status === "open" && t.folderId !== shoppingListFolderId
+    );
     return filterItems(filtered).length;
-  }, [allTasks, searchQuery]);
+  }, [allTasks, shoppingListFolder, searchQuery]);
+
+  const totalShoppingListItems = useMemo(() => {
+    if (!shoppingListFolder) return 0;
+    const filtered = allTasks.filter((t) => 
+      t.status === "open" && t.folderId === shoppingListFolder.id
+    );
+    return filterItems(filtered).length;
+  }, [allTasks, shoppingListFolder, searchQuery]);
   
   const totalScheduledEvents = useMemo(() => {
     if (!processedEvents || processedEvents.length === 0) return 0;
@@ -595,13 +631,13 @@ export default function DashboardPage() {
         {/* Main Content Area */}
         <div>
           {/* Status Cards Row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 text-center">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6 text-center">
             <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
-                {totalActiveReminders}
+                {totalShoppingListItems}
               </div>
               <div className="text-sm text-gray-500 font-normal">
-                Reminders Today
+                Shopping List
               </div>
             </div>
 
@@ -625,6 +661,15 @@ export default function DashboardPage() {
 
             <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
+                {totalActiveReminders}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Reminders Today
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {allNotes.length}
               </div>
               <div className="text-sm text-gray-500 font-normal">
@@ -634,6 +679,74 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Shopping List */}
+            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
+                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                  <ShoppingCart className="h-4 w-4 text-white" />
+                  Shopping List
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                  {shoppingListItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">
+                      No items in shopping list
+                    </p>
+                  ) : (
+                    shoppingListItems.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          setSelectedTask(item);
+                          setIsTaskModalOpen(true);
+                        }}
+                        className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5 cursor-pointer hover:bg-[#e9ecf3] transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.status === "completed"}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleToggleTask(item.id);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          disabled={
+                            toggleTaskMutation.isPending &&
+                            toggleTaskMutation.variables?.id === item.id
+                          }
+                          aria-label={`Mark item ${item.title || "Untitled Item"} as ${
+                            item.status === "completed" ? "open" : "completed"
+                          }`}
+                          className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[#1f2933] truncate">
+                            {item.title || "Untitled Item"}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {totalShoppingListItems > shoppingListItems.length && (
+                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
+                    Showing {shoppingListItems.length} of {totalShoppingListItems} items
+                  </div>
+                )}
+                <div className="border-t border-[#e2e8f0] px-4 py-3">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                    onClick={() => router.push("/tasks")}
+                  >
+                    View All Tasks
+                    <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Active Reminders */}
             {shouldShowReminders && (
             <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
