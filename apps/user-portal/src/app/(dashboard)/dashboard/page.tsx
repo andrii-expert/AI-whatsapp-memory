@@ -632,7 +632,7 @@ export default function DashboardPage() {
         <div>
           {/* Status Cards Row */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6 text-center">
-            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cols-span-2 lg:cols-span-1">
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {totalShoppingListItems}
               </div>
@@ -678,337 +678,345 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Shopping List */}
-            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                  <ShoppingCart className="h-4 w-4 text-white" />
-                  Shopping List
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-                  {shoppingListItems.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      No items in shopping list
-                    </p>
-                  ) : (
-                    shoppingListItems.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          setSelectedTask(item);
-                          setIsTaskModalOpen(true);
-                        }}
-                        className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5 cursor-pointer hover:bg-[#e9ecf3] transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={item.status === "completed"}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleToggleTask(item.id);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          disabled={
-                            toggleTaskMutation.isPending &&
-                            toggleTaskMutation.variables?.id === item.id
-                          }
-                          aria-label={`Mark item ${item.title || "Untitled Item"} as ${
-                            item.status === "completed" ? "open" : "completed"
-                          }`}
-                          className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[#1f2933] truncate">
-                            {item.title || "Untitled Item"}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                {totalShoppingListItems > shoppingListItems.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
-                    Showing {shoppingListItems.length} of {totalShoppingListItems} items
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* First Column - Shopping List */}
+            <div className="space-y-6">
+              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
+                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                    <ShoppingCart className="h-4 w-4 text-white" />
+                    Shopping List
                   </div>
-                )}
-                <div className="border-t border-[#e2e8f0] px-4 py-3">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                    onClick={() => router.push("/tasks")}
-                  >
-                    View All Tasks
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Active Reminders */}
-            {shouldShowReminders && (
-            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                  <BellRing className="h-4 w-4 text-white" />
-                  Active Reminders
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-                  {activeReminders.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      No active reminders
-                    </p>
-                  ) : (
-                    activeReminders.map((reminder: any) => {
-                      const visual = getReminderColorScheme(
-                        reminder.frequency || 
-                        reminder.scheduleType || 
-                        reminder.recurrence ||
-                        reminder.interval
-                      );
-                      const subtitle = formatReminderSubtitle(reminder);
-                      return (
+                </CardHeader>
+                <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                    {shoppingListItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-8 text-center">
+                        No items in shopping list
+                      </p>
+                    ) : (
+                      shoppingListItems.map((item) => (
                         <div
-                          key={reminder.id}
+                          key={item.id}
                           onClick={() => {
-                            setSelectedReminder(reminder);
-                            setIsReminderModalOpen(true);
+                            setSelectedTask(item);
+                            setIsTaskModalOpen(true);
                           }}
-                          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
+                          className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5 cursor-pointer hover:bg-[#e9ecf3] transition-colors"
                         >
-                          <div className={`h-8 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-medium ${visual.labelClass}`}>
-                              {reminder.title || "Untitled Reminder"}
-                            </p>
-                            {subtitle ? (
-                              <p className={`text-xs mt-0.5 ${visual.metaClass}`}>
-                                {subtitle}
-                              </p>
-                            ) : (
-                              reminder.time && (
-                                <p className={`text-xs mt-0.5 ${visual.metaClass}`}>
-                                  {reminder.time}
-                                </p>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-                {totalActiveReminders > activeReminders.length && (
-                  <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
-                    Showing {activeReminders.length} of {totalActiveReminders} reminders
-                  </div>
-                )}
-                <div className="border-t border-[#e2e8f0] px-4 py-3">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                    onClick={() => router.push("/reminders")}
-                  >
-                    View All Reminders
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            )}
-
-            {/* Pending Tasks */}
-            {shouldShowTasks && (
-            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                  <CheckSquare className="h-4 w-4 text-white" />
-                  Pending Tasks
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-                  {pendingTasks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      No pending tasks
-                    </p>
-                  ) : (
-                    pendingTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setIsTaskModalOpen(true);
-                        }}
-                        className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5 cursor-pointer hover:bg-[#e9ecf3] transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={task.status === "completed"}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleToggleTask(task.id);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          disabled={
-                            toggleTaskMutation.isPending &&
-                            toggleTaskMutation.variables?.id === task.id
-                          }
-                          aria-label={`Mark task ${task.title || "Untitled Task"} as ${
-                            task.status === "completed" ? "open" : "completed"
-                          }`}
-                          className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-[#1f2933] truncate">
-                            {task.title || "Untitled Task"}
-                          </p>
-                          {task.dueDate && (
-                            <p className="text-xs text-[#6b7a90] mt-0.5">
-                              Due {task.dueDate}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="border-t border-[#e2e8f0] px-4 py-3">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                    onClick={() => router.push("/tasks")}
-                  >
-                    View All Tasks
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            )}
-
-            {/* Today Events */}
-            {shouldShowEvents && (
-            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                  <Calendar className="h-4 w-4 text-white" />
-                  Today Events
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-                  {scheduledEvents.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      No events today
-                    </p>
-                  ) : (
-                    scheduledEvents.map((event: any) => {
-                      return (
-                        <div
-                          key={event.id}
-                          className={cn(
-                            "rounded-lg px-3 py-2 cursor-pointer hover:opacity-90 transition-opacity border-2 shadow-sm",
-                            event.color === "bg-blue-500" ? "border-blue-500 bg-blue-50 text-blue-900" : "border-purple-500 bg-purple-50 text-purple-900"
-                          )}
-                          title={`${event.title} - ${event.timeLabel}${event.location ? ` - ${event.location}` : ""}`}
-                          onClick={() => {
-                            if (event.htmlLink) {
-                              window.open(event.htmlLink, "_blank");
-                            } else if (event.webLink) {
-                              window.open(event.webLink, "_blank");
+                          <input
+                            type="checkbox"
+                            checked={item.status === "completed"}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleToggleTask(item.id);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={
+                              toggleTaskMutation.isPending &&
+                              toggleTaskMutation.variables?.id === item.id
                             }
-                          }}
-                        >
-                          <p className="text-sm font-medium truncate">
-                            {event.title}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-xs opacity-90">
-                              {event.timeLabel}
+                            aria-label={`Mark item ${item.title || "Untitled Item"} as ${
+                              item.status === "completed" ? "open" : "completed"
+                            }`}
+                            className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[#1f2933] truncate">
+                              {item.title || "Untitled Item"}
                             </p>
-                            {event.location && (
-                              <p className="text-xs opacity-75 truncate">
-                                • {event.location}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {totalShoppingListItems > shoppingListItems.length && (
+                    <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
+                      Showing {shoppingListItems.length} of {totalShoppingListItems} items
+                    </div>
+                  )}
+                  <div className="border-t border-[#e2e8f0] px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                      onClick={() => router.push("/tasks")}
+                    >
+                      View All Tasks
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Second Column - Events and Reminders */}
+            <div className="space-y-6">
+              {/* Today Events */}
+              {shouldShowEvents && (
+              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
+                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                    <Calendar className="h-4 w-4 text-white" />
+                    Today Events
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                    {scheduledEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-8 text-center">
+                        No events today
+                      </p>
+                    ) : (
+                      scheduledEvents.map((event: any) => {
+                        return (
+                          <div
+                            key={event.id}
+                            className={cn(
+                              "rounded-lg px-3 py-2 cursor-pointer hover:opacity-90 transition-opacity border-2 shadow-sm",
+                              event.color === "bg-blue-500" ? "border-blue-500 bg-blue-50 text-blue-900" : "border-purple-500 bg-purple-50 text-purple-900"
+                            )}
+                            title={`${event.title} - ${event.timeLabel}${event.location ? ` - ${event.location}` : ""}`}
+                            onClick={() => {
+                              if (event.htmlLink) {
+                                window.open(event.htmlLink, "_blank");
+                              } else if (event.webLink) {
+                                window.open(event.webLink, "_blank");
+                              }
+                            }}
+                          >
+                            <p className="text-sm font-medium truncate">
+                              {event.title}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <p className="text-xs opacity-90">
+                                {event.timeLabel}
+                              </p>
+                              {event.location && (
+                                <p className="text-xs opacity-75 truncate">
+                                  • {event.location}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="border-t border-[#e2e8f0] px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                      onClick={() => router.push("/calendars")}
+                    >
+                      View All Events
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              )}
+
+              {/* Active Reminders */}
+              {shouldShowReminders && (
+              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
+                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                    <BellRing className="h-4 w-4 text-white" />
+                    Active Reminders
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                    {activeReminders.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-8 text-center">
+                        No active reminders
+                      </p>
+                    ) : (
+                      activeReminders.map((reminder: any) => {
+                        const visual = getReminderColorScheme(
+                          reminder.frequency || 
+                          reminder.scheduleType || 
+                          reminder.recurrence ||
+                          reminder.interval
+                        );
+                        const subtitle = formatReminderSubtitle(reminder);
+                        return (
+                          <div
+                            key={reminder.id}
+                            onClick={() => {
+                              setSelectedReminder(reminder);
+                              setIsReminderModalOpen(true);
+                            }}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
+                          >
+                            <div className={`h-8 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-medium ${visual.labelClass}`}>
+                                {reminder.title || "Untitled Reminder"}
+                              </p>
+                              {subtitle ? (
+                                <p className={`text-xs mt-0.5 ${visual.metaClass}`}>
+                                  {subtitle}
+                                </p>
+                              ) : (
+                                reminder.time && (
+                                  <p className={`text-xs mt-0.5 ${visual.metaClass}`}>
+                                    {reminder.time}
+                                  </p>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  {totalActiveReminders > activeReminders.length && (
+                    <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
+                      Showing {activeReminders.length} of {totalActiveReminders} reminders
+                    </div>
+                  )}
+                  <div className="border-t border-[#e2e8f0] px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                      onClick={() => router.push("/reminders")}
+                    >
+                      View All Reminders
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              )}
+            </div>
+
+            {/* Third Column - Tasks and Notes */}
+            <div className="space-y-6">
+              {/* Pending Tasks */}
+              {shouldShowTasks && (
+              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
+                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                    <CheckSquare className="h-4 w-4 text-white" />
+                    Pending Tasks
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                    {pendingTasks.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-8 text-center">
+                        No pending tasks
+                      </p>
+                    ) : (
+                      pendingTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          onClick={() => {
+                            setSelectedTask(task);
+                            setIsTaskModalOpen(true);
+                          }}
+                          className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5 cursor-pointer hover:bg-[#e9ecf3] transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={task.status === "completed"}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleToggleTask(task.id);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={
+                              toggleTaskMutation.isPending &&
+                              toggleTaskMutation.variables?.id === task.id
+                            }
+                            aria-label={`Mark task ${task.title || "Untitled Task"} as ${
+                              task.status === "completed" ? "open" : "completed"
+                            }`}
+                            className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[#1f2933] truncate">
+                              {task.title || "Untitled Task"}
+                            </p>
+                            {task.dueDate && (
+                              <p className="text-xs text-[#6b7a90] mt-0.5">
+                                Due {task.dueDate}
                               </p>
                             )}
                           </div>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-                <div className="border-t border-[#e2e8f0] px-4 py-3">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                    onClick={() => router.push("/calendars")}
-                  >
-                    View All Events
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            )}
+                      ))
+                    )}
+                  </div>
+                  <div className="border-t border-[#e2e8f0] px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                      onClick={() => router.push("/tasks")}
+                    >
+                      View All Tasks
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              )}
 
-            {/* Quick Notes */}
-            {shouldShowNotes && (
-            <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-              <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                  <StickyNote className="h-4 w-4 text-white" />
-                  Quick Notes
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-                  {quickNotes.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      No notes available
-                    </p>
-                  ) : (
-                    quickNotes.map((note) => (
-                      <div
-                        key={note.id}
-                        onClick={() => {
-                          setSelectedNote(note);
-                          setIsNoteModalOpen(true);
-                        }}
-                        className="border-b border-[#e2e8f0] pb-4 last:border-b-0 cursor-pointer hover:bg-[#f5f7fb] rounded-lg px-2 py-2 -mx-2 transition-colors"
-                      >
-                        <p className="text-sm font-semibold text-[#1f2933]">
-                          {note.title || "Untitled Note"}
-                        </p>
-                        {note.content && (
-                          <p className="text-xs text-[#6b7a90] mt-1 line-clamp-2">
-                            {note.content}
+              {/* Quick Notes */}
+              {shouldShowNotes && (
+              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
+                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
+                    <StickyNote className="h-4 w-4 text-white" />
+                    Quick Notes
+                  </div>
+                </CardHeader>
+                <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+                    {quickNotes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-8 text-center">
+                        No notes available
+                      </p>
+                    ) : (
+                      quickNotes.map((note) => (
+                        <div
+                          key={note.id}
+                          onClick={() => {
+                            setSelectedNote(note);
+                            setIsNoteModalOpen(true);
+                          }}
+                          className="border-b border-[#e2e8f0] pb-4 last:border-b-0 cursor-pointer hover:bg-[#f5f7fb] rounded-lg px-2 py-2 -mx-2 transition-colors"
+                        >
+                          <p className="text-sm font-semibold text-[#1f2933]">
+                            {note.title || "Untitled Note"}
                           </p>
-                        )}
-                        <p className="text-xs text-[#94a3b8] mt-1">
-                          Updated {new Date(note.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="border-t border-[#e2e8f0] px-4 py-3">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                    onClick={() => router.push("/notes")}
-                  >
-                    View All Notes
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            )}
+                          {note.content && (
+                            <p className="text-xs text-[#6b7a90] mt-1 line-clamp-2">
+                              {note.content}
+                            </p>
+                          )}
+                          <p className="text-xs text-[#94a3b8] mt-1">
+                            Updated {new Date(note.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="border-t border-[#e2e8f0] px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
+                      onClick={() => router.push("/notes")}
+                    >
+                      View All Notes
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              )}
+            </div>
           </div>
         </div>
       </div>
