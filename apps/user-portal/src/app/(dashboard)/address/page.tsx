@@ -18,14 +18,6 @@ import {
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@imaginecalendar/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -334,10 +326,10 @@ function GoogleMap({
   // Show placeholder if no coordinates and click-to-drop is not enabled
   if ((lat == null || lng == null || isNaN(lat) || isNaN(lng)) && !enableClickToDrop) {
     return (
-      <div className="w-full h-[400px] bg-green-50 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center p-8">
+      <div className="w-full h-[300px] sm:h-[400px] bg-green-50 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-3 h-3 rounded-full bg-green-500"></div>
-          <p className="text-sm text-green-700 font-medium">Map placeholder - Enter coordinates or address to view map</p>
+          <p className="text-xs sm:text-sm text-green-700 font-medium text-center">Map placeholder - Enter coordinates or address to view map</p>
         </div>
         {address && (
           <p className="text-xs text-green-600 text-center mt-2">
@@ -354,9 +346,9 @@ function GoogleMap({
   // Show loading state
   if (!scriptLoaded) {
     return (
-      <div className="w-full h-[400px] bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-        <p className="text-sm text-gray-700 font-medium">Loading Google Maps...</p>
+      <div className="w-full h-[300px] sm:h-[400px] bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
+        <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mb-4" />
+        <p className="text-xs sm:text-sm text-gray-700 font-medium">Loading Google Maps...</p>
         <p className="text-xs text-gray-500 text-center mt-2">
           Please wait while we load the map.
         </p>
@@ -367,8 +359,8 @@ function GoogleMap({
   // Show error state
   if (mapError) {
     return (
-      <div className="w-full h-[400px] bg-red-50 border-2 border-dashed border-red-200 rounded-lg flex flex-col items-center justify-center p-8">
-        <p className="text-sm text-red-700 font-medium mb-2">Error loading map</p>
+      <div className="w-full h-[300px] sm:h-[400px] bg-red-50 border-2 border-dashed border-red-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
+        <p className="text-xs sm:text-sm text-red-700 font-medium mb-2">Error loading map</p>
         <p className="text-xs text-red-600 text-center mb-4">{mapError}</p>
         <Button
           onClick={() => {
@@ -385,6 +377,7 @@ function GoogleMap({
           }}
           variant="outline"
           size="sm"
+          className="touch-manipulation"
         >
           Retry
         </Button>
@@ -394,7 +387,7 @@ function GoogleMap({
 
   // Show map
   return (
-    <div className="w-full h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100 relative">
+    <div className="w-full h-[300px] sm:h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100 relative">
       <div 
         ref={mapContainerRef} 
         className={cn(
@@ -408,8 +401,8 @@ function GoogleMap({
         </div>
       )}
       {enableClickToDrop && mapInitialized && (
-        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-10 pointer-events-none">
-          <p className="text-sm font-medium">Click anywhere on the map to drop a pin</p>
+        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-lg z-10 pointer-events-none max-w-[90%]">
+          <p className="text-xs sm:text-sm font-medium text-center">Click anywhere on the map to drop a pin</p>
         </div>
       )}
     </div>
@@ -625,7 +618,7 @@ export default function AddressPage() {
         return;
       }
 
-      const input = document.getElementById("street-address") as HTMLInputElement;
+      const input = document.getElementById("modal-street-address") as HTMLInputElement;
       if (!input || autocomplete) return;
 
       try {
@@ -924,60 +917,140 @@ export default function AddressPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 max-w-7xl">
       {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm mb-6">
+      <div className="flex items-center gap-2 text-sm mb-4 sm:mb-6">
         <Link
           href="/dashboard"
           className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
         >
           <Home className="h-4 w-4" />
-          Dashboard
+          <span className="hidden sm:inline">Dashboard</span>
         </Link>
         <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
         <span className="font-medium">Saved addresses</span>
       </div>
 
       {/* Page Header */}
-      <div className="mb-8">
-        <div className="flex items-start justify-between mb-2">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-gray-900">Saved addresses</h1>
+      <div className="mb-6 sm:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-2">
+          <div className="flex-1">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Saved addresses</h1>
               <Button
                 onClick={handleOpenAddModal}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
                 size="sm"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add address
               </Button>
             </div>
-            <p className="text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600">
               Add your frequent locations, view them on the map and share directions to WhatsApp in a single tap.
             </p>
           </div>
-          <div className="flex gap-2">
-            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+          <div className="flex flex-wrap gap-2">
+            <span className="px-2 sm:px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium whitespace-nowrap">
               One tap share to WhatsApp
             </span>
-            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+            <span className="px-2 sm:px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium whitespace-nowrap">
               Responsive · Dashboard & mobile
             </span>
           </div>
         </div>
       </div>
 
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column */}
-        <div className="space-y-6">
-          {/* Saved locations Card */}
+      {/* Three Column Layout - Form, List, Map side by side on large screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Add Address Form (hidden on mobile, shown on large screens) */}
+        <div className="hidden lg:block">
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Add Address</h2>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="form-location-label">Location label</Label>
+                  <Input
+                    id="form-location-label"
+                    placeholder="e.g. Home, Office"
+                    value={locationLabel}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocationLabel(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="form-street-address">Street address</Label>
+                  <div className="relative">
+                    <Input
+                      id="form-street-address"
+                      placeholder="Type or paste address"
+                      value={streetAddress}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAddressPaste(e.target.value)}
+                      className="h-20 pr-10"
+                    />
+                    {isGeocoding && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="form-coordinates">Coordinates (optional)</Label>
+                  <Input
+                    id="form-coordinates"
+                    placeholder="e.g. -34.0822, 18.8501"
+                    value={coordinates}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      setCoordinates(e.target.value);
+                      const { lat, lng } = parseCoordinates(e.target.value);
+                      if (lat && lng && window.google?.maps) {
+                        setIsGeocoding(true);
+                        const geocoder = new window.google.maps.Geocoder();
+                        geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                          setIsGeocoding(false);
+                          if (status === "OK" && results?.[0]) {
+                            setStreetAddress(results[0].formatted_address);
+                          }
+                        });
+                      }
+                    }}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleOpenAddModal}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Address
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Middle Column - Saved locations */}
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Saved locations</h2>
-                <span className="text-sm text-gray-600">{addresses.length} saved</span>
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Saved locations</h2>
+                <span className="text-xs sm:text-sm text-gray-600">{addresses.length} saved</span>
+              </div>
+
+              {/* Mobile: Add Address Button */}
+              <div className="lg:hidden mb-4">
+                <Button
+                  onClick={handleOpenAddModal}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  size="sm"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add address
+                </Button>
               </div>
 
               {isLoading ? (
@@ -987,26 +1060,26 @@ export default function AddressPage() {
               ) : addresses.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                  <p>No saved locations yet.</p>
-                  <p className="text-sm mt-1">Add your first location above.</p>
+                  <p className="text-sm sm:text-base">No saved locations yet.</p>
+                  <p className="text-xs sm:text-sm mt-1">Add your first location above.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {addresses.map((address: any) => (
                     <div
                       key={address.id}
                       className={cn(
-                        "p-4 rounded-lg border-2 transition-all cursor-pointer",
+                        "p-3 sm:p-4 rounded-lg border-2 transition-all cursor-pointer touch-manipulation",
                         selectedAddress?.id === address.id
                           ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100"
                       )}
                       onClick={() => handleSelectAddress(address)}
                     >
-                      <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start justify-between gap-3 sm:gap-4">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-gray-900 mb-1">{address.name}</h3>
-                          <p className="text-sm text-gray-600 mb-1">
+                          <h3 className="font-bold text-sm sm:text-base text-gray-900 mb-1">{address.name}</h3>
+                          <p className="text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2">
                             {getFullAddress(address) || "No address provided"}
                           </p>
                           {getCoordinatesString(address) && (
@@ -1015,22 +1088,22 @@ export default function AddressPage() {
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                           <span
-                            className="text-sm text-gray-500 hover:text-gray-700 font-medium cursor-pointer"
+                            className="hidden sm:inline text-xs sm:text-sm text-gray-500 hover:text-gray-700 font-medium cursor-pointer"
                             onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
                               handleSelectAddress(address);
                             }}
                           >
-                            Tap to view on map
+                            Tap to view
                           </span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8"
+                                className="h-9 w-9 sm:h-8 sm:w-8 touch-manipulation"
                                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
                               >
                                 <MoreVertical className="h-4 w-4" />
@@ -1069,13 +1142,14 @@ export default function AddressPage() {
         {/* Right Column - Map Preview */}
         <div>
           <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">MAP PREVIEW</h2>
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2 mb-4">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Map Preview</h2>
                 {selectedAddress && (
                   <Button
                     onClick={handleWhatsAppShare}
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-green-600 hover:bg-green-700 w-full sm:w-auto touch-manipulation text-sm sm:text-base py-2.5 sm:py-2"
+                    size="sm"
                   >
                     <MessageCircle className="h-4 w-4 mr-2" />
                     Send to WhatsApp
@@ -1085,9 +1159,9 @@ export default function AddressPage() {
 
               {selectedAddress ? (
                 <>
-                  <div className="mb-4">
-                    <h3 className="font-bold text-gray-900 mb-1">{selectedAddress.name}</h3>
-                    <p className="text-sm text-gray-600">
+                  <div className="mb-3 sm:mb-4">
+                    <h3 className="font-bold text-sm sm:text-base text-gray-900 mb-1">{selectedAddress.name}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">
                       {getFullAddress(selectedAddress) || "No address provided"}
                     </p>
                   </div>
@@ -1099,8 +1173,8 @@ export default function AddressPage() {
                 </>
               ) : (
                 <>
-                  <div className="mb-4">
-                    <p className="text-sm text-gray-500">
+                  <div className="mb-3 sm:mb-4">
+                    <p className="text-xs sm:text-sm text-gray-500">
                       Select a location from the list to view it on the map.
                     </p>
                   </div>
@@ -1112,28 +1186,8 @@ export default function AddressPage() {
         </div>
       </div>
 
-      {/* Responsive Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
-        <Card>
-          <CardContent className="p-4">
-            <h3 className="font-bold text-gray-900 mb-2">Dashboard view</h3>
-            <p className="text-sm text-gray-600">
-              On larger screens, the form, list and map sit side by side for quick dispatch and routing.
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <h3 className="font-bold text-gray-900 mb-2">Mobile view</h3>
-            <p className="text-sm text-gray-600">
-              On phones, the layout stacks vertically so users can scroll from saved locations down into the map and WhatsApp share button.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Add/Edit Address Modal */}
-      <Dialog 
+      <AlertDialog 
         open={isAddModalOpen} 
         onOpenChange={(open) => {
           setIsAddModalOpen(open);
@@ -1143,17 +1197,17 @@ export default function AddressPage() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
+        <AlertDialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg sm:text-xl">
               {editingAddress ? "Edit location" : "Add new location"}
-            </DialogTitle>
-            <DialogDescription>
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm">
               Save an address or coordinates to use across your dashboard and mobile app.
-            </DialogDescription>
-          </DialogHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 px-1 sm:px-0">
             <div className="space-y-2">
               <Label htmlFor="modal-location-label">Location label</Label>
               <Input
@@ -1309,18 +1363,18 @@ export default function AddressPage() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <AlertDialogCancel
               onClick={handleCancelEdit}
-              variant="outline"
               disabled={createAddressMutation.isPending || updateAddressMutation.isPending}
+              className="w-full sm:w-auto touch-manipulation order-2 sm:order-1"
             >
               Cancel
-            </Button>
-            <Button
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={handleSaveLocation}
               disabled={createAddressMutation.isPending || updateAddressMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto touch-manipulation order-1 sm:order-2"
             >
               {(createAddressMutation.isPending || updateAddressMutation.isPending) ? (
                 <>
@@ -1330,10 +1384,10 @@ export default function AddressPage() {
               ) : (
                 editingAddress ? "Update location" : "Save location"
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
