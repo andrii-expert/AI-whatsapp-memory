@@ -4470,11 +4470,10 @@ export class ActionExecutor {
         responseParts.push(`Pin: No coordinates available`);
       }
       
-      // Always add Google Maps link (WhatsApp auto-links URLs)
+      // Add Google Maps link at the bottom (separate line, WhatsApp will auto-link)
       if (mapsUrl) {
-        responseParts.push(`Link: ${mapsUrl}`);
-      } else {
-        responseParts.push(`Link: No location available`);
+        responseParts.push(''); // Empty line before link
+        responseParts.push(mapsUrl);
       }
       
       const response = responseParts.join('\n');
@@ -4575,8 +4574,9 @@ export class ActionExecutor {
         }
       }
 
-      // Format: *✅️ New Location Added*\nName: {name}\nAdress link: {url}
-      const message = `*✅️ New Location Added*\nName: ${name}\nAdress link: ${mapsUrl || 'No location available'}`;
+      // Format: *✅️ New Location Added*\nName: {name}\n\n{url} (link at bottom)
+      const linkPart = mapsUrl ? `\n${mapsUrl}` : '';
+      const message = `*✅️ New Location Added*\nName: ${name}${linkPart}`;
 
       return {
         success: true,
@@ -4830,9 +4830,9 @@ export class ActionExecutor {
         };
       }
 
-      // Format: *🏠 All Locations*\n*1* {name1}\n*2* {name2}\n*3* {name3} (bold title and numbers)
+      // Format: *🏠 All Locations*\n*1.* {name1}\n*2.* {name2}\n*3.* {name3} (bold title and numbers with period)
       const addressList = addresses.map((addr, index) => {
-        return `*${index + 1}* ${addr.name}`;
+        return `*${index + 1}.* ${addr.name}`;
       }).join('\n');
 
       const message = `*🏠 All Locations*\n${addressList}`;
