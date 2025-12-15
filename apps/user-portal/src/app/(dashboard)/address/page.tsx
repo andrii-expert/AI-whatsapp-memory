@@ -935,7 +935,7 @@ export default function AddressPage() {
       <div className="mb-6 sm:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-2">
           <div className="flex-1">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Saved addresses</h1>
               <Button
                 onClick={handleOpenAddModal}
@@ -950,87 +950,11 @@ export default function AddressPage() {
               Add your frequent locations, view them on the map and share directions to WhatsApp in a single tap.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="px-2 sm:px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium whitespace-nowrap">
-              One tap share to WhatsApp
-            </span>
-            <span className="px-2 sm:px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium whitespace-nowrap">
-              Responsive · Dashboard & mobile
-            </span>
-          </div>
         </div>
       </div>
 
       {/* Three Column Layout - Form, List, Map side by side on large screens */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Add Address Form (hidden on mobile, shown on large screens) */}
-        <div className="hidden lg:block">
-          <Card>
-            <CardContent className="p-4 sm:p-6">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Add Address</h2>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="form-location-label">Location label</Label>
-                  <Input
-                    id="form-location-label"
-                    placeholder="e.g. Home, Office"
-                    value={locationLabel}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocationLabel(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="form-street-address">Street address</Label>
-                  <div className="relative">
-                    <Input
-                      id="form-street-address"
-                      placeholder="Type or paste address"
-                      value={streetAddress}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAddressPaste(e.target.value)}
-                      className="h-20 pr-10"
-                    />
-                    {isGeocoding && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="form-coordinates">Coordinates (optional)</Label>
-                  <Input
-                    id="form-coordinates"
-                    placeholder="e.g. -34.0822, 18.8501"
-                    value={coordinates}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      setCoordinates(e.target.value);
-                      const { lat, lng } = parseCoordinates(e.target.value);
-                      if (lat && lng && window.google?.maps) {
-                        setIsGeocoding(true);
-                        const geocoder = new window.google.maps.Geocoder();
-                        geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
-                          setIsGeocoding(false);
-                          if (status === "OK" && results?.[0]) {
-                            setStreetAddress(results[0].formatted_address);
-                          }
-                        });
-                      }
-                    }}
-                  />
-                </div>
-
-                <Button
-                  onClick={handleOpenAddModal}
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Address
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Middle Column - Saved locations */}
         <div className="space-y-6">
