@@ -36,13 +36,26 @@ declare global {
   }
 }
 
-function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | null; address?: string }) {
+function GoogleMap({ 
+  lat, 
+  lng, 
+  address, 
+  onPinDrop,
+  enableClickToDrop = false 
+}: { 
+  lat?: number | null; 
+  lng?: number | null; 
+  address?: string;
+  onPinDrop?: (lat: number, lng: number) => void;
+  enableClickToDrop?: boolean;
+}) {
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const clickListenerRef = useRef<any>(null);
   const initAttemptsRef = useRef(0);
   const maxInitAttempts = 20; // 2 seconds max (20 * 100ms)
 
@@ -110,16 +123,19 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
     };
   }, []);
 
-  // Initialize map when script is loaded and coordinates are available
+  // Initialize map when script is loaded
   useEffect(() => {
     if (!scriptLoaded || !window.google?.maps) {
       setMapInitialized(false);
       return;
     }
     
-    if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
+    // If no coordinates but click-to-drop is enabled, show map centered on a default location
+    const hasValidCoords = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+    
+    // If no valid coordinates and click-to-drop is not enabled, don't initialize
+    if (!hasValidCoords && !enableClickToDrop) {
       setMapInitialized(false);
-      // Clean up map instance if coordinates become invalid
       if (mapInstanceRef.current) {
         mapInstanceRef.current = null;
         markerRef.current = null;
@@ -144,11 +160,17 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
       }
 
       try {
+        // Determine center and zoom
+        // Use a reasonable default center (center of world map) if no coordinates
+        const centerLat = hasValidCoords ? lat : 20;
+        const centerLng = hasValidCoords ? lng : 0;
+        const zoom = hasValidCoords ? 15 : 3; // Zoom out if no coordinates, but not too much
+        
         // Create or update map
         if (!mapInstanceRef.current) {
           mapInstanceRef.current = new window.google.maps.Map(mapContainerRef.current, {
-            center: { lat, lng },
-            zoom: 15,
+            center: { lat: centerLat, lng: centerLng },
+            zoom: zoom,
             mapTypeControl: true,
             streetViewControl: true,
             fullscreenControl: true,
@@ -163,6 +185,38 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
               mapReady = true;
               setMapInitialized(true);
               setMapError(null);
+              
+              // Add click listener AFTER map is ready
+              if (enableClickToDrop && onPinDrop) {
+                // Remove existing listener if any
+                if (clickListenerRef.current) {
+                  window.google.maps.event.removeListener(clickListenerRef.current);
+                }
+                // Add click listener
+                try {
+                  clickListenerRef.current = mapInstanceRef.current.addListener('click', (e: any) => {
+                    if (e && e.latLng && onPinDrop) {
+                      try {
+                        const clickedLat = e.latLng.lat();
+                        const clickedLng = e.latLng.lng();
+                        console.log('Map clicked at:', clickedLat, clickedLng);
+                        if (typeof clickedLat === 'number' && typeof clickedLng === 'number' && !isNaN(clickedLat) && !isNaN(clickedLng)) {
+                          onPinDrop(clickedLat, clickedLng);
+                        } else {
+                          console.error('Invalid coordinates from click:', clickedLat, clickedLng);
+                        }
+                      } catch (error) {
+                        console.error('Error handling map click:', error);
+                      }
+                    } else {
+                      console.warn('Map click event missing latLng:', e);
+                    }
+                  });
+                  console.log('Click listener added for drop pin, enableClickToDrop:', enableClickToDrop, 'onPinDrop:', !!onPinDrop);
+                } catch (error) {
+                  console.error('Error adding click listener:', error);
+                }
+              }
             }
           };
           
@@ -176,22 +230,30 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
             }
           }, 1000);
         } else {
-          mapInstanceRef.current.setCenter({ lat, lng });
-          mapInstanceRef.current.setZoom(15);
+          if (hasValidCoords) {
+            mapInstanceRef.current.setCenter({ lat, lng });
+            mapInstanceRef.current.setZoom(15);
+          }
           setMapInitialized(true);
         }
 
-        // Create or update marker
-        if (markerRef.current) {
-          markerRef.current.setPosition({ lat, lng });
-          markerRef.current.setTitle(address || "Location");
-        } else {
-          markerRef.current = new window.google.maps.Marker({
-            position: { lat, lng },
-            map: mapInstanceRef.current,
-            title: address || "Location",
-            animation: window.google.maps.Animation.DROP,
-          });
+        // Create or update marker only if we have valid coordinates
+        if (hasValidCoords) {
+          if (markerRef.current) {
+            markerRef.current.setPosition({ lat, lng });
+            markerRef.current.setTitle(address || "Location");
+            markerRef.current.setMap(mapInstanceRef.current);
+          } else {
+            markerRef.current = new window.google.maps.Marker({
+              position: { lat, lng },
+              map: mapInstanceRef.current,
+              title: address || "Location",
+              animation: window.google.maps.Animation.DROP,
+            });
+          }
+        } else if (markerRef.current) {
+          // Remove marker if no valid coordinates
+          markerRef.current.setMap(null);
         }
 
         setMapError(null);
@@ -206,11 +268,63 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
     const timeoutId = setTimeout(initMap, 100);
     return () => {
       clearTimeout(timeoutId);
+      // Clean up click listener
+      if (clickListenerRef.current) {
+        window.google?.maps?.event?.removeListener(clickListenerRef.current);
+        clickListenerRef.current = null;
+      }
     };
-  }, [scriptLoaded, lat, lng, address]);
+  }, [scriptLoaded, lat, lng, address, enableClickToDrop, onPinDrop]);
+  
+  // Update click listener when enableClickToDrop changes (for existing maps)
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.google?.maps || !mapInitialized) return;
+    
+    // Remove existing listener
+    if (clickListenerRef.current) {
+      window.google.maps.event.removeListener(clickListenerRef.current);
+      clickListenerRef.current = null;
+    }
+    
+    // Add new listener if enabled
+    if (enableClickToDrop && onPinDrop) {
+      try {
+        clickListenerRef.current = mapInstanceRef.current.addListener('click', (e: any) => {
+          if (e && e.latLng && onPinDrop) {
+            try {
+              const clickedLat = e.latLng.lat();
+              const clickedLng = e.latLng.lng();
+              console.log('Map clicked at:', clickedLat, clickedLng);
+              if (typeof clickedLat === 'number' && typeof clickedLng === 'number' && !isNaN(clickedLat) && !isNaN(clickedLng)) {
+                onPinDrop(clickedLat, clickedLng);
+              } else {
+                console.error('Invalid coordinates from click:', clickedLat, clickedLng);
+              }
+            } catch (error) {
+              console.error('Error handling map click:', error);
+            }
+          } else {
+            console.warn('Map click event missing latLng:', e);
+          }
+        });
+        console.log('Click listener updated for drop pin, enableClickToDrop:', enableClickToDrop, 'onPinDrop:', !!onPinDrop);
+      } catch (error) {
+        console.error('Error adding click listener:', error);
+      }
+    } else {
+      console.log('Click listener removed (drop pin disabled)');
+    }
+    
+    return () => {
+      if (clickListenerRef.current) {
+        window.google?.maps?.event?.removeListener(clickListenerRef.current);
+        clickListenerRef.current = null;
+      }
+    };
+  }, [enableClickToDrop, onPinDrop, mapInitialized]);
 
-  // Show placeholder if no coordinates
-  if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
+  // Show placeholder if no coordinates and click-to-drop is not enabled
+  if ((lat == null || lng == null || isNaN(lat) || isNaN(lng)) && !enableClickToDrop) {
     return (
       <div className="w-full h-[400px] bg-green-50 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center p-8">
         <div className="flex items-center gap-2 mb-2">
@@ -273,10 +387,21 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
   // Show map
   return (
     <div className="w-full h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100 relative">
-      <div ref={mapContainerRef} className="w-full h-full" />
+      <div 
+        ref={mapContainerRef} 
+        className={cn(
+          "w-full h-full",
+          enableClickToDrop && mapInitialized && "cursor-crosshair"
+        )}
+      />
       {!mapInitialized && (
         <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        </div>
+      )}
+      {enableClickToDrop && mapInitialized && (
+        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-10 pointer-events-none">
+          <p className="text-sm font-medium">Click anywhere on the map to drop a pin</p>
         </div>
       )}
     </div>
@@ -305,6 +430,7 @@ export default function AddressPage() {
   const [editingAddress, setEditingAddress] = useState<any>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [addressToDelete, setAddressToDelete] = useState<any>(null);
+  const [enableDropPin, setEnableDropPin] = useState(false);
 
   // Fetch addresses
   const { data: addresses = [], isLoading } = useQuery(trpc.addresses.list.queryOptions());
@@ -406,6 +532,74 @@ export default function AddressPage() {
     }
     
     return { lat: null, lng: null };
+  };
+
+  // Handle pin drop from map click
+  const handlePinDrop = (lat: number, lng: number) => {
+    setCoordinates(`${lat}, ${lng}`);
+    setEnableDropPin(false);
+    
+    // Perform reverse geocoding
+    if (window.google?.maps) {
+      setIsGeocoding(true);
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+        setIsGeocoding(false);
+        if (status === "OK" && results?.[0]) {
+          const result = results[0];
+          setStreetAddress(result.formatted_address);
+          
+          // Extract address components
+          const components: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zip?: string;
+            country?: string;
+          } = {};
+          
+          if (result.address_components) {
+            result.address_components.forEach((component: any) => {
+              const types = component.types;
+              
+              if (types.includes("street_number") || types.includes("route")) {
+                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+              }
+              
+              if (types.includes("locality")) {
+                components.city = component.long_name;
+              } else if (types.includes("administrative_area_level_1")) {
+                components.state = component.long_name;
+              } else if (types.includes("postal_code")) {
+                components.zip = component.long_name;
+              } else if (types.includes("country")) {
+                components.country = component.long_name;
+              }
+            });
+          }
+          
+          setAddressComponents(components);
+          
+          toast({
+            title: "Pin dropped",
+            description: "Location captured. You can now save it.",
+          });
+        } else {
+          toast({
+            title: "Address lookup failed",
+            description: "Coordinates captured, but couldn't find the address. You can still save the location.",
+            variant: "default",
+          });
+        }
+      });
+    } else {
+      toast({
+        title: "Pin dropped",
+        description: "Coordinates captured. You can now save it.",
+      });
+    }
   };
 
   // Initialize Google Maps Autocomplete
@@ -796,70 +990,39 @@ export default function AddressPage() {
                     <Label htmlFor="coordinates">Pin / coordinates (optional)</Label>
                     <button
                       type="button"
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      className={cn(
+                        "text-sm font-medium transition-colors",
+                        enableDropPin
+                          ? "text-red-600 hover:text-red-700"
+                          : "text-blue-600 hover:text-blue-700"
+                      )}
                       onClick={() => {
-                        if (window.google?.maps && coordinates) {
-                          const { lat, lng } = parseCoordinates(coordinates);
-                          if (lat && lng) {
-                            setIsGeocoding(true);
-                            const geocoder = new window.google.maps.Geocoder();
-                            geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
-                              setIsGeocoding(false);
-                              if (status === "OK" && results?.[0]) {
-                                const result = results[0];
-                                setStreetAddress(result.formatted_address);
-                                
-                                // Extract address components
-                                const components: {
-                                  street?: string;
-                                  city?: string;
-                                  state?: string;
-                                  zip?: string;
-                                  country?: string;
-                                } = {};
-                                
-                                if (result.address_components) {
-                                  result.address_components.forEach((component: any) => {
-                                    const types = component.types;
-                                    
-                                    if (types.includes("street_number") || types.includes("route")) {
-                                      const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
-                                      const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
-                                      components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
-                                    }
-                                    
-                                    if (types.includes("locality")) {
-                                      components.city = component.long_name;
-                                    } else if (types.includes("administrative_area_level_1")) {
-                                      components.state = component.long_name;
-                                    } else if (types.includes("postal_code")) {
-                                      components.zip = component.long_name;
-                                    } else if (types.includes("country")) {
-                                      components.country = component.long_name;
-                                    }
-                                  });
-                                }
-                                
-                                setAddressComponents(components);
-                              }
+                        if (enableDropPin) {
+                          // Cancel drop pin mode
+                          setEnableDropPin(false);
+                          toast({
+                            title: "Drop pin cancelled",
+                            description: "Click 'Drop pin on map' again to enable.",
+                          });
+                        } else {
+                          // Enable drop pin mode
+                          if (window.google?.maps) {
+                            setEnableDropPin(true);
+                            toast({
+                              title: "Drop pin enabled",
+                              description: "Click anywhere on the map to drop a pin.",
                             });
                           } else {
                             toast({
-                              title: "Invalid coordinates",
-                              description: "Please enter valid coordinates in the format: lat, lng",
+                              title: "Google Maps not loaded",
+                              description: "Please wait for Google Maps to load, or enter coordinates manually.",
                               variant: "destructive",
                             });
                           }
-                        } else {
-                          toast({
-                            title: "Google Maps not loaded",
-                            description: "Please wait for Google Maps to load, or enter coordinates manually.",
-                            variant: "destructive",
-                          });
                         }
                       }}
                     >
-                      Drop pin on map
+                      {enableDropPin ? "Cancel drop pin" : "Drop pin on map"}
                     </button>
                   </div>
                   <Input
@@ -918,6 +1081,25 @@ export default function AddressPage() {
                       }
                     }}
                   />
+                  {enableDropPin && (
+                    <div className="mt-4">
+                      <div className="mb-2">
+                        <p className="text-sm text-blue-600 font-medium mb-1">
+                          Click on the map below to drop a pin
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          The coordinates and address will be automatically filled in.
+                        </p>
+                      </div>
+                      <GoogleMap
+                        lat={null}
+                        lng={null}
+                        address=""
+                        enableClickToDrop={true}
+                        onPinDrop={handlePinDrop}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2">
