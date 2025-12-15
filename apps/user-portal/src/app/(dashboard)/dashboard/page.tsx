@@ -632,7 +632,7 @@ export default function DashboardPage() {
         <div>
           {/* Status Cards Row */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6 text-center">
-            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cols-span-2 lg:cols-span-1">
+            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cols-2 lg:cols-1">
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {totalShoppingListItems}
               </div>
@@ -681,7 +681,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* First Column - Shopping List */}
             <div className="space-y-6">
-              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
+              <Card className="flex flex-col rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
                 <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
                   <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
                     <ShoppingCart className="h-4 w-4 text-white" />
