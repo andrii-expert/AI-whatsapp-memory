@@ -4415,34 +4415,69 @@ export class ActionExecutor {
         };
       }
       
+      // Determine what to include based on addressType
+      const includeAddress = addressType === 'location' || addressType === 'address' || addressType === 'all';
+      const includePin = addressType === 'location' || addressType === 'pin' || addressType === 'all';
+      
+      // Build full address string
+      const addressParts = [
+        matchingAddress.street,
+        matchingAddress.city,
+        matchingAddress.state,
+        matchingAddress.zip,
+        matchingAddress.country,
+      ].filter(Boolean);
+      
+      const fullAddress = addressParts.join(', ');
+      
+      // Get coordinates
+      let lat: number | null = null;
+      let lng: number | null = null;
+      if (matchingAddress.latitude != null && matchingAddress.longitude != null) {
+        const latNum = Number(matchingAddress.latitude);
+        const lngNum = Number(matchingAddress.longitude);
+        if (!isNaN(latNum) && !isNaN(lngNum)) {
+          lat = latNum;
+          lng = lngNum;
+        }
+      }
+      
       // Build Google Maps link
       let mapsUrl = '';
-      if (matchingAddress.latitude != null && matchingAddress.longitude != null) {
-        const lat = Number(matchingAddress.latitude);
-        const lng = Number(matchingAddress.longitude);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-        }
+      if (lat !== null && lng !== null) {
+        mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+      } else if (fullAddress) {
+        mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
       }
       
-      // If no coordinates, try to use address
-      if (!mapsUrl) {
-        const addressParts = [
-          matchingAddress.street,
-          matchingAddress.city,
-          matchingAddress.state,
-          matchingAddress.zip,
-          matchingAddress.country,
-        ].filter(Boolean);
-        
-        const fullAddress = addressParts.join(', ');
-        if (fullAddress) {
-          mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
-        }
+      // Build response based on request type
+      let responseParts: string[] = [];
+      
+      // Format: 🏠 {name} Address
+      responseParts.push(`🏠 ${matchingAddress.name} Address`);
+      
+      // Add address if requested
+      if (includeAddress && fullAddress) {
+        responseParts.push(`Address: ${fullAddress}`);
+      } else if (includeAddress && !fullAddress) {
+        responseParts.push(`Address: No address details available`);
       }
       
-      // Format: 🏠 {name} Address\nLink: {url}
-      const response = `🏠 ${matchingAddress.name} Address\nLink: ${mapsUrl || 'No location available'}`;
+      // Add pin/coordinates if requested
+      if (includePin && lat !== null && lng !== null) {
+        responseParts.push(`Pin: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      } else if (includePin) {
+        responseParts.push(`Pin: No coordinates available`);
+      }
+      
+      // Always add Google Maps link
+      if (mapsUrl) {
+        responseParts.push(`Link: ${mapsUrl}`);
+      } else {
+        responseParts.push(`Link: No location available`);
+      }
+      
+      const response = responseParts.join('\n');
       
       return {
         success: true,
