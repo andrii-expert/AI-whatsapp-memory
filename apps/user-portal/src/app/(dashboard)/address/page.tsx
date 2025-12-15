@@ -2,11 +2,27 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, MapPin, MessageCircle, Loader2 } from "lucide-react";
+import { Home, ChevronLeft, MapPin, MessageCircle, Loader2, Edit2, Trash2, MoreVertical } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
 import { Card, CardContent } from "@imaginecalendar/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@imaginecalendar/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@imaginecalendar/ui/dropdown-menu";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
@@ -25,6 +41,7 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const mapIdRef = useRef(`google-map-${Math.random().toString(36).substr(2, 9)}`);
 
   useEffect(() => {
     // Load Google Maps script if not already loaded
@@ -38,13 +55,19 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
       if (window.google?.maps) {
         setScriptLoaded(true);
       } else {
-        existingScript.addEventListener("load", () => setScriptLoaded(true));
+        const checkLoaded = setInterval(() => {
+          if (window.google?.maps) {
+            setScriptLoaded(true);
+            clearInterval(checkLoaded);
+          }
+        }, 100);
+        return () => clearInterval(checkLoaded);
       }
       return;
     }
 
     const script = document.createElement("script");
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyB_W7D5kzZDahDM5NpS4u8_k8_ZbD55-pc";
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
     script.defer = true;
@@ -52,19 +75,19 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
       setScriptLoaded(true);
     };
     script.onerror = () => {
-      console.warn("Failed to load Google Maps script. Please add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your .env file.");
+      console.warn("Failed to load Google Maps script.");
     };
     document.head.appendChild(script);
   }, []);
 
   useEffect(() => {
     if (!scriptLoaded || !window.google?.maps) return;
-    if (!lat || !lng) {
+    if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
       setMapLoaded(false);
       return;
     }
 
-    const mapElement = document.getElementById("google-map");
+    const mapElement = document.getElementById(mapIdRef.current);
     if (!mapElement) return;
 
     try {
@@ -103,15 +126,19 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
     }
   }, [scriptLoaded, lat, lng, address]);
 
-  if (!lat || !lng) {
+  if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
     return (
       <div className="w-full h-[400px] bg-green-50 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center p-8">
-        <MapPin className="h-8 w-8 text-green-500 mb-2" />
-        <p className="text-sm text-green-700 font-medium mb-1">Map placeholder - Integrate Google Maps / Mapbox here</p>
-        <p className="text-xs text-green-600 text-center">
-          Select a location from the list to view it on the map.
-        </p>
-        <p className="text-xs text-green-600 text-center mt-2">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <p className="text-sm text-green-700 font-medium">Map placeholder - Integrate Google Maps / Mapbox here</p>
+        </div>
+        {address && (
+          <p className="text-xs text-green-600 text-center mt-2">
+            Showing preview for {address}.
+          </p>
+        )}
+        <p className="text-xs text-green-600 text-center mt-1">
           In your production app, this area will be replaced by an interactive map component using your preferred provider.
         </p>
       </div>
@@ -120,7 +147,7 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
 
   return (
     <div className="w-full h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
-      <div id="google-map" className="w-full h-full" />
+      <div id={mapIdRef.current} className="w-full h-full" />
     </div>
   );
 }
@@ -137,9 +164,26 @@ export default function AddressPage() {
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [autocomplete, setAutocomplete] = useState<any>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [addressComponents, setAddressComponents] = useState<{
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+  }>({});
+  const [editingAddress, setEditingAddress] = useState<any>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState<any>(null);
 
   // Fetch addresses
   const { data: addresses = [], isLoading } = useQuery(trpc.addresses.list.queryOptions());
+
+  // Auto-select first address if available and none selected
+  useEffect(() => {
+    if (addresses.length > 0 && !selectedAddress) {
+      setSelectedAddress(addresses[0]);
+    }
+  }, [addresses, selectedAddress]);
 
   // Create address mutation
   const createAddressMutation = useMutation(
@@ -153,6 +197,8 @@ export default function AddressPage() {
         setLocationLabel("");
         setStreetAddress("");
         setCoordinates("");
+        setAddressComponents({});
+        setEditingAddress(null);
       },
       onError: (error) => {
         toast({
@@ -164,15 +210,65 @@ export default function AddressPage() {
     })
   );
 
+  // Update address mutation
+  const updateAddressMutation = useMutation(
+    trpc.addresses.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        toast({
+          title: "Location updated",
+          description: "Your location has been updated successfully.",
+        });
+        setLocationLabel("");
+        setStreetAddress("");
+        setCoordinates("");
+        setAddressComponents({});
+        setEditingAddress(null);
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update location",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
+  // Delete address mutation
+  const deleteAddressMutation = useMutation(
+    trpc.addresses.delete.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        setIsDeleteDialogOpen(false);
+        setAddressToDelete(null);
+        if (selectedAddress?.id === addressToDelete?.id) {
+          setSelectedAddress(null);
+        }
+        toast({
+          title: "Location deleted",
+          description: "Your location has been deleted successfully.",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to delete location",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
   // Parse coordinates from string
-  const parseCoordinates = (coordString: string): { lat: number | null; lng: number | null } => {
-    if (!coordString.trim()) return { lat: null, lng: null };
+  const parseCoordinates = (coordString: string | undefined): { lat: number | null; lng: number | null } => {
+    if (!coordString || !coordString.trim()) return { lat: null, lng: null };
     
     // Try to parse "lat, lng" format
     const parts = coordString.split(",").map(p => p.trim());
     if (parts.length === 2) {
-      const lat = parseFloat(parts[0]);
-      const lng = parseFloat(parts[1]);
+      const lat = parseFloat(parts[0] || "");
+      const lng = parseFloat(parts[1] || "");
       if (!isNaN(lat) && !isNaN(lng)) {
         return { lat, lng };
       }
@@ -211,6 +307,39 @@ export default function AddressPage() {
             // Format address
             const formattedAddress = place.formatted_address || place.name || "";
             setStreetAddress(formattedAddress);
+            
+            // Extract address components from Google Places API
+            const components: {
+              street?: string;
+              city?: string;
+              state?: string;
+              zip?: string;
+              country?: string;
+            } = {};
+            
+            if (place.address_components) {
+              place.address_components.forEach((component: any) => {
+                const types = component.types;
+                
+                if (types.includes("street_number") || types.includes("route")) {
+                  const streetNumber = place.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                  const route = place.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                  components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                }
+                
+                if (types.includes("locality")) {
+                  components.city = component.long_name;
+                } else if (types.includes("administrative_area_level_1")) {
+                  components.state = component.long_name;
+                } else if (types.includes("postal_code")) {
+                  components.zip = component.long_name;
+                } else if (types.includes("country")) {
+                  components.country = component.long_name;
+                }
+              });
+            }
+            
+            setAddressComponents(components);
           }
         });
 
@@ -230,22 +359,60 @@ export default function AddressPage() {
     // Try to extract coordinates from Google Maps link
     const googleMapsRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
     const match = value.match(googleMapsRegex);
-    if (match) {
+    if (match && match[1] && match[2]) {
       const lat = parseFloat(match[1]);
       const lng = parseFloat(match[2]);
       if (!isNaN(lat) && !isNaN(lng)) {
         setCoordinates(`${lat}, ${lng}`);
       }
     } else if (value.trim() && window.google?.maps) {
-      // Try to geocode the address
+      // Try to geocode the address and extract components
       setIsGeocoding(true);
       const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ address: value }, (results: any, status: string) => {
         setIsGeocoding(false);
-        if (status === "OK" && results?.[0]?.geometry?.location) {
-          const lat = results[0].geometry.location.lat();
-          const lng = results[0].geometry.location.lng();
-          setCoordinates(`${lat}, ${lng}`);
+        if (status === "OK" && results?.[0]) {
+          const result = results[0];
+          
+          // Extract coordinates
+          if (result.geometry?.location) {
+            const lat = result.geometry.location.lat();
+            const lng = result.geometry.location.lng();
+            setCoordinates(`${lat}, ${lng}`);
+          }
+          
+          // Extract address components
+          const components: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zip?: string;
+            country?: string;
+          } = {};
+          
+          if (result.address_components) {
+            result.address_components.forEach((component: any) => {
+              const types = component.types;
+              
+              if (types.includes("street_number") || types.includes("route")) {
+                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+              }
+              
+              if (types.includes("locality")) {
+                components.city = component.long_name;
+              } else if (types.includes("administrative_area_level_1")) {
+                components.state = component.long_name;
+              } else if (types.includes("postal_code")) {
+                components.zip = component.long_name;
+              } else if (types.includes("country")) {
+                components.country = component.long_name;
+              }
+            });
+          }
+          
+          setAddressComponents(components);
         }
       });
     }
@@ -264,22 +431,96 @@ export default function AddressPage() {
 
     const { lat, lng } = parseCoordinates(coordinates);
     
-    // Parse street address into components
-    const addressParts = streetAddress.split(",").map(p => p.trim());
-    const street = addressParts[0] || "";
-    const city = addressParts[1] || "";
-    const state = addressParts[2] || "";
-    const country = addressParts[3] || "";
+    // Use address components from Google Places API if available, otherwise parse from streetAddress
+    let street = addressComponents.street;
+    let city = addressComponents.city;
+    let state = addressComponents.state;
+    let zip = addressComponents.zip;
+    let country = addressComponents.country;
+    
+    // Fallback: if no components from Google Places, try to parse from streetAddress
+    if (!street && !city && streetAddress) {
+      const addressParts = streetAddress.split(",").map(p => p.trim());
+      street = addressParts[0] || "";
+      city = addressParts[1] || "";
+      state = addressParts[2] || "";
+      zip = addressParts[3] || "";
+      country = addressParts[4] || "";
+    }
 
-    createAddressMutation.mutate({
-      name: locationLabel.trim(),
-      street: street || undefined,
-      city: city || undefined,
-      state: state || undefined,
-      country: country || undefined,
-      latitude: lat || undefined,
-      longitude: lng || undefined,
+    if (editingAddress) {
+      // Update existing address
+      updateAddressMutation.mutate({
+        id: editingAddress.id,
+        name: locationLabel.trim(),
+        folderId: null,
+        connectedUserId: null,
+        street: street || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        zip: zip || undefined,
+        country: country || undefined,
+        latitude: lat || undefined,
+        longitude: lng || undefined,
+      });
+    } else {
+      // Create new address
+      createAddressMutation.mutate({
+        name: locationLabel.trim(),
+        folderId: null,
+        connectedUserId: null,
+        street: street || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        zip: zip || undefined,
+        country: country || undefined,
+        latitude: lat || undefined,
+        longitude: lng || undefined,
+      });
+    }
+  };
+
+  // Handle edit address
+  const handleEditAddress = (address: any) => {
+    setEditingAddress(address);
+    setLocationLabel(address.name);
+    setStreetAddress(getFullAddress(address) || "");
+    if (address.latitude != null && address.longitude != null) {
+      setCoordinates(`${address.latitude}, ${address.longitude}`);
+    } else {
+      setCoordinates("");
+    }
+    setAddressComponents({
+      street: address.street || undefined,
+      city: address.city || undefined,
+      state: address.state || undefined,
+      zip: address.zip || undefined,
+      country: address.country || undefined,
     });
+    // Scroll to form
+    document.getElementById("location-label")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  // Handle delete address
+  const handleDeleteAddress = (address: any) => {
+    setAddressToDelete(address);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Confirm delete
+  const confirmDelete = () => {
+    if (addressToDelete) {
+      deleteAddressMutation.mutate({ id: addressToDelete.id });
+    }
+  };
+
+  // Cancel edit
+  const handleCancelEdit = () => {
+    setEditingAddress(null);
+    setLocationLabel("");
+    setStreetAddress("");
+    setCoordinates("");
+    setAddressComponents({});
   };
 
   // Handle address selection
@@ -325,8 +566,16 @@ export default function AddressPage() {
 
   // Get coordinates string
   const getCoordinatesString = (address: any) => {
-    if (address.latitude && address.longitude) {
-      return `Pin: ${address.latitude}, ${address.longitude}`;
+    if (address.latitude != null && address.longitude != null && 
+        !isNaN(Number(address.latitude)) && !isNaN(Number(address.longitude))) {
+      // Format coordinates to show reasonable precision (4 decimal places)
+      const lat = typeof address.latitude === 'number' 
+        ? parseFloat(address.latitude.toFixed(4)).toString() 
+        : String(address.latitude);
+      const lng = typeof address.longitude === 'number' 
+        ? parseFloat(address.longitude.toFixed(4)).toString() 
+        : String(address.longitude);
+      return `Pin: ${lat}, ${lng}`;
     }
     return "";
   };
@@ -374,7 +623,9 @@ export default function AddressPage() {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Add new location</h2>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {editingAddress ? "Edit location" : "Add new location"}
+                </h2>
                 <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">
                   STEP 1 - CAPTURE
                 </span>
@@ -390,7 +641,7 @@ export default function AddressPage() {
                     id="location-label"
                     placeholder="e.g. Home, Office, Client - OK Foods"
                     value={locationLabel}
-                    onChange={(e) => setLocationLabel(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocationLabel(e.target.value)}
                   />
                 </div>
 
@@ -401,7 +652,7 @@ export default function AddressPage() {
                       id="street-address"
                       placeholder="Type or paste the full address"
                       value={streetAddress}
-                      onChange={(e) => handleAddressPaste(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAddressPaste(e.target.value)}
                       className="h-20 pr-10"
                     />
                     {isGeocoding && (
@@ -422,11 +673,65 @@ export default function AddressPage() {
                       type="button"
                       className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                       onClick={() => {
-                        // TODO: Implement drop pin on map functionality
-                        toast({
-                          title: "Coming soon",
-                          description: "Drop pin on map feature will be available soon.",
-                        });
+                        if (window.google?.maps && coordinates) {
+                          const { lat, lng } = parseCoordinates(coordinates);
+                          if (lat && lng) {
+                            setIsGeocoding(true);
+                            const geocoder = new window.google.maps.Geocoder();
+                            geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                              setIsGeocoding(false);
+                              if (status === "OK" && results?.[0]) {
+                                const result = results[0];
+                                setStreetAddress(result.formatted_address);
+                                
+                                // Extract address components
+                                const components: {
+                                  street?: string;
+                                  city?: string;
+                                  state?: string;
+                                  zip?: string;
+                                  country?: string;
+                                } = {};
+                                
+                                if (result.address_components) {
+                                  result.address_components.forEach((component: any) => {
+                                    const types = component.types;
+                                    
+                                    if (types.includes("street_number") || types.includes("route")) {
+                                      const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                                      const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                                      components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                                    }
+                                    
+                                    if (types.includes("locality")) {
+                                      components.city = component.long_name;
+                                    } else if (types.includes("administrative_area_level_1")) {
+                                      components.state = component.long_name;
+                                    } else if (types.includes("postal_code")) {
+                                      components.zip = component.long_name;
+                                    } else if (types.includes("country")) {
+                                      components.country = component.long_name;
+                                    }
+                                  });
+                                }
+                                
+                                setAddressComponents(components);
+                              }
+                            });
+                          } else {
+                            toast({
+                              title: "Invalid coordinates",
+                              description: "Please enter valid coordinates in the format: lat, lng",
+                              variant: "destructive",
+                            });
+                          }
+                        } else {
+                          toast({
+                            title: "Google Maps not loaded",
+                            description: "Please wait for Google Maps to load, or enter coordinates manually.",
+                            variant: "destructive",
+                          });
+                        }
                       }}
                     >
                       Drop pin on map
@@ -436,7 +741,57 @@ export default function AddressPage() {
                     id="coordinates"
                     placeholder="e.g. -34.0822, 18.8501"
                     value={coordinates}
-                    onChange={(e) => setCoordinates(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      setCoordinates(e.target.value);
+                      // If coordinates are entered, try reverse geocoding
+                      if (e.target.value.trim() && window.google?.maps) {
+                        const { lat, lng } = parseCoordinates(e.target.value);
+                        if (lat && lng) {
+                          setIsGeocoding(true);
+                          const geocoder = new window.google.maps.Geocoder();
+                          geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                            setIsGeocoding(false);
+                            if (status === "OK" && results?.[0]) {
+                              const result = results[0];
+                              setStreetAddress(result.formatted_address);
+                              
+                              // Extract address components
+                              const components: {
+                                street?: string;
+                                city?: string;
+                                state?: string;
+                                zip?: string;
+                                country?: string;
+                              } = {};
+                              
+                              if (result.address_components) {
+                                result.address_components.forEach((component: any) => {
+                                  const types = component.types;
+                                  
+                                  if (types.includes("street_number") || types.includes("route")) {
+                                    const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                                    const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                                    components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                                  }
+                                  
+                                  if (types.includes("locality")) {
+                                    components.city = component.long_name;
+                                  } else if (types.includes("administrative_area_level_1")) {
+                                    components.state = component.long_name;
+                                  } else if (types.includes("postal_code")) {
+                                    components.zip = component.long_name;
+                                  } else if (types.includes("country")) {
+                                    components.country = component.long_name;
+                                  }
+                                });
+                              }
+                              
+                              setAddressComponents(components);
+                            }
+                          });
+                        }
+                      }
+                    }}
                   />
                 </div>
 
@@ -444,20 +799,32 @@ export default function AddressPage() {
                   <p className="text-xs text-gray-500 mb-4">
                     Once saved, locations are available across your web dashboard and mobile app.
                   </p>
-                  <Button
-                    onClick={handleSaveLocation}
-                    disabled={createAddressMutation.isPending}
-                    className="w-full bg-blue-600 hover:bg-blue-700"
-                  >
-                    {createAddressMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      "Save location"
+                  <div className="flex gap-2">
+                    {editingAddress && (
+                      <Button
+                        onClick={handleCancelEdit}
+                        variant="outline"
+                        className="flex-1"
+                        disabled={createAddressMutation.isPending || updateAddressMutation.isPending}
+                      >
+                        Cancel
+                      </Button>
                     )}
-                  </Button>
+                    <Button
+                      onClick={handleSaveLocation}
+                      disabled={createAddressMutation.isPending || updateAddressMutation.isPending}
+                      className={cn("flex-1 bg-blue-600 hover:bg-blue-700", editingAddress && "flex-1")}
+                    >
+                      {(createAddressMutation.isPending || updateAddressMutation.isPending) ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          {editingAddress ? "Updating..." : "Saving..."}
+                        </>
+                      ) : (
+                        editingAddress ? "Update location" : "Save location"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -494,27 +861,60 @@ export default function AddressPage() {
                       )}
                       onClick={() => handleSelectAddress(address)}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
                           <h3 className="font-bold text-gray-900 mb-1">{address.name}</h3>
                           <p className="text-sm text-gray-600 mb-1">
                             {getFullAddress(address) || "No address provided"}
                           </p>
                           {getCoordinatesString(address) && (
-                            <p className="text-xs text-gray-500 mb-2">
+                            <p className="text-xs text-gray-500">
                               {getCoordinatesString(address)}
                             </p>
                           )}
                         </div>
-                        <button
-                          className="text-sm text-blue-600 hover:text-blue-700 font-medium ml-4"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectAddress(address);
-                          }}
-                        >
-                          Tap to view on map
-                        </button>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span
+                            className="text-sm text-gray-500 hover:text-gray-700 font-medium cursor-pointer"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleSelectAddress(address);
+                            }}
+                          >
+                            Tap to view on map
+                          </span>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleEditAddress(address);
+                              }}>
+                                <Edit2 className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  handleDeleteAddress(address);
+                                }}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -552,16 +952,18 @@ export default function AddressPage() {
                   <GoogleMap
                     lat={selectedAddress.latitude}
                     lng={selectedAddress.longitude}
-                    address={getFullAddress(selectedAddress)}
+                    address={selectedAddress.name}
                   />
                 </>
               ) : (
-                <div className="mb-4">
-                  <p className="text-sm text-gray-500 mb-4">
-                    Select a location from the list to view it on the map.
-                  </p>
-                  <GoogleMap lat={null} lng={null} />
-                </div>
+                <>
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-500">
+                      Select a location from the list to view it on the map.
+                    </p>
+                  </div>
+                  <GoogleMap lat={null} lng={null} address="" />
+                </>
               )}
             </CardContent>
           </Card>
@@ -587,6 +989,40 @@ export default function AddressPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Location?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{addressToDelete?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setIsDeleteDialogOpen(false);
+              setAddressToDelete(null);
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteAddressMutation.isPending}
+            >
+              {deleteAddressMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
