@@ -38,10 +38,13 @@ declare global {
 
 function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | null; address?: string }) {
   const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [mapInitialized, setMapInitialized] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
-  const mapIdRef = useRef(`google-map-${Math.random().toString(36).substr(2, 9)}`);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const initAttemptsRef = useRef(0);
+  const maxInitAttempts = 20; // 2 seconds max (20 * 100ms)
 
   // Load Google Maps script
   useEffect(() => {
@@ -63,14 +66,17 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
       }, 100);
       
       // Timeout after 10 seconds
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         clearInterval(checkLoaded);
         if (!window.google?.maps) {
           setMapError("Failed to load Google Maps. Please refresh the page.");
         }
       }, 10000);
       
-      return () => clearInterval(checkLoaded);
+      return () => {
+        clearInterval(checkLoaded);
+        clearTimeout(timeoutId);
+      };
     }
 
     // Load the script
@@ -81,12 +87,15 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
     script.defer = true;
     
     script.onload = () => {
-      if (window.google?.maps) {
-        setScriptLoaded(true);
-        setMapError(null);
-      } else {
-        setMapError("Google Maps API loaded but not available. Please check your API key.");
-      }
+      // Give it a moment for the API to fully initialize
+      setTimeout(() => {
+        if (window.google?.maps) {
+          setScriptLoaded(true);
+          setMapError(null);
+        } else {
+          setMapError("Google Maps API loaded but not available. Please check your API key.");
+        }
+      }, 100);
     };
     
     script.onerror = () => {
@@ -95,28 +104,49 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
     };
     
     document.head.appendChild(script);
+    
+    return () => {
+      // Cleanup if component unmounts
+    };
   }, []);
 
   // Initialize map when script is loaded and coordinates are available
   useEffect(() => {
-    if (!scriptLoaded || !window.google?.maps) return;
+    if (!scriptLoaded || !window.google?.maps) {
+      setMapInitialized(false);
+      return;
+    }
+    
     if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
+      setMapInitialized(false);
+      // Clean up map instance if coordinates become invalid
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+      }
       return;
     }
 
+    // Reset attempts when coordinates change
+    initAttemptsRef.current = 0;
+    setMapInitialized(false);
+
     // Wait for DOM element to be available
     const initMap = () => {
-      const mapElement = document.getElementById(mapIdRef.current);
-      if (!mapElement) {
-        // Retry after a short delay if element doesn't exist yet
-        setTimeout(initMap, 100);
+      if (!mapContainerRef.current) {
+        initAttemptsRef.current++;
+        if (initAttemptsRef.current < maxInitAttempts) {
+          setTimeout(initMap, 100);
+        } else {
+          setMapError("Map container not found. Please refresh the page.");
+        }
         return;
       }
 
       try {
         // Create or update map
         if (!mapInstanceRef.current) {
-          mapInstanceRef.current = new window.google.maps.Map(mapElement, {
+          mapInstanceRef.current = new window.google.maps.Map(mapContainerRef.current, {
             center: { lat, lng },
             zoom: 15,
             mapTypeControl: true,
@@ -125,9 +155,30 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
             zoomControl: true,
             mapTypeId: window.google.maps.MapTypeId.ROADMAP,
           });
+          
+          // Wait for map to be ready - use both idle and tilesloaded events
+          let mapReady = false;
+          const onMapReady = () => {
+            if (!mapReady) {
+              mapReady = true;
+              setMapInitialized(true);
+              setMapError(null);
+            }
+          };
+          
+          mapInstanceRef.current.addListener('idle', onMapReady);
+          mapInstanceRef.current.addListener('tilesloaded', onMapReady);
+          
+          // Fallback: set initialized after a short delay if events don't fire
+          setTimeout(() => {
+            if (!mapReady && mapInstanceRef.current) {
+              onMapReady();
+            }
+          }, 1000);
         } else {
           mapInstanceRef.current.setCenter({ lat, lng });
           mapInstanceRef.current.setZoom(15);
+          setMapInitialized(true);
         }
 
         // Create or update marker
@@ -145,14 +196,17 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
 
         setMapError(null);
       } catch (error) {
-        console.error("Error initializing map:", error);
-        setMapError("Failed to initialize map. Please try again.");
+        console.error("GoogleMap: Error initializing map:", error);
+        setMapError(`Failed to initialize map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setMapInitialized(false);
       }
     };
 
     // Small delay to ensure DOM is ready
     const timeoutId = setTimeout(initMap, 100);
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [scriptLoaded, lat, lng, address]);
 
   // Show placeholder if no coordinates
@@ -193,15 +247,38 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
     return (
       <div className="w-full h-[400px] bg-red-50 border-2 border-dashed border-red-200 rounded-lg flex flex-col items-center justify-center p-8">
         <p className="text-sm text-red-700 font-medium mb-2">Error loading map</p>
-        <p className="text-xs text-red-600 text-center">{mapError}</p>
+        <p className="text-xs text-red-600 text-center mb-4">{mapError}</p>
+        <Button
+          onClick={() => {
+            setMapError(null);
+            setScriptLoaded(false);
+            setMapInitialized(false);
+            mapInstanceRef.current = null;
+            markerRef.current = null;
+            // Force reload by removing script and re-adding
+            const script = document.querySelector('script[src*="maps.googleapis.com"]');
+            if (script) {
+              script.remove();
+            }
+          }}
+          variant="outline"
+          size="sm"
+        >
+          Retry
+        </Button>
       </div>
     );
   }
 
   // Show map
   return (
-    <div className="w-full h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
-      <div id={mapIdRef.current} className="w-full h-full" />
+    <div className="w-full h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100 relative">
+      <div ref={mapContainerRef} className="w-full h-full" />
+      {!mapInitialized && (
+        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        </div>
+      )}
     </div>
   );
 }
