@@ -4415,64 +4415,34 @@ export class ActionExecutor {
         };
       }
       
-      // Build response based on request type
-      let responseParts: string[] = [];
-      
-      // Determine what to include based on addressType
-      const includeAddress = addressType === 'location' || addressType === 'address' || addressType === 'all';
-      const includePin = addressType === 'location' || addressType === 'pin' || addressType === 'all';
-      
-      // Add address name
-      responseParts.push(`📍 ${matchingAddress.name}`);
-      
-      // Build full address string
-      const addressParts = [
-        matchingAddress.street,
-        matchingAddress.city,
-        matchingAddress.state,
-        matchingAddress.zip,
-        matchingAddress.country,
-      ].filter(Boolean);
-      
-      const fullAddress = addressParts.join(', ');
-      
-      // Add address if requested
-      if (includeAddress && fullAddress) {
-        responseParts.push(`\nAddress: ${fullAddress}`);
-      } else if (includeAddress && !fullAddress) {
-        responseParts.push(`\nAddress: No address details available`);
-      }
-      
-      // Add pin/coordinates if requested
-      if (includePin && matchingAddress.latitude != null && matchingAddress.longitude != null) {
-        const lat = Number(matchingAddress.latitude);
-        const lng = Number(matchingAddress.longitude);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          responseParts.push(`\nPin: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-        }
-      } else if (includePin) {
-        responseParts.push(`\nPin: No coordinates available`);
-      }
-      
-      // Always add Google Maps link if we have coordinates
+      // Build Google Maps link
+      let mapsUrl = '';
       if (matchingAddress.latitude != null && matchingAddress.longitude != null) {
         const lat = Number(matchingAddress.latitude);
         const lng = Number(matchingAddress.longitude);
         if (!isNaN(lat) && !isNaN(lng)) {
-          const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-          responseParts.push(`\n\n🗺️ View on Google Maps:\n${mapsUrl}`);
-        } else if (fullAddress) {
-          // Fallback to address-based link if coordinates are invalid
-          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
-          responseParts.push(`\n\n🗺️ View on Google Maps:\n${mapsUrl}`);
+          mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
         }
-      } else if (fullAddress) {
-        // Use address for Google Maps if no coordinates
-        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
-        responseParts.push(`\n\n🗺️ View on Google Maps:\n${mapsUrl}`);
       }
       
-      const response = responseParts.join('');
+      // If no coordinates, try to use address
+      if (!mapsUrl) {
+        const addressParts = [
+          matchingAddress.street,
+          matchingAddress.city,
+          matchingAddress.state,
+          matchingAddress.zip,
+          matchingAddress.country,
+        ].filter(Boolean);
+        
+        const fullAddress = addressParts.join(', ');
+        if (fullAddress) {
+          mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+        }
+      }
+      
+      // Format: 🏠 {name} Address\nLink: {url}
+      const response = `🏠 ${matchingAddress.name} Address\nLink: ${mapsUrl || 'No location available'}`;
       
       return {
         success: true,
@@ -4544,9 +4514,38 @@ export class ActionExecutor {
 
       const address = await createAddress(this.db, addressData);
 
+      // Build Google Maps link
+      let mapsUrl = '';
+      if (address.latitude != null && address.longitude != null) {
+        const lat = Number(address.latitude);
+        const lng = Number(address.longitude);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+        }
+      }
+      
+      // If no coordinates, try to use address
+      if (!mapsUrl) {
+        const addressParts = [
+          address.street,
+          address.city,
+          address.state,
+          address.zip,
+          address.country,
+        ].filter(Boolean);
+        
+        const fullAddress = addressParts.join(', ');
+        if (fullAddress) {
+          mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+        }
+      }
+
+      // Format: ✅️ New Location Added\nName: {name}\nAdress link: {url}
+      const message = `✅️ New Location Added\nName: ${name}\nAdress link: ${mapsUrl || 'No location available'}`;
+
       return {
         success: true,
-        message: `✅ Address "${name}" has been saved successfully!`,
+        message,
       };
     } catch (error) {
       logger.error(
@@ -4753,9 +4752,12 @@ export class ActionExecutor {
 
       await deleteAddress(this.db, matchingAddress.id, this.userId);
 
+      // Format: ⛔ Location Deleted:\nName: {name}
+      const message = `⛔ Location Deleted:\nName: ${matchingAddress.name}`;
+
       return {
         success: true,
-        message: `✅ Address "${name}" has been deleted successfully!`,
+        message,
       };
     } catch (error) {
       logger.error(
@@ -4789,31 +4791,20 @@ export class ActionExecutor {
       if (addresses.length === 0) {
         return {
           success: true,
-          message: "You don't have any saved addresses yet. Use 'Create an address' to add one!",
+          message: "🏠 All Locations\n(No locations saved yet)",
         };
       }
 
-      // Format addresses for display
+      // Format: 🏠 All Locations\n1 {name1}\n2 {name2}\n3 {name3}
       const addressList = addresses.map((addr, index) => {
-        const addressParts = [
-          addr.street,
-          addr.city,
-          addr.state,
-          addr.zip,
-          addr.country,
-        ].filter(Boolean);
-        
-        const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'No address details';
-        const coords = addr.latitude != null && addr.longitude != null 
-          ? `📍 ${addr.latitude.toFixed(4)}, ${addr.longitude.toFixed(4)}` 
-          : '';
-        
-        return `${index + 1}. ${addr.name}\n   ${fullAddress}${coords ? `\n   ${coords}` : ''}`;
-      }).join('\n\n');
+        return `${index + 1} ${addr.name}`;
+      }).join('\n');
+
+      const message = `🏠 All Locations\n${addressList}`;
 
       return {
         success: true,
-        message: `📍 Your saved addresses (${addresses.length}):\n\n${addressList}`,
+        message,
       };
     } catch (error) {
       logger.error(
