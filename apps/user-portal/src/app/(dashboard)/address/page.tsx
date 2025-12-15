@@ -37,101 +37,131 @@ declare global {
 }
 
 function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | null; address?: string }) {
-  const [mapLoaded, setMapLoaded] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const mapIdRef = useRef(`google-map-${Math.random().toString(36).substr(2, 9)}`);
 
+  // Load Google Maps script
   useEffect(() => {
-    // Load Google Maps script if not already loaded
+    // Check if already loaded
     if (window.google?.maps) {
       setScriptLoaded(true);
       return;
     }
 
+    // Check if script is already being loaded
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
     if (existingScript) {
-      if (window.google?.maps) {
-        setScriptLoaded(true);
-      } else {
-        const checkLoaded = setInterval(() => {
-          if (window.google?.maps) {
-            setScriptLoaded(true);
-            clearInterval(checkLoaded);
-          }
-        }, 100);
-        return () => clearInterval(checkLoaded);
-      }
-      return;
+      // Wait for script to load
+      const checkLoaded = setInterval(() => {
+        if (window.google?.maps) {
+          setScriptLoaded(true);
+          clearInterval(checkLoaded);
+        }
+      }, 100);
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        clearInterval(checkLoaded);
+        if (!window.google?.maps) {
+          setMapError("Failed to load Google Maps. Please refresh the page.");
+        }
+      }, 10000);
+      
+      return () => clearInterval(checkLoaded);
     }
 
+    // Load the script
     const script = document.createElement("script");
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyB_W7D5kzZDahDM5NpS4u8_k8_ZbD55-pc";
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
     script.defer = true;
+    
     script.onload = () => {
-      setScriptLoaded(true);
+      if (window.google?.maps) {
+        setScriptLoaded(true);
+        setMapError(null);
+      } else {
+        setMapError("Google Maps API loaded but not available. Please check your API key.");
+      }
     };
+    
     script.onerror = () => {
-      console.warn("Failed to load Google Maps script.");
+      setMapError("Failed to load Google Maps script. Please check your internet connection and API key.");
+      console.error("Failed to load Google Maps script.");
     };
+    
     document.head.appendChild(script);
   }, []);
 
+  // Initialize map when script is loaded and coordinates are available
   useEffect(() => {
     if (!scriptLoaded || !window.google?.maps) return;
     if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
-      setMapLoaded(false);
       return;
     }
 
-    const mapElement = document.getElementById(mapIdRef.current);
-    if (!mapElement) return;
-
-    try {
-      // Create or update map
-      if (!mapInstanceRef.current) {
-        mapInstanceRef.current = new window.google.maps.Map(mapElement, {
-          center: { lat, lng },
-          zoom: 15,
-          mapTypeControl: true,
-          streetViewControl: true,
-          fullscreenControl: true,
-          zoomControl: true,
-          mapTypeId: window.google.maps.MapTypeId.ROADMAP,
-        });
-      } else {
-        mapInstanceRef.current.setCenter({ lat, lng });
-        mapInstanceRef.current.setZoom(15);
+    // Wait for DOM element to be available
+    const initMap = () => {
+      const mapElement = document.getElementById(mapIdRef.current);
+      if (!mapElement) {
+        // Retry after a short delay if element doesn't exist yet
+        setTimeout(initMap, 100);
+        return;
       }
 
-      // Create or update marker
-      if (markerRef.current) {
-        markerRef.current.setPosition({ lat, lng });
-        markerRef.current.setTitle(address || "Location");
-      } else {
-        markerRef.current = new window.google.maps.Marker({
-          position: { lat, lng },
-          map: mapInstanceRef.current,
-          title: address || "Location",
-          animation: window.google.maps.Animation.DROP,
-        });
-      }
+      try {
+        // Create or update map
+        if (!mapInstanceRef.current) {
+          mapInstanceRef.current = new window.google.maps.Map(mapElement, {
+            center: { lat, lng },
+            zoom: 15,
+            mapTypeControl: true,
+            streetViewControl: true,
+            fullscreenControl: true,
+            zoomControl: true,
+            mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+          });
+        } else {
+          mapInstanceRef.current.setCenter({ lat, lng });
+          mapInstanceRef.current.setZoom(15);
+        }
 
-      setMapLoaded(true);
-    } catch (error) {
-      console.error("Error initializing map:", error);
-    }
+        // Create or update marker
+        if (markerRef.current) {
+          markerRef.current.setPosition({ lat, lng });
+          markerRef.current.setTitle(address || "Location");
+        } else {
+          markerRef.current = new window.google.maps.Marker({
+            position: { lat, lng },
+            map: mapInstanceRef.current,
+            title: address || "Location",
+            animation: window.google.maps.Animation.DROP,
+          });
+        }
+
+        setMapError(null);
+      } catch (error) {
+        console.error("Error initializing map:", error);
+        setMapError("Failed to initialize map. Please try again.");
+      }
+    };
+
+    // Small delay to ensure DOM is ready
+    const timeoutId = setTimeout(initMap, 100);
+    return () => clearTimeout(timeoutId);
   }, [scriptLoaded, lat, lng, address]);
 
+  // Show placeholder if no coordinates
   if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
     return (
       <div className="w-full h-[400px] bg-green-50 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center p-8">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-3 h-3 rounded-full bg-green-500"></div>
-          <p className="text-sm text-green-700 font-medium">Map placeholder - Integrate Google Maps / Mapbox here</p>
+          <p className="text-sm text-green-700 font-medium">Map placeholder - Enter coordinates or address to view map</p>
         </div>
         {address && (
           <p className="text-xs text-green-600 text-center mt-2">
@@ -139,12 +169,36 @@ function GoogleMap({ lat, lng, address }: { lat?: number | null; lng?: number | 
           </p>
         )}
         <p className="text-xs text-green-600 text-center mt-1">
-          In your production app, this area will be replaced by an interactive map component using your preferred provider.
+          Please enter an address or coordinates to display the map.
         </p>
       </div>
     );
   }
 
+  // Show loading state
+  if (!scriptLoaded) {
+    return (
+      <div className="w-full h-[400px] bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+        <p className="text-sm text-gray-700 font-medium">Loading Google Maps...</p>
+        <p className="text-xs text-gray-500 text-center mt-2">
+          Please wait while we load the map.
+        </p>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (mapError) {
+    return (
+      <div className="w-full h-[400px] bg-red-50 border-2 border-dashed border-red-200 rounded-lg flex flex-col items-center justify-center p-8">
+        <p className="text-sm text-red-700 font-medium mb-2">Error loading map</p>
+        <p className="text-xs text-red-600 text-center">{mapError}</p>
+      </div>
+    );
+  }
+
+  // Show map
   return (
     <div className="w-full h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
       <div id={mapIdRef.current} className="w-full h-full" />
@@ -944,8 +998,8 @@ export default function AddressPage() {
                     </p>
                   </div>
                   <GoogleMap
-                    lat={selectedAddress.latitude}
-                    lng={selectedAddress.longitude}
+                    lat={selectedAddress.latitude != null ? Number(selectedAddress.latitude) : null}
+                    lng={selectedAddress.longitude != null ? Number(selectedAddress.longitude) : null}
                     address={selectedAddress.name}
                   />
                 </>

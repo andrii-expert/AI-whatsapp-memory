@@ -125,19 +125,22 @@ export default function FriendsPage() {
   const [shareResourceId, setShareResourceId] = useState<string | null>(null);
   const [shareResourceName, setShareResourceName] = useState("");
 
-  // Fetch folders and addresses
+  // Fetch folders and friends
   const { data: allFolders = [], isLoading: isLoadingFolders } = useQuery(
-    trpc.addresses.folders.list.queryOptions()
+    trpc.friends.folders.list.queryOptions()
   );
   const { data: allAddresses = [], isLoading: isLoadingAddresses } = useQuery(
-    trpc.addresses.list.queryOptions()
+    trpc.friends.list.queryOptions()
   );
-  const { data: myShares = [] } = useQuery(
-    trpc.addressSharing.getMyShares.queryOptions()
-  );
-  const { data: sharedResources } = useQuery(
-    trpc.addressSharing.getSharedWithMe.queryOptions()
-  );
+  // TODO: Add friends sharing functionality later if needed
+  // const { data: myShares = [] } = useQuery(
+  //   trpc.addressSharing.getMyShares.queryOptions()
+  // );
+  // const { data: sharedResources } = useQuery(
+  //   trpc.addressSharing.getSharedWithMe.queryOptions()
+  // );
+  const myShares: any[] = [];
+  const sharedResources: any = { addresses: [], folders: [] };
 
   // Extract shared addresses and folders from sharedResources
   const sharedAddresses = useMemo(() => {
@@ -210,7 +213,7 @@ export default function FriendsPage() {
 
   // Mutations
   const createFolderMutation = useMutation(
-    trpc.addresses.folders.create.mutationOptions({
+    trpc.friends.folders.create.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
         toast({ title: "Folder created", variant: "default" });
@@ -227,7 +230,7 @@ export default function FriendsPage() {
   );
 
   const updateFolderMutation = useMutation(
-    trpc.addresses.folders.update.mutationOptions({
+    trpc.friends.folders.update.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
         toast({ title: "Folder updated", variant: "default" });
@@ -245,7 +248,7 @@ export default function FriendsPage() {
   );
 
   const deleteFolderMutation = useMutation(
-    trpc.addresses.folders.delete.mutationOptions({
+    trpc.friends.folders.delete.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
         setIsDeleteFolderDialogOpen(false);
@@ -266,7 +269,7 @@ export default function FriendsPage() {
   );
 
   const createAddressMutation = useMutation(
-    trpc.addresses.create.mutationOptions({
+    trpc.friends.create.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
         setIsAddressModalOpen(false);
@@ -287,7 +290,7 @@ export default function FriendsPage() {
   );
 
   const updateAddressMutation = useMutation(
-    trpc.addresses.update.mutationOptions({
+    trpc.friends.update.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
         setIsAddressModalOpen(false);
@@ -308,7 +311,7 @@ export default function FriendsPage() {
   );
 
   const deleteAddressMutation = useMutation(
-    trpc.addresses.delete.mutationOptions({
+    trpc.friends.delete.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
         setDeleteConfirmOpen(false);
@@ -472,7 +475,7 @@ export default function FriendsPage() {
     setIsSearchingUsers(true);
     try {
       const results = await queryClient.fetchQuery(
-        trpc.addresses.searchUsers.queryOptions({ searchTerm: searchTerm.trim() })
+        trpc.friends.searchUsers.queryOptions({ searchTerm: searchTerm.trim() })
       );
       setUserSearchResults(results);
     } catch (error) {

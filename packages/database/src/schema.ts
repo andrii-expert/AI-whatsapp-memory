@@ -220,6 +220,9 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   addressFolders: many(addressFolders),
   addresses: many(addresses),
   connectedAddresses: many(addresses, { relationName: "connectedAddresses" }),
+  friendFolders: many(friendFolders),
+  friends: many(friends),
+  connectedFriends: many(friends, { relationName: "connectedFriends" }),
   sharesGiven: many(taskShares, { relationName: "sharesGiven" }),
   sharesReceived: many(taskShares, { relationName: "sharesReceived" }),
   fileSharesGiven: many(fileShares, { relationName: "fileSharesGiven" }),
@@ -1420,4 +1423,85 @@ export const addressSharesRelations = relations(addressShares, ({ one }) => ({
     references: [users.id],
     relationName: "addressSharesReceived",
   }),
+}));
+
+// ============================================
+// Friends (My Friends)
+// ============================================
+
+export const friendFolders = pgTable("friend_folders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("friend_folders_user_id_idx").on(table.userId),
+  uniquePerUserIdx: uniqueIndex("friend_folders_unique_per_user").on(table.userId, table.name),
+}));
+
+export const friends = pgTable("friends", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  folderId: uuid("folder_id").references(() => friendFolders.id, { onDelete: "set null" }),
+  
+  // Friend name
+  name: text("name").notNull(),
+  
+  // Contact information
+  email: text("email"),
+  phone: text("phone"),
+  
+  // Address type (home, office, parents_house)
+  addressType: addressTypeEnum("address_type"),
+  
+  // Physical address fields
+  street: text("street"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
+  country: text("country"),
+  
+  // Google Maps coordinates
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  
+  // Connected user (if linked to another user account)
+  connectedUserId: text("connected_user_id").references(() => users.id, { onDelete: "set null" }),
+  
+  // Organization
+  sortOrder: integer("sort_order").default(0).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("friends_user_id_idx").on(table.userId),
+  folderIdIdx: index("friends_folder_id_idx").on(table.folderId),
+  connectedUserIdIdx: index("friends_connected_user_id_idx").on(table.connectedUserId),
+  sortOrderIdx: index("friends_sort_order_idx").on(table.sortOrder),
+  addressTypeIdx: index("friends_address_type_idx").on(table.addressType),
+}));
+
+export const friendsRelations = relations(friends, ({ one }) => ({
+  user: one(users, {
+    fields: [friends.userId],
+    references: [users.id],
+  }),
+  folder: one(friendFolders, {
+    fields: [friends.folderId],
+    references: [friendFolders.id],
+  }),
+  connectedUser: one(users, {
+    fields: [friends.connectedUserId],
+    references: [users.id],
+    relationName: "connectedFriends",
+  }),
+}));
+
+export const friendFoldersRelations = relations(friendFolders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [friendFolders.userId],
+    references: [users.id],
+  }),
+  friends: many(friends),
 }));
