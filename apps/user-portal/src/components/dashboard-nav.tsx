@@ -37,7 +37,7 @@ const navigation = [
   { name: "Notes", href: "/notes", icon: StickyNote, goldOnly: true },
   { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Documents", href: "/document", icon: FolderOpen },
-  { name: "Address Book", href: "/address", icon: BookOpen },
+  // { name: "Address Book", href: "/address", icon: BookOpen },
 ];
 
 export function DashboardNav() {
