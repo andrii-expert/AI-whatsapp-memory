@@ -4453,8 +4453,8 @@ export class ActionExecutor {
       // Build response based on request type
       let responseParts: string[] = [];
       
-      // Format: 🏠 {name} Address
-      responseParts.push(`🏠 ${matchingAddress.name} Address`);
+      // Format: *🏠 {name} Address* (bold title)
+      responseParts.push(`*🏠 ${matchingAddress.name} Address*`);
       
       // Add address if requested
       if (includeAddress && fullAddress) {
@@ -4470,7 +4470,7 @@ export class ActionExecutor {
         responseParts.push(`Pin: No coordinates available`);
       }
       
-      // Always add Google Maps link
+      // Always add Google Maps link (WhatsApp auto-links URLs)
       if (mapsUrl) {
         responseParts.push(`Link: ${mapsUrl}`);
       } else {
@@ -4575,8 +4575,8 @@ export class ActionExecutor {
         }
       }
 
-      // Format: ✅️ New Location Added\nName: {name}\nAdress link: {url}
-      const message = `✅️ New Location Added\nName: ${name}\nAdress link: ${mapsUrl || 'No location available'}`;
+      // Format: *✅️ New Location Added*\nName: {name}\nAdress link: {url}
+      const message = `*✅️ New Location Added*\nName: ${name}\nAdress link: ${mapsUrl || 'No location available'}`;
 
       return {
         success: true,
@@ -4787,8 +4787,8 @@ export class ActionExecutor {
 
       await deleteAddress(this.db, matchingAddress.id, this.userId);
 
-      // Format: ⛔ Location Deleted:\nName: {name}
-      const message = `⛔ Location Deleted:\nName: ${matchingAddress.name}`;
+      // Format: *⛔ Location Deleted:*\nName: {name}
+      const message = `*⛔ Location Deleted:*\nName: ${matchingAddress.name}`;
 
       return {
         success: true,
@@ -4826,16 +4826,16 @@ export class ActionExecutor {
       if (addresses.length === 0) {
         return {
           success: true,
-          message: "🏠 All Locations\n(No locations saved yet)",
+          message: "*🏠 All Locations*\n(No locations saved yet)",
         };
       }
 
-      // Format: 🏠 All Locations\n1 {name1}\n2 {name2}\n3 {name3}
+      // Format: *🏠 All Locations*\n*1* {name1}\n*2* {name2}\n*3* {name3} (bold title and numbers)
       const addressList = addresses.map((addr, index) => {
-        return `${index + 1} ${addr.name}`;
+        return `*${index + 1}* ${addr.name}`;
       }).join('\n');
 
-      const message = `🏠 All Locations\n${addressList}`;
+      const message = `*🏠 All Locations*\n${addressList}`;
 
       return {
         success: true,
