@@ -939,7 +939,7 @@ export default function AddressPage() {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Saved addresses</h1>
               <Button
                 onClick={handleOpenAddModal}
-                className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+                className="bg-blue-600 hover:bg-blue-700 w-full"
                 size="sm"
               >
                 <Plus className="h-4 w-4 mr-2" />
