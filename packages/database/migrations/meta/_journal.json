@@ -176,6 +176,13 @@
       "when": 1765722946684,
       "tag": "0024_noisy_leper_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1765781460741,
+      "tag": "0025_harsh_wolverine",
+      "breakpoints": true
     }
   ]
 }
