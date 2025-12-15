@@ -822,6 +822,32 @@ async function processAIResponse(
       }
     } else if (titleType === 'address') {
       // Handle address operations (create, update, delete, get, list)
+      
+      // Send AI response to user (for debugging/transparency)
+      try {
+        await whatsappService.sendTextMessage(
+          recipient,
+          `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`
+        );
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing AI analysis message');
+        }
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to send AI analysis to user');
+      }
+      
       const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       
       const results: string[] = [];

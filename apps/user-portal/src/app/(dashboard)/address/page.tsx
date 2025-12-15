@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, MapPin, MessageCircle, Loader2, Edit2, Trash2, MoreVertical } from "lucide-react";
+import { Home, ChevronLeft, MapPin, MessageCircle, Loader2, Edit2, Trash2, MoreVertical, Plus } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
@@ -17,6 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@imaginecalendar/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -431,6 +439,7 @@ export default function AddressPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [addressToDelete, setAddressToDelete] = useState<any>(null);
   const [enableDropPin, setEnableDropPin] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Fetch addresses
   const { data: addresses = [], isLoading } = useQuery(trpc.addresses.list.queryOptions());
@@ -456,6 +465,8 @@ export default function AddressPage() {
         setCoordinates("");
         setAddressComponents({});
         setEditingAddress(null);
+        setIsAddModalOpen(false);
+        setEnableDropPin(false);
       },
       onError: (error) => {
         toast({
@@ -481,6 +492,7 @@ export default function AddressPage() {
         setCoordinates("");
         setAddressComponents({});
         setEditingAddress(null);
+        setIsAddModalOpen(false);
       },
       onError: (error) => {
         toast({
@@ -816,8 +828,7 @@ export default function AddressPage() {
       zip: address.zip || undefined,
       country: address.country || undefined,
     });
-    // Scroll to form
-    document.getElementById("location-label")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setIsAddModalOpen(true);
   };
 
   // Handle delete address
@@ -840,6 +851,19 @@ export default function AddressPage() {
     setStreetAddress("");
     setCoordinates("");
     setAddressComponents({});
+    setIsAddModalOpen(false);
+    setEnableDropPin(false);
+  };
+
+  // Handle open add modal
+  const handleOpenAddModal = () => {
+    setEditingAddress(null);
+    setLocationLabel("");
+    setStreetAddress("");
+    setCoordinates("");
+    setAddressComponents({});
+    setEnableDropPin(false);
+    setIsAddModalOpen(true);
   };
 
   // Handle address selection
@@ -918,7 +942,17 @@ export default function AddressPage() {
       <div className="mb-8">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Saved addresses</h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold text-gray-900">Saved addresses</h1>
+              <Button
+                onClick={handleOpenAddModal}
+                className="bg-blue-600 hover:bg-blue-700"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add address
+              </Button>
+            </div>
             <p className="text-gray-600">
               Add your frequent locations, view them on the map and share directions to WhatsApp in a single tap.
             </p>
@@ -938,205 +972,6 @@ export default function AddressPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column */}
         <div className="space-y-6">
-          {/* Add new location Card */}
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {editingAddress ? "Edit location" : "Add new location"}
-                </h2>
-                <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">
-                  STEP 1 - CAPTURE
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 mb-6">
-                Save an address or coordinates to use across your dashboard and mobile app.
-              </p>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="location-label">Location label</Label>
-                  <Input
-                    id="location-label"
-                    placeholder="e.g. Home, Office, Client - OK Foods"
-                    value={locationLabel}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocationLabel(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="street-address">Street address</Label>
-                  <div className="relative">
-                    <Input
-                      id="street-address"
-                      placeholder="Type or paste the full address"
-                      value={streetAddress}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAddressPaste(e.target.value)}
-                      className="h-20 pr-10"
-                    />
-                    {isGeocoding && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    You can also paste a Google Maps link here. Your backend can normalise it and store the coordinates.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="coordinates">Pin / coordinates (optional)</Label>
-                    <button
-                      type="button"
-                      className={cn(
-                        "text-sm font-medium transition-colors",
-                        enableDropPin
-                          ? "text-red-600 hover:text-red-700"
-                          : "text-blue-600 hover:text-blue-700"
-                      )}
-                      onClick={() => {
-                        if (enableDropPin) {
-                          // Cancel drop pin mode
-                          setEnableDropPin(false);
-                          toast({
-                            title: "Drop pin cancelled",
-                            description: "Click 'Drop pin on map' again to enable.",
-                          });
-                        } else {
-                          // Enable drop pin mode
-                          if (window.google?.maps) {
-                            setEnableDropPin(true);
-                            toast({
-                              title: "Drop pin enabled",
-                              description: "Click anywhere on the map to drop a pin.",
-                            });
-                          } else {
-                            toast({
-                              title: "Google Maps not loaded",
-                              description: "Please wait for Google Maps to load, or enter coordinates manually.",
-                              variant: "destructive",
-                            });
-                          }
-                        }
-                      }}
-                    >
-                      {enableDropPin ? "Cancel drop pin" : "Drop pin on map"}
-                    </button>
-                  </div>
-                  <Input
-                    id="coordinates"
-                    placeholder="e.g. -34.0822, 18.8501"
-                    value={coordinates}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      setCoordinates(e.target.value);
-                      // If coordinates are entered, try reverse geocoding
-                      if (e.target.value.trim() && window.google?.maps) {
-                        const { lat, lng } = parseCoordinates(e.target.value);
-                        if (lat && lng) {
-                          setIsGeocoding(true);
-                          const geocoder = new window.google.maps.Geocoder();
-                          geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
-                            setIsGeocoding(false);
-                            if (status === "OK" && results?.[0]) {
-                              const result = results[0];
-                              setStreetAddress(result.formatted_address);
-                              
-                              // Extract address components
-                              const components: {
-                                street?: string;
-                                city?: string;
-                                state?: string;
-                                zip?: string;
-                                country?: string;
-                              } = {};
-                              
-                              if (result.address_components) {
-                                result.address_components.forEach((component: any) => {
-                                  const types = component.types;
-                                  
-                                  if (types.includes("street_number") || types.includes("route")) {
-                                    const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
-                                    const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
-                                    components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
-                                  }
-                                  
-                                  if (types.includes("locality")) {
-                                    components.city = component.long_name;
-                                  } else if (types.includes("administrative_area_level_1")) {
-                                    components.state = component.long_name;
-                                  } else if (types.includes("postal_code")) {
-                                    components.zip = component.long_name;
-                                  } else if (types.includes("country")) {
-                                    components.country = component.long_name;
-                                  }
-                                });
-                              }
-                              
-                              setAddressComponents(components);
-                            }
-                          });
-                        }
-                      }
-                    }}
-                  />
-                  {enableDropPin && (
-                    <div className="mt-4">
-                      <div className="mb-2">
-                        <p className="text-sm text-blue-600 font-medium mb-1">
-                          Click on the map below to drop a pin
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          The coordinates and address will be automatically filled in.
-                        </p>
-                      </div>
-                      <GoogleMap
-                        lat={null}
-                        lng={null}
-                        address=""
-                        enableClickToDrop={true}
-                        onPinDrop={handlePinDrop}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-2">
-                  <p className="text-xs text-gray-500 mb-4">
-                    Once saved, locations are available across your web dashboard and mobile app.
-                  </p>
-                  <div className="flex gap-2">
-                    {editingAddress && (
-                      <Button
-                        onClick={handleCancelEdit}
-                        variant="outline"
-                        className="flex-1"
-                        disabled={createAddressMutation.isPending || updateAddressMutation.isPending}
-                      >
-                        Cancel
-                      </Button>
-                    )}
-                    <Button
-                      onClick={handleSaveLocation}
-                      disabled={createAddressMutation.isPending || updateAddressMutation.isPending}
-                      className={cn("flex-1 bg-blue-600 hover:bg-blue-700", editingAddress && "flex-1")}
-                    >
-                      {(createAddressMutation.isPending || updateAddressMutation.isPending) ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          {editingAddress ? "Updating..." : "Saving..."}
-                        </>
-                      ) : (
-                        editingAddress ? "Update location" : "Save location"
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Saved locations Card */}
           <Card>
             <CardContent className="p-6">
@@ -1296,6 +1131,209 @@ export default function AddressPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Add/Edit Address Modal */}
+      <Dialog 
+        open={isAddModalOpen} 
+        onOpenChange={(open) => {
+          setIsAddModalOpen(open);
+          if (!open) {
+            // Reset form when modal closes
+            handleCancelEdit();
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingAddress ? "Edit location" : "Add new location"}
+            </DialogTitle>
+            <DialogDescription>
+              Save an address or coordinates to use across your dashboard and mobile app.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="modal-location-label">Location label</Label>
+              <Input
+                id="modal-location-label"
+                placeholder="e.g. Home, Office, Client - OK Foods"
+                value={locationLabel}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocationLabel(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="modal-street-address">Street address</Label>
+              <div className="relative">
+                <Input
+                  id="modal-street-address"
+                  placeholder="Type or paste the full address"
+                  value={streetAddress}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAddressPaste(e.target.value)}
+                  className="h-20 pr-10"
+                />
+                {isGeocoding && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">
+                You can also paste a Google Maps link here. Your backend can normalise it and store the coordinates.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="modal-coordinates">Pin / coordinates (optional)</Label>
+                <button
+                  type="button"
+                  className={cn(
+                    "text-sm font-medium transition-colors",
+                    enableDropPin
+                      ? "text-red-600 hover:text-red-700"
+                      : "text-blue-600 hover:text-blue-700"
+                  )}
+                  onClick={() => {
+                    if (enableDropPin) {
+                      // Cancel drop pin mode
+                      setEnableDropPin(false);
+                      toast({
+                        title: "Drop pin cancelled",
+                        description: "Click 'Drop pin on map' again to enable.",
+                      });
+                    } else {
+                      // Enable drop pin mode
+                      if (window.google?.maps) {
+                        setEnableDropPin(true);
+                        toast({
+                          title: "Drop pin enabled",
+                          description: "Click anywhere on the map to drop a pin.",
+                        });
+                      } else {
+                        toast({
+                          title: "Google Maps not loaded",
+                          description: "Please wait for Google Maps to load, or enter coordinates manually.",
+                          variant: "destructive",
+                        });
+                      }
+                    }
+                  }}
+                >
+                  {enableDropPin ? "Cancel drop pin" : "Drop pin on map"}
+                </button>
+              </div>
+              <Input
+                id="modal-coordinates"
+                placeholder="e.g. -34.0822, 18.8501"
+                value={coordinates}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setCoordinates(e.target.value);
+                  // If coordinates are entered, try reverse geocoding
+                  if (e.target.value.trim() && window.google?.maps) {
+                    const { lat, lng } = parseCoordinates(e.target.value);
+                    if (lat && lng) {
+                      setIsGeocoding(true);
+                      const geocoder = new window.google.maps.Geocoder();
+                      geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                        setIsGeocoding(false);
+                        if (status === "OK" && results?.[0]) {
+                          const result = results[0];
+                          setStreetAddress(result.formatted_address);
+                          
+                          // Extract address components
+                          const components: {
+                            street?: string;
+                            city?: string;
+                            state?: string;
+                            zip?: string;
+                            country?: string;
+                          } = {};
+                          
+                          if (result.address_components) {
+                            result.address_components.forEach((component: any) => {
+                              const types = component.types;
+                              
+                              if (types.includes("street_number") || types.includes("route")) {
+                                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                              }
+                              
+                              if (types.includes("locality")) {
+                                components.city = component.long_name;
+                              } else if (types.includes("administrative_area_level_1")) {
+                                components.state = component.long_name;
+                              } else if (types.includes("postal_code")) {
+                                components.zip = component.long_name;
+                              } else if (types.includes("country")) {
+                                components.country = component.long_name;
+                              }
+                            });
+                          }
+                          
+                          setAddressComponents(components);
+                        }
+                      });
+                    }
+                  }
+                }}
+              />
+              {enableDropPin && (
+                <div className="mt-4">
+                  <div className="mb-2">
+                    <p className="text-sm text-blue-600 font-medium mb-1">
+                      Click on the map below to drop a pin
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      The coordinates and address will be automatically filled in.
+                    </p>
+                  </div>
+                  <GoogleMap
+                    lat={null}
+                    lng={null}
+                    address=""
+                    enableClickToDrop={true}
+                    onPinDrop={handlePinDrop}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <p className="text-xs text-gray-500 mb-4">
+                Once saved, locations are available across your web dashboard and mobile app.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={handleCancelEdit}
+              variant="outline"
+              disabled={createAddressMutation.isPending || updateAddressMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveLocation}
+              disabled={createAddressMutation.isPending || updateAddressMutation.isPending}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {(createAddressMutation.isPending || updateAddressMutation.isPending) ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {editingAddress ? "Updating..." : "Saving..."}
+                </>
+              ) : (
+                editingAddress ? "Update location" : "Save location"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

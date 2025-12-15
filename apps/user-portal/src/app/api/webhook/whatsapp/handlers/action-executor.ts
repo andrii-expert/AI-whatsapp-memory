@@ -4374,46 +4374,119 @@ export class ActionExecutor {
       // Get all user addresses
       const addresses = await getUserAddresses(this.db, this.userId);
       
-      // Search for address by name (case-insensitive, flexible matching)
-      const matchingAddress = addresses.find(addr => {
+      if (addresses.length === 0) {
+        return {
+          success: false,
+          message: "You don't have any saved addresses yet. Please save an address first.",
+        };
+      }
+      
+      const personNameLower = personName.toLowerCase().trim();
+      
+      // Score-based matching: prioritize exact matches, then word-boundary matches, then partial matches
+      const scoredMatches = addresses.map(addr => {
         const addrName = addr.name.toLowerCase().trim();
-        const personNameLower = personName.toLowerCase().trim();
+        let score = 0;
+        let matchType = '';
         
-        // Exact match
+        // Exact match (highest priority)
         if (addrName === personNameLower) {
-          return true;
+          score = 100;
+          matchType = 'exact';
         }
-        
-        // Check if address name contains the person name (e.g., "Paul" matches "Paul's Home")
-        if (addrName.includes(personNameLower)) {
-          return true;
+        // Word-boundary match (e.g., "Paul" matches "Paul Home" or "Home Paul" but not "Pauline")
+        else if (new RegExp(`\\b${personNameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(addrName)) {
+          score = 80;
+          matchType = 'word-boundary';
         }
-        
-        // Check if person name contains address name (e.g., "Paul Smith" matches "Paul")
-        if (personNameLower.includes(addrName)) {
-          return true;
+        // Address name starts with person name (e.g., "Paul" matches "Paul's Home")
+        else if (addrName.startsWith(personNameLower)) {
+          score = 60;
+          matchType = 'starts-with';
         }
-        
-        // Check word-by-word match (e.g., "Paul" matches "Paul Home" or "Home Paul")
-        const addrWords = addrName.split(/\s+/);
-        const personWords = personNameLower.split(/\s+/);
-        
-        // If any word from person name matches any word from address name
-        for (const personWord of personWords) {
-          if (personWord.length > 2 && addrWords.some(addrWord => addrWord === personWord || addrWord.includes(personWord) || personWord.includes(addrWord))) {
-            return true;
+        // Person name starts with address name (e.g., "Paul Smith" matches "Paul")
+        else if (personNameLower.startsWith(addrName)) {
+          score = 50;
+          matchType = 'person-starts-with';
+        }
+        // Address name contains person name (e.g., "Paul" matches "Home Paul Office")
+        else if (addrName.includes(personNameLower)) {
+          score = 40;
+          matchType = 'contains';
+        }
+        // Person name contains address name (e.g., "Paul Smith" matches "Paul")
+        else if (personNameLower.includes(addrName)) {
+          score = 30;
+          matchType = 'person-contains';
+        }
+        // Word-by-word match (e.g., "Paul" matches "Paul Home" or "Home Paul")
+        else {
+          const addrWords = addrName.split(/\s+/);
+          const personWords = personNameLower.split(/\s+/);
+          
+          for (const personWord of personWords) {
+            if (personWord.length > 2) {
+              for (const addrWord of addrWords) {
+                if (addrWord === personWord) {
+                  score = Math.max(score, 20);
+                  matchType = 'word-match';
+                  break;
+                } else if (addrWord.includes(personWord) || personWord.includes(addrWord)) {
+                  score = Math.max(score, 10);
+                  matchType = 'word-partial';
+                }
+              }
+            }
           }
         }
         
-        return false;
-      });
+        return { address: addr, score, matchType };
+      }).filter(m => m.score > 0)
+        .sort((a, b) => b.score - a.score); // Sort by score descending
+      
+      if (scoredMatches.length === 0) {
+        // No matches found - suggest similar names
+        const allNames = addresses.map(a => a.name).join(', ');
+        return {
+          success: false,
+          message: `I couldn't find an address saved for "${personName}".\n\nYour saved addresses are: ${allNames || 'none'}\n\nPlease check the name and try again.`,
+        };
+      }
+      
+      // If multiple high-scoring matches, prefer exact or word-boundary matches
+      const exactMatches = scoredMatches.filter(m => m.matchType === 'exact' || m.matchType === 'word-boundary');
+      const bestMatches = exactMatches.length > 0 ? exactMatches : scoredMatches.slice(0, 1);
+      
+      // If there are multiple exact/word-boundary matches, ask user to be more specific
+      if (exactMatches.length > 1) {
+        const matchNames = exactMatches.map(m => m.address.name).join(', ');
+        return {
+          success: false,
+          message: `I found multiple addresses matching "${personName}": ${matchNames}\n\nPlease be more specific (e.g., use the full address name).`,
+        };
+      }
+      
+      // Use the best match
+      const matchingAddress = bestMatches[0]?.address;
       
       if (!matchingAddress) {
         return {
           success: false,
-          message: `I couldn't find an address saved for "${personName}". Please make sure the address is saved in your address book.`,
+          message: `I couldn't find an address saved for "${personName}". Please check the name and try again.`,
         };
       }
+      
+      logger.info(
+        {
+          userId: this.userId,
+          searchName: personName,
+          foundName: matchingAddress.name,
+          matchType: bestMatches[0]?.matchType,
+          score: bestMatches[0]?.score,
+          totalMatches: scoredMatches.length,
+        },
+        'Address matched successfully'
+      );
       
       // Determine what to include based on addressType
       const includeAddress = addressType === 'location' || addressType === 'address' || addressType === 'all';
