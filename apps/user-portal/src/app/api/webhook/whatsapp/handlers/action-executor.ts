@@ -43,6 +43,11 @@ import {
 import {
   createFileShare,
   searchUsersForFileSharing,
+  getUserAddresses,
+  createAddress,
+  updateAddress,
+  deleteAddress,
+  getAddressById,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -54,7 +59,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface ParsedAction {
   action: string;
-  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document';
+  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address';
   taskName?: string;
   folderName?: string;
   folderRoute?: string;
@@ -66,6 +71,8 @@ export interface ParsedAction {
   typeFilter?: ReminderFrequency; // For reminder type filtering: 'daily', 'hourly', etc.
   missingFields: string[];
   isFileFolder?: boolean; // True if this is a file folder operation (vs task folder)
+  addressName?: string; // For address operations: the person/place name
+  addressType?: string; // For address operations: 'location', 'address', 'pin', 'all'
 }
 
 export class ActionExecutor {
@@ -89,7 +96,7 @@ export class ActionExecutor {
 
     const missingFields: string[] = [];
     let action = '';
-    let resourceType: 'task' | 'folder' = 'task';
+    let resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address' = 'task';
     let taskName: string | undefined;
     let folderName: string | undefined;
     let folderRoute: string | undefined;
@@ -523,6 +530,84 @@ export class ActionExecutor {
       missingFields.push('new name or details');
     }
 
+    // Address operations
+    else if (trimmed.startsWith('Create an address:')) {
+      action = 'create';
+      resourceType = 'address';
+      // Parse: "Create an address: {name} - street: {street} - city: {city} ..."
+      const nameMatch = trimmed.match(/^Create an address:\s*(.+?)(?:\s*-|$)/i);
+      if (nameMatch) {
+        taskName = nameMatch[1].trim();
+        // Extract other fields if present
+        const streetMatch = trimmed.match(/street:\s*([^-]+)/i);
+        const cityMatch = trimmed.match(/city:\s*([^-]+)/i);
+        const stateMatch = trimmed.match(/state:\s*([^-]+)/i);
+        const zipMatch = trimmed.match(/zip:\s*([^-]+)/i);
+        const countryMatch = trimmed.match(/country:\s*([^-]+)/i);
+        const latMatch = trimmed.match(/latitude:\s*([^-]+)/i);
+        const lngMatch = trimmed.match(/longitude:\s*([^-]+)/i);
+        
+        // Store additional fields in newName for now (we'll parse them in the method)
+        const fields: string[] = [];
+        if (streetMatch) fields.push(`street:${streetMatch[1].trim()}`);
+        if (cityMatch) fields.push(`city:${cityMatch[1].trim()}`);
+        if (stateMatch) fields.push(`state:${stateMatch[1].trim()}`);
+        if (zipMatch) fields.push(`zip:${zipMatch[1].trim()}`);
+        if (countryMatch) fields.push(`country:${countryMatch[1].trim()}`);
+        if (latMatch) fields.push(`latitude:${latMatch[1].trim()}`);
+        if (lngMatch) fields.push(`longitude:${lngMatch[1].trim()}`);
+        
+        newName = fields.join('|'); // Use | as separator
+      } else {
+        missingFields.push('address name');
+      }
+    } else if (trimmed.startsWith('Update an address:') || trimmed.startsWith('Edit an address:')) {
+      action = 'edit';
+      resourceType = 'address';
+      const match = trimmed.match(/^(?:Update|Edit) an address:\s*(.+?)\s*-\s*changes:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim();
+        newName = match[2].trim(); // Store changes in newName
+      } else {
+        missingFields.push('address name or changes');
+      }
+    } else if (trimmed.startsWith('Delete an address:')) {
+      action = 'delete';
+      resourceType = 'address';
+      const match = trimmed.match(/^Delete an address:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim();
+      } else {
+        missingFields.push('address name');
+      }
+    } else if (trimmed.startsWith('List addresses:')) {
+      action = 'list';
+      resourceType = 'address';
+      const match = trimmed.match(/^List addresses:\s*(.+)$/i);
+      if (match) {
+        listFilter = match[1].trim();
+      } else {
+        listFilter = 'all';
+      }
+    } else if (trimmed.startsWith('Get address:')) {
+      action = 'get_address';
+      resourceType = 'address';
+      const match = trimmed.match(/^Get address:\s*(.+?)\s*-\s*type:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim(); // Using taskName as addressName for now
+        status = match[2].trim().toLowerCase(); // Using status as addressType for now
+      } else {
+        // Try without type (default to location)
+        const simpleMatch = trimmed.match(/^Get address:\s*(.+)$/i);
+        if (simpleMatch) {
+          taskName = simpleMatch[1].trim();
+          status = 'location'; // Default to location (includes both address and pin)
+        } else {
+          missingFields.push('person/place name');
+        }
+      }
+    }
+
     // Determine if this is a file folder operation
     const isFileFolder = trimmed.startsWith('Create a file folder:') ||
       trimmed.startsWith('Edit a file folder:') ||
@@ -542,6 +627,8 @@ export class ActionExecutor {
       listFilter,
       typeFilter,
       missingFields,
+      addressName: taskName, // Map taskName to addressName for address operations
+      addressType: status, // Map status to addressType for address operations
       ...(isFileFolder ? { isFileFolder: true } : {}),
     };
   }
@@ -577,11 +664,15 @@ export class ActionExecutor {
             return await this.listEvents(parsed);
           } else if (parsed.resourceType === 'document') {
             return await this.listFiles(parsed);
+          } else if (parsed.resourceType === 'address') {
+            return await this.listAddresses(parsed);
           }
           return {
             success: false,
             message: "I'm sorry, I couldn't understand what you want to list.",
           };
+        case 'get_address':
+          return await this.getAddress(parsed);
         case 'create_shopping_item':
           return await this.createShoppingItem(parsed);
         case 'create':
@@ -591,6 +682,8 @@ export class ActionExecutor {
             return await this.createReminder(parsed, timezone);
           } else if (parsed.resourceType === 'document') {
             return await this.createFile(parsed);
+          } else if (parsed.resourceType === 'address') {
+            return await this.createAddressAction(parsed);
           } else {
             return await this.createFolder(parsed);
           }
@@ -601,6 +694,8 @@ export class ActionExecutor {
             return await this.updateReminder(parsed, timezone);
           } else if (parsed.resourceType === 'document') {
             return await this.editFile(parsed);
+          } else if (parsed.resourceType === 'address') {
+            return await this.updateAddressAction(parsed);
           } else {
             return await this.editFolder(parsed);
           }
@@ -611,6 +706,8 @@ export class ActionExecutor {
             return await this.deleteReminder(parsed);
           } else if (parsed.resourceType === 'document') {
             return await this.deleteFile(parsed);
+          } else if (parsed.resourceType === 'address') {
+            return await this.deleteAddressAction(parsed);
           } else {
             return await this.deleteFolder(parsed);
           }
@@ -4257,6 +4354,481 @@ export class ActionExecutor {
       );
     }
     return files.find(f => f.title.toLowerCase() === fileName.toLowerCase());
+  }
+
+  /**
+   * Get address information for a saved address
+   */
+  private async getAddress(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const personName = parsed.addressName || parsed.taskName;
+      const addressType = parsed.addressType || 'location';
+      
+      if (!personName) {
+        return {
+          success: false,
+          message: "I need to know whose address you're looking for. Please specify a name.",
+        };
+      }
+      
+      // Get all user addresses
+      const addresses = await getUserAddresses(this.db, this.userId);
+      
+      // Search for address by name (case-insensitive, flexible matching)
+      const matchingAddress = addresses.find(addr => {
+        const addrName = addr.name.toLowerCase().trim();
+        const personNameLower = personName.toLowerCase().trim();
+        
+        // Exact match
+        if (addrName === personNameLower) {
+          return true;
+        }
+        
+        // Check if address name contains the person name (e.g., "Paul" matches "Paul's Home")
+        if (addrName.includes(personNameLower)) {
+          return true;
+        }
+        
+        // Check if person name contains address name (e.g., "Paul Smith" matches "Paul")
+        if (personNameLower.includes(addrName)) {
+          return true;
+        }
+        
+        // Check word-by-word match (e.g., "Paul" matches "Paul Home" or "Home Paul")
+        const addrWords = addrName.split(/\s+/);
+        const personWords = personNameLower.split(/\s+/);
+        
+        // If any word from person name matches any word from address name
+        for (const personWord of personWords) {
+          if (personWord.length > 2 && addrWords.some(addrWord => addrWord === personWord || addrWord.includes(personWord) || personWord.includes(addrWord))) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+      
+      if (!matchingAddress) {
+        return {
+          success: false,
+          message: `I couldn't find an address saved for "${personName}". Please make sure the address is saved in your address book.`,
+        };
+      }
+      
+      // Build response based on request type
+      let responseParts: string[] = [];
+      
+      // Determine what to include based on addressType
+      const includeAddress = addressType === 'location' || addressType === 'address' || addressType === 'all';
+      const includePin = addressType === 'location' || addressType === 'pin' || addressType === 'all';
+      
+      // Add address name
+      responseParts.push(`📍 ${matchingAddress.name}`);
+      
+      // Build full address string
+      const addressParts = [
+        matchingAddress.street,
+        matchingAddress.city,
+        matchingAddress.state,
+        matchingAddress.zip,
+        matchingAddress.country,
+      ].filter(Boolean);
+      
+      const fullAddress = addressParts.join(', ');
+      
+      // Add address if requested
+      if (includeAddress && fullAddress) {
+        responseParts.push(`\nAddress: ${fullAddress}`);
+      } else if (includeAddress && !fullAddress) {
+        responseParts.push(`\nAddress: No address details available`);
+      }
+      
+      // Add pin/coordinates if requested
+      if (includePin && matchingAddress.latitude != null && matchingAddress.longitude != null) {
+        const lat = Number(matchingAddress.latitude);
+        const lng = Number(matchingAddress.longitude);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          responseParts.push(`\nPin: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+        }
+      } else if (includePin) {
+        responseParts.push(`\nPin: No coordinates available`);
+      }
+      
+      // Always add Google Maps link if we have coordinates
+      if (matchingAddress.latitude != null && matchingAddress.longitude != null) {
+        const lat = Number(matchingAddress.latitude);
+        const lng = Number(matchingAddress.longitude);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+          responseParts.push(`\n\n🗺️ View on Google Maps:\n${mapsUrl}`);
+        } else if (fullAddress) {
+          // Fallback to address-based link if coordinates are invalid
+          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+          responseParts.push(`\n\n🗺️ View on Google Maps:\n${mapsUrl}`);
+        }
+      } else if (fullAddress) {
+        // Use address for Google Maps if no coordinates
+        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+        responseParts.push(`\n\n🗺️ View on Google Maps:\n${mapsUrl}`);
+      }
+      
+      const response = responseParts.join('');
+      
+      return {
+        success: true,
+        message: response,
+      };
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          userId: this.userId,
+          addressName: parsed.addressName,
+          addressType: parsed.addressType,
+        },
+        'Failed to get address'
+      );
+      
+      return {
+        success: false,
+        message: "I encountered an error while looking up the address. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Create a new address
+   */
+  private async createAddressAction(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const name = parsed.addressName || parsed.taskName;
+      
+      if (!name) {
+        return {
+          success: false,
+          message: "I need a name for this address. Please specify a name like 'Paul', 'Home', or 'Office'.",
+        };
+      }
+
+      // Parse additional fields from newName (stored as "field:value|field:value")
+      const fields: Record<string, string> = {};
+      if (parsed.newName) {
+        const fieldPairs = parsed.newName.split('|');
+        for (const pair of fieldPairs) {
+          const [field, value] = pair.split(':').map(s => s.trim());
+          if (field && value) {
+            fields[field.toLowerCase()] = value;
+          }
+        }
+      }
+
+      const addressData: any = {
+        userId: this.userId,
+        name: name.trim(),
+        street: fields.street || null,
+        city: fields.city || null,
+        state: fields.state || null,
+        zip: fields.zip || null,
+        country: fields.country || null,
+        latitude: fields.latitude ? parseFloat(fields.latitude) : null,
+        longitude: fields.longitude ? parseFloat(fields.longitude) : null,
+      };
+
+      // Validate coordinates
+      if (addressData.latitude !== null && (isNaN(addressData.latitude) || addressData.latitude < -90 || addressData.latitude > 90)) {
+        addressData.latitude = null;
+      }
+      if (addressData.longitude !== null && (isNaN(addressData.longitude) || addressData.longitude < -180 || addressData.longitude > 180)) {
+        addressData.longitude = null;
+      }
+
+      const address = await createAddress(this.db, addressData);
+
+      return {
+        success: true,
+        message: `✅ Address "${name}" has been saved successfully!`,
+      };
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          userId: this.userId,
+          addressName: parsed.addressName || parsed.taskName,
+        },
+        'Failed to create address'
+      );
+
+      return {
+        success: false,
+        message: "I encountered an error while saving the address. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Update an existing address
+   */
+  private async updateAddressAction(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const name = parsed.addressName || parsed.taskName;
+      const changes = parsed.newName; // Contains the changes description
+
+      if (!name) {
+        return {
+          success: false,
+          message: "I need to know which address to update. Please specify the address name.",
+        };
+      }
+
+      if (!changes) {
+        return {
+          success: false,
+          message: "I need to know what to change. Please specify what you want to update.",
+        };
+      }
+
+      // Get all user addresses to find the one to update
+      const addresses = await getUserAddresses(this.db, this.userId);
+      
+      // Find matching address
+      const matchingAddress = addresses.find(addr => {
+        const addrName = addr.name.toLowerCase().trim();
+        const searchName = name.toLowerCase().trim();
+        return addrName === searchName || addrName.includes(searchName) || searchName.includes(addrName);
+      });
+
+      if (!matchingAddress) {
+        return {
+          success: false,
+          message: `I couldn't find an address named "${name}". Please check the name and try again.`,
+        };
+      }
+
+      // Parse changes (format: "field to value" or "field: value")
+      const updateData: any = {};
+      const changesLower = changes.toLowerCase();
+
+      // Parse name change
+      if (changesLower.includes('name to')) {
+        const nameMatch = changes.match(/name\s+to\s+(.+?)(?:\s|$)/i);
+        if (nameMatch) {
+          updateData.name = nameMatch[1].trim();
+        }
+      }
+
+      // Parse street change
+      if (changesLower.includes('street to')) {
+        const streetMatch = changes.match(/street\s+to\s+(.+?)(?:\s|$)/i);
+        if (streetMatch) {
+          updateData.street = streetMatch[1].trim();
+        }
+      }
+
+      // Parse city change
+      if (changesLower.includes('city to')) {
+        const cityMatch = changes.match(/city\s+to\s+(.+?)(?:\s|$)/i);
+        if (cityMatch) {
+          updateData.city = cityMatch[1].trim();
+        }
+      }
+
+      // Parse state change
+      if (changesLower.includes('state to')) {
+        const stateMatch = changes.match(/state\s+to\s+(.+?)(?:\s|$)/i);
+        if (stateMatch) {
+          updateData.state = stateMatch[1].trim();
+        }
+      }
+
+      // Parse zip change
+      if (changesLower.includes('zip to') || changesLower.includes('postal code to')) {
+        const zipMatch = changes.match(/(?:zip|postal\s+code)\s+to\s+(.+?)(?:\s|$)/i);
+        if (zipMatch) {
+          updateData.zip = zipMatch[1].trim();
+        }
+      }
+
+      // Parse country change
+      if (changesLower.includes('country to')) {
+        const countryMatch = changes.match(/country\s+to\s+(.+?)(?:\s|$)/i);
+        if (countryMatch) {
+          updateData.country = countryMatch[1].trim();
+        }
+      }
+
+      // Parse coordinates
+      if (changesLower.includes('latitude to') || changesLower.includes('longitude to') || changesLower.includes('coordinates to')) {
+        const latMatch = changes.match(/latitude\s+to\s+(-?\d+\.?\d*)/i);
+        const lngMatch = changes.match(/longitude\s+to\s+(-?\d+\.?\d*)/i);
+        const coordsMatch = changes.match(/coordinates\s+to\s+(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/i);
+        
+        if (coordsMatch) {
+          updateData.latitude = parseFloat(coordsMatch[1]);
+          updateData.longitude = parseFloat(coordsMatch[2]);
+        } else {
+          if (latMatch) {
+            updateData.latitude = parseFloat(latMatch[1]);
+          }
+          if (lngMatch) {
+            updateData.longitude = parseFloat(lngMatch[1]);
+          }
+        }
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return {
+          success: false,
+          message: "I couldn't understand what you want to change. Please specify the field and new value (e.g., 'city to Durban').",
+        };
+      }
+
+      // Validate coordinates
+      if (updateData.latitude !== undefined && (isNaN(updateData.latitude) || updateData.latitude < -90 || updateData.latitude > 90)) {
+        delete updateData.latitude;
+      }
+      if (updateData.longitude !== undefined && (isNaN(updateData.longitude) || updateData.longitude < -180 || updateData.longitude > 180)) {
+        delete updateData.longitude;
+      }
+
+      const updatedAddress = await updateAddress(this.db, matchingAddress.id, this.userId, updateData);
+
+      if (!updatedAddress) {
+        return {
+          success: false,
+          message: "I encountered an error while updating the address. Please try again.",
+        };
+      }
+
+      return {
+        success: true,
+        message: `✅ Address "${name}" has been updated successfully!`,
+      };
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          userId: this.userId,
+          addressName: parsed.addressName || parsed.taskName,
+        },
+        'Failed to update address'
+      );
+
+      return {
+        success: false,
+        message: "I encountered an error while updating the address. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Delete an address
+   */
+  private async deleteAddressAction(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const name = parsed.addressName || parsed.taskName;
+
+      if (!name) {
+        return {
+          success: false,
+          message: "I need to know which address to delete. Please specify the address name.",
+        };
+      }
+
+      // Get all user addresses to find the one to delete
+      const addresses = await getUserAddresses(this.db, this.userId);
+      
+      // Find matching address
+      const matchingAddress = addresses.find(addr => {
+        const addrName = addr.name.toLowerCase().trim();
+        const searchName = name.toLowerCase().trim();
+        return addrName === searchName || addrName.includes(searchName) || searchName.includes(addrName);
+      });
+
+      if (!matchingAddress) {
+        return {
+          success: false,
+          message: `I couldn't find an address named "${name}". Please check the name and try again.`,
+        };
+      }
+
+      await deleteAddress(this.db, matchingAddress.id, this.userId);
+
+      return {
+        success: true,
+        message: `✅ Address "${name}" has been deleted successfully!`,
+      };
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          userId: this.userId,
+          addressName: parsed.addressName || parsed.taskName,
+        },
+        'Failed to delete address'
+      );
+
+      return {
+        success: false,
+        message: "I encountered an error while deleting the address. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * List all addresses
+   */
+  private async listAddresses(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const filter = parsed.listFilter || 'all';
+      
+      let addresses = await getUserAddresses(this.db, this.userId);
+
+      // Filter by folder if specified (future enhancement)
+      // For now, we just list all addresses
+
+      if (addresses.length === 0) {
+        return {
+          success: true,
+          message: "You don't have any saved addresses yet. Use 'Create an address' to add one!",
+        };
+      }
+
+      // Format addresses for display
+      const addressList = addresses.map((addr, index) => {
+        const addressParts = [
+          addr.street,
+          addr.city,
+          addr.state,
+          addr.zip,
+          addr.country,
+        ].filter(Boolean);
+        
+        const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'No address details';
+        const coords = addr.latitude != null && addr.longitude != null 
+          ? `📍 ${addr.latitude.toFixed(4)}, ${addr.longitude.toFixed(4)}` 
+          : '';
+        
+        return `${index + 1}. ${addr.name}\n   ${fullAddress}${coords ? `\n   ${coords}` : ''}`;
+      }).join('\n\n');
+
+      return {
+        success: true,
+        message: `📍 Your saved addresses (${addresses.length}):\n\n${addressList}`,
+      };
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          userId: this.userId,
+        },
+        'Failed to list addresses'
+      );
+
+      return {
+        success: false,
+        message: "I encountered an error while retrieving your addresses. Please try again.",
+      };
+    }
   }
 
   /**

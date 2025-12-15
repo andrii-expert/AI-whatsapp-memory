@@ -282,7 +282,7 @@ async function processAIResponse(
 ): Promise<void> {
   try {
     // Parse the Title from response
-    const titleMatch = aiResponse.match(/^Title:\s*(task|note|reminder|event|document|verification|normal)/i);
+    const titleMatch = aiResponse.match(/^Title:\s*(task|note|reminder|event|document|address|verification|normal)/i);
     if (!titleMatch || !titleMatch[1]) {
       logger.warn(
         {
@@ -352,8 +352,8 @@ async function processAIResponse(
     const isListOperation = actionTemplate.toLowerCase().startsWith('list ');
     const isListEvents = actionTemplate.toLowerCase().startsWith('list events:');
     
-    // Handle list operations for all types (tasks, notes, reminders, events, documents)
-    if (isListOperation && (titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event' || titleType === 'document')) {
+    // Handle list operations for all types (tasks, notes, reminders, events, documents, addresses)
+    if (isListOperation && (titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event' || titleType === 'document' || titleType === 'address')) {
       try {
         logger.info(
           {
@@ -368,7 +368,7 @@ async function processAIResponse(
         const parsed = executor.parseAction(actionTemplate);
         if (parsed) {
           // Set resourceType based on titleType for list operations
-          parsed.resourceType = titleType as 'task' | 'note' | 'reminder' | 'event' | 'document';
+          parsed.resourceType = titleType as 'task' | 'note' | 'reminder' | 'event' | 'document' | 'address';
           
           logger.info(
             {
@@ -809,6 +809,56 @@ async function processAIResponse(
         }
         
         await whatsappService.sendTextMessage(recipient, result.message);
+      }
+    } else if (titleType === 'address') {
+      // Handle address operations (create, update, delete, get, list)
+      const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      const results: string[] = [];
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const actionLine of actionLines) {
+        const parsed = executor.parseAction(actionLine);
+        if (parsed) {
+          parsed.resourceType = 'address';
+          const result = await executor.executeAction(parsed);
+          if (result.success) {
+            successCount++;
+            results.push(result.message);
+          } else {
+            failCount++;
+            results.push(result.message);
+          }
+        } else {
+          logger.warn({ userId, actionLine }, 'Failed to parse address action line');
+        }
+      }
+      
+      // Send combined results to user
+      if (results.length > 0) {
+        const combinedMessage = results.join('\n');
+        await whatsappService.sendTextMessage(recipient, combinedMessage);
+        
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: combinedMessage,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing message');
+        }
+        
+        logger.info({ userId, successCount, failCount, totalLines: actionLines.length }, 'Processed address operations');
+      } else {
+        logger.info({ userId, titleType }, 'No address actions parsed from template');
       }
     } else if (titleType === 'verification') {
       // Verification is handled separately, no need to process here
