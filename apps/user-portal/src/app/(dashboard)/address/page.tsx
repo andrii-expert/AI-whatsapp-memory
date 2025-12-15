@@ -448,35 +448,29 @@ export default function AddressPage() {
       country = addressParts[4] || "";
     }
 
+    // Prepare address data with proper null handling
+    const addressData = {
+      name: locationLabel.trim(),
+      folderId: null,
+      connectedUserId: null,
+      street: street?.trim() || undefined,
+      city: city?.trim() || undefined,
+      state: state?.trim() || undefined,
+      zip: zip?.trim() || undefined,
+      country: country?.trim() || undefined,
+      latitude: lat != null && !isNaN(lat) ? lat : undefined,
+      longitude: lng != null && !isNaN(lng) ? lng : undefined,
+    };
+
     if (editingAddress) {
       // Update existing address
       updateAddressMutation.mutate({
         id: editingAddress.id,
-        name: locationLabel.trim(),
-        folderId: null,
-        connectedUserId: null,
-        street: street || undefined,
-        city: city || undefined,
-        state: state || undefined,
-        zip: zip || undefined,
-        country: country || undefined,
-        latitude: lat || undefined,
-        longitude: lng || undefined,
+        ...addressData,
       });
     } else {
       // Create new address
-      createAddressMutation.mutate({
-        name: locationLabel.trim(),
-        folderId: null,
-        connectedUserId: null,
-        street: street || undefined,
-        city: city || undefined,
-        state: state || undefined,
-        zip: zip || undefined,
-        country: country || undefined,
-        latitude: lat || undefined,
-        longitude: lng || undefined,
-      });
+      createAddressMutation.mutate(addressData);
     }
   };
 
