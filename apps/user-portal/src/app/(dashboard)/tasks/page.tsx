@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Home, ChevronLeft, Folder, FolderClosed, Plus, Search, Edit2, Trash2, Check, ChevronDown, ChevronRight, Menu, X, ArrowUpDown, SortAsc, SortDesc, Calendar, ArrowUp, ArrowDown, Users, Eye, Edit3, MoreVertical, Share2, ShoppingCart } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -49,6 +50,7 @@ export default function TasksPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
 
   // State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -209,6 +211,19 @@ export default function TasksPage() {
   useEffect(() => {
     foldersRef.current = allOwnedFolders;
   }, [allOwnedFolders]);
+
+  // Handle folderId from URL parameters
+  useEffect(() => {
+    const folderIdFromUrl = searchParams.get("folderId");
+    if (folderIdFromUrl && allOwnedFolders.length > 0) {
+      // Check if the folder exists in owned folders
+      const folderExists = allOwnedFolders.some((f: any) => f.id === folderIdFromUrl);
+      if (folderExists) {
+        setSelectedFolderId(folderIdFromUrl);
+        setViewAllTasks(false);
+      }
+    }
+  }, [searchParams, allOwnedFolders]);
 
   // Auto-expand parent folders when a folder is selected
   useEffect(() => {

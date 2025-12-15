@@ -739,9 +739,15 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                      onClick={() => router.push("/tasks")}
+                      onClick={() => {
+                        if (shoppingListFolder?.id) {
+                          router.push(`/tasks?folderId=${shoppingListFolder.id}`);
+                        } else {
+                          router.push("/tasks");
+                        }
+                      }}
                     >
-                      View All Tasks
+                      View Shopping List
                       <ArrowRight className="h-3 w-3 ml-1" />
                     </Button>
                   </div>
