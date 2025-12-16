@@ -306,7 +306,7 @@ export async function GET(req: NextRequest) {
             );
             
             // Create reminder message in professional format
-            const message = `🚨 Reminder Alarm:\nTitle: ${reminder.title}\nDate: Now`;
+            const message = `🚨 *Reminder Alarm:*\nTitle: *${reminder.title}*\nDate: Now`;
             
             logger.info(
               {

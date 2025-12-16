@@ -2623,11 +2623,11 @@ export class ActionExecutor {
           timeDisplay = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
         }
         
-        // Format: number. Title | Time
+        // Format: number. Title | Time (with bold numbers and titles)
         if (timeDisplay) {
-          message += `${index + 1}. ${reminder.title} | ${timeDisplay}\n`;
+          message += `*${index + 1}.* *${reminder.title}* | ${timeDisplay}\n`;
         } else {
-          message += `${index + 1}. ${reminder.title}\n`;
+          message += `*${index + 1}.* *${reminder.title}*\n`;
         }
       });
 
@@ -3685,7 +3685,7 @@ export class ActionExecutor {
         }
         dateInfo = `${dateLabel} ${time24}`;
       }
-      const responseMessage = `✅ New Reminder Created:\nTitle: ${reminder.title}\n${dateInfo ? `Date: ${dateInfo}` : ''}`;
+      const responseMessage = `✅ *New Reminder Created:*\nTitle: *${reminder.title}*\n${dateInfo ? `Date: ${dateInfo}` : ''}`;
 
       return {
         success: true,
@@ -3830,7 +3830,7 @@ export class ActionExecutor {
         }
         dateInfo = `${dateLabel} ${time24}`;
       }
-      const responseMessage = `⚠️ Reminder Updated:\nTitle: ${updated.title || reminder.title}\n${dateInfo ? `New Date: ${dateInfo}` : ''}`;
+      const responseMessage = `⚠️ *Reminder Updated:*\nTitle: *${updated.title || reminder.title}*\n${dateInfo ? `New Date: ${dateInfo}` : ''}`;
 
       return {
         success: true,
@@ -3874,7 +3874,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `⛔ Reminder Deleted:\nTitle: ${reminder.title}`,
+        message: `⛔ *Reminder Deleted:*\nTitle: *${reminder.title}*`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to delete reminder');
