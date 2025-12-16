@@ -487,7 +487,7 @@ export async function handleMediaMessage(
     const folderInfo = folderId && folderName ? `\n📁 *Folder:* ${folderName}` : '';
     await whatsappService.sendTextMessage(
       message.from,
-      `✅️ *New File Added*\nFile: *PDF*\nName: *${file.title}*`
+      `✅️ *New File Added*\nFile: PDF\nName: ${file.title}`
     );
 
     await logOutgoingWhatsAppMessage(db, {

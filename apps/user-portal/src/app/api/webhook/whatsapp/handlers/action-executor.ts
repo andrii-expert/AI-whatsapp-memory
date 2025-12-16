@@ -803,7 +803,7 @@ export class ActionExecutor {
       const folderName = parsed.folderRoute || 'General';
       return {
         success: true,
-        message: `✅ *New Task Created:*\nTitle: *${parsed.taskName}*`,
+        message: `✅ *New Task Created:*\nTitle: ${parsed.taskName}`,
       };
     } catch (error) {
       logger.error({ error, taskName: parsed.taskName, userId: this.userId }, 'Failed to create task');
@@ -912,7 +912,7 @@ export class ActionExecutor {
 
         return {
           success: true,
-          message: `✅️ *New File Folder Created*\nName: *${parsed.folderRoute}*`,
+          message: `✅️ *New File Folder Created*\nName: ${parsed.folderRoute}`,
         };
       } catch (error) {
         logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create file folder');
@@ -932,7 +932,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *New Task Folder Created:*\nName: *${parsed.folderRoute}*`,
+        message: `✅ *New Task Folder Created:*\nName: ${parsed.folderRoute}`,
       };
     } catch (error) {
       logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create folder');
@@ -1004,7 +1004,7 @@ export class ActionExecutor {
 
         return {
           success: true,
-          message: `🔁 *File Folder Shared*\nFolder: *${parsed.folderRoute}*\nShare to: *${parsed.recipient}*\nAccount: *${parsed.recipient}*\nPermission: *Editor*`,
+          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nAccount: ${parsed.recipient}\nPermission: Editor`,
         };
       } catch (error) {
         logger.error(
@@ -1057,7 +1057,7 @@ export class ActionExecutor {
 
         return {
           success: true,
-          message: `🔁 *File Folder Shared*\nFolder: *${parsed.folderRoute}*\nShare to: *${parsed.recipient}*\nAccount: *${parsed.recipient}*\nPermission: *Editor*`,
+          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nAccount: ${parsed.recipient}\nPermission: Editor`,
         };
       } catch (error) {
         logger.error(
@@ -1115,7 +1115,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `🔁 *Task Folder Shared*\nFolder: *${parsed.folderRoute}*\nShare to: *${parsed.recipient}*\nPermission: *Editor*`,
+        message: `🔁 *Task Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nPermission: Editor`,
       };
     } catch (error) {
       logger.error(
@@ -1196,7 +1196,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `🔁 *Task Shared*\nTitle: *${parsed.taskName}*\nShare to: *${parsed.recipient}*\nPermission: *Editor*`,
+        message: `🔁 *Task Shared*\nTitle: ${parsed.taskName}\nShare to: ${parsed.recipient}\nPermission: Editor`,
       };
     } catch (error) {
       logger.error(
@@ -1241,7 +1241,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `⚠️ *Task Updated:*\nNew Title: *${parsed.newName === 'unspecified' ? parsed.taskName : parsed.newName}*`,
+        message: `⚠️ *Task Updated:*\nNew Title: ${parsed.newName === 'unspecified' ? parsed.taskName : parsed.newName}`,
       };
     } catch (error) {
       logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to update task');
@@ -1285,12 +1285,12 @@ export class ActionExecutor {
       if (isShoppingListItem) {
         return {
           success: true,
-          message: `⛔ *Item Removed:*\nTitle: *${parsed.taskName}*`,
+          message: `⛔ *Item Removed:*\nTitle: ${parsed.taskName}`,
         };
       }
       return {
         success: true,
-        message: `⛔ *Task Deleted:*\nTitle: *${parsed.taskName}*`,
+        message: `⛔ *Task Deleted:*\nTitle: ${parsed.taskName}`,
       };
     } catch (error) {
       logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to delete task');
@@ -1329,7 +1329,7 @@ export class ActionExecutor {
       await toggleTaskStatus(this.db, task.id, this.userId);
       return {
         success: true,
-        message: `✅ *Task Completed*\nTitle: *${parsed.taskName}*`,
+        message: `✅ *Task Completed*\nTitle: ${parsed.taskName}`,
       };
     } catch (error) {
       logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to complete task');
@@ -1665,7 +1665,7 @@ export class ActionExecutor {
       await deleteUserFile(this.db, file.id, this.userId);
       return {
         success: true,
-        message: `⛔ *File Deleted:*\nFile: *PDF*\nName: *${parsed.taskName}*`,
+        message: `⛔ *File Deleted:*\nFile: PDF\nName: ${parsed.taskName}`,
       };
     } catch (error) {
       logger.error({ error, fileId: file.id, userId: this.userId }, 'Failed to delete file');
@@ -1940,7 +1940,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `🔁 *File Shared*\nFile: *${parsed.taskName}*\nShare to: *${parsed.recipient}*\nPermission: *Editor*`,
+        message: `🔁 *File Shared*\nFile: ${parsed.taskName}\nShare to: ${parsed.recipient}\nPermission: Editor`,
       };
     } catch (error) {
       logger.error(
@@ -1993,7 +1993,7 @@ export class ActionExecutor {
       let message = `🪪 *Show All Files*\n`;
       
       files.slice(0, 20).forEach((file, index) => {
-        message += `*${index + 1}.* *${file.title}*\n`;
+        message += `*${index + 1}.* ${file.title}\n`;
       });
 
       if (files.length > 20) {
@@ -2092,7 +2092,7 @@ export class ActionExecutor {
       let message = `${headerIcon} ${headerText}\n`;
       
       tasks.slice(0, 20).forEach((task, index) => {
-        message += `*${index + 1}.* *${task.title}*\n`;
+        message += `*${index + 1}.* ${task.title}\n`;
       });
 
       if (tasks.length > 20) {

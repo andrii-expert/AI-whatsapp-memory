@@ -420,6 +420,7 @@ export default function AddressPage() {
   const [coordinates, setCoordinates] = useState("");
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const [autocomplete, setAutocomplete] = useState<any>(null);
+  const autocompleteRef = useRef<any>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [addressComponents, setAddressComponents] = useState<{
     street?: string;
@@ -633,19 +634,50 @@ export default function AddressPage() {
     }
   };
 
-  // Initialize Google Maps Autocomplete
+  // Initialize Google Maps Autocomplete when modal opens
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!isAddModalOpen) {
+      // Clean up autocomplete when modal closes
+      if (autocompleteRef.current) {
+        // Remove all listeners
+        if (window.google?.maps?.event) {
+          window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        }
+        autocompleteRef.current = null;
+        setAutocomplete(null);
+      }
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout;
+    let retryCount = 0;
+    const maxRetries = 50; // 5 seconds max wait
 
     const initAutocomplete = () => {
       if (!window.google?.maps?.places) {
         // Wait for Google Maps to load
-        setTimeout(initAutocomplete, 100);
+        retryCount++;
+        if (retryCount < maxRetries) {
+          timeoutId = setTimeout(initAutocomplete, 100);
+        }
         return;
       }
 
       const input = document.getElementById("modal-street-address") as HTMLInputElement;
-      if (!input || autocomplete) return;
+      if (!input) {
+        // Wait for input to be available in DOM (modal might still be animating)
+        retryCount++;
+        if (retryCount < maxRetries) {
+          timeoutId = setTimeout(initAutocomplete, 100);
+        }
+        return;
+      }
+
+      // If autocomplete already exists for this input, don't recreate
+      if (autocompleteRef.current) {
+        return;
+      }
 
       try {
         const autocompleteInstance = new window.google.maps.places.Autocomplete(input, {
@@ -699,14 +731,24 @@ export default function AddressPage() {
           }
         });
 
+        autocompleteRef.current = autocompleteInstance;
         setAutocomplete(autocompleteInstance);
       } catch (error) {
         console.error("Error initializing autocomplete:", error);
       }
     };
 
-    initAutocomplete();
-  }, [autocomplete]);
+    // Small delay to ensure modal is fully rendered
+    timeoutId = setTimeout(() => {
+      initAutocomplete();
+    }, 150);
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [isAddModalOpen]);
 
   // Handle Google Maps link parsing
   const handleAddressPaste = (value: string) => {

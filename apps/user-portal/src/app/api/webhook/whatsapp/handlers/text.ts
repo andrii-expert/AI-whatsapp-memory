@@ -525,7 +525,39 @@ async function processAIResponse(
       // Send combined results to user (filter out empty messages from button sends)
       const nonEmptyResults = results.filter(r => r.trim().length > 0);
       if (nonEmptyResults.length > 0) {
-        const combinedMessage = nonEmptyResults.join('\n');
+        // Check if we have shopping list items to format specially
+        const shoppingItems: string[] = [];
+        const otherMessages: string[] = [];
+        
+        for (const result of nonEmptyResults) {
+          if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
+            shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
+          } else {
+            otherMessages.push(result);
+          }
+        }
+        
+        let combinedMessage = '';
+        
+        // Format shopping list items if any
+        if (shoppingItems.length > 0) {
+          const itemsText = shoppingItems.length === 1
+            ? shoppingItems[0]
+            : shoppingItems.length === 2
+            ? `${shoppingItems[0]} and ${shoppingItems[1]}`
+            : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
+          combinedMessage = `✅ *Added to Shopping List:*\nItem/s: ${itemsText}`;
+        }
+        
+        // Add other messages
+        if (otherMessages.length > 0) {
+          if (combinedMessage) {
+            combinedMessage += '\n\n' + otherMessages.join('\n');
+          } else {
+            combinedMessage = otherMessages.join('\n');
+          }
+        }
+        
         await whatsappService.sendTextMessage(recipient, combinedMessage);
         
         // Log outgoing message
