@@ -487,7 +487,7 @@ export async function handleMediaMessage(
     const folderInfo = folderId && folderName ? `\n📁 *Folder:* ${folderName}` : '';
     await whatsappService.sendTextMessage(
       message.from,
-      `✅ *File saved successfully!*\n\n📄 *Name:* ${file.title}\n📦 *Size:* ${fileSizeMB} MB\n💾 *Type:* ${downloadedMimeType}${folderInfo}\n\nYour file has been saved to your documents.`
+      `✅️ *New File Added*\nFile: *PDF*\nName: *${file.title}*`
     );
 
     await logOutgoingWhatsAppMessage(db, {
