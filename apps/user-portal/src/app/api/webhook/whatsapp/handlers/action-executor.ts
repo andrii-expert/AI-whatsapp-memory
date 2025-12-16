@@ -3642,49 +3642,55 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: reminder.id, timezone }, 'Reminder created');
 
-      // Format response message
-      const timeParts = reminder.time ? reminder.time.split(':') : null;
+      // Calculate next occurrence date for the reminder
       let dateInfo = '';
-      if (timeParts) {
-        const hours = parseInt(timeParts[0] || '0', 10);
-        const minutes = parseInt(timeParts[1] || '0', 10);
-        const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      if (timezone) {
+        const timeComponents = this.getCurrentTimeInTimezone(timezone);
+        const now = new Date();
+        const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
+        const userNow = new Date(userNowString);
+        const userLocalTime = {
+          year: timeComponents.year,
+          month: timeComponents.month,
+          day: timeComponents.day,
+          hours: timeComponents.hour,
+          minutes: timeComponents.minute,
+          seconds: timeComponents.second,
+          date: userNow,
+        };
+        const nextOccurrence = this.calculateNextReminderTime(reminder, userLocalTime, timezone);
         
-        // Determine if it's today, tomorrow, or a specific date
-        let dateLabel = 'Today';
-        let targetDateObj: Date | null = null;
-        
-        if (reminder.targetDate) {
-          targetDateObj = new Date(reminder.targetDate);
-        } else if (reminder.daysFromNow !== undefined && reminder.daysFromNow !== null) {
-          // Calculate date from daysFromNow
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          targetDateObj = new Date(today);
-          targetDateObj.setDate(targetDateObj.getDate() + reminder.daysFromNow);
-        }
-        
-        if (targetDateObj) {
+        if (nextOccurrence) {
+          // Format the next occurrence date
+          const nextOccurrenceInUserTz = new Date(nextOccurrence.toLocaleString("en-US", { timeZone: timezone }));
+          const hours = nextOccurrenceInUserTz.getHours();
+          const minutes = nextOccurrenceInUserTz.getMinutes();
+          const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+          
+          // Determine if it's today, tomorrow, or a specific date
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
-          const targetDateOnly = new Date(targetDateObj);
-          targetDateOnly.setHours(0, 0, 0, 0);
+          const nextDateOnly = new Date(nextOccurrenceInUserTz);
+          nextDateOnly.setHours(0, 0, 0, 0);
           
-          if (targetDateOnly.getTime() === today.getTime()) {
+          let dateLabel = 'Today';
+          if (nextDateOnly.getTime() === today.getTime()) {
             dateLabel = 'Today';
-          } else if (targetDateOnly.getTime() === tomorrow.getTime()) {
+          } else if (nextDateOnly.getTime() === tomorrow.getTime()) {
             dateLabel = 'Tomorrow';
           } else {
-            const day = targetDateObj.getDate();
+            const day = nextOccurrenceInUserTz.getDate();
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const month = monthNames[targetDateObj.getMonth()];
+            const month = monthNames[nextOccurrenceInUserTz.getMonth()];
             dateLabel = `${day} ${month}`;
           }
+          
+          dateInfo = `${dateLabel} ${time24}`;
         }
-        dateInfo = `${dateLabel} ${time24}`;
       }
+      
       const responseMessage = `✅ New Reminder Created:\nTitle: *${reminder.title}*\n${dateInfo ? `Date: ${dateInfo}` : ''}`;
 
       return {
@@ -3783,53 +3789,55 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: updated.id, timezone }, 'Reminder updated');
 
-      // Format response message
-      const timeToDisplay = updated.time || reminder.time;
-      const timeParts = timeToDisplay ? timeToDisplay.split(':') : null;
+      // Calculate next occurrence date for the updated reminder
       let dateInfo = '';
-      if (timeParts) {
-        const hours = parseInt(timeParts[0] || '0', 10);
-        const minutes = parseInt(timeParts[1] || '0', 10);
-        const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      if (timezone) {
+        const timeComponents = this.getCurrentTimeInTimezone(timezone);
+        const now = new Date();
+        const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
+        const userNow = new Date(userNowString);
+        const userLocalTime = {
+          year: timeComponents.year,
+          month: timeComponents.month,
+          day: timeComponents.day,
+          hours: timeComponents.hour,
+          minutes: timeComponents.minute,
+          seconds: timeComponents.second,
+          date: userNow,
+        };
+        const nextOccurrence = this.calculateNextReminderTime(updated, userLocalTime, timezone);
         
-        // Determine if it's today, tomorrow, or a specific date
-        let dateLabel = 'Today';
-        let targetDateObj: Date | null = null;
-        
-        const targetDate = updated.targetDate || reminder.targetDate;
-        const daysFromNow = updated.daysFromNow !== undefined ? updated.daysFromNow : reminder.daysFromNow;
-        
-        if (targetDate) {
-          targetDateObj = new Date(targetDate);
-        } else if (daysFromNow !== undefined && daysFromNow !== null) {
-          // Calculate date from daysFromNow
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          targetDateObj = new Date(today);
-          targetDateObj.setDate(targetDateObj.getDate() + daysFromNow);
-        }
-        
-        if (targetDateObj) {
+        if (nextOccurrence) {
+          // Format the next occurrence date
+          const nextOccurrenceInUserTz = new Date(nextOccurrence.toLocaleString("en-US", { timeZone: timezone }));
+          const hours = nextOccurrenceInUserTz.getHours();
+          const minutes = nextOccurrenceInUserTz.getMinutes();
+          const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+          
+          // Determine if it's today, tomorrow, or a specific date
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
-          const targetDateOnly = new Date(targetDateObj);
-          targetDateOnly.setHours(0, 0, 0, 0);
+          const nextDateOnly = new Date(nextOccurrenceInUserTz);
+          nextDateOnly.setHours(0, 0, 0, 0);
           
-          if (targetDateOnly.getTime() === today.getTime()) {
+          let dateLabel = 'Today';
+          if (nextDateOnly.getTime() === today.getTime()) {
             dateLabel = 'Today';
-          } else if (targetDateOnly.getTime() === tomorrow.getTime()) {
+          } else if (nextDateOnly.getTime() === tomorrow.getTime()) {
             dateLabel = 'Tomorrow';
           } else {
-            const day = targetDateObj.getDate();
+            const day = nextOccurrenceInUserTz.getDate();
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const month = monthNames[targetDateObj.getMonth()];
+            const month = monthNames[nextOccurrenceInUserTz.getMonth()];
             dateLabel = `${day} ${month}`;
           }
+          
+          dateInfo = `${dateLabel} ${time24}`;
         }
-        dateInfo = `${dateLabel} ${time24}`;
       }
+      
       const responseMessage = `⚠️ Reminder Updated:\nTitle: *${updated.title || reminder.title}*\n${dateInfo ? `New Date: ${dateInfo}` : ''}`;
 
       return {
