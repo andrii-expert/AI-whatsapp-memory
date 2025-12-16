@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, MapPin, MessageCircle, Loader2, Edit2, Trash2, MoreVertical, Plus } from "lucide-react";
+import { Home, ChevronLeft, MapPin, MessageCircle, Loader2, Edit2, Trash2, MoreVertical, Plus, Menu, X } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
@@ -433,6 +433,7 @@ export default function AddressPage() {
   const [addressToDelete, setAddressToDelete] = useState<any>(null);
   const [enableDropPin, setEnableDropPin] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Fetch addresses
   const { data: addresses = [], isLoading } = useQuery(trpc.addresses.list.queryOptions());
@@ -443,6 +444,31 @@ export default function AddressPage() {
       setSelectedAddress(addresses[0]);
     }
   }, [addresses, selectedAddress]);
+
+  // Close mobile sidebar on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isMobileSidebarOpen) {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isMobileSidebarOpen]);
+
+  // Prevent body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (isMobileSidebarOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isMobileSidebarOpen]);
 
   // Create address mutation
   const createAddressMutation = useMutation(
@@ -917,18 +943,102 @@ export default function AddressPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 max-w-7xl">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
       {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm mb-4 sm:mb-6">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+      <div className="flex items-center gap-2 text-sm justify-between mb-4 sm:mb-6">
+        <div className="flex items-center justify-center gap-2">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Home className="h-4 w-4" />
+            <span className="hidden sm:inline">Dashboard</span>
+          </Link>
+          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+          <span className="font-medium">Saved addresses</span>
+        </div>
+
+        <Button
+          onClick={handleOpenAddModal}
+          variant="orange-primary"
+          className="flex-shrink-0 lg:hidden"
         >
-          <Home className="h-4 w-4" />
-          <span className="hidden sm:inline">Dashboard</span>
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <span className="font-medium">Saved addresses</span>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Address
+        </Button>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {isMobileSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden mt-0"
+          style={{ margin: 0 }}
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <div
+        className={cn(
+          "fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto m-0",
+          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+        style={{ margin: 0 }}
+      >
+        <div className="p-4">
+          {/* Close Button */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Addresses</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMobileSidebarOpen(false)}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Saved Locations List */}
+          <div className="space-y-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : addresses.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 text-sm">
+                <MapPin className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p>No saved locations yet.</p>
+                <p className="text-xs mt-1">
+                  Add your first location to get started.
+                </p>
+              </div>
+            ) : (
+              addresses.map((address: any) => (
+                <button
+                  key={address.id}
+                  onClick={() => {
+                    handleSelectAddress(address);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium text-left",
+                    selectedAddress?.id === address.id
+                      ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
+                      : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                  )}
+                >
+                  <MapPin className="h-4 w-4 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{address.name}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {getFullAddress(address) || "No address provided"}
+                    </p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Page Header */}
@@ -939,11 +1049,11 @@ export default function AddressPage() {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Saved addresses</h1>
               <Button
                 onClick={handleOpenAddModal}
-                type="button"
-                variant="default"
-                className="w-full sm:w-auto"
+                variant="orange-primary"
+                className="flex-shrink-0 hidden lg:flex"
               >
-                <Plus size={18} className="mr-2" /> New Address
+                <Plus className="h-4 w-4 mr-2" />
+                Add Address
               </Button>
             </div>
             <p className="text-sm sm:text-base text-gray-600">
@@ -953,118 +1063,70 @@ export default function AddressPage() {
         </div>
       </div>
 
-      {/* Three Column Layout - Form, List, Map side by side on large screens */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Main Content - Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+        {/* Desktop Left Panel - Saved Locations */}
+        <div className="hidden lg:block space-y-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Saved locations</h2>
 
-        {/* Middle Column - Saved locations */}
-        <div className="space-y-6">
-          <Card>
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">Saved locations</h2>
-                <span className="text-xs sm:text-sm text-gray-600">{addresses.length} saved</span>
-              </div>
-
-              {/* Mobile: Add Address Button */}
-              <div className="lg:hidden mb-4">
-                <Button
-                  onClick={handleOpenAddModal}
-                  type="button"
-                  variant="default"
-                  className="w-full"
-                >
-                  <Plus size={18} className="mr-2" /> New Address
-                </Button>
-              </div>
-
+            {/* Saved Locations List */}
+            <div className="space-y-1">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : addresses.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <MapPin className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm sm:text-base">No saved locations yet.</p>
-                  <p className="text-xs sm:text-sm mt-1">Add your first location above.</p>
+                <div className="text-center py-8 text-gray-500 text-sm">
+                  <MapPin className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p>No saved locations yet.</p>
+                  <p className="text-xs mt-1">
+                    Add your first location to get started.
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-3 sm:space-y-4">
-                  {addresses.map((address: any) => (
-                    <div
-                      key={address.id}
-                      className={cn(
-                        "p-3 sm:p-4 rounded-lg border-2 transition-all cursor-pointer touch-manipulation",
-                        selectedAddress?.id === address.id
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100"
-                      )}
-                      onClick={() => handleSelectAddress(address)}
-                    >
-                      <div className="flex items-start justify-between gap-3 sm:gap-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-sm sm:text-base text-gray-900 mb-1">{address.name}</h3>
-                          <p className="text-xs sm:text-sm text-gray-600 mb-1 line-clamp-2">
-                            {getFullAddress(address) || "No address provided"}
-                          </p>
-                          {getCoordinatesString(address) && (
-                            <p className="text-xs text-gray-500">
-                              {getCoordinatesString(address)}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                          <span
-                            className="hidden sm:inline text-xs sm:text-sm text-gray-500 hover:text-gray-700 font-medium cursor-pointer"
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleSelectAddress(address);
-                            }}
-                          >
-                            Tap to view
-                          </span>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 sm:h-8 sm:w-8 touch-manipulation"
-                                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleEditAddress(address);
-                              }}>
-                                <Edit2 className="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e: React.MouseEvent) => {
-                                  e.stopPropagation();
-                                  handleDeleteAddress(address);
-                                }}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
+                addresses.map((address: any) => (
+                  <button
+                    key={address.id}
+                    onClick={() => handleSelectAddress(address)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium text-left",
+                      selectedAddress?.id === address.id
+                        ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
+                        : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                    )}
+                  >
+                    <MapPin className="h-4 w-4 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{address.name}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {getFullAddress(address) || "No address provided"}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                  </button>
+                ))
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
 
-        {/* Right Column - Map Preview */}
-        <div>
+        {/* Main Content Area */}
+        <div className="space-y-6">
+          {/* Mobile - Addresses Button */}
+          <div className="lg:hidden">
+            <div className="flex items-center gap-2 mb-4">
+              <Button
+                variant="outline"
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
+              >
+                <Menu className="h-4 w-4" />
+                <span className="font-medium">Addresses</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Map Preview */}
           <Card>
             <CardContent className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-2 mb-4">
