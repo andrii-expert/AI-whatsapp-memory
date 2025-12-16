@@ -305,9 +305,8 @@ export async function GET(req: NextRequest) {
               'Reminder due - preparing notification with user timezone'
             );
             
-            // Create reminder message in standard format
-            const timeInfo = reminderTimeStr ? ` at ${reminderTimeStr}` : '';
-            const message = `🔔 *Reminder Alarm:*\n"${reminder.title}${timeInfo}"`;
+            // Create reminder message in professional format
+            const message = `🚨 Reminder Alarm:\nTitle: ${reminder.title}\nDate: Now`;
             
             logger.info(
               {

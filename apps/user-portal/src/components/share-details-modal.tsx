@@ -24,6 +24,7 @@ import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useState } from "react";
+import { cn } from "@imaginecalendar/ui/cn";
 
 interface ShareDetailsModalProps {
   isOpen: boolean;
@@ -49,6 +50,13 @@ export function ShareDetailsModal({
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [showFriendsList, setShowFriendsList] = useState(true);
+
+  // Fetch friends list
+  const { data: friendsList = [] } = useQuery(trpc.friends.list.queryOptions());
+
+  // Filter friends that have connectedUserId (linked to user accounts)
+  const friendsWithAccounts = friendsList.filter((friend: any) => friend.connectedUserId && friend.connectedUser);
 
   // Determine which sharing router to use based on resource type
   const isNoteResource = resourceType === "note" || resourceType === "note_folder";
@@ -405,6 +413,20 @@ export function ShareDetailsModal({
     });
   };
 
+  const handleAddFriend = (friend: any, permission: "view" | "edit" = "view") => {
+    // Use the connectedUser for sharing
+    if (!friend.connectedUser) {
+      toast({
+        title: "Cannot share",
+        description: "This friend is not linked to a user account",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    handleAddUser(friend.connectedUser, permission);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -681,6 +703,81 @@ export function ShareDetailsModal({
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
+
+                {/* Friends List */}
+                {friendsWithAccounts.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs sm:text-sm font-semibold text-gray-700">
+                        Select from Friends ({friendsWithAccounts.length})
+                      </label>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowFriendsList(!showFriendsList)}
+                        className="h-7 text-xs"
+                      >
+                        {showFriendsList ? "Hide" : "Show"}
+                      </Button>
+                    </div>
+                    {showFriendsList && (
+                      <div className="border rounded-lg divide-y max-h-[120px] sm:max-h-[150px] overflow-y-auto">
+                        {friendsWithAccounts.map((friend: any) => {
+                          const user = friend.connectedUser;
+                          const displayName = [user.firstName, user.lastName]
+                            .filter(Boolean)
+                            .join(' ') || user.email?.split('@')[0] || friend.name || "Unknown User";
+                          const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
+                          const isAlreadyShared = existingUserIds.includes(user.id);
+                          
+                          return (
+                            <div
+                              key={friend.id}
+                              className={cn(
+                                "p-2 flex flex-col sm:flex-row sm:items-center gap-2",
+                                isAlreadyShared ? "bg-gray-50 opacity-60" : "hover:bg-gray-50"
+                              )}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm text-gray-900 truncate">
+                                  {displayName}
+                                  {friend.name && friend.name !== displayName && (
+                                    <span className="text-xs text-gray-500 ml-1">({friend.name})</span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500 truncate">
+                                  {user.email}
+                                </div>
+                              </div>
+                              <div className="flex gap-1.5 sm:gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleAddFriend(friend, "view")}
+                                  disabled={createShareMutation.isPending || isAlreadyShared}
+                                  className="flex-1 sm:flex-none text-xs h-7 sm:h-8"
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  View
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="blue-primary"
+                                  onClick={() => handleAddFriend(friend, "edit")}
+                                  disabled={createShareMutation.isPending || isAlreadyShared}
+                                  className="flex-1 sm:flex-none text-xs h-7 sm:h-8"
+                                >
+                                  <Edit3 className="h-3 w-3 mr-1" />
+                                  Edit
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Search Input */}
                 <div className="flex flex-col sm:flex-row gap-2">

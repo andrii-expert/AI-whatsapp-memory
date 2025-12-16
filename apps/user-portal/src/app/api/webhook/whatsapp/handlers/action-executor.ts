@@ -2571,7 +2571,7 @@ export class ActionExecutor {
         }
         return {
           success: true,
-          message: `🔔 *${filterTitle}*\n\n"None"`,
+          message: `🔔 ${filterTitle}\n\nNone`,
         };
       }
 
@@ -2603,14 +2603,14 @@ export class ActionExecutor {
       let filterTitle = 'Reminders';
       if (parsed.listFilter) {
         const filter = parsed.listFilter.toLowerCase();
-        if (filter === 'today') filterTitle = "Todays Reminders";
-        else if (filter === 'tomorrow') filterTitle = "Tomorrows Reminders";
-        else if (filter.includes('week')) filterTitle = "This Weeks Reminders";
-        else if (filter.includes('month')) filterTitle = "This Months Reminders";
+        if (filter === 'today') filterTitle = "Today's Reminders";
+        else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
+        else if (filter.includes('week')) filterTitle = "This Week's Reminders";
+        else if (filter.includes('month')) filterTitle = "This Month's Reminders";
         else filterTitle = `Reminders for ${parsed.listFilter}`;
       }
       
-      let message = `🔔 *${filterTitle}*\n\n`;
+      let message = `🔔 ${filterTitle}\n`;
       
       remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
         // Format next time in user's timezone
@@ -2619,21 +2619,16 @@ export class ActionExecutor {
           const nextTimeInUserTz = new Date(nextTime.toLocaleString("en-US", { timeZone: userTimezone }));
           const hours = nextTimeInUserTz.getHours();
           const minutes = nextTimeInUserTz.getMinutes();
-          const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
-          const period = hours >= 12 ? 'PM' : 'AM';
-          const dateStr = nextTimeInUserTz.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-          });
-          timeDisplay = `${hour12}:${String(minutes).padStart(2, '0')} ${period} on ${dateStr}`;
+          // Use 24-hour format for professional look
+          timeDisplay = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
         }
         
-        // Format: number, title on one line, time/date on next line (indented with spaces)
-        message += `*${index + 1}.* "${reminder.title}"\n`;
+        // Format: number. Title | Time
         if (timeDisplay) {
-          message += `   ${timeDisplay}\n`;
+          message += `${index + 1}. ${reminder.title} | ${timeDisplay}\n`;
+        } else {
+          message += `${index + 1}. ${reminder.title}\n`;
         }
-        message += '\n';
       });
 
       if (remindersWithNextTime.length > 20) {
@@ -3649,15 +3644,48 @@ export class ActionExecutor {
 
       // Format response message
       const timeParts = reminder.time ? reminder.time.split(':') : null;
-      let timeInfo = '';
+      let dateInfo = '';
       if (timeParts) {
         const hours = parseInt(timeParts[0] || '0', 10);
         const minutes = parseInt(timeParts[1] || '0', 10);
-        const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
-        const period = hours >= 12 ? 'PM' : 'AM';
-        timeInfo = ` at ${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+        const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        
+        // Determine if it's today, tomorrow, or a specific date
+        let dateLabel = 'Today';
+        let targetDateObj: Date | null = null;
+        
+        if (reminder.targetDate) {
+          targetDateObj = new Date(reminder.targetDate);
+        } else if (reminder.daysFromNow !== undefined && reminder.daysFromNow !== null) {
+          // Calculate date from daysFromNow
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          targetDateObj = new Date(today);
+          targetDateObj.setDate(targetDateObj.getDate() + reminder.daysFromNow);
+        }
+        
+        if (targetDateObj) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const targetDateOnly = new Date(targetDateObj);
+          targetDateOnly.setHours(0, 0, 0, 0);
+          
+          if (targetDateOnly.getTime() === today.getTime()) {
+            dateLabel = 'Today';
+          } else if (targetDateOnly.getTime() === tomorrow.getTime()) {
+            dateLabel = 'Tomorrow';
+          } else {
+            const day = targetDateObj.getDate();
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const month = monthNames[targetDateObj.getMonth()];
+            dateLabel = `${day} ${month}`;
+          }
+        }
+        dateInfo = `${dateLabel} ${time24}`;
       }
-      const responseMessage = `🔔 *Reminder created:*\n"${reminder.title}${timeInfo}"`;
+      const responseMessage = `✅ New Reminder Created:\nTitle: ${reminder.title}\n${dateInfo ? `Date: ${dateInfo}` : ''}`;
 
       return {
         success: true,
@@ -3758,15 +3786,51 @@ export class ActionExecutor {
       // Format response message
       const timeToDisplay = updated.time || reminder.time;
       const timeParts = timeToDisplay ? timeToDisplay.split(':') : null;
-      let timeInfo = '';
+      let dateInfo = '';
       if (timeParts) {
         const hours = parseInt(timeParts[0] || '0', 10);
         const minutes = parseInt(timeParts[1] || '0', 10);
-        const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
-        const period = hours >= 12 ? 'PM' : 'AM';
-        timeInfo = ` at ${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+        const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        
+        // Determine if it's today, tomorrow, or a specific date
+        let dateLabel = 'Today';
+        let targetDateObj: Date | null = null;
+        
+        const targetDate = updated.targetDate || reminder.targetDate;
+        const daysFromNow = updated.daysFromNow !== undefined ? updated.daysFromNow : reminder.daysFromNow;
+        
+        if (targetDate) {
+          targetDateObj = new Date(targetDate);
+        } else if (daysFromNow !== undefined && daysFromNow !== null) {
+          // Calculate date from daysFromNow
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          targetDateObj = new Date(today);
+          targetDateObj.setDate(targetDateObj.getDate() + daysFromNow);
+        }
+        
+        if (targetDateObj) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const targetDateOnly = new Date(targetDateObj);
+          targetDateOnly.setHours(0, 0, 0, 0);
+          
+          if (targetDateOnly.getTime() === today.getTime()) {
+            dateLabel = 'Today';
+          } else if (targetDateOnly.getTime() === tomorrow.getTime()) {
+            dateLabel = 'Tomorrow';
+          } else {
+            const day = targetDateObj.getDate();
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const month = monthNames[targetDateObj.getMonth()];
+            dateLabel = `${day} ${month}`;
+          }
+        }
+        dateInfo = `${dateLabel} ${time24}`;
       }
-      const responseMessage = `🔔 *Reminder updated:*\n"${updated.title || reminder.title}${timeInfo}"`;
+      const responseMessage = `⚠️ Reminder Updated:\nTitle: ${updated.title || reminder.title}\n${dateInfo ? `New Date: ${dateInfo}` : ''}`;
 
       return {
         success: true,
@@ -3810,7 +3874,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `🔔 *Reminder deleted:*\n"${reminder.title}"`,
+        message: `⛔ Reminder Deleted:\nTitle: ${reminder.title}`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to delete reminder');

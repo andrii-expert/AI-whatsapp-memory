@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@imaginecalendar/ui/select";
 import { useTRPC } from "@/trpc/client";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { cn } from "@imaginecalendar/ui/cn";
 
@@ -49,6 +49,13 @@ export function ShareModal({
     user: any;
     permission: "view" | "edit";
   }>>([]);
+  const [showFriendsList, setShowFriendsList] = useState(true);
+
+  // Fetch friends list
+  const { data: friendsList = [] } = useQuery(trpc.friends.list.queryOptions());
+
+  // Filter friends that have connectedUserId (linked to user accounts)
+  const friendsWithAccounts = friendsList.filter((friend: any) => friend.connectedUserId && friend.connectedUser);
 
   // Determine which sharing router to use based on resource type
   const isNoteResource = resourceType === "note" || resourceType === "note_folder";
@@ -209,6 +216,20 @@ export function ShareModal({
     setSearchResults([]);
   };
 
+  const handleAddFriend = (friend: any) => {
+    // Use the connectedUser for sharing
+    if (!friend.connectedUser) {
+      toast({
+        title: "Cannot share",
+        description: "This friend is not linked to a user account",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    handleAddUser(friend.connectedUser);
+  };
+
   const handleRemoveUser = (userId: string) => {
     setPendingShares(pendingShares.filter(share => share.user.id !== userId));
   };
@@ -237,7 +258,7 @@ export function ShareModal({
             <span className="truncate">Share {resourceType === "task" || resourceType === "file" ? (resourceType === "task" ? "Task" : "File") : "Folder"}</span>
           </AlertDialogTitle>
           <AlertDialogDescription className="text-sm sm:text-base break-all pt-1">
-            Share "{resourceName}" with users by searching for their email or phone
+            Share "{resourceName}" with users by selecting from your friends list or searching by email or phone
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -329,6 +350,78 @@ export function ShareModal({
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Friends List */}
+          {friendsWithAccounts.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-semibold text-gray-700">
+                  Select from Friends ({friendsWithAccounts.length})
+                </label>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowFriendsList(!showFriendsList)}
+                  className="h-7 text-xs"
+                >
+                  {showFriendsList ? "Hide" : "Show"}
+                </Button>
+              </div>
+              {showFriendsList && (
+                <div className="border rounded-lg divide-y max-h-[180px] sm:max-h-[200px] overflow-y-auto">
+                  {friendsWithAccounts.map((friend: any) => {
+                    const user = friend.connectedUser;
+                    const displayName = [user.firstName, user.lastName]
+                      .filter(Boolean)
+                      .join(' ') || user.email?.split('@')[0] || friend.name || "Unknown User";
+                    const isAlreadyAdded = pendingShares.some(share => share.user.id === user.id);
+                    
+                    return (
+                      <div
+                        key={friend.id}
+                        className={cn(
+                          "p-2 sm:p-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between",
+                          isAlreadyAdded ? "bg-gray-50 opacity-60" : "hover:bg-gray-50"
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm sm:text-base text-gray-900 truncate">
+                            {displayName}
+                            {friend.name && friend.name !== displayName && (
+                              <span className="text-xs text-gray-500 ml-1">({friend.name})</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1">
+                            {user.email && (
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                                <Mail className="h-3 w-3 flex-shrink-0" />
+                                <span className="truncate">{user.email}</span>
+                              </div>
+                            )}
+                            {user.phone && (
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                                <Phone className="h-3 w-3 flex-shrink-0" />
+                                <span className="truncate">{user.phone}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAddFriend(friend)}
+                          disabled={isAlreadyAdded}
+                          variant="blue-primary"
+                          className="w-full sm:w-auto sm:ml-3 h-8 text-xs sm:text-sm"
+                        >
+                          {isAlreadyAdded ? "Added" : "Add"}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
