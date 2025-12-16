@@ -175,23 +175,56 @@ export default function OnboardingPage() {
         const queryOpts = trpc.user.detectTimezone.queryOptions();
         const result = await queryClient.fetchQuery(queryOpts);
         if (result.timezone && result.utcOffset) {
-          setValue("timezone", result.timezone, { shouldDirty: false });
-          setValue("utcOffset", result.utcOffset, { shouldDirty: false });
+          setValue("timezone", result.timezone, { shouldDirty: false, shouldValidate: true });
+          setValue("utcOffset", result.utcOffset, { shouldDirty: false, shouldValidate: true });
         }
       } catch (error) {
         console.error("Failed to detect timezone:", error);
         // Fallback to browser timezone
         const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        setValue("timezone", browserTimezone, { shouldDirty: false });
+        setValue("timezone", browserTimezone, { shouldDirty: false, shouldValidate: true });
         // Try to get UTC offset for browser timezone
         try {
           const queryOpts = trpc.user.getTimezoneDetails.queryOptions({ timezone: browserTimezone });
           const result = await queryClient.fetchQuery(queryOpts);
           if (result.utcOffset) {
-            setValue("utcOffset", result.utcOffset, { shouldDirty: false });
+            setValue("utcOffset", result.utcOffset, { shouldDirty: false, shouldValidate: true });
+          } else {
+            // Fallback: calculate UTC offset manually
+            try {
+              const now = new Date();
+              const formatter = new Intl.DateTimeFormat('en', {
+                timeZone: browserTimezone,
+                timeZoneName: 'shortOffset'
+              });
+              const parts = formatter.formatToParts(now);
+              const offsetPart = parts.find(part => part.type === 'timeZoneName');
+              if (offsetPart) {
+                const offset = offsetPart.value.replace('GMT', '').trim();
+                setValue("utcOffset", offset, { shouldDirty: false, shouldValidate: true });
+              }
+            } catch (err) {
+              console.error("Failed to calculate UTC offset:", err);
+            }
           }
         } catch (err) {
           console.error("Failed to get UTC offset for browser timezone:", err);
+          // Try to calculate it manually as last resort
+          try {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('en', {
+              timeZone: browserTimezone,
+              timeZoneName: 'shortOffset'
+            });
+            const parts = formatter.formatToParts(now);
+            const offsetPart = parts.find(part => part.type === 'timeZoneName');
+            if (offsetPart) {
+              const offset = offsetPart.value.replace('GMT', '').trim();
+              setValue("utcOffset", offset, { shouldDirty: false, shouldValidate: true });
+            }
+          } catch (calcErr) {
+            console.error("Failed to calculate UTC offset:", calcErr);
+          }
         }
       } finally {
         setIsDetectingTimezone(false);
@@ -209,10 +242,43 @@ export default function OnboardingPage() {
           const queryOpts = trpc.user.getTimezoneDetails.queryOptions({ timezone: currentTimezone });
           const result = await queryClient.fetchQuery(queryOpts);
           if (result.utcOffset) {
-            setValue("utcOffset", result.utcOffset, { shouldDirty: false });
+            setValue("utcOffset", result.utcOffset, { shouldDirty: false, shouldValidate: true });
+          } else {
+            // Fallback: calculate UTC offset from timezone
+            try {
+              const now = new Date();
+              const formatter = new Intl.DateTimeFormat('en', {
+                timeZone: currentTimezone,
+                timeZoneName: 'shortOffset'
+              });
+              const parts = formatter.formatToParts(now);
+              const offsetPart = parts.find(part => part.type === 'timeZoneName');
+              if (offsetPart) {
+                const offset = offsetPart.value.replace('GMT', '').trim();
+                setValue("utcOffset", offset, { shouldDirty: false, shouldValidate: true });
+              }
+            } catch (err) {
+              console.error("Failed to calculate UTC offset:", err);
+            }
           }
         } catch (error) {
           console.error("Failed to fetch UTC offset:", error);
+          // Try to calculate it manually as fallback
+          try {
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('en', {
+              timeZone: currentTimezone,
+              timeZoneName: 'shortOffset'
+            });
+            const parts = formatter.formatToParts(now);
+            const offsetPart = parts.find(part => part.type === 'timeZoneName');
+            if (offsetPart) {
+              const offset = offsetPart.value.replace('GMT', '').trim();
+              setValue("utcOffset", offset, { shouldDirty: false, shouldValidate: true });
+            }
+          } catch (err) {
+            console.error("Failed to calculate UTC offset:", err);
+          }
         }
       };
       fetchUtcOffset();
@@ -301,6 +367,20 @@ export default function OnboardingPage() {
   }
 
   function onSubmit(values: z.infer<typeof formSchema>) {
+    // Double-check required fields are present
+    if (!values.firstName || !values.lastName || !values.phone || !values.country || 
+        !values.ageGroup || !values.mainUse || !values.howHeardAboutUs || 
+        !values.timezone || !values.utcOffset || !values.plan) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields before continuing.",
+        variant: "error",
+        duration: 4000,
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(true);
 
     const isFree = values.plan === 'free';
@@ -390,7 +470,7 @@ export default function OnboardingPage() {
                 <PhoneInput
                   id="phone"
                   value={watch("phone")}
-                  onChange={(value) => setValue("phone", value)}
+                  onChange={(value) => setValue("phone", value, { shouldValidate: true })}
                   error={!!errors.phone}
                   defaultCountry="ZA"
                 />
@@ -405,7 +485,10 @@ export default function OnboardingPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="country">Country *</Label>
-                  <Select onValueChange={(value) => setValue("country", value)}>
+                  <Select 
+                    value={watch("country") || ""} 
+                    onValueChange={(value) => setValue("country", value, { shouldValidate: true })}
+                  >
                     <SelectTrigger className={errors.country ? "border-red-500" : ""}>
                       <SelectValue placeholder="Select country" />
                     </SelectTrigger>
@@ -424,7 +507,10 @@ export default function OnboardingPage() {
 
                 <div>
                   <Label htmlFor="ageGroup">Age Group *</Label>
-                  <Select onValueChange={(value) => setValue("ageGroup", value as any)}>
+                  <Select 
+                    value={watch("ageGroup") || ""} 
+                    onValueChange={(value) => setValue("ageGroup", value as any, { shouldValidate: true })}
+                  >
                     <SelectTrigger className={errors.ageGroup ? "border-red-500" : ""}>
                       <SelectValue placeholder="Select age group" />
                     </SelectTrigger>
@@ -445,7 +531,10 @@ export default function OnboardingPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="gender">Gender (Optional)</Label>
-                  <Select onValueChange={(value) => setValue("gender", value as any)}>
+                  <Select 
+                    value={watch("gender") || ""} 
+                    onValueChange={(value) => setValue("gender", value as any, { shouldValidate: true })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select gender" />
                     </SelectTrigger>
@@ -489,7 +578,10 @@ export default function OnboardingPage() {
 
               <div>
                 <Label htmlFor="mainUse">Main Use *</Label>
-                <Select onValueChange={(value) => setValue("mainUse", value)}>
+                <Select 
+                  value={watch("mainUse") || ""} 
+                  onValueChange={(value) => setValue("mainUse", value, { shouldValidate: true })}
+                >
                   <SelectTrigger className={errors.mainUse ? "border-red-500" : ""}>
                     <SelectValue placeholder="Select main use" />
                   </SelectTrigger>
@@ -508,7 +600,10 @@ export default function OnboardingPage() {
 
               <div>
                 <Label htmlFor="howHeardAboutUs">How did you hear about us? *</Label>
-                <Select onValueChange={(value) => setValue("howHeardAboutUs", value)}>
+                <Select 
+                  value={watch("howHeardAboutUs") || ""} 
+                  onValueChange={(value) => setValue("howHeardAboutUs", value, { shouldValidate: true })}
+                >
                   <SelectTrigger className={errors.howHeardAboutUs ? "border-red-500" : ""}>
                     <SelectValue placeholder="Select an option" />
                   </SelectTrigger>
