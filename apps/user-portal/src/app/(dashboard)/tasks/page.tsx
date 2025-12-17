@@ -2099,16 +2099,16 @@ export default function TasksPage() {
                               )}
 
                               {/* Task Title and Folder Path */}
-                              <div className="flex-1 min-w-0 max-w-full">
-                                <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
                                   <span
                                     className={cn(
-                                      "text-base leading-relaxed break-words",
+                                      "text-base leading-relaxed truncate min-w-0",
                                       task.status === "completed"
                                         ? "line-through text-gray-500"
                                         : "text-gray-900"
                                     )}
-                                    style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
+                                    title={task.title}
                                   >
                                     {task.title}
                                   </span>
@@ -2271,14 +2271,15 @@ export default function TasksPage() {
 
                                 {/* Task Title */}
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex flex-col gap-1">
+                                  <div className="flex flex-col gap-1 min-w-0">
                                     <span
                                       className={cn(
-                                        "text-sm truncate leading-relaxed",
+                                        "text-sm truncate leading-relaxed min-w-0",
                                         task.status === "completed"
                                           ? "line-through text-gray-500"
                                           : "text-gray-900"
                                       )}
+                                      title={task.title}
                                     >
                                       {task.title}
                                     </span>
