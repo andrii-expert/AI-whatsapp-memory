@@ -217,6 +217,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   activityLogs: many(activityLogs),
   taskFolders: many(taskFolders),
   tasks: many(tasks),
+  shoppingListItems: many(shoppingListItems),
   noteFolders: many(noteFolders),
   notes: many(notes),
   userFileFolders: many(userFileFolders),
@@ -1017,6 +1018,37 @@ export const taskFoldersRelations = relations(taskFolders, ({ one, many }) => ({
     relationName: "subfolders",
   }),
   tasks: many(tasks),
+}));
+
+// ============================================
+// Shopping List Items
+// ============================================
+
+export const shoppingListItems = pgTable("shopping_list_items", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  name: text("name").notNull(),
+  description: text("description"),
+  status: taskStatusEnum("status").default("open").notNull(), // Reuse task status enum: open, completed, archived
+  
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  
+  sortOrder: integer("sort_order").default(0).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("shopping_list_items_user_id_idx").on(table.userId),
+  statusIdx: index("shopping_list_items_status_idx").on(table.status),
+  sortOrderIdx: index("shopping_list_items_sort_order_idx").on(table.sortOrder),
+}));
+
+export const shoppingListItemsRelations = relations(shoppingListItems, ({ one }) => ({
+  user: one(users, {
+    fields: [shoppingListItems.userId],
+    references: [users.id],
+  }),
 }));
 
 // ============================================

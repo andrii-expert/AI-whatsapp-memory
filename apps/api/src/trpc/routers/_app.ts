@@ -15,6 +15,7 @@ import { voiceTestingRouter } from "./voice-testing";
 import { plansRouter } from "./plans";
 import { tasksRouter } from "./tasks";
 import { taskSharingRouter } from "./task-sharing";
+import { shoppingListRouter } from "./shopping-list";
 import { notesRouter } from "./notes";
 import { noteSharingRouter } from "./note-sharing";
 import { remindersRouter } from "./reminders";
@@ -40,6 +41,7 @@ export const appRouter = createTRPCRouter({
   plans: plansRouter,
   tasks: tasksRouter,
   taskSharing: taskSharingRouter,
+  shoppingList: shoppingListRouter,
   notes: notesRouter,
   noteSharing: noteSharingRouter,
   reminders: remindersRouter,
