@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X } from "lucide-react";
+import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -26,15 +26,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@imaginecalendar/ui/dialog";
 import { Label } from "@imaginecalendar/ui/label";
+import { ShareButton } from "@/components/share-button";
+import { ShareModal } from "@/components/share-modal";
+import { ShareDetailsModal } from "@/components/share-details-modal";
 
 export default function ShoppingListPage() {
   const trpc = useTRPC();
@@ -54,9 +49,21 @@ export default function ShoppingListPage() {
   const [newItemDescription, setNewItemDescription] = useState("");
   const [editItemDescription, setEditItemDescription] = useState("");
 
+  // Share states
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isShareDetailsModalOpen, setIsShareDetailsModalOpen] = useState(false);
+  const [shareResourceType, setShareResourceType] = useState<"task" | "task_folder">("task");
+  const [shareResourceId, setShareResourceId] = useState<string | null>(null);
+  const [shareResourceName, setShareResourceName] = useState("");
+
   // Fetch shopping list items
   const { data: allItems = [], isLoading } = useQuery(
     trpc.shoppingList.list.queryOptions({})
+  );
+
+  // Fetch shares
+  const { data: myShares = [] } = useQuery(
+    trpc.taskSharing.getMyShares.queryOptions()
   );
 
   // Mutations
@@ -214,6 +221,28 @@ export default function ShoppingListPage() {
     toggleItemMutation.mutate({ id: itemId });
   };
 
+  // Share functions
+  const openShareModal = (id: string, name: string) => {
+    setShareResourceType("task");
+    setShareResourceId(id);
+    setShareResourceName(name);
+    setIsShareModalOpen(true);
+  };
+
+  const openShareDetails = (id: string, name: string) => {
+    setShareResourceType("task");
+    setShareResourceId(id);
+    setShareResourceName(name);
+    setIsShareDetailsModalOpen(true);
+  };
+
+  // Get share count for an item
+  const getShareCount = (itemId: string): number => {
+    return myShares.filter(
+      (share: any) => share.resourceType === "task" && share.resourceId === itemId
+    ).length;
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -279,7 +308,7 @@ export default function ShoppingListPage() {
           <Input
             placeholder="Search items..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
         </div>
@@ -348,6 +377,19 @@ export default function ShoppingListPage() {
 
               {/* Actions */}
               <div className="flex items-center gap-2">
+                <ShareButton
+                  onClick={() => {
+                    const shareCount = getShareCount(item.id);
+                    if (shareCount > 0) {
+                      openShareDetails(item.id, item.name);
+                    } else {
+                      openShareModal(item.id, item.name);
+                    }
+                  }}
+                  isShared={getShareCount(item.id) > 0}
+                  shareCount={getShareCount(item.id)}
+                  size="md"
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -371,12 +413,12 @@ export default function ShoppingListPage() {
       </div>
 
       {/* Add Item Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Item</DialogTitle>
-            <DialogDescription>Add a new item to your shopping list</DialogDescription>
-          </DialogHeader>
+      <AlertDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add Item</AlertDialogTitle>
+            <AlertDialogDescription>Add a new item to your shopping list</AlertDialogDescription>
+          </AlertDialogHeader>
           <form onSubmit={handleCreateItem}>
             <div className="space-y-4 py-4">
               <div>
@@ -384,7 +426,7 @@ export default function ShoppingListPage() {
                 <Input
                   id="item-name"
                   value={newItemName}
-                  onChange={(e) => setNewItemName(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemName(e.target.value)}
                   placeholder="e.g., Milk, Bread, Eggs"
                   autoFocus
                 />
@@ -394,15 +436,13 @@ export default function ShoppingListPage() {
                 <Input
                   id="item-description"
                   value={newItemDescription}
-                  onChange={(e) => setNewItemDescription(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemDescription(e.target.value)}
                   placeholder="e.g., 2% milk, whole wheat bread"
                 />
               </div>
             </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
+            <AlertDialogFooter>
+              <AlertDialogCancel
                 onClick={() => {
                   setIsAddModalOpen(false);
                   setNewItemName("");
@@ -410,7 +450,7 @@ export default function ShoppingListPage() {
                 }}
               >
                 Cancel
-              </Button>
+              </AlertDialogCancel>
               <Button
                 type="submit"
                 variant="orange-primary"
@@ -418,18 +458,18 @@ export default function ShoppingListPage() {
               >
                 Add Item
               </Button>
-            </DialogFooter>
+            </AlertDialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Edit Item Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Item</DialogTitle>
-            <DialogDescription>Update the item details</DialogDescription>
-          </DialogHeader>
+      <AlertDialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit Item</AlertDialogTitle>
+            <AlertDialogDescription>Update the item details</AlertDialogDescription>
+          </AlertDialogHeader>
           <form onSubmit={handleUpdateItem}>
             <div className="space-y-4 py-4">
               <div>
@@ -437,7 +477,7 @@ export default function ShoppingListPage() {
                 <Input
                   id="edit-item-name"
                   value={editItemName}
-                  onChange={(e) => setEditItemName(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemName(e.target.value)}
                   autoFocus
                 />
               </div>
@@ -446,14 +486,12 @@ export default function ShoppingListPage() {
                 <Input
                   id="edit-item-description"
                   value={editItemDescription}
-                  onChange={(e) => setEditItemDescription(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemDescription(e.target.value)}
                 />
               </div>
             </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
+            <AlertDialogFooter>
+              <AlertDialogCancel
                 onClick={() => {
                   setIsEditModalOpen(false);
                   setEditingItemId(null);
@@ -462,7 +500,7 @@ export default function ShoppingListPage() {
                 }}
               >
                 Cancel
-              </Button>
+              </AlertDialogCancel>
               <Button
                 type="submit"
                 variant="orange-primary"
@@ -470,10 +508,10 @@ export default function ShoppingListPage() {
               >
                 Update Item
               </Button>
-            </DialogFooter>
+            </AlertDialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
@@ -496,6 +534,28 @@ export default function ShoppingListPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Share Modal */}
+      {shareResourceId && (
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          resourceType={shareResourceType}
+          resourceId={shareResourceId}
+          resourceName={shareResourceName}
+        />
+      )}
+
+      {/* Share Details Modal */}
+      {shareResourceId && (
+        <ShareDetailsModal
+          isOpen={isShareDetailsModalOpen}
+          onClose={() => setIsShareDetailsModalOpen(false)}
+          resourceType={shareResourceType}
+          resourceId={shareResourceId}
+          resourceName={shareResourceName}
+        />
+      )}
     </div>
   );
 }
