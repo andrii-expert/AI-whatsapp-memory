@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc } from "lucide-react";
+import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -343,10 +343,24 @@ export default function ShoppingListPage() {
       </div>
 
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <ShoppingCart className="h-8 w-8 text-green-600" />
           <h1 className="text-3xl font-bold text-gray-900">Shopping List</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/reminders">
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" />
+              Reminders
+            </Button>
+          </Link>
+          <Link href="/notes">
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <StickyNote className="h-4 w-4" />
+              Notes
+            </Button>
+          </Link>
         </div>
       </div>
 

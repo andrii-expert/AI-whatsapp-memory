@@ -1000,9 +1000,9 @@ export default function DashboardPage() {
                     <Button
                       variant="ghost"
                       className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                      onClick={() => router.push("/reminders")}
+                      onClick={() => router.push("/notes")}
                     >
-                      View All Reminders
+                      View All Notes
                       <ArrowRight className="h-3 w-3 ml-1" />
                     </Button>
                   </div>
