@@ -324,7 +324,12 @@ export default function ShoppingListPage() {
             Dashboard
           </Link>
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">Shopping List</span>
+          <Link
+            href="/shopping-list"
+            className="font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Shopping List
+          </Link>
         </div>
 
         <Button
@@ -342,16 +347,6 @@ export default function ShoppingListPage() {
         <div className="flex items-center gap-2">
           <ShoppingCart className="h-8 w-8 text-green-600" />
           <h1 className="text-3xl font-bold text-gray-900">Shopping List</h1>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
-            {itemCounts.open} open
-          </span>
-          {itemCounts.completed > 0 && (
-            <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-semibold">
-              {itemCounts.completed} completed
-            </span>
-          )}
         </div>
       </div>
 

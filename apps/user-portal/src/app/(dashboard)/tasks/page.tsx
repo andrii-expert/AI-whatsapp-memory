@@ -2103,7 +2103,7 @@ export default function TasksPage() {
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span
                                     className={cn(
-                                      "text-base break-all leading-relaxed",
+                                      "text-base truncate leading-relaxed",
                                       task.status === "completed"
                                         ? "line-through text-gray-500"
                                         : "text-gray-900"
@@ -2273,7 +2273,7 @@ export default function TasksPage() {
                                   <div className="flex flex-col gap-1">
                                     <span
                                       className={cn(
-                                        "text-sm break-all leading-relaxed",
+                                        "text-sm truncate leading-relaxed",
                                         task.status === "completed"
                                           ? "line-through text-gray-500"
                                           : "text-gray-900"

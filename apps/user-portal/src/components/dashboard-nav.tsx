@@ -16,6 +16,7 @@ import {
   X,
   FolderOpen,
   BookOpen,
+  ShoppingCart,
 } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { Button } from "@imaginecalendar/ui/button";
@@ -32,9 +33,9 @@ import { useQuery } from "@tanstack/react-query";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Shopping List", href: "/shopping-list", icon: ShoppingCart },
   { name: "Calendar", href: "/calendars", icon: Calendar },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
-  { name: "Notes", href: "/notes", icon: StickyNote, goldOnly: true },
   { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Documents", href: "/document", icon: FolderOpen },
   { name: "Address Book", href: "/address", icon: BookOpen },
@@ -53,6 +54,7 @@ export function DashboardNav() {
   const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
   const { data: storageStats } = useQuery(trpc.storage.stats.queryOptions());
   const { data: allAddresses = [] } = useQuery(trpc.addresses.list.queryOptions());
+  const { data: shoppingListItems = [] } = useQuery(trpc.shoppingList.list.queryOptions({}));
 
   // Check verification status
   const hasVerifiedWhatsApp = whatsappNumbers?.some(number => number.isVerified) || false;
@@ -180,8 +182,8 @@ export function DashboardNav() {
                         let itemCount = 0;
                         if (item.href === "/dashboard") {
                           itemCount = totalItems;
-                        } else if (item.href === "/notes") {
-                          itemCount = allNotes.length;
+                        } else if (item.href === "/shopping-list") {
+                          itemCount = shoppingListItems.filter((item: any) => item.status === "open").length;
                         } else if (item.href === "/reminders") {
                           itemCount = reminders.length;
                         } else if (item.href === "/calendars") {
