@@ -87,7 +87,7 @@ export function DashboardNav() {
   return (
     <nav className="bg-primary text-white shadow-md">
       <div className="container mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-16 gap-2">
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link href="/dashboard">
@@ -111,7 +111,7 @@ export function DashboardNav() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden md:flex items-center space-x-1 flex-1 min-w-0 overflow-hidden flex-nowrap">
             {navigation.map((item) => {
               // For /billing, only match exact path to avoid highlighting when on /billing/invoices
               const isActive = item.href === "/billing" 
@@ -122,14 +122,15 @@ export function DashboardNav() {
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    "px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 relative",
+                    "px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 relative min-w-0 flex-shrink max-w-[140px]",
                     isActive
                       ? "bg-white/20 text-white font-bold"
                       : "text-white/90 hover:bg-white/10 hover:text-white"
                   )}
+                  title={item.name}
                 >
-                  <item.icon className="h-4 w-4" />
-                  {item.name}
+                  <item.icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate min-w-0 overflow-hidden">{item.name}</span>
                 </Link>
               );
             })}
@@ -209,9 +210,9 @@ export function DashboardNav() {
                                 : "text-foreground hover:bg-muted"
                             )}
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
                               <item.icon className="h-5 w-5 flex-shrink-0" />
-                              <span>{item.name}</span>
+                              <span className="truncate">{item.name}</span>
                             </div>
                             {itemCount > 0 && (
                               <Badge variant="orange">
