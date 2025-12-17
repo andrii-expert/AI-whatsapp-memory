@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users } from "lucide-react";
+import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -38,7 +38,10 @@ export default function ShoppingListPage() {
 
   // State
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("open");
+  const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchScope, setSearchScope] = useState<"all" | "name" | "description">("all");
   const [newItemName, setNewItemName] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editItemName, setEditItemName] = useState("");
@@ -160,23 +163,57 @@ export default function ShoppingListPage() {
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      items = items.filter(
-        (item) =>
-          item.name.toLowerCase().includes(query) ||
-          (item.description && item.description.toLowerCase().includes(query))
-      );
+      items = items.filter((item) => {
+        if (searchScope === "name") {
+          return item.name.toLowerCase().includes(query);
+        } else if (searchScope === "description") {
+          return item.description?.toLowerCase().includes(query) || false;
+        } else {
+          // searchScope === "all"
+          return (
+            item.name.toLowerCase().includes(query) ||
+            item.description?.toLowerCase().includes(query)
+          );
+        }
+      });
     }
 
-    // Sort: completed items at bottom, then by creation date (newest first)
-    return items.sort((a, b) => {
-      if (a.status === "completed" && b.status !== "completed") return 1;
-      if (a.status !== "completed" && b.status === "completed") return -1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [allItems, filterStatus, searchQuery]);
+    // Sort items
+    if (sortBy === "alphabetical") {
+      items = [...items].sort((a, b) => {
+        const comparison = a.name.localeCompare(b.name);
+        return sortOrder === "asc" ? comparison : -comparison;
+      });
+    } else if (sortBy === "date") {
+      items = [...items].sort((a, b) => {
+        // Items without dates always go to the end
+        if (!a.createdAt && !b.createdAt) return 0;
+        if (!a.createdAt) return 1;  // a goes to end
+        if (!b.createdAt) return -1; // b goes to end
+        
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        const comparison = dateA - dateB;
+        return sortOrder === "asc" ? comparison : -comparison;
+      });
+    }
 
-  const openItems = useMemo(() => allItems.filter((item) => item.status === "open"), [allItems]);
-  const completedItems = useMemo(() => allItems.filter((item) => item.status === "completed"), [allItems]);
+    return items;
+  }, [allItems, filterStatus, searchQuery, searchScope, sortBy, sortOrder]);
+
+  // Calculate item counts for status badges (before search filtering)
+  const itemCounts = useMemo(() => {
+    const openCount = allItems.filter((item) => item.status === "open").length;
+    const completedCount = allItems.filter((item) => item.status === "completed").length;
+    const allCount = allItems.length;
+
+    return { open: openCount, completed: completedCount, all: allCount };
+  }, [allItems]);
+
+  // Calculate deletable items (only completed items that user owns)
+  const deletableItems = useMemo(() => {
+    return filteredItems.filter((item) => item.status === "completed");
+  }, [filteredItems]);
 
   const handleCreateItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,6 +256,23 @@ export default function ShoppingListPage() {
 
   const handleToggleItem = (itemId: string) => {
     toggleItemMutation.mutate({ id: itemId });
+  };
+
+  const handleDeleteAll = async () => {
+    if (deletableItems.length === 0) return;
+    
+    try {
+      // Delete all completed items
+      await Promise.all(
+        deletableItems.map((item) => deleteItemMutation.mutateAsync({ id: item.id }))
+      );
+      toast({
+        title: "Items deleted",
+        description: `${deletableItems.length} completed ${deletableItems.length === 1 ? "item" : "items"} deleted`,
+      });
+    } catch (error) {
+      // Error handling is done by the mutation
+    }
   };
 
   // Share functions
@@ -291,37 +345,246 @@ export default function ShoppingListPage() {
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold">
-            {openItems.length} open
+            {itemCounts.open} open
           </span>
-          {completedItems.length > 0 && (
+          {itemCounts.completed > 0 && (
             <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-semibold">
-              {completedItems.length} completed
+              {itemCounts.completed} completed
             </span>
           )}
         </div>
       </div>
 
-      {/* Search and Filter Bar */}
-      <div className="flex gap-2">
+      {/* Search Bar */}
+      <div className="mb-4 w-full justify-between flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search items..."
+            placeholder={
+              searchScope === "all"
+                ? "Search items..."
+                : searchScope === "name"
+                ? "Search by name..."
+                : "Search by description..."
+            }
             value={searchQuery}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setSearchQuery(e.target.value)
+            }
+            className="pr-10 h-11"
           />
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         </div>
-        <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Items</SelectItem>
-            <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Mobile: Dropdown Menu */}
+        <div className="sm:hidden w-full max-w-[100px]">
+          <Select
+            value={`${sortBy}-${sortOrder}`}
+            onValueChange={(value) => {
+              const [by, order] = value.split("-") as [
+                "date" | "alphabetical",
+                "asc" | "desc"
+              ];
+              setSortBy(by);
+              setSortOrder(order);
+            }}
+          >
+            <SelectTrigger className="w-full h-11">
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  {sortBy === "date" ? (
+                    <>
+                      <Calendar className="h-4 w-4" />
+                      {sortOrder === "asc" ? (
+                        <ArrowUp className="h-3 w-3" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3" />
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {sortOrder === "asc" ? (
+                        <>
+                          <SortAsc className="h-4 w-4" />
+                          <span className="text-sm">A-Z</span>
+                        </>
+                      ) : (
+                        <>
+                          <SortDesc className="h-4 w-4" />
+                          <span className="text-sm">Z-A</span>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date-desc">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <ArrowDown className="h-3 w-3" />
+                </div>
+              </SelectItem>
+              <SelectItem value="date-asc">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  <ArrowUp className="h-3 w-3" />
+                </div>
+              </SelectItem>
+              <SelectItem value="alphabetical-asc">
+                <div className="flex items-center gap-2">
+                  <SortAsc className="h-4 w-4" />
+                  <span>A-Z</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="alphabetical-desc">
+                <div className="flex items-center gap-2">
+                  <SortDesc className="h-4 w-4" />
+                  <span>Z-A</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Filter and Sort Controls */}
+      <div className="flex flex-row w-full justify-between items-center sm:gap-3 mb-4">
+        {/* Filter Buttons and Delete All */}
+        <div className="flex w-full sm:w-auto justify-start gap-1.5 sm:gap-2 flex-wrap items-center">
+          <Button
+            variant={filterStatus === "open" ? "blue-primary" : "outline"}
+            size="sm"
+            onClick={() => setFilterStatus("open")}
+            className="relative"
+          >
+            Open
+            {itemCounts.open > 0 && filterStatus !== "open" && (
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+                {itemCounts.open}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant={
+              filterStatus === "completed" ? "blue-primary" : "outline"
+            }
+            size="sm"
+            onClick={() => setFilterStatus("completed")}
+            className="relative"
+          >
+            Completed
+            {itemCounts.completed > 0 && filterStatus !== "completed" && (
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+                {itemCounts.completed}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant={filterStatus === "all" ? "blue-primary" : "outline"}
+            size="sm"
+            onClick={() => setFilterStatus("all")}
+            className="relative"
+          >
+            All
+            {itemCounts.all > 0 && filterStatus !== "all" && (
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+                {itemCounts.all}
+              </span>
+            )}
+          </Button>
+
+          {/* Delete All Button */}
+          {deletableItems.length > 0 &&
+            filterStatus === "completed" &&
+            !searchQuery && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDeleteAll}
+                className="bg-red-600 text-white border-red-600 hover:bg-red-700 hover:border-red-700"
+              >
+                Delete All
+              </Button>
+            )}
+        </div>
+
+        {/* Sort Controls - Dropdown on mobile, buttons on desktop */}
+        <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+          {/* Desktop: Sort Buttons */}
+          <div className="hidden sm:flex gap-2 flex-wrap">
+            {/* Date Sort */}
+            <div className="flex gap-0 border rounded-lg overflow-hidden">
+              <Button
+                variant={
+                  sortBy === "date" && sortOrder === "desc"
+                    ? "blue-primary"
+                    : "outline"
+                }
+                size="sm"
+                onClick={() => {
+                  setSortBy("date");
+                  setSortOrder("desc");
+                }}
+                className="gap-1.5 rounded-none border-0 border-r"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                <ArrowDown className="h-3 w-3" />
+              </Button>
+              <Button
+                variant={
+                  sortBy === "date" && sortOrder === "asc"
+                    ? "blue-primary"
+                    : "outline"
+                }
+                size="sm"
+                onClick={() => {
+                  setSortBy("date");
+                  setSortOrder("asc");
+                }}
+                className="gap-1.5 rounded-none border-0"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                <ArrowUp className="h-3 w-3" />
+              </Button>
+            </div>
+
+            {/* Alphabetical Sort */}
+            <div className="flex gap-0 border rounded-lg overflow-hidden">
+              <Button
+                variant={
+                  sortBy === "alphabetical" && sortOrder === "asc"
+                    ? "blue-primary"
+                    : "outline"
+                }
+                size="sm"
+                onClick={() => {
+                  setSortBy("alphabetical");
+                  setSortOrder("asc");
+                }}
+                className="gap-1.5 rounded-none border-0 border-r"
+              >
+                <SortAsc className="h-3.5 w-3.5" />
+                A-Z
+              </Button>
+              <Button
+                variant={
+                  sortBy === "alphabetical" && sortOrder === "desc"
+                    ? "blue-primary"
+                    : "outline"
+                }
+                size="sm"
+                onClick={() => {
+                  setSortBy("alphabetical");
+                  setSortOrder("desc");
+                }}
+                className="gap-1.5 rounded-none border-0"
+              >
+                <SortDesc className="h-3.5 w-3.5" />
+                Z-A
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Items List */}
