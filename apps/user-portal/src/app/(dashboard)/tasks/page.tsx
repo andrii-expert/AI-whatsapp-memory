@@ -2103,7 +2103,7 @@ export default function TasksPage() {
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span
                                     className={cn(
-                                      "text-base truncate leading-relaxed",
+                                      "text-base truncate leading-relaxed block max-w-full",
                                       task.status === "completed"
                                         ? "line-through text-gray-500"
                                         : "text-gray-900"
