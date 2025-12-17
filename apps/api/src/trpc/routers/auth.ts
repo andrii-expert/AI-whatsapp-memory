@@ -267,35 +267,17 @@ export const authRouter = createTRPCRouter({
         });
       }
 
-      // Create default "General" and "Shopping List" task folders if user doesn't have any folders
+      // Create default "General" task folder if user doesn't have any folders
       const existingFolders = await getUserFolders(db, session.user.id);
       if (existingFolders.length === 0) {
-        logger.info({ userId: session.user.id }, "Creating default task folders");
+        logger.info({ userId: session.user.id }, "Creating default task folder");
         await createFolder(db, {
           userId: session.user.id,
           name: "General",
           color: "#3B82F6", // Blue color
           icon: "folder",
         });
-        await createFolder(db, {
-          userId: session.user.id,
-          name: "Shopping List",
-          color: "#10B981", // Green color
-          icon: "shopping-cart",
-        });
-        logger.info({ userId: session.user.id }, "Default task folders created");
-      } else {
-        // Ensure "Shopping List" folder exists for existing users
-        const hasShoppingList = existingFolders.some((f: any) => f.name.toLowerCase() === "shopping list");
-        if (!hasShoppingList) {
-          logger.info({ userId: session.user.id }, "Creating 'Shopping List' folder for existing user");
-          await createFolder(db, {
-            userId: session.user.id,
-            name: "Shopping List",
-            color: "#10B981", // Green color
-            icon: "shopping-cart",
-          });
-        }
+        logger.info({ userId: session.user.id }, "Default task folder created");
       }
 
       // Create default "General" note folder if user doesn't have any note folders

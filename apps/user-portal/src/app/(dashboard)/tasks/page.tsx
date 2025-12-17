@@ -184,16 +184,10 @@ export default function TasksPage() {
         .sort((a, b) => {
           const aIsGeneral = a.name.toLowerCase() === "general";
           const bIsGeneral = b.name.toLowerCase() === "general";
-          const aIsShoppingList = a.name.toLowerCase() === "shopping list";
-          const bIsShoppingList = b.name.toLowerCase() === "shopping list";
           
           // General always comes first
           if (aIsGeneral && !bIsGeneral) return -1;
           if (!aIsGeneral && bIsGeneral) return 1;
-          
-          // Shopping List comes second (after General)
-          if (aIsShoppingList && !bIsShoppingList && !bIsGeneral) return -1;
-          if (!aIsShoppingList && bIsShoppingList && !aIsGeneral) return 1;
           
           // If neither or both are special folders, maintain original order
           return 0;
@@ -1153,7 +1147,7 @@ export default function TasksPage() {
                 onClick={() => handleFolderSelect(folder.id)}
                 className="flex items-center gap-2 flex-1 text-left min-w-0"
               >
-                {folder.icon === "shopping-cart" || folder.name.toLowerCase() === "shopping list" ? (
+                {folder.icon === "shopping-cart" ? (
                   <ShoppingCart className="h-4 w-4 flex-shrink-0" />
                 ) : (
                   <FolderClosed className="h-4 w-4 flex-shrink-0" />
@@ -1255,8 +1249,8 @@ export default function TasksPage() {
                     <span>Add subfolder</span>
                   </DropdownMenuItem>
                 )}
-                {/* Delete button - only for owned folders (not shared) and not General or Shopping List */}
-                {isOwner && folder.name.toLowerCase() !== "general" && folder.name.toLowerCase() !== "shopping list" && (
+                {/* Delete button - only for owned folders (not shared) and not General */}
+                {isOwner && folder.name.toLowerCase() !== "general" && (
                   <DropdownMenuItem
                     onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();

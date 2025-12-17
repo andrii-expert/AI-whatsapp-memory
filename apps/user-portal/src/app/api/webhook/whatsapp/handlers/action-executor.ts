@@ -50,6 +50,11 @@ import {
   updateAddress,
   deleteAddress,
   getAddressById,
+  createShoppingListItem,
+  getUserShoppingListItems,
+  updateShoppingListItem,
+  deleteShoppingListItem,
+  toggleShoppingListItemStatus,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -823,35 +828,10 @@ export class ActionExecutor {
       };
     }
 
-    // Always use "Shopping List" folder for shopping items
-    const shoppingFolderName = 'Shopping List';
-    let folderId = await this.resolveFolderRoute(shoppingFolderName);
-    
-    // Auto-create Shopping List folder if it doesn't exist
-    if (!folderId) {
-      try {
-        const folder = await createFolder(this.db, {
-          userId: this.userId,
-          name: shoppingFolderName,
-          color: '#10B981', // Green color
-          icon: 'shopping-cart',
-        });
-        folderId = folder.id;
-        logger.info({ userId: this.userId, folderId }, 'Auto-created Shopping List folder');
-      } catch (error) {
-        logger.error({ error, userId: this.userId }, 'Failed to auto-create Shopping List folder');
-        return {
-          success: false,
-          message: "I couldn't create the Shopping List folder. Please try again.",
-        };
-      }
-    }
-
     try {
-      await createTask(this.db, {
+      await createShoppingListItem(this.db, {
         userId: this.userId,
-        folderId,
-        title: parsed.taskName,
+        name: parsed.taskName,
         status: 'open',
       });
 
@@ -1261,6 +1241,37 @@ export class ActionExecutor {
       };
     }
 
+    // Check if this is a shopping list operation
+    const isShoppingList = parsed.folderRoute?.toLowerCase() === 'shopping list';
+    
+    if (isShoppingList) {
+      // Handle shopping list item deletion
+      const items = await getUserShoppingListItems(this.db, this.userId, {});
+      const item = items.find((i) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
+      
+      if (!item) {
+        return {
+          success: false,
+          message: `I couldn't find the item "${parsed.taskName}" in your shopping list. Please make sure the item exists.`,
+        };
+      }
+
+      try {
+        await deleteShoppingListItem(this.db, item.id, this.userId);
+        return {
+          success: true,
+          message: `⛔ *Item Removed:*\n${item.name}`,
+        };
+      } catch (error) {
+        logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item');
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't delete the item "${parsed.taskName}". Please try again.`,
+        };
+      }
+    }
+
+    // Handle regular task deletion
     const folderId = await this.resolveFolderRoute(parsed.folderRoute || 'General');
     if (!folderId) {
       return {
@@ -1277,18 +1288,8 @@ export class ActionExecutor {
       };
     }
 
-    // Check if this is a shopping list item
-    const folder = await getFolderById(this.db, folderId, this.userId);
-    const isShoppingListItem = folder && folder.name?.toLowerCase() === 'shopping list';
-
     try {
       await deleteTask(this.db, task.id, this.userId);
-      if (isShoppingListItem) {
-        return {
-          success: true,
-          message: `⛔ *Item Removed:*\nTitle: ${parsed.taskName}`,
-        };
-      }
       return {
         success: true,
         message: `⛔ *Task Deleted:*\nTitle: ${parsed.taskName}`,
@@ -1310,6 +1311,40 @@ export class ActionExecutor {
       };
     }
 
+    // Check if this is a shopping list operation
+    const isShoppingList = parsed.folderRoute?.toLowerCase() === 'shopping list';
+    
+    if (isShoppingList) {
+      // Handle shopping list item completion
+      const items = await getUserShoppingListItems(this.db, this.userId, {});
+      const item = items.find((i) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
+      
+      if (!item) {
+        return {
+          success: false,
+          message: `I couldn't find the item "${parsed.taskName}" in your shopping list. Please make sure the item exists.`,
+        };
+      }
+
+      try {
+        await toggleShoppingListItemStatus(this.db, item.id, this.userId);
+        const newStatus = item.status === 'open' ? 'completed' : 'open';
+        return {
+          success: true,
+          message: newStatus === 'completed' 
+            ? `✅ *Item Completed:*\n${item.name}`
+            : `📝 *Item Reopened:*\n${item.name}`,
+        };
+      } catch (error) {
+        logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to toggle shopping list item status');
+        return {
+          success: false,
+          message: `I'm sorry, I couldn't update the item "${parsed.taskName}". Please try again.`,
+        };
+      }
+    }
+
+    // Handle regular task completion
     const folderId = await this.resolveFolderRoute(parsed.folderRoute || 'General');
     if (!folderId) {
       return {
@@ -2024,6 +2059,46 @@ export class ActionExecutor {
 
   private async listTasks(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     try {
+      // Check if this is a Shopping List request
+      const isShoppingList = parsed.folderRoute?.toLowerCase() === 'shopping list';
+      
+      if (isShoppingList) {
+        // Handle shopping list items
+        const statusFilter = parsed.status && parsed.status !== 'all' ? parsed.status as 'open' | 'completed' : undefined;
+        const items = await getUserShoppingListItems(this.db, this.userId, {
+          status: statusFilter,
+        });
+
+        if (items.length === 0) {
+          const statusText = statusFilter ? ` (${statusFilter})` : '';
+          return {
+            success: true,
+            message: `🛒 *Your shopping list is empty${statusText}*`,
+          };
+        }
+
+        const statusText = statusFilter ? ` (${statusFilter})` : '';
+        let message = `🛍️ *Shopping List${statusText}:*\n`;
+        
+        items.slice(0, 20).forEach((item, index) => {
+          message += `*${index + 1}.* ${item.name}`;
+          if (item.description) {
+            message += ` - ${item.description}`;
+          }
+          message += '\n';
+        });
+
+        if (items.length > 20) {
+          message += `\n... and ${items.length - 20} more items.`;
+        }
+
+        return {
+          success: true,
+          message: message.trim(),
+        };
+      }
+
+      // Handle regular tasks
       const folderId = parsed.folderRoute ? await this.resolveFolderRoute(parsed.folderRoute) : undefined;
       
       if (parsed.folderRoute && !folderId) {
@@ -2038,39 +2113,27 @@ export class ActionExecutor {
         folderId,
         status: statusFilter,
       });
-
-      // Check if this is a Shopping List
-      const isShoppingList = parsed.folderRoute?.toLowerCase() === 'shopping list';
       
       if (tasks.length === 0) {
         const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
         const statusText = statusFilter ? ` (${statusFilter})` : '';
-        const headerIcon = isShoppingList ? '🛒' : '📋';
-        const emptyText = isShoppingList ? 'Your shopping list is empty' : `You have no tasks${folderText}${statusText}`;
         return {
           success: true,
-          message: `${headerIcon} *${emptyText}*`,
+          message: `📋 *You have no tasks${folderText}${statusText}*`,
         };
       }
 
       const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
       const statusText = statusFilter ? ` (${statusFilter})` : '';
       
-      // Use different icons for Shopping List vs regular tasks
-      const headerIcon = isShoppingList ? '🛍️' : '📋';
-      const headerText = isShoppingList 
-        ? `*Shopping List*` 
-        : `*Todays Tasks*`;
-      
-      let message = `${headerIcon} ${headerText}\n`;
+      let message = `📋 *Todays Tasks${statusText}:*\n`;
       
       tasks.slice(0, 20).forEach((task, index) => {
         message += `*${index + 1}.* ${task.title}\n`;
       });
 
       if (tasks.length > 20) {
-        const moreText = isShoppingList ? 'more items' : 'more tasks';
-        message += `\n... and ${tasks.length - 20} ${moreText}.`;
+        message += `\n... and ${tasks.length - 20} more tasks.`;
       }
 
       return {

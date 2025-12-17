@@ -64,21 +64,6 @@ export const tasksRouter = createTRPCRouter({
   folders: createTRPCRouter({
     list: protectedProcedure.query(async ({ ctx: { db, session } }) => {
       const folders = await getUserFolders(db, session.user.id);
-      
-      // Ensure "Shopping List" folder exists for all users
-      const hasShoppingList = folders.some((f: any) => f.name.toLowerCase() === "shopping list");
-      if (!hasShoppingList) {
-        logger.info({ userId: session.user.id }, "Creating 'Shopping List' folder");
-        await createFolder(db, {
-          userId: session.user.id,
-          name: "Shopping List",
-          color: "#10B981", // Green color
-          icon: "shopping-cart",
-        });
-        // Return updated folders list
-        return getUserFolders(db, session.user.id);
-      }
-      
       return folders;
     }),
 

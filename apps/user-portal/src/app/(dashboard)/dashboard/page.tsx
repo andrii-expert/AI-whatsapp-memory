@@ -61,6 +61,7 @@ export default function DashboardPage() {
   const { data: allNotes = [] } = useQuery(trpc.notes.list.queryOptions({}));
   const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
   const { data: folders = [] } = useQuery(trpc.tasks.folders.list.queryOptions());
+  const { data: shoppingListItems = [] } = useQuery(trpc.shoppingList.list.queryOptions({}));
 
   // Check if welcome modal should be shown from database
   useEffect(() => {
@@ -101,6 +102,14 @@ export default function DashboardPage() {
         return (query.data || []).map((event: any) => ({ ...event, calendarId }));
       });
   }, [eventQueries, activeCalendars]);
+
+  const toggleShoppingListItemMutation = useMutation(
+    trpc.shoppingList.toggle.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+      },
+    })
+  );
 
   const toggleTaskMutation = useMutation(
     trpc.tasks.toggleStatus.mutationOptions({
@@ -202,32 +211,28 @@ export default function DashboardPage() {
     return searched.slice(0, 10);
   }, [reminders, searchQuery]);
 
-  // Find Shopping List folder
-  const shoppingListFolder = useMemo(() => {
-    return folders.find((f: any) => f.name.toLowerCase() === "shopping list");
-  }, [folders]);
-
-  // Filter shopping list items
-  const shoppingListItems = useMemo(() => {
-    if (!shoppingListFolder) return [];
-    const filtered = allTasks.filter((t) => 
-      t.status === "open" && t.folderId === shoppingListFolder.id
-    );
+  // Filter shopping list items (from new shopping list table)
+  const filteredShoppingListItems = useMemo(() => {
+    const filtered = shoppingListItems.filter((item) => item.status === "open");
     const sorted = [...filtered].sort((a, b) => {
       const dateA = new Date(a.createdAt || 0).getTime();
       const dateB = new Date(b.createdAt || 0).getTime();
       return dateB - dateA; // Most recent first
     });
-    const searched = filterItems(sorted);
+    const searched = sorted.filter((item) => {
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        item.name.toLowerCase().includes(query) ||
+        (item.description && item.description.toLowerCase().includes(query))
+      );
+    });
     return searched.slice(0, 10); // Show up to 10 items
-  }, [allTasks, shoppingListFolder, searchQuery]);
+  }, [shoppingListItems, searchQuery]);
 
-  // Filter tasks - show 10 most recent (sorted by createdAt), EXCLUDING shopping list items
+  // Filter tasks - show 10 most recent (sorted by createdAt)
   const pendingTasks = useMemo(() => {
-    const shoppingListFolderId = shoppingListFolder?.id;
-    const filtered = allTasks.filter((t) => 
-      t.status === "open" && t.folderId !== shoppingListFolderId
-    );
+    const filtered = allTasks.filter((t) => t.status === "open");
     const sorted = [...filtered].sort((a, b) => {
       const dateA = new Date(a.createdAt || 0).getTime();
       const dateB = new Date(b.createdAt || 0).getTime();
@@ -235,7 +240,7 @@ export default function DashboardPage() {
     });
     const searched = filterItems(sorted);
     return searched.slice(0, 10); // Show up to 10 tasks
-  }, [allTasks, shoppingListFolder, searchQuery]);
+  }, [allTasks, searchQuery]);
 
   // Get quick notes - show latest 10
   const quickNotes = useMemo(() => {
@@ -491,20 +496,14 @@ export default function DashboardPage() {
   }, [reminders, searchQuery]);
   
   const totalPendingTasks = useMemo(() => {
-    const shoppingListFolderId = shoppingListFolder?.id;
-    const filtered = allTasks.filter((t) => 
-      t.status === "open" && t.folderId !== shoppingListFolderId
-    );
+    const filtered = allTasks.filter((t) => t.status === "open");
     return filterItems(filtered).length;
-  }, [allTasks, shoppingListFolder, searchQuery]);
+  }, [allTasks, searchQuery]);
 
   const totalShoppingListItems = useMemo(() => {
-    if (!shoppingListFolder) return 0;
-    const filtered = allTasks.filter((t) => 
-      t.status === "open" && t.folderId === shoppingListFolder.id
-    );
-    return filterItems(filtered).length;
-  }, [allTasks, shoppingListFolder, searchQuery]);
+    const filtered = shoppingListItems.filter((item) => item.status === "open");
+    return filtered.length;
+  }, [shoppingListItems]);
   
   const totalScheduledEvents = useMemo(() => {
     if (!processedEvents || processedEvents.length === 0) return 0;
@@ -684,49 +683,47 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
                   <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-                    {shoppingListItems.length === 0 ? (
+                    {filteredShoppingListItems.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-8 text-center">
                         No items in shopping list
                       </p>
                     ) : (
-                      shoppingListItems.map((item) => (
+                      filteredShoppingListItems.map((item) => (
                         <div
                           key={item.id}
-                          onClick={() => {
-                            setSelectedTask(item);
-                            setIsTaskModalOpen(true);
-                          }}
-                          className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5 cursor-pointer hover:bg-[#e9ecf3] transition-colors"
+                          className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5"
                         >
                           <input
                             type="checkbox"
                             checked={item.status === "completed"}
                             onChange={(e) => {
                               e.stopPropagation();
-                              handleToggleTask(item.id);
+                              toggleShoppingListItemMutation.mutate({ id: item.id });
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            disabled={
-                              toggleTaskMutation.isPending &&
-                              toggleTaskMutation.variables?.id === item.id
-                            }
-                            aria-label={`Mark item ${item.title || "Untitled Item"} as ${
+                            disabled={toggleShoppingListItemMutation.isPending}
+                            aria-label={`Mark item ${item.name} as ${
                               item.status === "completed" ? "open" : "completed"
                             }`}
                             className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-[#1f2933] truncate">
-                              {item.title || "Untitled Item"}
+                              {item.name}
                             </p>
+                            {item.description && (
+                              <p className="text-xs text-gray-500 truncate mt-0.5">
+                                {item.description}
+                              </p>
+                            )}
                           </div>
                         </div>
                       ))
                     )}
                   </div>
-                  {totalShoppingListItems > shoppingListItems.length && (
+                  {totalShoppingListItems > filteredShoppingListItems.length && (
                     <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
-                      Showing {shoppingListItems.length} of {totalShoppingListItems} items
+                      Showing {filteredShoppingListItems.length} of {totalShoppingListItems} items
                     </div>
                   )}
                   <div className="border-t border-[#e2e8f0] px-4 py-3">
@@ -734,11 +731,7 @@ export default function DashboardPage() {
                       variant="ghost"
                       className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
                       onClick={() => {
-                        if (shoppingListFolder?.id) {
-                          router.push(`/tasks?folderId=${shoppingListFolder.id}`);
-                        } else {
-                          router.push("/tasks");
-                        }
+                        router.push("/shopping-list");
                       }}
                     >
                       View Shopping List
