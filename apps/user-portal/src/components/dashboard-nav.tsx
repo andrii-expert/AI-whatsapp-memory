@@ -37,6 +37,7 @@ const navigation = [
   { name: "Calendar", href: "/calendars", icon: Calendar },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Reminders", href: "/reminders", icon: Bell },
+  { name: "Notes", href: "/notes", icon: StickyNote },
   { name: "Documents", href: "/document", icon: FolderOpen },
   { name: "Address Book", href: "/address", icon: BookOpen },
 ];

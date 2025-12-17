@@ -1319,7 +1319,7 @@ export default function TasksPage() {
   // Loading state
   if (isLoadingInitialData) {
     return (
-      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
+      <div className="w-full px-0 py-0 md:px-4 md:py-8">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
@@ -1331,7 +1331,7 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
+    <div className="w-full px-0 py-0 md:px-4 md:py-8 space-y-6">
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
@@ -1539,7 +1539,7 @@ export default function TasksPage() {
       </div>
 
       {/* Main Content - Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 w-full">
         {/* Desktop Left Panel - Folders */}
         <div className="hidden lg:block space-y-4">
           <div>
@@ -1691,7 +1691,7 @@ export default function TasksPage() {
         </div>
 
         {/* Right Panel - Tasks */}
-        <div className="space-y-4">
+        <div className="space-y-4 w-full min-w-0">
           <div>
             {/* Desktop - Folder breadcrumb and Add Task button */}
             <div className="flex items-center justify-between mb-4 gap-4">
@@ -2030,7 +2030,7 @@ export default function TasksPage() {
             </div>
 
             {/* Tasks List */}
-            <div className="space-y-6">
+            <div className="space-y-6 w-full">
               {groupedTasks.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   No tasks found. Create your first task here or through WhatsApp!
@@ -2050,7 +2050,7 @@ export default function TasksPage() {
                     {/* Tasks for this date */}
                     <div
                       className={cn(
-                        "space-y-2",
+                        "space-y-2 w-full",
                         sortBy === "alphabetical" && "mt-0"
                       )}
                     >
@@ -2064,7 +2064,7 @@ export default function TasksPage() {
                         return (
                           <div
                             key={task.id}
-                            className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4 min-w-0"
+                            className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4 min-w-0 w-full"
                           >
                             {/* Desktop Layout - Single Row */}
                             <div className="hidden sm:flex items-center gap-3">
@@ -2099,15 +2099,16 @@ export default function TasksPage() {
                               )}
 
                               {/* Task Title and Folder Path */}
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0 max-w-full">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span
                                     className={cn(
-                                      "text-base truncate leading-relaxed block max-w-full",
+                                      "text-base leading-relaxed break-words",
                                       task.status === "completed"
                                         ? "line-through text-gray-500"
                                         : "text-gray-900"
                                     )}
+                                    style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
                                   >
                                     {task.title}
                                   </span>
