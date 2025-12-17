@@ -229,6 +229,7 @@ export const authRouter = createTRPCRouter({
           company: input.company,
           timezone: input.timezone,
           utcOffset: input.utcOffset,
+          showWelcomeModal: true, // Show welcome modal for new users
         });
       } else {
         // Update existing user with onboarding data
@@ -245,6 +246,7 @@ export const authRouter = createTRPCRouter({
           company: input.company,
           timezone: input.timezone,
           utcOffset: input.utcOffset,
+          showWelcomeModal: true, // Show welcome modal after completing onboarding
         });
       }
 

@@ -98,6 +98,7 @@ export async function createUser(
     avatarUrl?: string;
     timezone?: string;
     utcOffset?: string;
+    showWelcomeModal?: boolean;
   }
 ) {
   return withMutationLogging(
@@ -145,6 +146,7 @@ export async function updateUser(
     avatarUrl?: string;
     timezone?: string;
     utcOffset?: string;
+    showWelcomeModal?: boolean;
   }
 ) {
   return withMutationLogging(

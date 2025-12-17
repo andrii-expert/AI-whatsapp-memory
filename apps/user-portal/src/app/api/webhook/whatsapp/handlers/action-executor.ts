@@ -29,6 +29,7 @@ import {
   getUserByEmail,
   getUserByPhone,
   normalizePhoneNumber,
+  getUserFriends,
 } from '@imaginecalendar/database/queries';
 import {
   getUserFiles,
@@ -1099,7 +1100,7 @@ export class ActionExecutor {
       } else {
         return {
           success: false,
-          message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+          message: `I couldn't find a user or friend with "${parsed.recipient}". Please provide the recipient's email address, phone number, or friend name (e.g., "john@example.com", "+27123456789", or "John Doe").`,
         };
       }
     }
@@ -1180,7 +1181,7 @@ export class ActionExecutor {
       } else {
         return {
           success: false,
-          message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+          message: `I couldn't find a user or friend with "${parsed.recipient}". Please provide the recipient's email address, phone number, or friend name (e.g., "john@example.com", "+27123456789", or "John Doe").`,
         };
       }
     }
@@ -1873,44 +1874,16 @@ export class ActionExecutor {
       };
     }
 
-    // Try to find user by email or phone, or search by name
-    let sharedWithUserId: string | null = null;
-    
-    // Check if recipient looks like an email address
-    const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
-    
-    // Check if recipient looks like a phone number
-    const hasDigits = /\d/.test(parsed.recipient);
-    const isPhone = hasDigits && (parsed.recipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(parsed.recipient.replace(/\+/g, '')));
-    
-    if (isEmail) {
-      try {
-        const user = await getUserByEmail(this.db, parsed.recipient.toLowerCase());
-        if (user && user.id !== this.userId) {
-          sharedWithUserId = user.id;
-        }
-      } catch (error) {
-        logger.error({ error, recipient: parsed.recipient }, 'Error looking up user by email');
-      }
-    } else if (isPhone) {
-      try {
-        const normalizedPhone = normalizePhoneNumber(parsed.recipient);
-        const user = await getUserByPhone(this.db, normalizedPhone, this.userId);
-        if (user) {
-          sharedWithUserId = user.id;
-        }
-      } catch (error) {
-        logger.error({ error, recipient: parsed.recipient }, 'Error looking up user by phone');
-      }
-    } else {
-      // Try searching by name
-      const users = await searchUsersForFileSharing(this.db, parsed.recipient, this.userId);
-      if (users.length > 0) {
-        sharedWithUserId = users[0].id;
-      }
-    }
+    // Try to find user by email, phone, or friend name
+    // The searchUsersForFileSharing function now includes friend name search
+    const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
 
     if (!sharedWithUserId) {
+      // Check if recipient looks like email or phone for better error messages
+      const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
+      const hasDigits = /\d/.test(parsed.recipient);
+      const isPhone = hasDigits && (parsed.recipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(parsed.recipient.replace(/\+/g, '')));
+      
       if (isEmail) {
         return {
           success: false,
@@ -1924,7 +1897,7 @@ export class ActionExecutor {
       } else {
         return {
           success: false,
-          message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+          message: `I couldn't find a user or friend with "${parsed.recipient}". Please provide the recipient's email address, phone number, or friend name (e.g., "john@example.com", "+27123456789", or "John Doe").`,
         };
       }
     }
@@ -5068,8 +5041,8 @@ export class ActionExecutor {
   }
 
   /**
-   * Resolve recipient email or phone number to user ID
-   * Returns null if user not found (caller should ask for correct email/phone)
+   * Resolve recipient email, phone number, or friend name to user ID
+   * Returns null if user not found (caller should ask for correct email/phone/name)
    */
   private async resolveRecipient(recipient: string): Promise<string | null> {
     const trimmedRecipient = recipient.trim();
@@ -5115,8 +5088,9 @@ export class ActionExecutor {
     
     // If recipient doesn't look like email or phone, try searching by name/partial match
     // This handles cases where user provided a name instead of email/phone
+    // This now includes searching by friend name
     if (!isEmail && !isPhone) {
-      const users = await searchUsersForSharing(this.db, this.userId, trimmedRecipient);
+      const users = await searchUsersForSharing(this.db, trimmedRecipient, this.userId);
       if (users.length > 0) {
         return users[0].id;
       }

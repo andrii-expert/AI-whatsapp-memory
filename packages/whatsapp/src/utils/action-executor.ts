@@ -872,8 +872,8 @@ export class ActionExecutor {
   }
 
   /**
-   * Resolve recipient email or phone number to user ID
-   * Returns null if user not found (caller should ask for correct email/phone)
+   * Resolve recipient email, phone number, or friend name to user ID
+   * Returns null if user not found (caller should ask for correct email/phone/name)
    */
   private async resolveRecipient(recipient: string): Promise<string | null> {
     const trimmedRecipient = recipient.trim();
@@ -919,8 +919,9 @@ export class ActionExecutor {
     
     // If recipient doesn't look like email or phone, try searching by name/partial match
     // This handles cases where user provided a name instead of email/phone
+    // This now includes searching by friend name
     if (!isEmail && !isPhone) {
-      const users = await searchUsersForSharing(this.db, this.userId, trimmedRecipient);
+      const users = await searchUsersForSharing(this.db, trimmedRecipient, this.userId);
       if (users.length > 0) {
         return users[0].id;
       }

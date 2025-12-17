@@ -1,6 +1,6 @@
 import { eq, and, or, ilike, ne, isNull, isNotNull } from "drizzle-orm";
 import type { Database } from "../client";
-import { taskShares, tasks, taskFolders, users } from "../schema";
+import { taskShares, tasks, taskFolders, users, friends } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
 
 // ============================================
@@ -359,7 +359,7 @@ export async function getSharedResourcesForUser(db: Database, userId: string) {
 }
 
 /**
- * Search users by email or phone number (for sharing)
+ * Search users by email, phone number, or friend name (for sharing)
  */
 export async function searchUsersForSharing(
   db: Database,
@@ -371,9 +371,17 @@ export async function searchUsersForSharing(
     { searchTerm, currentUserId },
     async () => {
       const searchPattern = `%${searchTerm.toLowerCase()}%`;
+      const foundUserIds = new Set<string>();
+      const foundUsers: Array<{
+        id: string;
+        email: string | null;
+        firstName: string | null;
+        lastName: string | null;
+        phoneNumber: string | null;
+      }> = [];
       
-      // Search by email or phone (case-insensitive, partial match), excluding current user and deleted users
-      const foundUsers = await db
+      // First, search by email or phone (case-insensitive, partial match), excluding current user and deleted users
+      const usersByEmailOrPhone = await db
         .select({
           id: users.id,
           email: users.email,
@@ -397,7 +405,91 @@ export async function searchUsersForSharing(
         )
         .limit(10);
 
-      return foundUsers;
+      // Add users found by email/phone
+      for (const user of usersByEmailOrPhone) {
+        if (!foundUserIds.has(user.id)) {
+          foundUserIds.add(user.id);
+          foundUsers.push(user);
+        }
+      }
+
+      // Then, search by friend name in the user's friend list
+      const friendsByName = await db
+        .select({
+          friendId: friends.id,
+          friendName: friends.name,
+          connectedUserId: friends.connectedUserId,
+          friendEmail: friends.email,
+          friendPhone: friends.phone,
+        })
+        .from(friends)
+        .where(
+          and(
+            eq(friends.userId, currentUserId),
+            ilike(friends.name, searchPattern) // Case-insensitive pattern match for friend name
+          )
+        )
+        .limit(10);
+
+      // For each friend found, try to find the connected user
+      for (const friend of friendsByName) {
+        // If friend has a connectedUserId, use that
+        if (friend.connectedUserId && !foundUserIds.has(friend.connectedUserId)) {
+          const connectedUser = await db.query.users.findFirst({
+            where: and(
+              eq(users.id, friend.connectedUserId),
+              isNull(users.deletedAt)
+            ),
+            columns: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+            },
+          });
+
+          if (connectedUser) {
+            foundUserIds.add(connectedUser.id);
+            foundUsers.push({
+              id: connectedUser.id,
+              email: connectedUser.email,
+              firstName: connectedUser.firstName,
+              lastName: connectedUser.lastName,
+              phoneNumber: connectedUser.phone,
+            });
+          }
+        } else if (friend.friendEmail || friend.friendPhone) {
+          // If friend doesn't have connectedUserId but has email/phone, search for user by that
+          const userByFriendContact = await db
+            .select({
+              id: users.id,
+              email: users.email,
+              firstName: users.firstName,
+              lastName: users.lastName,
+              phoneNumber: users.phone,
+            })
+            .from(users)
+            .where(
+              and(
+                ne(users.id, currentUserId),
+                isNull(users.deletedAt),
+                or(
+                  friend.friendEmail ? ilike(users.email, `%${friend.friendEmail.toLowerCase()}%`) : undefined,
+                  friend.friendPhone ? ilike(users.phone, `%${friend.friendPhone}%`) : undefined
+                )
+              )
+            )
+            .limit(1);
+
+          if (userByFriendContact.length > 0 && !foundUserIds.has(userByFriendContact[0].id)) {
+            foundUserIds.add(userByFriendContact[0].id);
+            foundUsers.push(userByFriendContact[0]);
+          }
+        }
+      }
+
+      return foundUsers.slice(0, 10);
     }
   );
 }

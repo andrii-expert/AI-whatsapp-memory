@@ -53,27 +53,21 @@ export default function DashboardPage() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
 
-  // Check if welcome modal should be shown
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const showModal = localStorage.getItem("show-welcome-modal");
-      const hasBeenShown = localStorage.getItem("welcome-modal-shown");
-      
-      if (showModal === "true" && !hasBeenShown) {
-        setIsWelcomeModalOpen(true);
-        // Clear the flag so it doesn't show again
-        localStorage.removeItem("show-welcome-modal");
-      }
-    }
-  }, []);
-
   // Fetch all data
+  const { data: userData } = useQuery(trpc.user.me.queryOptions());
   const { data: whatsappNumbers } = useQuery(trpc.whatsapp.getMyNumbers.queryOptions());
   const { data: calendars } = useQuery(trpc.calendar.list.queryOptions());
   const { data: allTasks = [] } = useQuery(trpc.tasks.list.queryOptions({}));
   const { data: allNotes = [] } = useQuery(trpc.notes.list.queryOptions({}));
   const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
   const { data: folders = [] } = useQuery(trpc.tasks.folders.list.queryOptions());
+
+  // Check if welcome modal should be shown from database
+  useEffect(() => {
+    if (userData?.showWelcomeModal) {
+      setIsWelcomeModalOpen(true);
+    }
+  }, [userData?.showWelcomeModal]);
 
   // Get all active calendars (like the calendar page does)
   const activeCalendars = useMemo(() => 

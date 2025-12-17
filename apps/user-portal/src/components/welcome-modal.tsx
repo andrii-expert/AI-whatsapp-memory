@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTRPC } from "@/trpc/client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -21,20 +23,37 @@ interface WelcomeModalProps {
 
 export function WelcomeModal({ open, onOpenChange }: WelcomeModalProps) {
   const router = useRouter();
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
 
-  const handleClose = () => {
-    // Mark as shown in localStorage
-    localStorage.setItem("welcome-modal-shown", "true");
+  const markWelcomeModalShownMutation = useMutation(
+    trpc.user.update.mutationOptions({
+      onSuccess: () => {
+        // Invalidate user query to refresh the data
+        queryClient.invalidateQueries({ queryKey: trpc.user.me.queryKey() });
+      },
+    })
+  );
+
+  const handleClose = async () => {
+    // Mark as shown in database
+    try {
+      await markWelcomeModalShownMutation.mutateAsync({
+        showWelcomeModal: false,
+      });
+    } catch (error) {
+      console.error("Failed to update welcome modal status:", error);
+    }
     onOpenChange(false);
   };
 
-  const handleGoToDashboard = () => {
-    handleClose();
+  const handleGoToDashboard = async () => {
+    await handleClose();
     // Already on dashboard, just close
   };
 
-  const handleWhatsAppClick = () => {
-    handleClose();
+  const handleWhatsAppClick = async () => {
+    await handleClose();
     // Navigate to WhatsApp settings page
     router.push("/settings/whatsapp");
   };

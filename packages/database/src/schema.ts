@@ -191,6 +191,10 @@ export const users = pgTable("users", {
   // Admin & metadata
   isAdmin: boolean("is_admin").default(false).notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  
+  // UI preferences
+  showWelcomeModal: boolean("show_welcome_modal").default(false).notNull(),
+  
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({

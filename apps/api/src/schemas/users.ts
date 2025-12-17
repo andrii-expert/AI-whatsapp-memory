@@ -16,6 +16,7 @@ export const updateUserSchema = z.object({
   avatarUrl: z.string().url().optional(),
   timezone: z.string().optional(),
   utcOffset: z.string().optional(),
+  showWelcomeModal: z.boolean().optional(),
 });
 
 export const userSchema = z.object({
