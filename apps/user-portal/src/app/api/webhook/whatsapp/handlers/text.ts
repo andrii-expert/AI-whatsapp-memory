@@ -536,9 +536,9 @@ async function processAIResponse(
           // Check for shopping item additions (new format: "✓ Added ..." or old format: "SHOPPING_ITEM_ADDED:")
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
-          } else if (result.includes('Added') && result.includes('to Shopping List')) {
-            // Extract item name from "✓ Added "{item}" to Shopping List"
-            const match = result.match(/Added\s+"([^"]+)"\s+to\s+Shopping\s+List/i);
+          } else if (result.includes('Added') && result.includes('to Shopping Lists')) {
+            // Extract item name from "✓ Added "{item}" to Shopping Lists"
+            const match = result.match(/Added\s+"([^"]+)"\s+to\s+Shopping\s+Lists/i);
             if (match && match[1]) {
               shoppingItems.push(match[1]);
             } else {
@@ -558,7 +558,7 @@ async function processAIResponse(
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          combinedMessage = `✅ *Added to Shopping List:*\nItem/s: ${itemsText}`;
+          combinedMessage = `✅ *Added to Shopping Lists:*\nItem/s: ${itemsText}`;
         }
         
         // Add other messages

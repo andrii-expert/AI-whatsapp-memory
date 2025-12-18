@@ -125,7 +125,7 @@ export class ActionExecutor {
     if (trimmed.startsWith('Create a shopping item:')) {
       action = 'create_shopping_item';
       resourceType = 'task';
-      // Try full format first: "Create a shopping item: {item} - on folder: Shopping List"
+      // Try full format first: "Create a shopping item: {item} - on folder: Shopping Lists"
       const fullMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
       if (fullMatch) {
         taskName = fullMatch[1].trim();
@@ -1000,7 +1000,7 @@ export class ActionExecutor {
         if (parsed.folderRoute && !folderId) {
           return {
             success: false,
-            message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+            message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
       }
@@ -1015,7 +1015,7 @@ export class ActionExecutor {
       const folderText = folderId && parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
       return {
         success: true,
-        message: `✓ Added "${parsed.taskName}" to Shopping List${folderText}`,
+        message: `✓ Added "${parsed.taskName}" to Shopping Lists${folderText}`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
@@ -2248,7 +2248,7 @@ export class ActionExecutor {
 
   private async listTasks(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     try {
-      // Check if this is a Shopping List request
+      // Check if this is a Shopping Lists request
       // Shopping list can be detected by:
       // 1. Folder route contains "shopping" or is "shopping list"
       // 2. List filter contains "shopping"
@@ -2269,7 +2269,7 @@ export class ActionExecutor {
           if (!folderId) {
             return {
               success: false,
-              message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+              message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
             };
           }
         }
@@ -2290,7 +2290,7 @@ export class ActionExecutor {
 
         const statusText = statusFilter ? ` (${statusFilter})` : '';
         const folderText = folderId ? ` - ${parsed.folderRoute}` : '';
-        let message = `🛍️ *Shopping List${folderText}${statusText}:*\n`;
+        let message = `🛍️ *Shopping Lists${folderText}${statusText}:*\n`;
         
         items.slice(0, 20).forEach((item, index) => {
           const statusIcon = item.status === 'completed' ? '✅' : '⬜';
@@ -4708,7 +4708,7 @@ export class ActionExecutor {
     if (existingFolder) {
       return {
         success: false,
-        message: `A shopping list folder named "${parsed.folderRoute}" already exists.`,
+        message: `A shopping lists folder named "${parsed.folderRoute}" already exists.`,
       };
     }
 
@@ -4720,13 +4720,13 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *New Shopping List Folder Created:*\nName: ${parsed.folderRoute}`,
+        message: `✅ *New Shopping Lists Folder Created:*\nName: ${parsed.folderRoute}`,
       };
     } catch (error) {
       logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create shopping list folder');
       return {
         success: false,
-        message: `I'm sorry, I couldn't create the shopping list folder "${parsed.folderRoute}". Please try again.`,
+        message: `I'm sorry, I couldn't create the shopping lists folder "${parsed.folderRoute}". Please try again.`,
       };
     }
   }
@@ -4735,7 +4735,7 @@ export class ActionExecutor {
     if (!parsed.folderRoute) {
       return {
         success: false,
-        message: "I need to know which shopping list folder you'd like to edit. Please specify the folder name.",
+        message: "I need to know which shopping lists folder you'd like to edit. Please specify the folder name.",
       };
     }
 
@@ -4761,7 +4761,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✏️ *Shopping List Folder Updated:*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
+        message: `✏️ *Shopping Lists Folder Updated:*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to edit shopping list folder');
@@ -4776,7 +4776,7 @@ export class ActionExecutor {
     if (!parsed.folderRoute) {
       return {
         success: false,
-        message: "I need to know which shopping list folder you'd like to delete. Please specify the folder name.",
+        message: "I need to know which shopping lists folder you'd like to delete. Please specify the folder name.",
       };
     }
 
@@ -4793,13 +4793,13 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `⛔ *Shopping List Folder Deleted:*\n"${parsed.folderRoute}"`,
+        message: `⛔ *Shopping Lists Folder Deleted:*\n"${parsed.folderRoute}"`,
       };
     } catch (error) {
       logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to delete shopping list folder');
       return {
         success: false,
-        message: `I'm sorry, I couldn't delete the shopping list folder "${parsed.folderRoute}". Please try again.`,
+        message: `I'm sorry, I couldn't delete the shopping lists folder "${parsed.folderRoute}". Please try again.`,
       };
     }
   }
@@ -4836,7 +4836,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *New Shopping List Subfolder Created:*\nParent: ${parsed.folderRoute}\nName: ${parsed.newName}`,
+        message: `✅ *New Shopping Lists Subfolder Created:*\nParent: ${parsed.folderRoute}\nName: ${parsed.newName}`,
       };
     } catch (error) {
       logger.error({ error, parentFolder: parsed.folderRoute, subfolderName: parsed.newName, userId: this.userId }, 'Failed to create shopping list subfolder');
@@ -4885,11 +4885,11 @@ export class ActionExecutor {
       if (folders.length === 0) {
         return {
           success: true,
-          message: `📁 *You have no shopping list folders*`,
+          message: `📁 *You have no shopping lists folders*`,
         };
       }
 
-      let message = `📁 *Shopping List Folders:*\n`;
+      let message = `📁 *Shopping Lists Folders:*\n`;
       folders.forEach((folder: any, index: number) => {
         const subfolderCount = folder.subfolders?.length || 0;
         const itemCount = folder.items?.length || 0;
@@ -4915,7 +4915,7 @@ export class ActionExecutor {
       logger.error({ error, userId: this.userId }, 'Failed to list shopping list folders');
       return {
         success: false,
-        message: `I'm sorry, I couldn't list your shopping list folders. Please try again.`,
+        message: `I'm sorry, I couldn't list your shopping lists folders. Please try again.`,
       };
     }
   }

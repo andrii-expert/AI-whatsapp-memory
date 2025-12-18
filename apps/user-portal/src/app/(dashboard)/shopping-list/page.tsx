@@ -920,7 +920,7 @@ export default function ShoppingListPage() {
             Dashboard
           </Link>
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">Shopping List</span>
+          <span className="font-medium">Shopping Lists</span>
         </div>
       </div>
 
