@@ -892,22 +892,8 @@ export default function ShoppingListPage() {
             Dashboard
           </Link>
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <Link
-            href="/shopping-list"
-            className="font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Shopping List
-          </Link>
+          <span className="font-medium">Shopping List</span>
         </div>
-
-        <Button
-          onClick={() => setIsAddModalOpen(true)}
-          variant="orange-primary"
-          className="flex-shrink-0"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Item
-        </Button>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -1123,27 +1109,6 @@ export default function ShoppingListPage() {
 
         {/* Right Panel - Items */}
         <div className="space-y-4 w-full min-w-0">
-          {/* Header */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="h-8 w-8 text-green-600" />
-              <h1 className="text-3xl font-bold text-gray-900">Shopping List</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/reminders">
-                <Button variant="outline" size="sm" className="flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Reminders
-                </Button>
-              </Link>
-              <Link href="/notes">
-                <Button variant="outline" size="sm" className="flex items-center gap-2">
-                  <StickyNote className="h-4 w-4" />
-                  Notes
-                </Button>
-              </Link>
-            </div>
-          </div>
 
           {/* Folder breadcrumb and Add Item button */}
           <div className="flex items-center justify-between mb-4 gap-4">
