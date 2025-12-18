@@ -84,13 +84,13 @@ export default function ShoppingListPage() {
   // Share states
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isShareDetailsModalOpen, setIsShareDetailsModalOpen] = useState(false);
-  const [shareResourceType, setShareResourceType] = useState<"task" | "task_folder">("task");
+  const [shareResourceType, setShareResourceType] = useState<"task" | "task_folder" | "shopping_list_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder">("task");
   const [shareResourceId, setShareResourceId] = useState<string | null>(null);
   const [shareResourceName, setShareResourceName] = useState("");
 
   // Fetch folders and items
   const { data: allFolders = [], isLoading: isLoadingFolders } = useQuery(
-    trpc.tasks.folders.list.queryOptions()
+    trpc.shoppingList.folders.list.queryOptions()
   );
   const { data: allItems = [], isLoading: isLoadingItems } = useQuery(
     trpc.shoppingList.list.queryOptions({})
@@ -112,22 +112,32 @@ export default function ShoppingListPage() {
   }, []);
 
   const sharedFolders = useMemo(() => {
-    return (sharedResources?.folders || []).map((folder: any) => {
-      const folderPermission = folder.shareInfo?.permission || "view";
-      return {
-        ...folder,
-        isSharedWithMe: true,
-        sharePermission: folderPermission,
-        ownerId: folder.shareInfo?.ownerId,
-        items: (folder.items || []).map((item: any) => ({
-          ...item,
+    // Filter only shopping list folders from shared resources
+    return (sharedResources?.folders || [])
+      .filter((folder: any) => {
+        // Check if this is a shopping list folder by checking if it has items property
+        // or by checking the share resource type
+        const share = myShares.find((s: any) => 
+          s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
+        );
+        return share || (folder.items && Array.isArray(folder.items));
+      })
+      .map((folder: any) => {
+        const folderPermission = folder.shareInfo?.permission || "view";
+        return {
+          ...folder,
           isSharedWithMe: true,
           sharePermission: folderPermission,
-          sharedViaFolder: true,
-        })),
-      };
-    });
-  }, [sharedResources]);
+          ownerId: folder.shareInfo?.ownerId,
+          items: (folder.items || []).map((item: any) => ({
+            ...item,
+            isSharedWithMe: true,
+            sharePermission: folderPermission,
+            sharedViaFolder: true,
+          })),
+        };
+      });
+  }, [sharedResources, myShares]);
 
   // Filter out shared folders from main folder list - only show owned folders
   const folders = allFolders.filter((folder: any) => !folder.isSharedWithMe);
@@ -306,7 +316,7 @@ export default function ShoppingListPage() {
 
   // Folder mutations
   const createFolderMutation = useMutation(
-    trpc.tasks.folders.create.mutationOptions({
+    trpc.shoppingList.folders.create.mutationOptions({
       onSuccess: (newFolder) => {
         queryClient.invalidateQueries();
         setNewFolderName("");
@@ -339,7 +349,7 @@ export default function ShoppingListPage() {
   );
 
   const updateFolderMutation = useMutation(
-    trpc.tasks.folders.update.mutationOptions({
+    trpc.shoppingList.folders.update.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
         setEditingFolderId(null);
@@ -360,7 +370,7 @@ export default function ShoppingListPage() {
   );
 
   const deleteFolderMutation = useMutation(
-    trpc.tasks.folders.delete.mutationOptions({
+    trpc.shoppingList.folders.delete.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
         setDeleteFolderConfirmOpen(false);
@@ -465,7 +475,7 @@ export default function ShoppingListPage() {
   };
 
   // Get share count for a resource
-  const getShareCount = (resourceType: "task" | "task_folder", resourceId: string): number => {
+  const getShareCount = (resourceType: "task" | "task_folder" | "shopping_list_folder", resourceId: string): number => {
     return myShares.filter(
       (share: any) => share.resourceType === resourceType && share.resourceId === resourceId
     ).length;
@@ -560,6 +570,7 @@ export default function ShoppingListPage() {
     if (!newItemName.trim()) return;
 
     createItemMutation.mutate({
+      folderId: selectedFolderId || undefined,
       name: newItemName.trim(),
       description: newItemDescription.trim() || undefined,
     });
@@ -685,7 +696,7 @@ export default function ShoppingListPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      openShareDetails("task_folder", folder.id, folder.name);
+                      openShareDetails("shopping_list_folder", folder.id, folder.name);
                     }}
                     className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
                     title="View who shared this folder with you"
@@ -718,16 +729,16 @@ export default function ShoppingListPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                 {isOwner && (() => {
-                  const shareCount = getShareCount("task_folder", folder.id);
+                  const shareCount = getShareCount("shopping_list_folder", folder.id);
                   const isShared = shareCount > 0;
                   return (
                     <DropdownMenuItem
                       onClick={(e: React.MouseEvent) => {
                         e.stopPropagation();
                         if (isShared) {
-                          openShareDetails("task_folder", folder.id, folder.name);
+                          openShareDetails("shopping_list_folder", folder.id, folder.name);
                         } else {
-                          openShareModal("task_folder", folder.id, folder.name);
+                          openShareModal("shopping_list_folder", folder.id, folder.name);
                         }
                       }}
                       className="flex items-center gap-2 cursor-pointer"
@@ -840,14 +851,14 @@ export default function ShoppingListPage() {
   };
 
   // Share functions
-  const openShareModal = (type: "task" | "task_folder", id: string, name: string) => {
+  const openShareModal = (type: "task" | "task_folder" | "shopping_list_folder", id: string, name: string) => {
     setShareResourceType(type);
     setShareResourceId(id);
     setShareResourceName(name);
     setIsShareModalOpen(true);
   };
 
-  const openShareDetails = (type: "task" | "task_folder", id: string, name: string) => {
+  const openShareDetails = (type: "task" | "task_folder" | "shopping_list_folder", id: string, name: string) => {
     setShareResourceType(type);
     setShareResourceId(id);
     setShareResourceName(name);
@@ -1487,19 +1498,7 @@ export default function ShoppingListPage() {
 
               {/* Actions */}
               <div className="flex items-center gap-2">
-                <ShareButton
-                  onClick={() => {
-                    const shareCount = getShareCount("task", item.id);
-                    if (shareCount > 0) {
-                      openShareDetails("task", item.id, item.name);
-                    } else {
-                      openShareModal("task", item.id, item.name);
-                    }
-                  }}
-                  isShared={getShareCount("task", item.id) > 0}
-                  shareCount={getShareCount("task", item.id)}
-                  size="md"
-                />
+                {/* Shopping list items don't have direct sharing - only folders can be shared */}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1652,7 +1651,7 @@ export default function ShoppingListPage() {
         <ShareModal
           isOpen={isShareModalOpen}
           onClose={() => setIsShareModalOpen(false)}
-          resourceType={shareResourceType}
+          resourceType={shareResourceType as "task" | "task_folder" | "shopping_list_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder"}
           resourceId={shareResourceId}
           resourceName={shareResourceName}
         />
@@ -1663,7 +1662,7 @@ export default function ShoppingListPage() {
         <ShareDetailsModal
           isOpen={isShareDetailsModalOpen}
           onClose={() => setIsShareDetailsModalOpen(false)}
-          resourceType={shareResourceType}
+          resourceType={shareResourceType as "task" | "task_folder" | "shopping_list_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder"}
           resourceId={shareResourceId}
           resourceName={shareResourceName}
         />

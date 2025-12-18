@@ -26,7 +26,7 @@ import { cn } from "@imaginecalendar/ui/cn";
 interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
-  resourceType: "task" | "task_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder";
+  resourceType: "task" | "task_folder" | "shopping_list_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder";
   resourceId: string;
   resourceName: string;
 }

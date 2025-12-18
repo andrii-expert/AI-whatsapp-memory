@@ -15,6 +15,7 @@ export * from "./pending-intents";
 export * from "./plans";
 export * from "./tasks";
 export * from "./shopping-list";
+export * from "./shopping-list-folders";
 export * from "./task-sharing";
 export * from "./notes";
 export * from "./note-sharing";

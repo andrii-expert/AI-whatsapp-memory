@@ -8,11 +8,12 @@ import {
   deleteTaskShare,
   checkTaskAccess,
   checkFolderAccess,
+  checkShoppingListFolderAccess,
   getSharedResourcesForUser,
   searchUsersForSharing,
   getUserById,
 } from "@imaginecalendar/database/queries";
-import { getTaskById, getFolderById } from "@imaginecalendar/database/queries";
+import { getTaskById, getFolderById, getShoppingListFolderById } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -20,14 +21,14 @@ import { sendShareNotificationEmail } from "@api/utils/email";
 
 // Schemas
 const createShareSchema = z.object({
-  resourceType: z.enum(["task", "task_folder"]),
+  resourceType: z.enum(["task", "task_folder", "shopping_list_folder"]),
   resourceId: z.string().uuid(),
   sharedWithUserId: z.string(),
   permission: z.enum(["view", "edit"]),
 });
 
 const getResourceSharesSchema = z.object({
-  resourceType: z.enum(["task", "task_folder"]),
+  resourceType: z.enum(["task", "task_folder", "shopping_list_folder"]),
   resourceId: z.string().uuid(),
 });
 
@@ -41,7 +42,7 @@ const deleteShareSchema = z.object({
 });
 
 const checkAccessSchema = z.object({
-  resourceType: z.enum(["task", "task_folder"]),
+  resourceType: z.enum(["task", "task_folder", "shopping_list_folder"]),
   resourceId: z.string().uuid(),
 });
 
@@ -75,8 +76,16 @@ export const taskSharingRouter = createTRPCRouter({
             message: "You don't have permission to share this task",
           });
         }
-      } else {
+      } else if (input.resourceType === "task_folder") {
         const access = await checkFolderAccess(db, input.resourceId, session.user.id);
+        if (!access.hasAccess || access.permission !== "owner") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have permission to share this folder",
+          });
+        }
+      } else if (input.resourceType === "shopping_list_folder") {
+        const access = await checkShoppingListFolderAccess(db, input.resourceId, session.user.id);
         if (!access.hasAccess || access.permission !== "owner") {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -135,8 +144,11 @@ export const taskSharingRouter = createTRPCRouter({
         if (input.resourceType === "task") {
           const task = await getTaskById(db, input.resourceId, session.user.id);
           resourceName = task?.title || "Untitled Task";
-        } else {
+        } else if (input.resourceType === "task_folder") {
           const folder = await getFolderById(db, input.resourceId, session.user.id);
+          resourceName = folder?.name || "Untitled Folder";
+        } else if (input.resourceType === "shopping_list_folder") {
+          const folder = await getShoppingListFolderById(db, input.resourceId, session.user.id);
           resourceName = folder?.name || "Untitled Folder";
         }
 
@@ -224,8 +236,16 @@ export const taskSharingRouter = createTRPCRouter({
             message: "You don't have permission to view shares for this task",
           });
         }
-      } else {
+      } else if (input.resourceType === "task_folder") {
         const access = await checkFolderAccess(db, input.resourceId, session.user.id);
+        if (!access.hasAccess || access.permission !== "owner") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You don't have permission to view shares for this folder",
+          });
+        }
+      } else if (input.resourceType === "shopping_list_folder") {
+        const access = await checkShoppingListFolderAccess(db, input.resourceId, session.user.id);
         if (!access.hasAccess || access.permission !== "owner") {
           throw new TRPCError({
             code: "FORBIDDEN",
@@ -318,9 +338,12 @@ export const taskSharingRouter = createTRPCRouter({
     .query(async ({ ctx: { db, session }, input }) => {
       if (input.resourceType === "task") {
         return checkTaskAccess(db, input.resourceId, session.user.id);
-      } else {
+      } else if (input.resourceType === "task_folder") {
         return checkFolderAccess(db, input.resourceId, session.user.id);
+      } else if (input.resourceType === "shopping_list_folder") {
+        return checkShoppingListFolderAccess(db, input.resourceId, session.user.id);
       }
+      return { hasAccess: false, permission: null };
     }),
 
   /**

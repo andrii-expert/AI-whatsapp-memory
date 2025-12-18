@@ -936,6 +936,7 @@ export const sharePermissionEnum = pgEnum("share_permission", [
 export const shareResourceTypeEnum = pgEnum("share_resource_type", [
   "task",
   "task_folder",
+  "shopping_list_folder",
   "note",
   "note_folder",
   "file",
@@ -1021,12 +1022,32 @@ export const taskFoldersRelations = relations(taskFolders, ({ one, many }) => ({
 }));
 
 // ============================================
-// Shopping List Items
+// Shopping List Folders and Items
 // ============================================
+
+export const shoppingListFolders = pgTable("shopping_list_folders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  parentId: uuid("parent_id").references((): any => shoppingListFolders.id, { onDelete: "cascade" }),
+  
+  name: text("name").notNull(),
+  color: text("color"),
+  icon: text("icon"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  isExpanded: boolean("is_expanded").default(true).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("shopping_list_folders_user_id_idx").on(table.userId),
+  parentIdIdx: index("shopping_list_folders_parent_id_idx").on(table.parentId),
+  sortOrderIdx: index("shopping_list_folders_sort_order_idx").on(table.sortOrder),
+}));
 
 export const shoppingListItems = pgTable("shopping_list_items", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  folderId: uuid("folder_id").references(() => shoppingListFolders.id, { onDelete: "cascade" }),
   
   name: text("name").notNull(),
   description: text("description"),
@@ -1040,14 +1061,35 @@ export const shoppingListItems = pgTable("shopping_list_items", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   userIdIdx: index("shopping_list_items_user_id_idx").on(table.userId),
+  folderIdIdx: index("shopping_list_items_folder_id_idx").on(table.folderId),
   statusIdx: index("shopping_list_items_status_idx").on(table.status),
   sortOrderIdx: index("shopping_list_items_sort_order_idx").on(table.sortOrder),
+}));
+
+export const shoppingListFoldersRelations = relations(shoppingListFolders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [shoppingListFolders.userId],
+    references: [users.id],
+  }),
+  parent: one(shoppingListFolders, {
+    fields: [shoppingListFolders.parentId],
+    references: [shoppingListFolders.id],
+    relationName: "parent",
+  }),
+  subfolders: many(shoppingListFolders, {
+    relationName: "parent",
+  }),
+  items: many(shoppingListItems),
 }));
 
 export const shoppingListItemsRelations = relations(shoppingListItems, ({ one }) => ({
   user: one(users, {
     fields: [shoppingListItems.userId],
     references: [users.id],
+  }),
+  folder: one(shoppingListFolders, {
+    fields: [shoppingListItems.folderId],
+    references: [shoppingListFolders.id],
   }),
 }));
 

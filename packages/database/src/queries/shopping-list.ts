@@ -11,6 +11,7 @@ export async function getUserShoppingListItems(
   db: Database,
   userId: string,
   options?: {
+    folderId?: string;
     status?: "open" | "completed" | "archived";
   }
 ) {
@@ -20,6 +21,10 @@ export async function getUserShoppingListItems(
     async () => {
       const whereConditions = [eq(shoppingListItems.userId, userId)];
       
+      if (options?.folderId) {
+        whereConditions.push(eq(shoppingListItems.folderId, options.folderId));
+      }
+      
       if (options?.status) {
         whereConditions.push(eq(shoppingListItems.status, options.status));
       }
@@ -27,6 +32,9 @@ export async function getUserShoppingListItems(
       return db.query.shoppingListItems.findMany({
         where: and(...whereConditions),
         orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+        with: {
+          folder: true,
+        },
       });
     }
   );
@@ -55,6 +63,7 @@ export async function createShoppingListItem(
   db: Database,
   data: {
     userId: string;
+    folderId?: string;
     name: string;
     description?: string;
     status?: "open" | "completed" | "archived";
@@ -69,6 +78,7 @@ export async function createShoppingListItem(
         .insert(shoppingListItems)
         .values({
           userId: data.userId,
+          folderId: data.folderId,
           name: data.name,
           description: data.description,
           status: data.status || "open",
@@ -89,6 +99,7 @@ export async function updateShoppingListItem(
   data: {
     name?: string;
     description?: string;
+    folderId?: string | null;
     status?: "open" | "completed" | "archived";
     sortOrder?: number;
   }
@@ -106,6 +117,9 @@ export async function updateShoppingListItem(
       }
       if (data.description !== undefined) {
         updateData.description = data.description;
+      }
+      if (data.folderId !== undefined) {
+        updateData.folderId = data.folderId;
       }
       if (data.status !== undefined) {
         updateData.status = data.status;

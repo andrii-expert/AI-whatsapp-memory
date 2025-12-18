@@ -1,6 +1,6 @@
-import { eq, and, or, ilike, ne, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, or, ilike, ne, isNull, isNotNull, inArray } from "drizzle-orm";
 import type { Database } from "../client";
-import { taskShares, tasks, taskFolders, users, friends } from "../schema";
+import { taskShares, tasks, taskFolders, shoppingListFolders, shoppingListItems, users, friends } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
 
 // ============================================
@@ -15,7 +15,7 @@ export async function createTaskShare(
   data: {
     ownerId: string;
     sharedWithUserId: string;
-    resourceType: "task" | "task_folder";
+    resourceType: "task" | "task_folder" | "shopping_list_folder";
     resourceId: string;
     permission: "view" | "edit";
   }
@@ -64,7 +64,7 @@ export async function createTaskShare(
  */
 export async function getResourceShares(
   db: Database,
-  resourceType: "task" | "task_folder",
+  resourceType: "task" | "task_folder" | "shopping_list_folder",
   resourceId: string,
   ownerId: string
 ) {
@@ -294,6 +294,54 @@ export async function checkFolderAccess(
 }
 
 /**
+ * Check if user has access to a shopping list folder
+ */
+export async function checkShoppingListFolderAccess(
+  db: Database,
+  folderId: string,
+  userId: string
+): Promise<{ hasAccess: boolean; permission: "view" | "edit" | "owner" | null }> {
+  return withQueryLogging(
+    'checkShoppingListFolderAccess',
+    { folderId, userId },
+    async () => {
+      // Check if user owns the folder
+      const folder = await db.query.shoppingListFolders.findFirst({
+        where: eq(shoppingListFolders.id, folderId),
+      });
+
+      if (!folder) {
+        return { hasAccess: false, permission: null };
+      }
+
+      if (folder.userId === userId) {
+        return { hasAccess: true, permission: "owner" };
+      }
+
+      // Check if folder is shared with user
+      const share = await db.query.taskShares.findFirst({
+        where: and(
+          eq(taskShares.resourceType, "shopping_list_folder"),
+          eq(taskShares.resourceId, folderId),
+          eq(taskShares.sharedWithUserId, userId)
+        ),
+      });
+
+      if (share) {
+        return { hasAccess: true, permission: share.permission };
+      }
+
+      // Check if parent folder is shared (recursive check)
+      if (folder.parentId) {
+        return checkShoppingListFolderAccess(db, folder.parentId, userId);
+      }
+
+      return { hasAccess: false, permission: null };
+    }
+  );
+}
+
+/**
  * Get all tasks and folders shared with a user
  */
 export async function getSharedResourcesForUser(db: Database, userId: string) {
@@ -321,24 +369,38 @@ export async function getSharedResourcesForUser(db: Database, userId: string) {
         .filter(s => s.resourceType === "task")
         .map(s => s.resourceId);
       
-      const folderIds = shares
+      const taskFolderIds = shares
         .filter(s => s.resourceType === "task_folder")
+        .map(s => s.resourceId);
+
+      const shoppingListFolderIds = shares
+        .filter(s => s.resourceType === "shopping_list_folder")
         .map(s => s.resourceId);
 
       const sharedTasks = taskIds.length > 0 
         ? await db.query.tasks.findMany({
-            where: or(...taskIds.map(id => eq(tasks.id, id))),
+            where: inArray(tasks.id, taskIds),
             with: {
               folder: true,
             },
           })
         : [];
 
-      const sharedFolders = folderIds.length > 0
+      const sharedTaskFolders = taskFolderIds.length > 0
         ? await db.query.taskFolders.findMany({
-            where: or(...folderIds.map(id => eq(taskFolders.id, id))),
+            where: inArray(taskFolders.id, taskFolderIds),
             with: {
               tasks: true,
+              subfolders: true,
+            },
+          })
+        : [];
+
+      const sharedShoppingListFolders = shoppingListFolderIds.length > 0
+        ? await db.query.shoppingListFolders.findMany({
+            where: inArray(shoppingListFolders.id, shoppingListFolderIds),
+            with: {
+              items: true,
               subfolders: true,
             },
           })
@@ -349,10 +411,16 @@ export async function getSharedResourcesForUser(db: Database, userId: string) {
           ...task,
           shareInfo: shares.find(s => s.resourceId === task.id),
         })),
-        folders: sharedFolders.map(folder => ({
-          ...folder,
-          shareInfo: shares.find(s => s.resourceId === folder.id),
-        })),
+        folders: [
+          ...sharedTaskFolders.map(folder => ({
+            ...folder,
+            shareInfo: shares.find(s => s.resourceId === folder.id),
+          })),
+          ...sharedShoppingListFolders.map(folder => ({
+            ...folder,
+            shareInfo: shares.find(s => s.resourceId === folder.id),
+          })),
+        ],
       };
     }
   );

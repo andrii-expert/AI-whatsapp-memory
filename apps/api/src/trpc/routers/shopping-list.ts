@@ -6,13 +6,35 @@ import {
   updateShoppingListItem,
   deleteShoppingListItem,
   toggleShoppingListItemStatus,
+  getUserShoppingListFolders,
+  getShoppingListFolderById,
+  createShoppingListFolder,
+  updateShoppingListFolder,
+  deleteShoppingListFolder,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+// Folder schemas
+const createShoppingListFolderSchema = z.object({
+  name: z.string().min(1, "Folder name is required").max(100),
+  parentId: z.string().uuid().optional(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+});
+
+const updateShoppingListFolderSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100).optional(),
+  color: z.string().optional(),
+  icon: z.string().optional(),
+  sortOrder: z.number().optional(),
+});
+
 // Shopping list item schemas
 const createShoppingListItemSchema = z.object({
+  folderId: z.string().uuid().optional(),
   name: z.string().min(1, "Item name is required").max(500),
   description: z.string().optional(),
   status: z.enum(["open", "completed", "archived"]).optional(),
@@ -22,19 +44,96 @@ const updateShoppingListItemSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(500).optional(),
   description: z.string().optional(),
+  folderId: z.string().uuid().nullable().optional(),
   status: z.enum(["open", "completed", "archived"]).optional(),
   sortOrder: z.number().optional(),
 });
 
 const getShoppingListItemsSchema = z.object({
+  folderId: z.string().uuid().optional(),
   status: z.enum(["open", "completed", "archived"]).optional(),
 });
 
 export const shoppingListRouter = createTRPCRouter({
+  // ============================================
+  // Folder Endpoints
+  // ============================================
+  
+  folders: createTRPCRouter({
+    list: protectedProcedure.query(async ({ ctx: { db, session } }) => {
+      const folders = await getUserShoppingListFolders(db, session.user.id);
+      return folders;
+    }),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .query(async ({ ctx: { db, session }, input }) => {
+        const folder = await getShoppingListFolderById(db, input.id, session.user.id);
+        
+        if (!folder) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Folder not found",
+          });
+        }
+
+        return folder;
+      }),
+
+    create: protectedProcedure
+      .input(createShoppingListFolderSchema)
+      .mutation(async ({ ctx: { db, session }, input }) => {
+        logger.info({ userId: session.user.id, folderName: input.name }, "Creating shopping list folder");
+        
+        const folder = await createShoppingListFolder(db, {
+          userId: session.user.id,
+          ...input,
+        });
+
+        logger.info({ userId: session.user.id, folderId: folder.id }, "Shopping list folder created");
+        return folder;
+      }),
+
+    update: protectedProcedure
+      .input(updateShoppingListFolderSchema)
+      .mutation(async ({ ctx: { db, session }, input }) => {
+        const { id, ...data } = input;
+        
+        logger.info({ userId: session.user.id, folderId: id }, "Updating shopping list folder");
+        
+        const folder = await updateShoppingListFolder(db, id, session.user.id, data);
+        
+        if (!folder) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Folder not found",
+          });
+        }
+
+        logger.info({ userId: session.user.id, folderId: id }, "Shopping list folder updated");
+        return folder;
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .mutation(async ({ ctx: { db, session }, input }) => {
+        logger.info({ userId: session.user.id, folderId: input.id }, "Deleting shopping list folder");
+        
+        await deleteShoppingListFolder(db, input.id, session.user.id);
+        
+        logger.info({ userId: session.user.id, folderId: input.id }, "Shopping list folder deleted");
+        return { success: true };
+      }),
+  }),
+
+  // ============================================
+  // Shopping List Item Endpoints
+  // ============================================
   list: protectedProcedure
     .input(getShoppingListItemsSchema.optional())
     .query(async ({ ctx: { db, session }, input }) => {
       const items = await getUserShoppingListItems(db, session.user.id, {
+        folderId: input?.folderId,
         status: input?.status,
       });
       return items;
@@ -62,6 +161,7 @@ export const shoppingListRouter = createTRPCRouter({
       
       const item = await createShoppingListItem(db, {
         userId: session.user.id,
+        folderId: input.folderId,
         name: input.name,
         description: input.description,
         status: input.status || "open",
@@ -74,11 +174,14 @@ export const shoppingListRouter = createTRPCRouter({
   update: protectedProcedure
     .input(updateShoppingListItemSchema)
     .mutation(async ({ ctx: { db, session }, input }) => {
-      const { id, ...updateData } = input;
+      const { id, folderId, ...updateData } = input;
       
       logger.info({ userId: session.user.id, itemId: id, updates: Object.keys(updateData) }, "Updating shopping list item");
       
-      const item = await updateShoppingListItem(db, id, session.user.id, updateData);
+      const item = await updateShoppingListItem(db, id, session.user.id, {
+        ...updateData,
+        folderId: folderId !== undefined ? folderId : undefined,
+      });
       
       if (!item) {
         throw new TRPCError({
