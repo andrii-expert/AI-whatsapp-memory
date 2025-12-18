@@ -932,7 +932,7 @@ export default function ShoppingListPage() {
           onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
-n
+
       {/* Mobile Sidebar */}
       <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
         <SheetContent 

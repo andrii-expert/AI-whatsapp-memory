@@ -55,6 +55,11 @@ import {
   updateShoppingListItem,
   deleteShoppingListItem,
   toggleShoppingListItemStatus,
+  getUserShoppingListFolders,
+  createShoppingListFolder,
+  updateShoppingListFolder,
+  deleteShoppingListFolder,
+  getShoppingListFolderById,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -78,6 +83,7 @@ export interface ParsedAction {
   typeFilter?: ReminderFrequency; // For reminder type filtering: 'daily', 'hourly', etc.
   missingFields: string[];
   isFileFolder?: boolean; // True if this is a file folder operation (vs task folder)
+  isShoppingListFolder?: boolean; // True if this is a shopping list folder operation (vs task folder)
   addressName?: string; // For address operations: the person/place name
   addressType?: string; // For address operations: 'location', 'address', 'pin', 'all'
 }
@@ -113,6 +119,7 @@ export class ActionExecutor {
     let status: string | undefined;
     let listFilter: string | undefined;
     let typeFilter: ReminderFrequency | undefined;
+    let isShoppingListFolder: boolean | undefined;
 
     // Shopping item operations (check before regular task)
     if (trimmed.startsWith('Create a shopping item:')) {
@@ -128,7 +135,8 @@ export class ActionExecutor {
         const simpleMatch = trimmed.match(/^Create a shopping item:\s*(.+)$/i);
         if (simpleMatch) {
           taskName = simpleMatch[1].trim();
-          folderRoute = 'Shopping List'; // Default to Shopping List
+          // Don't set default folder - let it be undefined so item goes to root
+          folderRoute = undefined;
         } else {
           missingFields.push('item name');
         }
@@ -524,6 +532,60 @@ export class ActionExecutor {
       } else {
         missingFields.push('parent folder or subfolder name');
       }
+    } else if (trimmed.startsWith('Create a shopping list folder:')) {
+      action = 'create';
+      resourceType = 'folder';
+      isShoppingListFolder = true;
+      const match = trimmed.match(/^Create a shopping list folder:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+      } else {
+        missingFields.push('folder name');
+      }
+    } else if (trimmed.startsWith('Edit a shopping list folder:')) {
+      action = 'edit';
+      resourceType = 'folder';
+      isShoppingListFolder = true;
+      const match = trimmed.match(/^Edit a shopping list folder:\s*(.+?)\s*-\s*to:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+        newName = match[2].trim();
+      } else {
+        missingFields.push('folder name or new name');
+      }
+    } else if (trimmed.startsWith('Delete a shopping list folder:')) {
+      action = 'delete';
+      resourceType = 'folder';
+      isShoppingListFolder = true;
+      const match = trimmed.match(/^Delete a shopping list folder:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+      } else {
+        missingFields.push('folder name');
+      }
+    } else if (trimmed.startsWith('Create a shopping list sub-folder:')) {
+      action = 'create_subfolder';
+      resourceType = 'folder';
+      isShoppingListFolder = true;
+      const match = trimmed.match(/^Create a shopping list sub-folder:\s*(.+?)\s*-\s*name:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim(); // parent folder
+        newName = match[2].trim(); // subfolder name
+      } else {
+        missingFields.push('parent folder or subfolder name');
+      }
+    } else if (trimmed.startsWith('List shopping list folders:')) {
+      action = 'list_folders';
+      resourceType = 'folder';
+      isShoppingListFolder = true;
+      // Optional: can list all or specific parent folder's subfolders
+      const match = trimmed.match(/^List shopping list folders:\s*(.+)$/i);
+      if (match) {
+        const folderOrAll = match[1].trim();
+        folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+      } else {
+        folderRoute = undefined; // List all folders
+      }
     }
 
     // Validate required fields
@@ -621,9 +683,19 @@ export class ActionExecutor {
       trimmed.startsWith('Delete a file folder:') ||
       trimmed.startsWith('Share a file folder:');
 
+    // Update isShoppingListFolder if it wasn't already set in parsing
+    if (isShoppingListFolder === undefined) {
+      isShoppingListFolder = trimmed.startsWith('Create a shopping list folder:') ||
+        trimmed.startsWith('Edit a shopping list folder:') ||
+        trimmed.startsWith('Delete a shopping list folder:') ||
+        trimmed.startsWith('Create a shopping list sub-folder:') ||
+        trimmed.startsWith('List shopping list folders:');
+    }
+
     return {
       action,
       resourceType,
+      isShoppingListFolder,
       taskName,
       folderName,
       folderRoute,
@@ -637,6 +709,7 @@ export class ActionExecutor {
       addressName: taskName, // Map taskName to addressName for address operations
       addressType: status, // Map status to addressType for address operations
       ...(isFileFolder ? { isFileFolder: true } : {}),
+      ...(isShoppingListFolder ? { isShoppingListFolder: true } : {}),
     };
   }
 
@@ -669,6 +742,8 @@ export class ActionExecutor {
             return await this.listReminders(parsed, userTimezone);
           } else if (parsed.resourceType === 'event') {
             return await this.listEvents(parsed);
+          } else if (parsed.resourceType === 'folder' && parsed.isShoppingListFolder) {
+            return await this.listShoppingListFolders(parsed);
           } else if (parsed.resourceType === 'document') {
             return await this.listFiles(parsed);
           } else if (parsed.resourceType === 'address') {
@@ -691,11 +766,19 @@ export class ActionExecutor {
             return await this.createFile(parsed);
           } else if (parsed.resourceType === 'address') {
             return await this.createAddressAction(parsed);
+          } else if (parsed.isShoppingListFolder) {
+            return await this.createShoppingListFolder(parsed);
           } else {
             return await this.createFolder(parsed);
           }
         case 'edit':
           if (parsed.resourceType === 'task') {
+            // Check if this is a shopping list item edit
+            const isShoppingListEdit = parsed.folderRoute?.toLowerCase().includes('shopping') || 
+                                      parsed.folderRoute?.toLowerCase() === 'shopping list';
+            if (isShoppingListEdit) {
+              return await this.editShoppingItem(parsed);
+            }
             return await this.editTask(parsed);
           } else if (parsed.resourceType === 'reminder') {
             return await this.updateReminder(parsed, timezone);
@@ -703,6 +786,8 @@ export class ActionExecutor {
             return await this.editFile(parsed);
           } else if (parsed.resourceType === 'address') {
             return await this.updateAddressAction(parsed);
+          } else if (parsed.isShoppingListFolder) {
+            return await this.editShoppingListFolder(parsed);
           } else {
             return await this.editFolder(parsed);
           }
@@ -715,6 +800,8 @@ export class ActionExecutor {
             return await this.deleteFile(parsed);
           } else if (parsed.resourceType === 'address') {
             return await this.deleteAddressAction(parsed);
+          } else if (parsed.isShoppingListFolder) {
+            return await this.deleteShoppingListFolder(parsed);
           } else {
             return await this.deleteFolder(parsed);
           }
@@ -758,7 +845,18 @@ export class ActionExecutor {
             message: "I'm sorry, I couldn't understand what you want to view.",
           };
         case 'create_subfolder':
+          if (parsed.isShoppingListFolder) {
+            return await this.createShoppingListSubfolder(parsed);
+          }
           return await this.createSubfolder(parsed);
+        case 'list_folders':
+          if (parsed.isShoppingListFolder) {
+            return await this.listShoppingListFolders(parsed);
+          }
+          return {
+            success: false,
+            message: "I'm sorry, I couldn't understand what folders you want to list.",
+          };
         default:
           return {
             success: false,
@@ -778,6 +876,59 @@ export class ActionExecutor {
       return {
         success: false,
         message: "I'm sorry, I encountered an error while processing your request. Please try again.",
+      };
+    }
+  }
+
+  private async editShoppingItem(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which item you'd like to edit. Please specify the item name.",
+      };
+    }
+
+    if (!parsed.newName) {
+      return {
+        success: false,
+        message: "I need to know what you'd like to change the item to. Please specify the new name.",
+      };
+    }
+
+    try {
+      // Find the item - search in specific folder if provided, otherwise search all
+      let items = await getUserShoppingListItems(this.db, this.userId, {});
+      
+      if (parsed.folderRoute) {
+        const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+        if (folderId) {
+          items = items.filter((item: any) => item.folderId === folderId);
+        }
+      }
+
+      const item = items.find((i: any) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
+      
+      if (!item) {
+        const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
+        return {
+          success: false,
+          message: `I couldn't find the item "${parsed.taskName}"${folderText}. Please make sure the item exists.`,
+        };
+      }
+
+      await updateShoppingListItem(this.db, item.id, this.userId, {
+        name: parsed.newName,
+      });
+
+      return {
+        success: true,
+        message: `✏️ *Item Updated:*\n"${parsed.taskName}" → "${parsed.newName}"`,
+      };
+    } catch (error) {
+      logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to edit shopping item');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't update the item "${parsed.taskName}". Please try again.`,
       };
     }
   }
@@ -829,15 +980,29 @@ export class ActionExecutor {
     }
 
     try {
+      // Resolve folder if specified
+      let folderId: string | undefined = undefined;
+      if (parsed.folderRoute) {
+        folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute) || undefined;
+        if (parsed.folderRoute && !folderId) {
+          return {
+            success: false,
+            message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+          };
+        }
+      }
+
       await createShoppingListItem(this.db, {
         userId: this.userId,
+        folderId,
         name: parsed.taskName,
         status: 'open',
       });
 
+      const folderText = folderId && parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
       return {
         success: true,
-        message: `SHOPPING_ITEM_ADDED:${parsed.taskName}`,
+        message: `✓ Added "${parsed.taskName}" to Shopping List${folderText}`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
@@ -1312,17 +1477,28 @@ export class ActionExecutor {
     }
 
     // Check if this is a shopping list operation
-    const isShoppingList = parsed.folderRoute?.toLowerCase() === 'shopping list';
+    const isShoppingList = parsed.folderRoute?.toLowerCase().includes('shopping') || 
+                          parsed.folderRoute?.toLowerCase() === 'shopping list';
     
     if (isShoppingList) {
       // Handle shopping list item completion
-      const items = await getUserShoppingListItems(this.db, this.userId, {});
+      let items = await getUserShoppingListItems(this.db, this.userId, {});
+      
+      // Filter by folder if specified
+      if (parsed.folderRoute && parsed.folderRoute.toLowerCase() !== 'shopping list') {
+        const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+        if (folderId) {
+          items = items.filter((item: any) => item.folderId === folderId);
+        }
+      }
+
       const item = items.find((i) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
       
       if (!item) {
+        const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
         return {
           success: false,
-          message: `I couldn't find the item "${parsed.taskName}" in your shopping list. Please make sure the item exists.`,
+          message: `I couldn't find the item "${parsed.taskName}"${folderText}. Please make sure the item exists.`,
         };
       }
 
@@ -2060,28 +2236,52 @@ export class ActionExecutor {
   private async listTasks(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     try {
       // Check if this is a Shopping List request
-      const isShoppingList = parsed.folderRoute?.toLowerCase() === 'shopping list';
+      // Shopping list can be detected by:
+      // 1. Folder route contains "shopping" or is "shopping list"
+      // 2. List filter contains "shopping"
+      // 3. Folder route is undefined but user asked for shopping list (handled by AI prompt)
+      const isShoppingList = parsed.folderRoute?.toLowerCase().includes('shopping') || 
+                            parsed.folderRoute?.toLowerCase() === 'shopping list' ||
+                            parsed.listFilter?.toLowerCase().includes('shopping');
       
       if (isShoppingList) {
         // Handle shopping list items
         const statusFilter = parsed.status && parsed.status !== 'all' ? parsed.status as 'open' | 'completed' : undefined;
+        
+        // Resolve folder if specified
+        let folderId: string | undefined = undefined;
+        if (parsed.folderRoute && parsed.folderRoute.toLowerCase() !== 'shopping list' && parsed.folderRoute.toLowerCase() !== 'all') {
+          const resolvedFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+          folderId = resolvedFolderId || undefined;
+          if (!folderId) {
+            return {
+              success: false,
+              message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+            };
+          }
+        }
+
         const items = await getUserShoppingListItems(this.db, this.userId, {
+          folderId,
           status: statusFilter,
         });
 
         if (items.length === 0) {
           const statusText = statusFilter ? ` (${statusFilter})` : '';
+          const folderText = folderId ? ` in "${parsed.folderRoute}"` : '';
           return {
             success: true,
-            message: `🛒 *Your shopping list is empty${statusText}*`,
+            message: `🛒 *Your shopping list${folderText} is empty${statusText}*`,
           };
         }
 
         const statusText = statusFilter ? ` (${statusFilter})` : '';
-        let message = `🛍️ *Shopping List${statusText}:*\n`;
+        const folderText = folderId ? ` - ${parsed.folderRoute}` : '';
+        let message = `🛍️ *Shopping List${folderText}${statusText}:*\n`;
         
         items.slice(0, 20).forEach((item, index) => {
-          message += `*${index + 1}.* ${item.name}`;
+          const statusIcon = item.status === 'completed' ? '✅' : '⬜';
+          message += `${statusIcon} *${index + 1}.* ${item.name}`;
           if (item.description) {
             message += ` - ${item.description}`;
           }
@@ -4430,6 +4630,281 @@ export class ActionExecutor {
       }
     }
     return null;
+  }
+
+  /**
+   * Resolve shopping list folder route (e.g., "Groceries" or "Groceries/Fruits") to folder ID
+   * Similar to resolveFolderRoute but for shopping list folders
+   */
+  private async resolveShoppingListFolderRoute(folderRoute: string): Promise<string | null> {
+    const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
+    const folders = await getUserShoppingListFolders(this.db, this.userId);
+    
+    // If only one part is provided, search all subfolders recursively
+    if (parts.length === 1) {
+      const folderName = parts[0].toLowerCase();
+      
+      // First check if it's a root folder
+      const rootFolder = folders.find(f => f.name.toLowerCase() === folderName);
+      if (rootFolder) {
+        return rootFolder.id;
+      }
+      
+      // If not found as root folder, search all subfolders recursively
+      const foundSubfolder = this.findSubfolderByName(folders, folderName);
+      if (foundSubfolder) {
+        return foundSubfolder.id;
+      }
+      
+      return null;
+    }
+    
+    // Multiple parts: use the original path-based approach
+    // Find root folder
+    let currentFolder = folders.find(f => f.name.toLowerCase() === parts[0].toLowerCase());
+    if (!currentFolder) {
+      return null;
+    }
+
+    // Navigate through subfolders
+    for (let i = 1; i < parts.length; i++) {
+      const subfolder = currentFolder.subfolders?.find(
+        sf => sf.name.toLowerCase() === parts[i].toLowerCase()
+      );
+      if (!subfolder) {
+        return null;
+      }
+      currentFolder = subfolder;
+    }
+
+    return currentFolder.id;
+  }
+
+  private async createShoppingListFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know what shopping list folder you'd like to create. Please specify the folder name.",
+      };
+    }
+
+    // Check if folder already exists
+    const existingFolders = await getUserShoppingListFolders(this.db, this.userId);
+    const existingFolder = existingFolders.find(f => f.name.toLowerCase() === parsed.folderRoute!.toLowerCase());
+    
+    if (existingFolder) {
+      return {
+        success: false,
+        message: `A shopping list folder named "${parsed.folderRoute}" already exists.`,
+      };
+    }
+
+    try {
+      const folder = await createShoppingListFolder(this.db, {
+        userId: this.userId,
+        name: parsed.folderRoute,
+      });
+
+      return {
+        success: true,
+        message: `✅ *New Shopping List Folder Created:*\nName: ${parsed.folderRoute}`,
+      };
+    } catch (error) {
+      logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create shopping list folder');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't create the shopping list folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  private async editShoppingListFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which shopping list folder you'd like to edit. Please specify the folder name.",
+      };
+    }
+
+    if (!parsed.newName) {
+      return {
+        success: false,
+        message: "I need to know what you'd like to rename the folder to. Please specify the new name.",
+      };
+    }
+
+    try {
+      const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      await updateShoppingListFolder(this.db, folderId, this.userId, {
+        name: parsed.newName,
+      });
+
+      return {
+        success: true,
+        message: `✏️ *Shopping List Folder Updated:*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
+      };
+    } catch (error) {
+      logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to edit shopping list folder');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't update the shopping list folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  private async deleteShoppingListFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which shopping list folder you'd like to delete. Please specify the folder name.",
+      };
+    }
+
+    try {
+      const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      await deleteShoppingListFolder(this.db, folderId, this.userId);
+
+      return {
+        success: true,
+        message: `⛔ *Shopping List Folder Deleted:*\n"${parsed.folderRoute}"`,
+      };
+    } catch (error) {
+      logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to delete shopping list folder');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't delete the shopping list folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  private async createShoppingListSubfolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which parent folder you'd like to create a subfolder in. Please specify the parent folder name.",
+      };
+    }
+
+    if (!parsed.newName) {
+      return {
+        success: false,
+        message: "I need to know what you'd like to name the subfolder. Please specify the subfolder name.",
+      };
+    }
+
+    try {
+      const parentFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      if (!parentFolderId) {
+        return {
+          success: false,
+          message: `I couldn't find the parent folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      const folder = await createShoppingListFolder(this.db, {
+        userId: this.userId,
+        parentId: parentFolderId,
+        name: parsed.newName,
+      });
+
+      return {
+        success: true,
+        message: `✅ *New Shopping List Subfolder Created:*\nParent: ${parsed.folderRoute}\nName: ${parsed.newName}`,
+      };
+    } catch (error) {
+      logger.error({ error, parentFolder: parsed.folderRoute, subfolderName: parsed.newName, userId: this.userId }, 'Failed to create shopping list subfolder');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't create the subfolder "${parsed.newName}" in "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  private async listShoppingListFolders(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const folders = await getUserShoppingListFolders(this.db, this.userId);
+      
+      // If a parent folder is specified, only show its subfolders
+      if (parsed.folderRoute) {
+        const parentFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+        if (!parentFolderId) {
+          return {
+            success: false,
+            message: `I couldn't find the folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+          };
+        }
+
+        // Find the parent folder and its subfolders
+        const parentFolder = folders.find(f => f.id === parentFolderId);
+        if (!parentFolder || !parentFolder.subfolders || parentFolder.subfolders.length === 0) {
+          return {
+            success: true,
+            message: `📁 *No subfolders in "${parsed.folderRoute}"*`,
+          };
+        }
+
+        let message = `📁 *Subfolders in "${parsed.folderRoute}":*\n`;
+        parentFolder.subfolders.forEach((subfolder: any, index: number) => {
+          message += `*${index + 1}.* ${subfolder.name}\n`;
+        });
+
+        return {
+          success: true,
+          message: message.trim(),
+        };
+      }
+
+      // List all root folders
+      if (folders.length === 0) {
+        return {
+          success: true,
+          message: `📁 *You have no shopping list folders*`,
+        };
+      }
+
+      let message = `📁 *Shopping List Folders:*\n`;
+      folders.forEach((folder: any, index: number) => {
+        const subfolderCount = folder.subfolders?.length || 0;
+        const itemCount = folder.items?.length || 0;
+        message += `*${index + 1}.* ${folder.name}`;
+        if (subfolderCount > 0 || itemCount > 0) {
+          const details: string[] = [];
+          if (subfolderCount > 0) {
+            details.push(`${subfolderCount} subfolder${subfolderCount > 1 ? 's' : ''}`);
+          }
+          if (itemCount > 0) {
+            details.push(`${itemCount} item${itemCount > 1 ? 's' : ''}`);
+          }
+          message += ` (${details.join(', ')})`;
+        }
+        message += '\n';
+      });
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to list shopping list folders');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't list your shopping list folders. Please try again.`,
+      };
+    }
   }
 
   /**

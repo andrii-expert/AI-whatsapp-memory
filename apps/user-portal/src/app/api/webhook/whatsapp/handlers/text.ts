@@ -530,8 +530,17 @@ async function processAIResponse(
         const otherMessages: string[] = [];
         
         for (const result of nonEmptyResults) {
+          // Check for shopping item additions (new format: "✓ Added ..." or old format: "SHOPPING_ITEM_ADDED:")
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
+          } else if (result.includes('Added') && result.includes('to Shopping List')) {
+            // Extract item name from "✓ Added "{item}" to Shopping List"
+            const match = result.match(/Added\s+"([^"]+)"\s+to\s+Shopping\s+List/i);
+            if (match && match[1]) {
+              shoppingItems.push(match[1]);
+            } else {
+              otherMessages.push(result);
+            }
           } else {
             otherMessages.push(result);
           }
