@@ -33,7 +33,7 @@ import { useQuery } from "@tanstack/react-query";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Shopping List", href: "/shopping-list", icon: ShoppingCart },
+  { name: "Shopping Lists", href: "/shopping-lists", icon: ShoppingCart },
   { name: "Calendar", href: "/calendars", icon: Calendar },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Reminders", href: "/reminders", icon: Bell },
