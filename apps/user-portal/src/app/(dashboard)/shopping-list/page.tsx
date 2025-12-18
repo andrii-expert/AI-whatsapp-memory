@@ -504,6 +504,10 @@ export default function ShoppingListPage() {
     else if (viewAllItems) {
       items = items.filter((item: any) => !item.isSharedWithMe);
     }
+    // When viewing "All Shared", show only shared items
+    else if (viewAllShared) {
+      items = items.filter((item: any) => item.isSharedWithMe);
+    }
 
     // Filter by status
     if (filterStatus !== "all") {
@@ -549,16 +553,40 @@ export default function ShoppingListPage() {
     }
 
     return items;
-  }, [allItems, filterStatus, searchQuery, searchScope, sortBy, sortOrder]);
+  }, [allItems, selectedFolderId, viewAllItems, viewAllShared, sharedFolders, filterStatus, searchQuery, searchScope, sortBy, sortOrder]);
 
-  // Calculate item counts for status badges (before search filtering)
+  // Calculate item counts for status badges (before search filtering, but after folder filtering)
   const itemCounts = useMemo(() => {
-    const openCount = allItems.filter((item) => item.status === "open").length;
-    const completedCount = allItems.filter((item) => item.status === "completed").length;
-    const allCount = allItems.length;
+    let items = allItems;
+
+    // Filter by folder - same logic as filteredItems, but without status/search filters
+    if (!viewAllItems && !viewAllShared && selectedFolderId) {
+      // Check if it's a shared folder
+      const isSharedFolder = sharedFolders.some((f: any) => f.id === selectedFolderId);
+      if (isSharedFolder) {
+        // Show items from the shared folder
+        const sharedFolder = sharedFolders.find((f: any) => f.id === selectedFolderId);
+        items = sharedFolder?.items || [];
+      } else {
+        // Regular owned folder - filter items by folderId
+        items = items.filter((item: any) => item.folderId === selectedFolderId && !item.isSharedWithMe);
+      }
+    }
+    // When viewing "All Items", exclude shared items
+    else if (viewAllItems) {
+      items = items.filter((item: any) => !item.isSharedWithMe);
+    }
+    // When viewing "All Shared", show only shared items
+    else if (viewAllShared) {
+      items = items.filter((item: any) => item.isSharedWithMe);
+    }
+
+    const openCount = items.filter((item) => item.status === "open").length;
+    const completedCount = items.filter((item) => item.status === "completed").length;
+    const allCount = items.length;
 
     return { open: openCount, completed: completedCount, all: allCount };
-  }, [allItems]);
+  }, [allItems, selectedFolderId, viewAllItems, viewAllShared, sharedFolders]);
 
   // Calculate deletable items (only completed items that user owns)
   const deletableItems = useMemo(() => {
@@ -904,7 +932,7 @@ export default function ShoppingListPage() {
           onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
-
+n
       {/* Mobile Sidebar */}
       <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
         <SheetContent 
