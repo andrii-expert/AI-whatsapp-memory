@@ -2872,7 +2872,7 @@ export class ActionExecutor {
           timeDisplay = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
         }
         
-        // Format: number. Title | Time (with bold numbers and titles)
+        // Format: number. Title | Time (with bold numbers and titles only)
         if (timeDisplay) {
           message += `*${index + 1}.* *${reminder.title}* | ${timeDisplay}\n`;
         } else {
@@ -2881,7 +2881,7 @@ export class ActionExecutor {
       });
 
       if (remindersWithNextTime.length > 20) {
-        message += `... and ${remindersWithNextTime.length - 20} more reminders.`;
+        message += `... and *${remindersWithNextTime.length - 20}* more reminders.`;
       }
 
       return {
@@ -4171,7 +4171,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `⏸️ *Reminder paused:*\n"${reminder.title}"`,
+        message: `⏸️ Reminder paused:\nTitle: *${reminder.title}*`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to pause reminder');
@@ -4211,7 +4211,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `▶️ *Reminder resumed:*\n"${reminder.title}"`,
+        message: `▶️ Reminder resumed:\nTitle: *${reminder.title}*`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to resume reminder');
