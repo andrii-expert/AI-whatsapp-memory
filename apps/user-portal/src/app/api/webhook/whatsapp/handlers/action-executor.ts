@@ -2848,7 +2848,7 @@ export class ActionExecutor {
         remindersWithNextTime = filteredReminders.map(reminder => ({ reminder, nextTime: new Date(0) }));
       }
 
-      // Format filter name for title
+      // Format filter name for title (NOT bold - only reminder titles and numbers should be bold)
       let filterTitle = 'Reminders';
       if (parsed.listFilter) {
         const filter = parsed.listFilter.toLowerCase();
@@ -2859,6 +2859,7 @@ export class ActionExecutor {
         else filterTitle = `Reminders for ${parsed.listFilter}`;
       }
       
+      // Message header is NOT bold - only reminder titles and numbers are bold
       let message = `🔔 ${filterTitle}\n`;
       
       remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
@@ -3940,6 +3941,7 @@ export class ActionExecutor {
         }
       }
       
+      // Message header is NOT bold - only reminder title is bold
       const responseMessage = `✅ New Reminder Created:\nTitle: *${reminder.title}*\n${dateInfo ? `Date: ${dateInfo}` : ''}`;
 
       return {
@@ -4087,6 +4089,7 @@ export class ActionExecutor {
         }
       }
       
+      // Message header is NOT bold - only reminder title is bold
       const responseMessage = `⚠️ Reminder Updated:\nTitle: *${updated.title || reminder.title}*\n${dateInfo ? `New Date: ${dateInfo}` : ''}`;
 
       return {
@@ -4129,6 +4132,7 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder deleted');
 
+      // Message header is NOT bold - only reminder title is bold
       return {
         success: true,
         message: `⛔ Reminder Deleted:\nTitle: *${reminder.title}*`,
@@ -4169,6 +4173,7 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder paused');
 
+      // Message header is NOT bold - only reminder title is bold
       return {
         success: true,
         message: `⏸️ Reminder paused:\nTitle: *${reminder.title}*`,
@@ -4209,6 +4214,7 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder resumed');
 
+      // Message header is NOT bold - only reminder title is bold
       return {
         success: true,
         message: `▶️ Reminder resumed:\nTitle: *${reminder.title}*`,
