@@ -368,7 +368,10 @@ async function processAIResponse(
         const parsed = executor.parseAction(actionTemplate);
         if (parsed) {
           // Set resourceType based on titleType for list operations
-          parsed.resourceType = titleType as 'task' | 'note' | 'reminder' | 'event' | 'document' | 'address';
+          // BUT preserve resourceType if it's already set to 'folder' (for folder listing operations)
+          if (parsed.action !== 'list_folders' && parsed.resourceType !== 'folder') {
+            parsed.resourceType = titleType as 'task' | 'note' | 'reminder' | 'event' | 'document' | 'address';
+          }
           
           logger.info(
             {
