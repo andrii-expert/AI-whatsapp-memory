@@ -532,6 +532,17 @@ export class ActionExecutor {
       } else {
         missingFields.push('parent folder or subfolder name');
       }
+    } else if (trimmed.startsWith('List task folders:')) {
+      action = 'list_folders';
+      resourceType = 'folder';
+      // Optional: can list all or specific parent folder's subfolders
+      const match = trimmed.match(/^List task folders:\s*(.+)$/i);
+      if (match) {
+        const folderOrAll = match[1].trim();
+        folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+      } else {
+        folderRoute = undefined; // List all folders
+      }
     } else if (trimmed.startsWith('Create a shopping list folder:')) {
       action = 'create';
       resourceType = 'folder';
@@ -852,6 +863,8 @@ export class ActionExecutor {
         case 'list_folders':
           if (parsed.isShoppingListFolder) {
             return await this.listShoppingListFolders(parsed);
+          } else if (parsed.resourceType === 'folder') {
+            return await this.listTaskFolders(parsed);
           }
           return {
             success: false,
@@ -4903,6 +4916,79 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't list your shopping list folders. Please try again.`,
+      };
+    }
+  }
+
+  private async listTaskFolders(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const folders = await getUserFolders(this.db, this.userId);
+      
+      // If a parent folder is specified, only show its subfolders
+      if (parsed.folderRoute) {
+        const parentFolderId = await this.resolveFolderRoute(parsed.folderRoute);
+        if (!parentFolderId) {
+          return {
+            success: false,
+            message: `I couldn't find the folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+          };
+        }
+
+        // Find the parent folder and its subfolders
+        const parentFolder = folders.find(f => f.id === parentFolderId);
+        if (!parentFolder || !parentFolder.subfolders || parentFolder.subfolders.length === 0) {
+          return {
+            success: true,
+            message: `📁 *No subfolders in "${parsed.folderRoute}"*`,
+          };
+        }
+
+        let message = `📁 *Subfolders in "${parsed.folderRoute}":*\n`;
+        parentFolder.subfolders.forEach((subfolder: any, index: number) => {
+          message += `*${index + 1}.* ${subfolder.name}\n`;
+        });
+
+        return {
+          success: true,
+          message: message.trim(),
+        };
+      }
+
+      // List all root folders
+      if (folders.length === 0) {
+        return {
+          success: true,
+          message: `📁 *You have no task folders*`,
+        };
+      }
+
+      let message = `📁 *Task Folders:*\n`;
+      folders.forEach((folder: any, index: number) => {
+        const subfolderCount = folder.subfolders?.length || 0;
+        const taskCount = folder.tasks?.length || 0;
+        message += `*${index + 1}.* ${folder.name}`;
+        if (subfolderCount > 0 || taskCount > 0) {
+          const details: string[] = [];
+          if (subfolderCount > 0) {
+            details.push(`${subfolderCount} subfolder${subfolderCount > 1 ? 's' : ''}`);
+          }
+          if (taskCount > 0) {
+            details.push(`${taskCount} task${taskCount > 1 ? 's' : ''}`);
+          }
+          message += ` (${details.join(', ')})`;
+        }
+        message += '\n';
+      });
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to list task folders');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't list your task folders. Please try again.`,
       };
     }
   }
