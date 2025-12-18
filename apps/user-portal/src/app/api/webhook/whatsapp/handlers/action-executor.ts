@@ -2820,7 +2820,7 @@ export class ActionExecutor {
         }
         return {
           success: true,
-          message: `🔔 ${filterTitle}\n\nNone`,
+          message: `🔔 *${filterTitle}*\n\nNone`,
         };
       }
 
@@ -2848,7 +2848,7 @@ export class ActionExecutor {
         remindersWithNextTime = filteredReminders.map(reminder => ({ reminder, nextTime: new Date(0) }));
       }
 
-      // Format filter name for title (NOT bold - only reminder titles and numbers should be bold)
+      // Format filter name for title
       let filterTitle = 'Reminders';
       if (parsed.listFilter) {
         const filter = parsed.listFilter.toLowerCase();
@@ -2859,8 +2859,8 @@ export class ActionExecutor {
         else filterTitle = `Reminders for ${parsed.listFilter}`;
       }
       
-      // Message header is NOT bold - only reminder titles and numbers are bold
-      let message = `🔔 ${filterTitle}\n`;
+      // Message header is bold - only header and list numbers are bold
+      let message = `🔔 *${filterTitle}*\n`;
       
       remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
         // Format next time in user's timezone
@@ -2873,16 +2873,16 @@ export class ActionExecutor {
           timeDisplay = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
         }
         
-        // Format: number. Title | Time (with bold numbers and titles only)
+        // Format: number. Title | Time (only list numbers are bold, not titles)
         if (timeDisplay) {
-          message += `*${index + 1}.* *${reminder.title}* | ${timeDisplay}\n`;
+          message += `*${index + 1}.* ${reminder.title} | ${timeDisplay}\n`;
         } else {
-          message += `*${index + 1}.* *${reminder.title}*\n`;
+          message += `*${index + 1}.* ${reminder.title}\n`;
         }
       });
 
       if (remindersWithNextTime.length > 20) {
-        message += `... and *${remindersWithNextTime.length - 20}* more reminders.`;
+        message += `... and ${remindersWithNextTime.length - 20} more reminders.`;
       }
 
       return {
@@ -3941,8 +3941,8 @@ export class ActionExecutor {
         }
       }
       
-      // Message header is NOT bold - only reminder title is bold
-      const responseMessage = `✅ New Reminder Created:\nTitle: *${reminder.title}*\n${dateInfo ? `Date: ${dateInfo}` : ''}`;
+      // Message header is bold - reminder title is NOT bold
+      const responseMessage = `✅ *New Reminder Created:*\nTitle: ${reminder.title}\n${dateInfo ? `Date: ${dateInfo}` : ''}`;
 
       return {
         success: true,
@@ -4089,8 +4089,8 @@ export class ActionExecutor {
         }
       }
       
-      // Message header is NOT bold - only reminder title is bold
-      const responseMessage = `⚠️ Reminder Updated:\nTitle: *${updated.title || reminder.title}*\n${dateInfo ? `New Date: ${dateInfo}` : ''}`;
+      // Message header is bold - reminder title is NOT bold
+      const responseMessage = `⚠️ *Reminder Updated:*\nTitle: ${updated.title || reminder.title}\n${dateInfo ? `New Date: ${dateInfo}` : ''}`;
 
       return {
         success: true,
@@ -4132,10 +4132,10 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder deleted');
 
-      // Message header is NOT bold - only reminder title is bold
+      // Message header is bold - reminder title is NOT bold
       return {
         success: true,
-        message: `⛔ Reminder Deleted:\nTitle: *${reminder.title}*`,
+        message: `⛔ *Reminder Deleted:*\nTitle: ${reminder.title}`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to delete reminder');
@@ -4173,10 +4173,10 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder paused');
 
-      // Message header is NOT bold - only reminder title is bold
+      // Message header is bold - reminder title is NOT bold
       return {
         success: true,
-        message: `⏸️ Reminder paused:\nTitle: *${reminder.title}*`,
+        message: `⏸️ *Reminder paused:*\nTitle: ${reminder.title}`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to pause reminder');
@@ -4214,10 +4214,10 @@ export class ActionExecutor {
 
       logger.info({ userId: this.userId, reminderId: reminder.id }, 'Reminder resumed');
 
-      // Message header is NOT bold - only reminder title is bold
+      // Message header is bold - reminder title is NOT bold
       return {
         success: true,
-        message: `▶️ Reminder resumed:\nTitle: *${reminder.title}*`,
+        message: `▶️ *Reminder resumed:*\nTitle: ${reminder.title}`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId }, 'Failed to resume reminder');
