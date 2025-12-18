@@ -625,7 +625,10 @@ export default function DashboardPage() {
         <div>
           {/* Status Cards Row */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6 text-center">
-            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 col-span-2 lg:col-span-1">
+            <div 
+              onClick={() => router.push("/shopping-lists")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 col-span-2 lg:col-span-1 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {totalShoppingListItems}
               </div>
@@ -634,7 +637,10 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+            <div 
+              onClick={() => router.push("/tasks")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {totalPendingTasks}
               </div>
@@ -643,7 +649,10 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+            <div 
+              onClick={() => router.push("/calendars")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {totalScheduledEvents}
               </div>
@@ -652,7 +661,10 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+            <div 
+              onClick={() => router.push("/reminders")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {totalActiveReminders}
               </div>
@@ -661,7 +673,10 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4">
+            <div 
+              onClick={() => router.push("/notes")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
                 {allNotes.length}
               </div>
