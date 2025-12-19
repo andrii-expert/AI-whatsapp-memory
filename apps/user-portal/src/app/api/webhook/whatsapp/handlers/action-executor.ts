@@ -107,6 +107,7 @@ export interface ParsedAction {
   latitude?: number; // For friend/address operations: latitude
   longitude?: number; // For friend/address operations: longitude
   friendAddressType?: 'home' | 'office' | 'parents_house'; // For friend operations: address type
+  permission?: 'view' | 'edit'; // For share operations: permission level
 }
 
 export class ActionExecutor {
@@ -152,6 +153,7 @@ export class ActionExecutor {
     let latitude: number | undefined;
     let longitude: number | undefined;
     let friendAddressType: 'home' | 'office' | 'parents_house' | undefined;
+    let permission: 'view' | 'edit' | undefined;
 
     // Shopping item operations (check before regular task)
     if (trimmed.startsWith('Create a shopping item:')) {
@@ -558,12 +560,32 @@ export class ActionExecutor {
       action = 'share';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Share a shopping list folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+      // Try to match with permission first: "Share a shopping list folder: {folder} - with: {recipient} - permission: {view|edit}"
+      let match = trimmed.match(/^Share a shopping list folder:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
       if (match) {
         folderRoute = match[1].trim();
         recipient = match[2].trim();
+        permission = (match[3].trim().toLowerCase() === 'edit' ? 'edit' : 'view') as 'view' | 'edit';
       } else {
-        missingFields.push('folder name or recipient');
+        // Fallback: match without permission
+        match = trimmed.match(/^Share a shopping list folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+        if (match) {
+          folderRoute = match[1].trim();
+          recipient = match[2].trim();
+          // Check if the recipient string or the whole message contains "editor" or "edit" permission keywords
+          const lowerRecipient = recipient.toLowerCase();
+          const lowerTrimmed = trimmed.toLowerCase();
+          if (lowerRecipient.includes('editor') || lowerRecipient.includes('edit permission') || 
+              lowerTrimmed.includes('editor') || lowerTrimmed.includes('edit permission') ||
+              lowerTrimmed.includes('permission: edit') || lowerTrimmed.includes('permission:editor')) {
+            permission = 'edit';
+          } else {
+            // Default to view if not specified
+            permission = 'view';
+          }
+        } else {
+          missingFields.push('folder name or recipient');
+        }
       }
     } else if (trimmed.startsWith('Create a task sub-folder:')) {
       action = 'create_subfolder';
@@ -883,6 +905,7 @@ export class ActionExecutor {
       listFilter,
       typeFilter,
       missingFields,
+      permission,
       addressName: taskName, // Map taskName to addressName for address operations
       addressType: status, // Map status to addressType for address operations
       email,
@@ -1531,17 +1554,21 @@ export class ActionExecutor {
     }
 
     try {
+      // Determine permission: use parsed permission if available, default to 'view'
+      const sharePermission = parsed.permission || 'view';
+
       await createTaskShare(this.db, {
         resourceType: 'shopping_list_folder',
         resourceId: folderId,
         ownerId: this.userId,
         sharedWithUserId,
-        permission: 'view',
+        permission: sharePermission,
       });
 
+      const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
       return {
         success: true,
-        message: `🔁 *Shopping Lists Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nPermission: Editor`,
+        message: `🔁 *Shopping Lists Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(

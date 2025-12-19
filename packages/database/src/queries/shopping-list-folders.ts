@@ -279,10 +279,10 @@ export async function updateShoppingListFolder(
           });
 
           if (!parentShare) {
-            throw new Error("No edit permission for this folder");
+            throw new Error("You have view permission only. You cannot edit this folder because you are on view permission.");
           }
         } else if (!share) {
-          throw new Error("No edit permission for this folder");
+          throw new Error("You have view permission only. You cannot edit this folder because you are on view permission.");
         }
       }
 

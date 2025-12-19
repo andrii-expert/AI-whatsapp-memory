@@ -2,6 +2,7 @@ import { eq, and, desc, asc, or } from "drizzle-orm";
 import type { Database } from "../client";
 import { shoppingListItems } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
+import { checkShoppingListFolderAccess } from "./task-sharing";
 
 // ============================================
 // Shopping List Items
@@ -108,6 +109,34 @@ export async function updateShoppingListItem(
     'updateShoppingListItem',
     { itemId, userId, updates: Object.keys(data) },
     async () => {
+      // First, get the item to check its folder and ownership
+      const existingItem = await db.query.shoppingListItems.findFirst({
+        where: eq(shoppingListItems.id, itemId),
+      });
+
+      if (!existingItem) {
+        throw new Error("Shopping list item not found");
+      }
+
+      // Check if user owns the item
+      const isOwner = existingItem.userId === userId;
+
+      // If not owner, check folder permission
+      if (!isOwner && existingItem.folderId) {
+        const folderAccess = await checkShoppingListFolderAccess(db, existingItem.folderId, userId);
+        if (!folderAccess.hasAccess || folderAccess.permission !== "edit") {
+          throw new Error("You have view permission only. You cannot edit this item because you are on view permission.");
+        }
+      }
+
+      // If moving to a different folder, check permission on target folder
+      if (data.folderId !== undefined && data.folderId !== existingItem.folderId && data.folderId) {
+        const targetFolderAccess = await checkShoppingListFolderAccess(db, data.folderId, userId);
+        if (!targetFolderAccess.hasAccess || targetFolderAccess.permission !== "edit") {
+          throw new Error("You have view permission only. You cannot move this item because you are on view permission.");
+        }
+      }
+
       const updateData: any = {
         updatedAt: new Date(),
       };
@@ -134,16 +163,17 @@ export async function updateShoppingListItem(
         updateData.sortOrder = data.sortOrder;
       }
 
+      // If user owns the item, allow update directly
+      // If user has edit permission on folder (checked above), also allow update
       const [item] = await db
         .update(shoppingListItems)
         .set(updateData)
-        .where(
-          and(
-            eq(shoppingListItems.id, itemId),
-            eq(shoppingListItems.userId, userId)
-          )
-        )
+        .where(eq(shoppingListItems.id, itemId))
         .returning();
+
+      if (!item) {
+        throw new Error("Shopping list item not found");
+      }
 
       return item;
     }
@@ -159,14 +189,29 @@ export async function deleteShoppingListItem(
     'deleteShoppingListItem',
     { itemId, userId },
     async () => {
+      // First, get the item to check its folder and ownership
+      const existingItem = await db.query.shoppingListItems.findFirst({
+        where: eq(shoppingListItems.id, itemId),
+      });
+
+      if (!existingItem) {
+        throw new Error("Shopping list item not found");
+      }
+
+      // Check if user owns the item
+      const isOwner = existingItem.userId === userId;
+
+      // If not owner, check folder permission
+      if (!isOwner && existingItem.folderId) {
+        const folderAccess = await checkShoppingListFolderAccess(db, existingItem.folderId, userId);
+        if (!folderAccess.hasAccess || folderAccess.permission !== "edit") {
+          throw new Error("You have view permission only. You cannot delete this item because you are on view permission.");
+        }
+      }
+
       const [item] = await db
         .delete(shoppingListItems)
-        .where(
-          and(
-            eq(shoppingListItems.id, itemId),
-            eq(shoppingListItems.userId, userId)
-          )
-        )
+        .where(eq(shoppingListItems.id, itemId))
         .returning();
 
       return item;
@@ -183,14 +228,30 @@ export async function toggleShoppingListItemStatus(
     'toggleShoppingListItemStatus',
     { itemId, userId },
     async () => {
-      const item = await getShoppingListItemById(db, itemId, userId);
+      // Get the item without userId filter to support shared items
+      const item = await db.query.shoppingListItems.findFirst({
+        where: eq(shoppingListItems.id, itemId),
+      });
       
       if (!item) {
         throw new Error("Shopping list item not found");
       }
 
+      // Check if user owns the item
+      const isOwner = item.userId === userId;
+
+      // If not owner, check folder permission
+      if (!isOwner && item.folderId) {
+        const folderAccess = await checkShoppingListFolderAccess(db, item.folderId, userId);
+        if (!folderAccess.hasAccess || folderAccess.permission !== "edit") {
+          throw new Error("You have view permission only. You cannot edit this item because you are on view permission.");
+        }
+      }
+
       const newStatus = item.status === "open" ? "completed" : "open";
       
+      // Use updateShoppingListItem which will handle the actual update
+      // (it already has permission checks, but we check here too for early failure)
       return updateShoppingListItem(db, itemId, userId, {
         status: newStatus,
       });
