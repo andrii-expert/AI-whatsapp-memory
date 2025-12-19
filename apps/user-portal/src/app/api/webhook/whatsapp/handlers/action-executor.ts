@@ -241,13 +241,30 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('Share a task:')) {
       action = 'share';
       resourceType = 'task';
-      const match = trimmed.match(/^Share a task:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      // Try to match with permission first
+      let match = trimmed.match(/^Share a task:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*on folder:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
       if (match) {
         taskName = match[1].trim();
         recipient = match[2].trim();
         folderRoute = match[3].trim();
+        permission = (match[4].trim().toLowerCase() === 'edit' ? 'edit' : 'view') as 'view' | 'edit';
       } else {
-        missingFields.push('task name, recipient, or folder');
+        // Fallback: match without permission
+        match = trimmed.match(/^Share a task:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+        if (match) {
+          taskName = match[1].trim();
+          recipient = match[2].trim();
+          folderRoute = match[3].trim();
+          // Check for permission keywords, default to 'edit'
+          const lowerTrimmed = trimmed.toLowerCase();
+          if (lowerTrimmed.includes('permission: view') || lowerTrimmed.includes('view permission')) {
+            permission = 'view';
+          } else {
+            permission = 'edit'; // Default to edit
+          }
+        } else {
+          missingFields.push('task name, recipient, or folder');
+        }
       }
     } else if (trimmed.startsWith('List tasks:')) {
       action = 'list';
@@ -457,13 +474,30 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('Share a file:')) {
       action = 'share';
       resourceType = 'document';
-      const match = trimmed.match(/^Share a file:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      // Try to match with permission first
+      let match = trimmed.match(/^Share a file:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*on folder:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
       if (match) {
         taskName = match[1].trim(); // Reuse taskName for fileName
         recipient = match[2].trim();
         folderRoute = match[3].trim();
+        permission = (match[4].trim().toLowerCase() === 'edit' ? 'edit' : 'view') as 'view' | 'edit';
       } else {
-        missingFields.push('file name, recipient, or folder');
+        // Fallback: match without permission
+        match = trimmed.match(/^Share a file:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+        if (match) {
+          taskName = match[1].trim(); // Reuse taskName for fileName
+          recipient = match[2].trim();
+          folderRoute = match[3].trim();
+          // Check for permission keywords, default to 'edit'
+          const lowerTrimmed = trimmed.toLowerCase();
+          if (lowerTrimmed.includes('permission: view') || lowerTrimmed.includes('view permission')) {
+            permission = 'view';
+          } else {
+            permission = 'edit'; // Default to edit
+          }
+        } else {
+          missingFields.push('file name, recipient, or folder');
+        }
       }
     } else if (trimmed.startsWith('List files:')) {
       action = 'list';
@@ -508,12 +542,28 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('Share a file folder:')) {
       action = 'share';
       resourceType = 'folder';
-      const match = trimmed.match(/^Share a file folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+      // Try to match with permission first
+      let match = trimmed.match(/^Share a file folder:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
       if (match) {
         folderRoute = match[1].trim();
         recipient = match[2].trim();
+        permission = (match[3].trim().toLowerCase() === 'edit' ? 'edit' : 'view') as 'view' | 'edit';
       } else {
-        missingFields.push('folder name or recipient');
+        // Fallback: match without permission
+        match = trimmed.match(/^Share a file folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+        if (match) {
+          folderRoute = match[1].trim();
+          recipient = match[2].trim();
+          // Check for permission keywords, default to 'edit'
+          const lowerTrimmed = trimmed.toLowerCase();
+          if (lowerTrimmed.includes('permission: view') || lowerTrimmed.includes('view permission')) {
+            permission = 'view';
+          } else {
+            permission = 'edit'; // Default to edit
+          }
+        } else {
+          missingFields.push('folder name or recipient');
+        }
       }
       // Mark as file folder operation - will be handled in return statement
     }
@@ -549,12 +599,28 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('Share a task folder:')) {
       action = 'share';
       resourceType = 'folder';
-      const match = trimmed.match(/^Share a task folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+      // Try to match with permission first
+      let match = trimmed.match(/^Share a task folder:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
       if (match) {
         folderRoute = match[1].trim();
         recipient = match[2].trim();
+        permission = (match[3].trim().toLowerCase() === 'edit' ? 'edit' : 'view') as 'view' | 'edit';
       } else {
-        missingFields.push('folder name or recipient');
+        // Fallback: match without permission
+        match = trimmed.match(/^Share a task folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+        if (match) {
+          folderRoute = match[1].trim();
+          recipient = match[2].trim();
+          // Check for permission keywords, default to 'edit'
+          const lowerTrimmed = trimmed.toLowerCase();
+          if (lowerTrimmed.includes('permission: view') || lowerTrimmed.includes('view permission')) {
+            permission = 'view';
+          } else {
+            permission = 'edit'; // Default to edit
+          }
+        } else {
+          missingFields.push('folder name or recipient');
+        }
       }
     } else if (trimmed.startsWith('Share a shopping list folder:')) {
       action = 'share';
@@ -572,16 +638,14 @@ export class ActionExecutor {
         if (match) {
           folderRoute = match[1].trim();
           recipient = match[2].trim();
-          // Check if the recipient string or the whole message contains "editor" or "edit" permission keywords
+          // Check if the recipient string or the whole message contains permission keywords
           const lowerRecipient = recipient.toLowerCase();
           const lowerTrimmed = trimmed.toLowerCase();
-          if (lowerRecipient.includes('editor') || lowerRecipient.includes('edit permission') || 
-              lowerTrimmed.includes('editor') || lowerTrimmed.includes('edit permission') ||
-              lowerTrimmed.includes('permission: edit') || lowerTrimmed.includes('permission:editor')) {
-            permission = 'edit';
-          } else {
-            // Default to view if not specified
+          if (lowerRecipient.includes('view permission') || lowerTrimmed.includes('permission: view') || lowerTrimmed.includes('view permission')) {
             permission = 'view';
+          } else {
+            // Default to edit if not specified
+            permission = 'edit';
           }
         } else {
           missingFields.push('folder name or recipient');
@@ -1370,17 +1434,21 @@ export class ActionExecutor {
       }
 
       try {
+        // Determine permission: use parsed permission if available, default to 'edit'
+        const sharePermission = parsed.permission || 'edit';
+
         await createFileShare(this.db, {
           resourceType: 'file_folder',
           resourceId: fileFolderId,
           ownerId: this.userId,
           sharedWithUserId,
-          permission: 'view',
+          permission: sharePermission,
         });
 
+        const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
         return {
           success: true,
-          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nAccount: ${parsed.recipient}\nPermission: Editor`,
+          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nAccount: ${parsed.recipient}\nPermission: ${permissionLabel}`,
         };
       } catch (error) {
         logger.error(
@@ -1423,17 +1491,21 @@ export class ActionExecutor {
       }
 
       try {
+        // Determine permission: use parsed permission if available, default to 'edit'
+        const sharePermission = parsed.permission || 'edit';
+
         await createFileShare(this.db, {
           resourceType: 'file_folder',
           resourceId: fileFolderId,
           ownerId: this.userId,
           sharedWithUserId,
-          permission: 'view',
+          permission: sharePermission,
         });
 
+        const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
         return {
           success: true,
-          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nAccount: ${parsed.recipient}\nPermission: Editor`,
+          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nAccount: ${parsed.recipient}\nPermission: ${permissionLabel}`,
         };
       } catch (error) {
         logger.error(
@@ -1481,17 +1553,21 @@ export class ActionExecutor {
     }
 
     try {
+      // Determine permission: use parsed permission if available, default to 'edit'
+      const sharePermission = parsed.permission || 'edit';
+
       await createTaskShare(this.db, {
         resourceType: 'task_folder',
         resourceId: folderId,
         ownerId: this.userId,
         sharedWithUserId,
-        permission: 'view', // Default to view, can be enhanced later
+        permission: sharePermission,
       });
 
+      const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
       return {
         success: true,
-        message: `🔁 *Task Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nPermission: Editor`,
+        message: `🔁 *Task Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(
@@ -1554,8 +1630,8 @@ export class ActionExecutor {
     }
 
     try {
-      // Determine permission: use parsed permission if available, default to 'view'
-      const sharePermission = parsed.permission || 'view';
+      // Determine permission: use parsed permission if available, default to 'edit'
+      const sharePermission = parsed.permission || 'edit';
 
       await createTaskShare(this.db, {
         resourceType: 'shopping_list_folder',
@@ -1639,17 +1715,21 @@ export class ActionExecutor {
     }
 
     try {
+      // Determine permission: use parsed permission if available, default to 'edit'
+      const sharePermission = parsed.permission || 'edit';
+
       await createTaskShare(this.db, {
         resourceType: 'task',
         resourceId: task.id,
         ownerId: this.userId,
         sharedWithUserId,
-        permission: 'view',
+        permission: sharePermission,
       });
 
+      const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
       return {
         success: true,
-        message: `🔁 *Task Shared*\nTitle: ${parsed.taskName}\nShare to: ${parsed.recipient}\nPermission: Editor`,
+        message: `🔁 *Task Shared*\nTitle: ${parsed.taskName}\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(
@@ -2421,17 +2501,21 @@ export class ActionExecutor {
     }
 
     try {
+      // Determine permission: use parsed permission if available, default to 'edit'
+      const sharePermission = parsed.permission || 'edit';
+
       await createFileShare(this.db, {
         resourceType: 'file',
         resourceId: file.id,
         ownerId: this.userId,
         sharedWithUserId,
-        permission: 'view',
+        permission: sharePermission,
       });
 
+      const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
       return {
         success: true,
-        message: `🔁 *File Shared*\nFile: ${parsed.taskName}\nShare to: ${parsed.recipient}\nPermission: Editor`,
+        message: `🔁 *File Shared*\nFile: ${parsed.taskName}\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(

@@ -62,6 +62,7 @@ export default function DashboardPage() {
   const { data: reminders = [] } = useQuery(trpc.reminders.list.queryOptions());
   const { data: folders = [] } = useQuery(trpc.tasks.folders.list.queryOptions());
   const { data: shoppingListItems = [] } = useQuery(trpc.shoppingList.list.queryOptions({}));
+  const { data: sharedResources } = useQuery(trpc.taskSharing.getSharedWithMe.queryOptions());
 
   // Check if welcome modal should be shown from database
   useEffect(() => {
@@ -211,9 +212,47 @@ export default function DashboardPage() {
     return searched.slice(0, 10);
   }, [reminders, searchQuery]);
 
+  // Extract shared shopping list items from shared folders
+  const sharedShoppingListItems = useMemo(() => {
+    const sharedFolders = (sharedResources?.folders || []).filter((folder: any) => {
+      // Check if this is a shopping list folder (has items property)
+      return folder.items && Array.isArray(folder.items);
+    });
+    
+    return sharedFolders.flatMap((folder: any) => {
+      const folderPermission = folder.shareInfo?.permission || "view";
+      return (folder.items || []).map((item: any) => ({
+        ...item,
+        isSharedWithMe: true,
+        sharePermission: folderPermission,
+        sharedViaFolder: true,
+      }));
+    });
+  }, [sharedResources]);
+
+  // Combine owned and shared shopping list items
+  const allShoppingListItems = useMemo(() => {
+    // Deduplicate by ID, keeping owned items over shared if duplicate
+    const itemMap = new Map<string, any>();
+    
+    // Add owned items first
+    shoppingListItems.forEach((item: any) => {
+      itemMap.set(item.id, item);
+    });
+    
+    // Add shared items (won't overwrite owned items)
+    sharedShoppingListItems.forEach((item: any) => {
+      if (!itemMap.has(item.id)) {
+        itemMap.set(item.id, item);
+      }
+    });
+    
+    return Array.from(itemMap.values());
+  }, [shoppingListItems, sharedShoppingListItems]);
+
   // Filter shopping list items (from new shopping list table)
   const filteredShoppingListItems = useMemo(() => {
-    const filtered = shoppingListItems.filter((item) => item.status === "open");
+    const filtered = allShoppingListItems.filter((item) => item.status === "open");
     const sorted = [...filtered].sort((a, b) => {
       const dateA = new Date(a.createdAt || 0).getTime();
       const dateB = new Date(b.createdAt || 0).getTime();
@@ -228,11 +267,66 @@ export default function DashboardPage() {
       );
     });
     return searched.slice(0, 10); // Show up to 10 items
-  }, [shoppingListItems, searchQuery]);
+  }, [allShoppingListItems, searchQuery]);
+
+  // Extract shared tasks from shared resources
+  const sharedTasks = useMemo(() => {
+    return (sharedResources?.tasks || []).map((task: any) => ({
+      ...task,
+      isSharedWithMe: true,
+      sharePermission: task.shareInfo?.permission || "view",
+      ownerId: task.shareInfo?.ownerId,
+    }));
+  }, [sharedResources]);
+
+  // Extract tasks from shared folders
+  const tasksFromSharedFolders = useMemo(() => {
+    const sharedFolders = (sharedResources?.folders || []).filter((folder: any) => {
+      // Check if this is a task folder (has tasks property)
+      return folder.tasks && Array.isArray(folder.tasks);
+    });
+    
+    return sharedFolders.flatMap((folder: any) => {
+      const folderPermission = folder.shareInfo?.permission || "view";
+      return (folder.tasks || []).map((task: any) => ({
+        ...task,
+        isSharedWithMe: true,
+        sharePermission: folderPermission,
+        sharedViaFolder: true,
+      }));
+    });
+  }, [sharedResources]);
+
+  // Combine owned and shared tasks
+  const allCombinedTasks = useMemo(() => {
+    // Deduplicate by ID, keeping owned items over shared if duplicate
+    const taskMap = new Map<string, any>();
+    
+    // Add owned tasks first
+    allTasks.forEach((task: any) => {
+      taskMap.set(task.id, task);
+    });
+    
+    // Add directly shared tasks
+    sharedTasks.forEach((task: any) => {
+      if (!taskMap.has(task.id)) {
+        taskMap.set(task.id, task);
+      }
+    });
+    
+    // Add tasks from shared folders
+    tasksFromSharedFolders.forEach((task: any) => {
+      if (!taskMap.has(task.id)) {
+        taskMap.set(task.id, task);
+      }
+    });
+    
+    return Array.from(taskMap.values());
+  }, [allTasks, sharedTasks, tasksFromSharedFolders]);
 
   // Filter tasks - show 10 most recent (sorted by createdAt)
   const pendingTasks = useMemo(() => {
-    const filtered = allTasks.filter((t) => t.status === "open");
+    const filtered = allCombinedTasks.filter((t) => t.status === "open");
     const sorted = [...filtered].sort((a, b) => {
       const dateA = new Date(a.createdAt || 0).getTime();
       const dateB = new Date(b.createdAt || 0).getTime();
@@ -240,15 +334,70 @@ export default function DashboardPage() {
     });
     const searched = filterItems(sorted);
     return searched.slice(0, 10); // Show up to 10 tasks
-  }, [allTasks, searchQuery]);
+  }, [allCombinedTasks, searchQuery]);
+
+  // Fetch shared notes (notes have separate sharing endpoint)
+  const { data: sharedNoteResources } = useQuery(trpc.noteSharing.getSharedWithMe.queryOptions());
+
+  // Extract shared notes from shared note resources
+  const sharedNotes = useMemo(() => {
+    return (sharedNoteResources?.notes || []).map((note: any) => ({
+      ...note,
+      isSharedWithMe: true,
+      sharePermission: note.shareInfo?.permission || "view",
+      ownerId: note.shareInfo?.ownerId,
+    }));
+  }, [sharedNoteResources]);
+
+  // Extract notes from shared note folders
+  const notesFromSharedFolders = useMemo(() => {
+    const sharedFolders = (sharedNoteResources?.folders || []);
+    
+    return sharedFolders.flatMap((folder: any) => {
+      const folderPermission = folder.shareInfo?.permission || "view";
+      return (folder.notes || []).map((note: any) => ({
+        ...note,
+        isSharedWithMe: true,
+        sharePermission: folderPermission,
+        sharedViaFolder: true,
+      }));
+    });
+  }, [sharedNoteResources]);
+
+  // Combine owned and shared notes
+  const allCombinedNotes = useMemo(() => {
+    // Deduplicate by ID, keeping owned items over shared if duplicate
+    const noteMap = new Map<string, any>();
+    
+    // Add owned notes first
+    allNotes.forEach((note: any) => {
+      noteMap.set(note.id, note);
+    });
+    
+    // Add directly shared notes
+    sharedNotes.forEach((note: any) => {
+      if (!noteMap.has(note.id)) {
+        noteMap.set(note.id, note);
+      }
+    });
+    
+    // Add notes from shared folders
+    notesFromSharedFolders.forEach((note: any) => {
+      if (!noteMap.has(note.id)) {
+        noteMap.set(note.id, note);
+      }
+    });
+    
+    return Array.from(noteMap.values());
+  }, [allNotes, sharedNotes, notesFromSharedFolders]);
 
   // Get quick notes - show latest 10
   const quickNotes = useMemo(() => {
-    const sorted = [...allNotes]
+    const sorted = [...allCombinedNotes]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const searched = filterItems(sorted);
     return searched.slice(0, 10); // Show up to 10 notes
-  }, [allNotes, searchQuery]);
+  }, [allCombinedNotes, searchQuery]);
 
   // Process events for display (EXACT same as calendar page)
   const processedEvents = useMemo(() => {
@@ -482,8 +631,8 @@ export default function DashboardPage() {
     return details.join(" ");
   };
 
-  const totalItems = reminders.length + allTasks.length + allNotes.length + (calendars?.length || 0);
-  const openTasks = allTasks.filter((t) => t.status === "open").length;
+  const totalItems = reminders.length + allCombinedTasks.length + allCombinedNotes.length + (calendars?.length || 0);
+  const openTasks = allCombinedTasks.filter((t) => t.status === "open").length;
   
   // Total filtered counts for each type (before slicing)
   const totalActiveReminders = useMemo(() => {
@@ -496,14 +645,14 @@ export default function DashboardPage() {
   }, [reminders, searchQuery]);
   
   const totalPendingTasks = useMemo(() => {
-    const filtered = allTasks.filter((t) => t.status === "open");
+    const filtered = allCombinedTasks.filter((t) => t.status === "open");
     return filterItems(filtered).length;
-  }, [allTasks, searchQuery]);
+  }, [allCombinedTasks, searchQuery]);
 
   const totalShoppingListItems = useMemo(() => {
-    const filtered = shoppingListItems.filter((item) => item.status === "open");
+    const filtered = allShoppingListItems.filter((item) => item.status === "open");
     return filtered.length;
-  }, [shoppingListItems]);
+  }, [allShoppingListItems]);
   
   const totalScheduledEvents = useMemo(() => {
     if (!processedEvents || processedEvents.length === 0) return 0;
@@ -523,10 +672,10 @@ export default function DashboardPage() {
   }, [processedEvents, searchQuery]);
   
   const totalQuickNotes = useMemo(() => {
-    const sorted = [...allNotes]
+    const sorted = [...allCombinedNotes]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return filterItems(sorted).length;
-  }, [allNotes, searchQuery]);
+  }, [allCombinedNotes, searchQuery]);
 
   const userName = user?.firstName || "there";
 
@@ -678,7 +827,7 @@ export default function DashboardPage() {
               className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
             >
               <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
-                {allNotes.length}
+                {allCombinedNotes.length}
               </div>
               <div className="text-sm text-gray-500 font-normal">
                 Notes Created
