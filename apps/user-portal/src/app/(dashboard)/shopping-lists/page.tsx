@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical } from "lucide-react";
+import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -493,10 +493,13 @@ export default function ShoppingListPage() {
       if (isSharedFolder) {
         // Show items from the shared folder
         const sharedFolder = sharedFolders.find((f: any) => f.id === selectedFolderId);
-        items = sharedFolder?.items || [];
+        items = (sharedFolder?.items || []).map((item: any) => ({
+          ...item,
+          isSharedWithMe: true,
+          sharePermission: sharedFolder.sharePermission || "view",
+        }));
       } else {
         // Regular owned folder - filter items by folderId
-        // Note: Shopping list items don't have folderId yet, so this will be empty until backend is updated
         items = items.filter((item: any) => item.folderId === selectedFolderId && !item.isSharedWithMe);
       }
     }
@@ -726,10 +729,19 @@ export default function ShoppingListPage() {
                       e.stopPropagation();
                       openShareDetails("shopping_list_folder", folder.id, folder.name);
                     }}
-                    className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
-                    title="View who shared this folder with you"
+                    className={cn(
+                      "flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 transition-colors",
+                      folder.sharePermission === "view"
+                        ? "bg-blue-50 text-blue-700 hover:bg-blue-100"
+                        : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                    )}
+                    title={folder.sharePermission === "view" ? "View only - You have view permission" : "Edit - You have edit permission"}
                   >
-                    <Users className="h-2.5 w-2.5" />
+                    {folder.sharePermission === "view" ? (
+                      <Eye className="h-2.5 w-2.5" />
+                    ) : (
+                      <Users className="h-2.5 w-2.5" />
+                    )}
                     <span className="hidden sm:inline">
                       {folder.sharePermission === "view" ? "View" : "Edit"}
                     </span>
@@ -1174,35 +1186,49 @@ export default function ShoppingListPage() {
             )}
 
             <div className="flex gap-2">
-              <Button
-                onClick={() => setIsAddModalOpen(true)}
-                variant="orange-primary"
-                className="flex-shrink-0 hidden lg:flex"
-                disabled={viewAllShared || (!selectedFolderId && !viewAllItems)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Item
-              </Button>
-              {/* Mobile - Folder Menu and Add Item Button */}
-              <div className="lg:hidden flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsMobileSidebarOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-                >
-                  <Menu className="h-4 w-4" />
-                  <span className="font-medium">Folders</span>
-                </Button>
-                <Button
-                  onClick={() => setIsAddModalOpen(true)}
-                  variant="orange-primary"
-                  className="flex-shrink-0"
-                  disabled={viewAllShared || (!selectedFolderId && !viewAllItems)}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Item
-                </Button>
-              </div>
+              {(() => {
+                // Check if selected folder is shared and user has view permission only
+                const isSharedFolder = selectedFolder?.isSharedWithMe || false;
+                const folderPermission = selectedFolder?.sharePermission;
+                const canAddToFolder = !isSharedFolder || folderPermission === "edit";
+                const isDisabled = viewAllShared || (!selectedFolderId && !viewAllItems) || (selectedFolderId && !canAddToFolder);
+                
+                return (
+                  <>
+                    <Button
+                      onClick={() => setIsAddModalOpen(true)}
+                      variant="orange-primary"
+                      className="flex-shrink-0 hidden lg:flex"
+                      disabled={isDisabled}
+                      title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : undefined}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Item
+                    </Button>
+                    {/* Mobile - Folder Menu and Add Item Button */}
+                    <div className="lg:hidden flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsMobileSidebarOpen(true)}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
+                      >
+                        <Menu className="h-4 w-4" />
+                        <span className="font-medium">Folders</span>
+                      </Button>
+                      <Button
+                        onClick={() => setIsAddModalOpen(true)}
+                        variant="orange-primary"
+                        className="flex-shrink-0"
+                        disabled={isDisabled}
+                        title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : undefined}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -1453,64 +1479,100 @@ export default function ShoppingListPage() {
             </p>
           </div>
         ) : (
-          filteredItems.map((item) => (
-            <div
-              key={item.id}
-              className={cn(
-                "flex items-center gap-3 p-4 bg-white border rounded-lg hover:shadow-md transition-all",
-                item.status === "completed" && "opacity-60"
-              )}
-            >
-              {/* Checkbox */}
-              <button
-                onClick={() => handleToggleItem(item.id)}
+          filteredItems.map((item) => {
+            // Check if item is shared and what permission the user has
+            // Items inherit permission from their folder
+            const isSharedItem = (item as any).isSharedWithMe || false;
+            const itemPermission = (item as any).sharePermission || (isSharedItem ? "view" : undefined);
+            // If item doesn't have explicit permission, check if it's in a shared folder
+            let finalPermission = itemPermission;
+            if (!finalPermission && selectedFolder) {
+              const folder = selectedFolder as any;
+              if (folder.isSharedWithMe) {
+                finalPermission = folder.sharePermission || "view";
+              }
+            }
+            const canEditItem = !isSharedItem || finalPermission === "edit";
+            
+            return (
+              <div
+                key={item.id}
                 className={cn(
-                  "flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors",
-                  item.status === "completed"
-                    ? "bg-green-500 border-green-500 text-white"
-                    : "border-gray-300 hover:border-green-500"
+                  "flex items-center gap-3 p-4 bg-white border rounded-lg hover:shadow-md transition-all",
+                  item.status === "completed" && "opacity-60"
                 )}
               >
-                {item.status === "completed" && <Check className="h-4 w-4" />}
-              </button>
-
-              {/* Item Content */}
-              <div className="flex-1 min-w-0">
-                <div
+                {/* Checkbox */}
+                <button
+                  onClick={() => canEditItem && handleToggleItem(item.id)}
+                  disabled={!canEditItem}
                   className={cn(
-                    "font-medium text-gray-900",
-                    item.status === "completed" && "line-through text-gray-500"
+                    "flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors",
+                    !canEditItem && "opacity-50 cursor-not-allowed",
+                    item.status === "completed"
+                      ? "bg-green-500 border-green-500 text-white"
+                      : "border-gray-300 hover:border-green-500"
                   )}
+                  title={!canEditItem ? "View only - You cannot edit this item" : undefined}
                 >
-                  {item.name}
-                </div>
-                {item.description && (
-                  <div className="text-sm text-gray-500 mt-1">{item.description}</div>
-                )}
-              </div>
+                  {item.status === "completed" && <Check className="h-4 w-4" />}
+                </button>
 
-              {/* Actions */}
-              <div className="flex items-center gap-2">
-                {/* Shopping list items don't have direct sharing - only folders can be shared */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleEditItem(item)}
-                  className="h-8 w-8"
-                >
-                  <Edit2 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDeleteItem(item.id, item.name)}
-                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {/* Item Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "font-medium text-gray-900",
+                        item.status === "completed" && "line-through text-gray-500"
+                      )}
+                    >
+                      {item.name}
+                    </div>
+                    {isSharedItem && finalPermission === "view" && (
+                      <span title="View only" className="flex items-center">
+                        <Eye className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+                      </span>
+                    )}
+                  </div>
+                  {item.description && (
+                    <div className="text-sm text-gray-500 mt-1">{item.description}</div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2">
+                  {/* Shopping list items don't have direct sharing - only folders can be shared */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleEditItem(item)}
+                    disabled={!canEditItem}
+                    className={cn(
+                      "h-8 w-8",
+                      !canEditItem && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={!canEditItem ? "View only - You cannot edit this item" : "Edit item"}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteItem(item.id, item.name)}
+                    disabled={!canEditItem}
+                    className={cn(
+                      "h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50",
+                      !canEditItem && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={!canEditItem ? "View only - You cannot delete this item" : "Delete item"}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
           </div>
         </div>
