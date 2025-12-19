@@ -522,6 +522,17 @@ export class ActionExecutor {
       } else {
         missingFields.push('folder name or recipient');
       }
+    } else if (trimmed.startsWith('Share a shopping list folder:')) {
+      action = 'share';
+      resourceType = 'folder';
+      isShoppingListFolder = true;
+      const match = trimmed.match(/^Share a shopping list folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+        recipient = match[2].trim();
+      } else {
+        missingFields.push('folder name or recipient');
+      }
     } else if (trimmed.startsWith('Create a task sub-folder:')) {
       action = 'create_subfolder';
       resourceType = 'folder';
@@ -844,6 +855,8 @@ export class ActionExecutor {
             return await this.shareTask(parsed);
           } else if (parsed.resourceType === 'document') {
             return await this.shareFile(parsed);
+          } else if (parsed.isShoppingListFolder) {
+            return await this.shareShoppingListFolder(parsed);
           } else {
             return await this.shareFolder(parsed);
           }
@@ -1284,6 +1297,79 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't share the folder "${parsed.folderRoute}" with ${parsed.recipient}. Please try again.`,
+      };
+    }
+  }
+
+  private async shareShoppingListFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which shopping lists folder you'd like to share. Please specify the folder name.",
+      };
+    }
+
+    if (!parsed.recipient) {
+      return {
+        success: false,
+        message: "I need to know who you'd like to share with. Please specify the recipient name.",
+      };
+    }
+
+    const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+    if (!folderId) {
+      return {
+        success: false,
+        message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+      };
+    }
+
+    const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+    if (!sharedWithUserId) {
+      // Check if recipient looks like email or phone
+      const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
+      const hasDigits = /\d/.test(parsed.recipient);
+      const isPhone = hasDigits && (parsed.recipient.startsWith('+') || /^[\d\s\-\(\)]+$/.test(parsed.recipient.replace(/\+/g, '')));
+      
+      if (isEmail) {
+        return {
+          success: false,
+          message: `I couldn't find a user with the email address "${parsed.recipient}". Please check the email address and make sure the person has a CrackOn account.`,
+        };
+      } else if (isPhone) {
+        return {
+          success: false,
+          message: `I couldn't find a user with the phone number "${parsed.recipient}". Please check the phone number and make sure the person has a CrackOn account.`,
+        };
+      } else {
+        return {
+          success: false,
+          message: `I couldn't find a user or friend with "${parsed.recipient}". Please provide the recipient's email address, phone number, or friend name (e.g., "john@example.com", "+27123456789", or "John Doe").`,
+        };
+      }
+    }
+
+    try {
+      await createTaskShare(this.db, {
+        resourceType: 'shopping_list_folder',
+        resourceId: folderId,
+        ownerId: this.userId,
+        sharedWithUserId,
+        permission: 'view',
+      });
+
+      return {
+        success: true,
+        message: `🔁 *Shopping Lists Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nPermission: Editor`,
+      };
+    } catch (error) {
+      logger.error(
+        { error, folderRoute: parsed.folderRoute, recipient: parsed.recipient, userId: this.userId },
+        'Failed to share shopping list folder'
+      );
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't share the shopping lists folder "${parsed.folderRoute}" with ${parsed.recipient}. Please try again.`,
       };
     }
   }
