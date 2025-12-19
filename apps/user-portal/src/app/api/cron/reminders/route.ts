@@ -123,20 +123,30 @@ export async function GET(req: NextRequest) {
           continue; // Skip users without timezone set
         }
 
-        // Get current time in user's timezone
-        const now = new Date();
-        const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
-        const userLocalTimeDate = new Date(userTimeString);
+        // Get current time in user's timezone using Intl.DateTimeFormat for accurate conversion
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+          hour12: false,
+        });
+        
+        const parts = formatter.formatToParts(now);
+        const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
         
         // Extract user's local time components (these represent the actual time in user's timezone)
         const userLocalTime = {
-          year: userLocalTimeDate.getFullYear(),
-          month: userLocalTimeDate.getMonth(),
-          day: userLocalTimeDate.getDate(),
-          hours: userLocalTimeDate.getHours(),
-          minutes: userLocalTimeDate.getMinutes(),
-          seconds: userLocalTimeDate.getSeconds(),
-          date: userLocalTimeDate, // This Date object represents the current time in user's timezone
+          year: parseInt(getPart('year'), 10),
+          month: parseInt(getPart('month'), 10) - 1, // Convert to 0-11
+          day: parseInt(getPart('day'), 10),
+          hours: parseInt(getPart('hour'), 10),
+          minutes: parseInt(getPart('minute'), 10),
+          seconds: parseInt(getPart('second'), 10),
+          date: now, // Use server time as base, but components are in user's timezone
         };
         
         logger.info(
@@ -565,57 +575,74 @@ function createDateInUserTimezone(
   minutes: number,
   timezone: string
 ): Date {
-  // Create a date string in ISO format
-  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+  // Create a date string in ISO format (treating it as if it's in the user's timezone)
+  // We need to find the UTC timestamp that, when displayed in the user's timezone, gives us the desired time
   
-  // We need to create a Date object that, when converted to the user's timezone, gives us the desired time
-  // Strategy: Use iterative approach to find the correct UTC timestamp
-  
-  // Start with a guess: assume the time is in UTC
+  // Strategy: Use iterative approach with Intl.DateTimeFormat to find the correct UTC timestamp
+  // Start with a guess: create a date assuming it's in UTC
   let candidate = new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
   
-  // Check what this represents in the user's timezone
-  let candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
+  // Check what this represents in the user's timezone using Intl.DateTimeFormat
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false,
+  });
   
-  // Get components of what we got
-  let gotYear = candidateInUserTz.getFullYear();
-  let gotMonth = candidateInUserTz.getMonth();
-  let gotDay = candidateInUserTz.getDate();
-  let gotHours = candidateInUserTz.getHours();
-  let gotMinutes = candidateInUserTz.getMinutes();
-  
-  // Calculate how far off we are
-  const targetMs = new Date(year, month, day, hours, minutes, 0, 0).getTime();
-  const gotMs = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
-  const diff = targetMs - gotMs;
-  
-  // Adjust the candidate
-  candidate = new Date(candidate.getTime() + diff);
-  
-  // Verify and fine-tune if needed (one more iteration)
-  candidateInUserTz = new Date(candidate.toLocaleString("en-US", { timeZone: timezone }));
-  gotYear = candidateInUserTz.getFullYear();
-  gotMonth = candidateInUserTz.getMonth();
-  gotDay = candidateInUserTz.getDate();
-  gotHours = candidateInUserTz.getHours();
-  gotMinutes = candidateInUserTz.getMinutes();
-  
-  if (
-    gotYear === year &&
-    gotMonth === month &&
-    gotDay === day &&
-    gotHours === hours &&
-    gotMinutes === minutes
-  ) {
-    return candidate;
+  // Iterate to find the correct UTC timestamp
+  for (let iteration = 0; iteration < 3; iteration++) {
+    const candidateParts = formatter.formatToParts(candidate);
+    const getPart = (type: string) => candidateParts.find(p => p.type === type)?.value || '0';
+    
+    const gotYear = parseInt(getPart('year'), 10);
+    const gotMonth = parseInt(getPart('month'), 10) - 1; // Convert to 0-11
+    const gotDay = parseInt(getPart('day'), 10);
+    const gotHours = parseInt(getPart('hour'), 10);
+    const gotMinutes = parseInt(getPart('minute'), 10);
+    
+    // Check if we got the correct time
+    if (
+      gotYear === year &&
+      gotMonth === month &&
+      gotDay === day &&
+      gotHours === hours &&
+      gotMinutes === minutes
+    ) {
+      return candidate;
+    }
+    
+    // Calculate the difference in the user's local time
+    // Create Date objects in UTC to avoid server timezone issues
+    const targetDate = new Date(Date.UTC(year, month, day, hours, minutes, 0, 0));
+    const gotDate = new Date(Date.UTC(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0));
+    
+    // The difference in milliseconds (this is in "logical" time, not actual UTC)
+    const diffMs = targetDate.getTime() - gotDate.getTime();
+    
+    // Adjust the candidate
+    candidate = new Date(candidate.getTime() - diffMs);
   }
   
-  // One more adjustment if needed
-  const targetMs2 = new Date(year, month, day, hours, minutes, 0, 0).getTime();
-  const gotMs2 = new Date(gotYear, gotMonth, gotDay, gotHours, gotMinutes, 0, 0).getTime();
-  const diff2 = targetMs2 - gotMs2;
+  // If we still don't have a match after iterations, return the best guess
+  logger.warn(
+    {
+      year,
+      month,
+      day,
+      hours,
+      minutes,
+      timezone,
+      finalCandidate: candidate.toISOString(),
+    },
+    'Could not perfectly match timezone in createDateInUserTimezone, using approximation'
+  );
   
-  return new Date(candidate.getTime() + diff2);
+  return candidate;
 }
 
 /**
@@ -640,7 +667,9 @@ function checkIfReminderShouldFire(
   const currentDay = userLocalTime.day;
   const currentMonth = userLocalTime.month;
   const currentYear = userLocalTime.year;
-  const currentDayOfWeek = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day).getDay();
+  // Calculate day of week from user's local time components
+  // Use UTC to avoid timezone issues when creating the date
+  const currentDayOfWeek = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, userLocalTime.day)).getUTCDay();
 
   try {
     if (reminder.frequency === 'daily') {
