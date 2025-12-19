@@ -44,6 +44,14 @@ function isValidTemplateResponse(text: string): boolean {
     /^Create a reminder:/i,
     /^Update a reminder:/i,
     /^Delete a reminder:/i,
+    /^Create a friend:/i,
+    /^Update a friend:/i,
+    /^Delete a friend:/i,
+    /^List friends:/i,
+    /^Create a friend folder:/i,
+    /^Edit a friend folder:/i,
+    /^Delete a friend folder:/i,
+    /^List friend folders:/i,
     /^Pause a reminder:/i,
     /^Resume a reminder:/i,
     /^List reminders:/i,
@@ -283,7 +291,7 @@ async function processAIResponse(
 ): Promise<void> {
   try {
     // Parse the Title from response
-    const titleMatch = aiResponse.match(/^Title:\s*(task|note|reminder|event|document|address|verification|normal)/i);
+    const titleMatch = aiResponse.match(/^Title:\s*(task|note|reminder|event|document|address|friend|verification|normal)/i);
     if (!titleMatch || !titleMatch[1]) {
       logger.warn(
         {
@@ -354,7 +362,7 @@ async function processAIResponse(
     const isListEvents = actionTemplate.toLowerCase().startsWith('list events:');
     
     // Handle list operations for all types (tasks, notes, reminders, events, documents, addresses)
-    if (isListOperation && (titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event' || titleType === 'document' || titleType === 'address')) {
+    if (isListOperation && (titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event' || titleType === 'document' || titleType === 'address' || titleType === 'friend')) {
       try {
         logger.info(
           {
@@ -941,6 +949,86 @@ async function processAIResponse(
         logger.info({ userId, successCount, failCount, totalLines: actionLines.length }, 'Processed address operations');
       } else {
         logger.info({ userId, titleType }, 'No address actions parsed from template');
+      }
+    } else if (titleType === 'friend') {
+      // Handle friend operations (create, update, delete, list, folder operations)
+      
+      // Send AI response to user (for debugging/transparency)
+      try {
+        await whatsappService.sendTextMessage(
+          recipient,
+          `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`
+        );
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing AI analysis message');
+        }
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to send AI analysis to user');
+      }
+      
+      const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      const results: string[] = [];
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const actionLine of actionLines) {
+        const parsed = executor.parseAction(actionLine);
+        if (parsed) {
+          // Ensure resourceType is set to friend for friend operations
+          if (parsed.resourceType !== 'friend' && !parsed.isFriendFolder) {
+            parsed.resourceType = 'friend';
+          }
+          const result = await executor.executeAction(parsed);
+          if (result.success) {
+            successCount++;
+            results.push(result.message);
+          } else {
+            failCount++;
+            results.push(result.message);
+          }
+        } else {
+          logger.warn({ userId, actionLine }, 'Failed to parse friend action line');
+        }
+      }
+      
+      // Send combined results to user (filter out empty messages from button sends)
+      const nonEmptyResults = results.filter(r => r.trim().length > 0);
+      if (nonEmptyResults.length > 0) {
+        const combinedMessage = nonEmptyResults.join('\n\n');
+        await whatsappService.sendTextMessage(recipient, combinedMessage);
+        
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: combinedMessage,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing message');
+        }
+        
+        logger.info({ userId, successCount, failCount, totalLines: actionLines.length }, 'Processed friend operations');
+      } else {
+        logger.info({ userId, titleType }, 'No friend actions parsed from template');
       }
     } else if (titleType === 'verification') {
       // Verification is handled separately, no need to process here

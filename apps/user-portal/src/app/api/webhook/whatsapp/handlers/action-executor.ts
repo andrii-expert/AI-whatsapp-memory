@@ -29,7 +29,6 @@ import {
   getUserByEmail,
   getUserByPhone,
   normalizePhoneNumber,
-  getUserFriends,
 } from '@imaginecalendar/database/queries';
 import {
   getUserFiles,
@@ -60,6 +59,17 @@ import {
   updateShoppingListFolder,
   deleteShoppingListFolder,
   getShoppingListFolderById,
+  getUserFriends,
+  getFriendById,
+  createFriend,
+  updateFriend,
+  deleteFriend,
+  getUserFriendFolders,
+  createFriendFolder,
+  updateFriendFolder,
+  deleteFriendFolder,
+  getFriendFolderById,
+  searchUsersByEmailOrPhoneForFriends,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -71,7 +81,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface ParsedAction {
   action: string;
-  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address';
+  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address' | 'friend';
   taskName?: string;
   folderName?: string;
   folderRoute?: string;
@@ -84,8 +94,19 @@ export interface ParsedAction {
   missingFields: string[];
   isFileFolder?: boolean; // True if this is a file folder operation (vs task folder)
   isShoppingListFolder?: boolean; // True if this is a shopping list folder operation (vs task folder)
+  isFriendFolder?: boolean; // True if this is a friend folder operation
   addressName?: string; // For address operations: the person/place name
   addressType?: string; // For address operations: 'location', 'address', 'pin', 'all'
+  email?: string; // For friend operations: email address
+  phone?: string; // For friend operations: phone number
+  street?: string; // For friend/address operations: street address
+  city?: string; // For friend/address operations: city
+  state?: string; // For friend/address operations: state
+  zip?: string; // For friend/address operations: zip code
+  country?: string; // For friend/address operations: country
+  latitude?: number; // For friend/address operations: latitude
+  longitude?: number; // For friend/address operations: longitude
+  friendAddressType?: 'home' | 'office' | 'parents_house'; // For friend operations: address type
 }
 
 export class ActionExecutor {
@@ -109,7 +130,7 @@ export class ActionExecutor {
 
     const missingFields: string[] = [];
     let action = '';
-    let resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address' = 'task';
+    let resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address' | 'friend' = 'task';
     let taskName: string | undefined;
     let folderName: string | undefined;
     let folderRoute: string | undefined;
@@ -120,6 +141,17 @@ export class ActionExecutor {
     let listFilter: string | undefined;
     let typeFilter: ReminderFrequency | undefined;
     let isShoppingListFolder: boolean | undefined;
+    let isFriendFolder: boolean | undefined;
+    let email: string | undefined;
+    let phone: string | undefined;
+    let street: string | undefined;
+    let city: string | undefined;
+    let state: string | undefined;
+    let zip: string | undefined;
+    let country: string | undefined;
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+    let friendAddressType: 'home' | 'office' | 'parents_house' | undefined;
 
     // Shopping item operations (check before regular task)
     if (trimmed.startsWith('Create a shopping item:')) {
@@ -621,6 +653,123 @@ export class ActionExecutor {
       missingFields.push('new name or details');
     }
 
+    // Friend operations
+    else if (trimmed.startsWith('Create a friend:')) {
+      action = 'create';
+      resourceType = 'friend';
+      // Parse: "Create a friend: {name} - email: {email} - phone: {phone} - folder: {folder} - street: {street} - city: {city} - state: {state} - zip: {zip} - country: {country} - latitude: {lat} - longitude: {lng} - addressType: {type}"
+      const match = trimmed.match(/^Create a friend:\s*(.+?)(?:\s*-\s*(.+))?$/i);
+      if (match) {
+        taskName = match[1].trim(); // friend name
+        
+        // Parse optional fields
+        if (match[2]) {
+          const fields = match[2].split(/\s*-\s*/);
+          fields.forEach(field => {
+            const [key, value] = field.split(':').map(s => s.trim());
+            if (key && value) {
+              const keyLower = key.toLowerCase();
+              if (keyLower === 'email') {
+                email = value;
+              } else if (keyLower === 'phone') {
+                phone = value;
+              } else if (keyLower === 'folder') {
+                folderRoute = value;
+              } else if (keyLower === 'street') {
+                street = value;
+              } else if (keyLower === 'city') {
+                city = value;
+              } else if (keyLower === 'state') {
+                state = value;
+              } else if (keyLower === 'zip') {
+                zip = value;
+              } else if (keyLower === 'country') {
+                country = value;
+              } else if (keyLower === 'latitude') {
+                latitude = parseFloat(value);
+              } else if (keyLower === 'longitude') {
+                longitude = parseFloat(value);
+              } else if (keyLower === 'addresstype') {
+                friendAddressType = value.toLowerCase() as 'home' | 'office' | 'parents_house';
+              }
+            }
+          });
+        }
+      } else {
+        missingFields.push('friend name');
+      }
+    } else if (trimmed.startsWith('Update a friend:')) {
+      action = 'edit';
+      resourceType = 'friend';
+      const match = trimmed.match(/^Update a friend:\s*(.+?)\s*-\s*changes:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim(); // existing friend name
+        newName = match[2].trim(); // changes description
+      } else {
+        missingFields.push('friend name or changes');
+      }
+    } else if (trimmed.startsWith('Delete a friend:')) {
+      action = 'delete';
+      resourceType = 'friend';
+      const match = trimmed.match(/^Delete a friend:\s*(.+)$/i);
+      if (match) {
+        taskName = match[1].trim();
+      } else {
+        missingFields.push('friend name');
+      }
+    } else if (trimmed.startsWith('List friends:')) {
+      action = 'list';
+      resourceType = 'friend';
+      const match = trimmed.match(/^List friends:\s*(.+)$/i);
+      if (match) {
+        const folderOrAll = match[1].trim();
+        folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+      } else {
+        folderRoute = undefined; // List all friends
+      }
+    } else if (trimmed.startsWith('Create a friend folder:')) {
+      action = 'create';
+      resourceType = 'folder';
+      isFriendFolder = true;
+      const match = trimmed.match(/^Create a friend folder:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+      } else {
+        missingFields.push('folder name');
+      }
+    } else if (trimmed.startsWith('Edit a friend folder:')) {
+      action = 'edit';
+      resourceType = 'folder';
+      isFriendFolder = true;
+      const match = trimmed.match(/^Edit a friend folder:\s*(.+?)\s*-\s*to:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+        newName = match[2].trim();
+      } else {
+        missingFields.push('folder name or new name');
+      }
+    } else if (trimmed.startsWith('Delete a friend folder:')) {
+      action = 'delete';
+      resourceType = 'folder';
+      isFriendFolder = true;
+      const match = trimmed.match(/^Delete a friend folder:\s*(.+)$/i);
+      if (match) {
+        folderRoute = match[1].trim();
+      } else {
+        missingFields.push('folder name');
+      }
+    } else if (trimmed.startsWith('List friend folders:')) {
+      action = 'list_folders';
+      resourceType = 'folder';
+      isFriendFolder = true;
+      const match = trimmed.match(/^List friend folders:\s*(.+)$/i);
+      if (match) {
+        const folderOrAll = match[1].trim();
+        folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+      } else {
+        folderRoute = undefined; // List all folders
+      }
+    }
     // Address operations
     else if (trimmed.startsWith('Create an address:')) {
       action = 'create';
@@ -712,12 +861,18 @@ export class ActionExecutor {
         trimmed.startsWith('Delete a shopping list folder:') ||
         trimmed.startsWith('Create a shopping list sub-folder:') ||
         trimmed.startsWith('List shopping list folders:');
+      
+      isFriendFolder = trimmed.startsWith('Create a friend folder:') ||
+        trimmed.startsWith('Edit a friend folder:') ||
+        trimmed.startsWith('Delete a friend folder:') ||
+        trimmed.startsWith('List friend folders:');
     }
 
     return {
       action,
       resourceType,
       isShoppingListFolder,
+      isFriendFolder,
       taskName,
       folderName,
       folderRoute,
@@ -730,6 +885,16 @@ export class ActionExecutor {
       missingFields,
       addressName: taskName, // Map taskName to addressName for address operations
       addressType: status, // Map status to addressType for address operations
+      email,
+      phone,
+      street,
+      city,
+      state,
+      zip,
+      country,
+      latitude,
+      longitude,
+      friendAddressType,
       ...(isFileFolder ? { isFileFolder: true } : {}),
       ...(isShoppingListFolder ? { isShoppingListFolder: true } : {}),
     };
@@ -770,6 +935,8 @@ export class ActionExecutor {
             return await this.listFiles(parsed);
           } else if (parsed.resourceType === 'address') {
             return await this.listAddresses(parsed);
+          } else if (parsed.resourceType === 'friend') {
+            return await this.listFriends(parsed);
           }
           return {
             success: false,
@@ -788,8 +955,12 @@ export class ActionExecutor {
             return await this.createFile(parsed);
           } else if (parsed.resourceType === 'address') {
             return await this.createAddressAction(parsed);
+          } else if (parsed.resourceType === 'friend') {
+            return await this.createFriend(parsed);
           } else if (parsed.isShoppingListFolder) {
             return await this.createShoppingListFolder(parsed);
+          } else if (parsed.isFriendFolder) {
+            return await this.createFriendFolder(parsed);
           } else {
             return await this.createFolder(parsed);
           }
@@ -808,8 +979,12 @@ export class ActionExecutor {
             return await this.editFile(parsed);
           } else if (parsed.resourceType === 'address') {
             return await this.updateAddressAction(parsed);
+          } else if (parsed.resourceType === 'friend') {
+            return await this.updateFriend(parsed);
           } else if (parsed.isShoppingListFolder) {
             return await this.editShoppingListFolder(parsed);
+          } else if (parsed.isFriendFolder) {
+            return await this.updateFriendFolder(parsed);
           } else {
             return await this.editFolder(parsed);
           }
@@ -822,8 +997,12 @@ export class ActionExecutor {
             return await this.deleteFile(parsed);
           } else if (parsed.resourceType === 'address') {
             return await this.deleteAddressAction(parsed);
+          } else if (parsed.resourceType === 'friend') {
+            return await this.deleteFriend(parsed);
           } else if (parsed.isShoppingListFolder) {
             return await this.deleteShoppingListFolder(parsed);
+          } else if (parsed.isFriendFolder) {
+            return await this.deleteFriendFolder(parsed);
           } else {
             return await this.deleteFolder(parsed);
           }
@@ -876,6 +1055,8 @@ export class ActionExecutor {
         case 'list_folders':
           if (parsed.isShoppingListFolder) {
             return await this.listShoppingListFolders(parsed);
+          } else if (parsed.isFriendFolder) {
+            return await this.listFriendFolders(parsed);
           } else if (parsed.resourceType === 'folder') {
             return await this.listTaskFolders(parsed);
           }
@@ -5752,6 +5933,489 @@ export class ActionExecutor {
       return {
         success: false,
         message: "I encountered an error while retrieving your addresses. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Resolve friend folder route (e.g., "Work") to folder ID
+   */
+  private async resolveFriendFolderRoute(folderRoute: string): Promise<string | null> {
+    const folders = await getUserFriendFolders(this.db, this.userId);
+    const folderName = folderRoute.toLowerCase();
+    const folder = folders.find(f => f.name.toLowerCase() === folderName);
+    return folder ? folder.id : null;
+  }
+
+  /**
+   * Create a friend
+   */
+  private async createFriend(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.taskName) {
+        return {
+          success: false,
+          message: "I need to know the friend's name. Please specify the name.",
+        };
+      }
+
+      // Resolve folder if specified
+      let folderId: string | null = null;
+      if (parsed.folderRoute) {
+        folderId = await this.resolveFriendFolderRoute(parsed.folderRoute) || null;
+        if (parsed.folderRoute && !folderId) {
+          return {
+            success: false,
+            message: `I couldn't find the friend folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+          };
+        }
+      }
+
+      // Try to find connected user by email or phone if provided
+      let connectedUserId: string | null = null;
+      if (parsed.email || parsed.phone) {
+        const searchResults = await searchUsersByEmailOrPhoneForFriends(
+          this.db,
+          parsed.email || parsed.phone || '',
+          this.userId
+        );
+        if (searchResults.length > 0) {
+          connectedUserId = searchResults[0].id;
+        }
+      }
+
+      const friend = await createFriend(this.db, {
+        userId: this.userId,
+        name: parsed.taskName,
+        folderId,
+        connectedUserId,
+        email: parsed.email || null,
+        phone: parsed.phone || null,
+        addressType: parsed.friendAddressType || null,
+        street: parsed.street || null,
+        city: parsed.city || null,
+        state: parsed.state || null,
+        zip: parsed.zip || null,
+        country: parsed.country || null,
+        latitude: parsed.latitude || null,
+        longitude: parsed.longitude || null,
+      });
+
+      let message = `✅ *Friend Created*\nName: ${friend.name}`;
+      if (friend.email) message += `\nEmail: ${friend.email}`;
+      if (friend.phone) message += `\nPhone: ${friend.phone}`;
+      if (parsed.folderRoute) message += `\nFolder: ${parsed.folderRoute}`;
+
+      return {
+        success: true,
+        message,
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId, friendName: parsed.taskName }, 'Failed to create friend');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't create the friend "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  /**
+   * Update a friend
+   */
+  private async updateFriend(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.taskName) {
+        return {
+          success: false,
+          message: "I need to know which friend you want to update. Please specify the friend name.",
+        };
+      }
+
+      if (!parsed.newName) {
+        return {
+          success: false,
+          message: "I need to know what changes you want to make. Please specify the changes.",
+        };
+      }
+
+      // Find friend by name
+      const friends = await getUserFriends(this.db, this.userId);
+      const friend = friends.find(f => 
+        f.name.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+        parsed.taskName!.toLowerCase().includes(f.name.toLowerCase())
+      );
+
+      if (!friend) {
+        return {
+          success: false,
+          message: `I couldn't find a friend named "${parsed.taskName}". Please check the name and try again.`,
+        };
+      }
+
+      // Parse changes from newName
+      const changes = parsed.newName.toLowerCase();
+      const updateData: any = {};
+
+      // Check for name changes
+      if (changes.includes('name to') || changes.includes('name:')) {
+        const nameMatch = parsed.newName.match(/name\s+(?:to|:)\s*(.+?)(?:\s|$)/i);
+        if (nameMatch) {
+          updateData.name = nameMatch[1].trim();
+        }
+      }
+
+      // Check for email changes
+      if (changes.includes('email to') || changes.includes('email:')) {
+        const emailMatch = parsed.newName.match(/email\s+(?:to|:)\s*([^\s]+)/i);
+        if (emailMatch) {
+          updateData.email = emailMatch[1].trim();
+        }
+      }
+
+      // Check for phone changes
+      if (changes.includes('phone to') || changes.includes('phone:')) {
+        const phoneMatch = parsed.newName.match(/phone\s+(?:to|:)\s*([^\s]+)/i);
+        if (phoneMatch) {
+          updateData.phone = phoneMatch[1].trim();
+        }
+      }
+
+      // Check for address field changes
+      if (changes.includes('street to') || changes.includes('street:')) {
+        const streetMatch = parsed.newName.match(/street\s+(?:to|:)\s*(.+?)(?:\s|$)/i);
+        if (streetMatch) {
+          updateData.street = streetMatch[1].trim();
+        }
+      }
+
+      if (changes.includes('city to') || changes.includes('city:')) {
+        const cityMatch = parsed.newName.match(/city\s+(?:to|:)\s*(.+?)(?:\s|$)/i);
+        if (cityMatch) {
+          updateData.city = cityMatch[1].trim();
+        }
+      }
+
+      if (changes.includes('state to') || changes.includes('state:')) {
+        const stateMatch = parsed.newName.match(/state\s+(?:to|:)\s*(.+?)(?:\s|$)/i);
+        if (stateMatch) {
+          updateData.state = stateMatch[1].trim();
+        }
+      }
+
+      if (changes.includes('zip to') || changes.includes('zip:')) {
+        const zipMatch = parsed.newName.match(/zip\s+(?:to|:)\s*([^\s]+)/i);
+        if (zipMatch) {
+          updateData.zip = zipMatch[1].trim();
+        }
+      }
+
+      if (changes.includes('country to') || changes.includes('country:')) {
+        const countryMatch = parsed.newName.match(/country\s+(?:to|:)\s*(.+?)(?:\s|$)/i);
+        if (countryMatch) {
+          updateData.country = countryMatch[1].trim();
+        }
+      }
+
+      // Check for coordinate changes
+      if (changes.includes('latitude to') || changes.includes('latitude:')) {
+        const latMatch = parsed.newName.match(/latitude\s+(?:to|:)\s*([^\s]+)/i);
+        if (latMatch) {
+          updateData.latitude = parseFloat(latMatch[1].trim());
+        }
+      }
+
+      if (changes.includes('longitude to') || changes.includes('longitude:')) {
+        const lngMatch = parsed.newName.match(/longitude\s+(?:to|:)\s*([^\s]+)/i);
+        if (lngMatch) {
+          updateData.longitude = parseFloat(lngMatch[1].trim());
+        }
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return {
+          success: false,
+          message: "I couldn't understand what changes you want to make. Please specify the field and new value (e.g., 'email to new@example.com').",
+        };
+      }
+
+      const updated = await updateFriend(this.db, friend.id, this.userId, updateData);
+
+      if (!updated) {
+        return {
+          success: false,
+          message: "I encountered an error while updating the friend. Please try again.",
+        };
+      }
+
+      return {
+        success: true,
+        message: `✅ *Friend Updated*\nName: ${updated.name}`,
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId, friendName: parsed.taskName }, 'Failed to update friend');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't update the friend "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  /**
+   * Delete a friend
+   */
+  private async deleteFriend(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.taskName) {
+        return {
+          success: false,
+          message: "I need to know which friend you want to delete. Please specify the friend name.",
+        };
+      }
+
+      // Find friend by name
+      const friends = await getUserFriends(this.db, this.userId);
+      const friend = friends.find(f => 
+        f.name.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+        parsed.taskName!.toLowerCase().includes(f.name.toLowerCase())
+      );
+
+      if (!friend) {
+        return {
+          success: false,
+          message: `I couldn't find a friend named "${parsed.taskName}". Please check the name and try again.`,
+        };
+      }
+
+      await deleteFriend(this.db, friend.id, this.userId);
+
+      return {
+        success: true,
+        message: `⛔ *Friend Deleted*\nName: ${friend.name}`,
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId, friendName: parsed.taskName }, 'Failed to delete friend');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't delete the friend "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  /**
+   * List friends
+   */
+  private async listFriends(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const friends = await getUserFriends(this.db, this.userId);
+      
+      // Filter by folder if specified
+      let filteredFriends = friends;
+      if (parsed.folderRoute) {
+        const folderId = await this.resolveFriendFolderRoute(parsed.folderRoute);
+        if (!folderId) {
+          return {
+            success: false,
+            message: `I couldn't find the friend folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+          };
+        }
+        filteredFriends = friends.filter(f => f.folderId === folderId);
+      }
+
+      if (filteredFriends.length === 0) {
+        const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
+        return {
+          success: true,
+          message: `👥 *Friends${folderText}*\n\nNone`,
+        };
+      }
+
+      let message = parsed.folderRoute 
+        ? `👥 *Friends in "${parsed.folderRoute}":*\n`
+        : `👥 *Friends:*\n`;
+      
+      filteredFriends.slice(0, 20).forEach((friend, index) => {
+        message += `*${index + 1}.* ${friend.name}`;
+        if (friend.email || friend.phone) {
+          const details: string[] = [];
+          if (friend.email) details.push(`📧 ${friend.email}`);
+          if (friend.phone) details.push(`📞 ${friend.phone}`);
+          message += `\n   ${details.join(' | ')}`;
+        }
+        message += '\n';
+      });
+
+      if (filteredFriends.length > 20) {
+        message += `... and ${filteredFriends.length - 20} more friends.`;
+      }
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to list friends');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't retrieve your friends. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Create a friend folder
+   */
+  private async createFriendFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.folderRoute) {
+        return {
+          success: false,
+          message: "I need to know what friend folder you'd like to create. Please specify the folder name.",
+        };
+      }
+
+      // Check if folder already exists
+      const existingFolders = await getUserFriendFolders(this.db, this.userId);
+      const existingFolder = existingFolders.find(f => f.name.toLowerCase() === parsed.folderRoute.toLowerCase());
+      
+      if (existingFolder) {
+        return {
+          success: false,
+          message: `A friend folder named "${parsed.folderRoute}" already exists.`,
+        };
+      }
+
+      const folder = await createFriendFolder(this.db, {
+        userId: this.userId,
+        name: parsed.folderRoute,
+      });
+
+      return {
+        success: true,
+        message: `✅ *Friend Folder Created*\nName: ${folder.name}`,
+      };
+    } catch (error) {
+      logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create friend folder');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't create the friend folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  /**
+   * Update a friend folder
+   */
+  private async updateFriendFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.folderRoute) {
+        return {
+          success: false,
+          message: "I need to know which friend folder you'd like to edit. Please specify the folder name.",
+        };
+      }
+
+      if (!parsed.newName) {
+        return {
+          success: false,
+          message: "I need to know what you'd like to rename the folder to. Please specify the new name.",
+        };
+      }
+
+      const folderId = await this.resolveFriendFolderRoute(parsed.folderRoute);
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the friend folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      const updated = await updateFriendFolder(this.db, folderId, this.userId, {
+        name: parsed.newName,
+      });
+
+      if (!updated) {
+        return {
+          success: false,
+          message: "I encountered an error while updating the friend folder. Please try again.",
+        };
+      }
+
+      return {
+        success: true,
+        message: `✏️ *Friend Folder Updated*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
+      };
+    } catch (error) {
+      logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to update friend folder');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't update the friend folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  /**
+   * Delete a friend folder
+   */
+  private async deleteFriendFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!parsed.folderRoute) {
+        return {
+          success: false,
+          message: "I need to know which friend folder you'd like to delete. Please specify the folder name.",
+        };
+      }
+
+      const folderId = await this.resolveFriendFolderRoute(parsed.folderRoute);
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the friend folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      await deleteFriendFolder(this.db, folderId, this.userId);
+
+      return {
+        success: true,
+        message: `⛔ *Friend Folder Deleted*\n"${parsed.folderRoute}"`,
+      };
+    } catch (error) {
+      logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to delete friend folder');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't delete the friend folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  /**
+   * List friend folders
+   */
+  private async listFriendFolders(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      const folders = await getUserFriendFolders(this.db, this.userId);
+      
+      if (folders.length === 0) {
+        return {
+          success: true,
+          message: `📁 *You have no friend folders*`,
+        };
+      }
+
+      let message = `📁 *Friend Folders:*\n`;
+      folders.forEach((folder: any, index: number) => {
+        message += `*${index + 1}.* ${folder.name}\n`;
+      });
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId }, 'Failed to list friend folders');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't list your friend folders. Please try again.`,
       };
     }
   }
