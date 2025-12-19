@@ -294,13 +294,23 @@ export async function GET(req: NextRequest) {
         // Send notifications for reminders that are due now (within 1 minute)
         for (const { reminder, reminderTime } of dueReminders) {
           try {
-            // Format reminder time for message using user's timezone
-            const reminderTimeInUserTz = new Date(reminderTime.toLocaleString("en-US", { timeZone: userTimezone }));
-            const hours = reminderTimeInUserTz.getHours();
-            const minutes = reminderTimeInUserTz.getMinutes();
-            const hour12 = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
-            const period = hours >= 12 ? 'PM' : 'AM';
-            const reminderTimeStr = `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+            // Format reminder time for message using user's timezone with Intl.DateTimeFormat
+            const timeFormatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: userTimezone,
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            });
+            const reminderTimeStr = timeFormatter.format(reminderTime);
+            
+            // Also get date for full context
+            const dateFormatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: userTimezone,
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            });
+            const reminderDateStr = dateFormatter.format(reminderTime);
             
             logger.info(
               {
@@ -308,32 +318,76 @@ export async function GET(req: NextRequest) {
                 reminderId: reminder.id,
                 reminderTitle: reminder.title,
                 reminderTime: reminderTime.toISOString(),
-                reminderLocalTime: `${hours}:${String(minutes).padStart(2, '0')}`,
+                reminderLocalTime: reminderTimeStr,
+                reminderLocalDate: reminderDateStr,
                 userTimezone,
-                formattedTime: reminderTimeStr,
               },
               'Reminder due - preparing notification with user timezone'
             );
             
-            // Create reminder message in professional format
-            const message = `🚨 Reminder Alarm:\nTitle: *${reminder.title}*\nDate: Now`;
+            // Create reminder message in professional format with more details
+            let message = `🚨 *Reminder Alarm*\n\n`;
+            message += `*Title:* ${reminder.title}\n`;
+            message += `*Date:* ${reminderDateStr}\n`;
+            message += `*Time:* ${reminderTimeStr}\n`;
+            
+            // Add frequency information if available
+            if (reminder.frequency && reminder.frequency !== 'once') {
+              const frequencyLabel = reminder.frequency.charAt(0).toUpperCase() + reminder.frequency.slice(1);
+              message += `*Frequency:* ${frequencyLabel}\n`;
+            }
+            
+            // Add description if available
+            if (reminder.description) {
+              message += `\n*Description:*\n${reminder.description}\n`;
+            }
+            
+            message += `\n_This is an automated reminder from CrackOn._`;
             
             logger.info(
               {
                 userId: user.id,
                 phoneNumber: whatsappNumber.phoneNumber,
+                normalizedPhone: whatsappNumber.phoneNumber.replace(/\D/g, ''),
                 reminderId: reminder.id,
                 reminderTitle: reminder.title,
                 reminderTime: reminderTime.toISOString(),
                 reminderLocalTimeFormatted: reminderTimeStr,
                 messageLength: message.length,
-                message: message.substring(0, 200) + '...', // Log first 200 chars
+                messagePreview: message.substring(0, 200), // Log first 200 chars
               },
               'Preparing to send due reminder notification'
             );
             
             try {
-              await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, message);
+              // Validate phone number format before sending
+              const normalizedPhone = whatsappNumber.phoneNumber.replace(/\D/g, '');
+              if (!normalizedPhone || normalizedPhone.length < 10) {
+                throw new Error(`Invalid phone number format: ${whatsappNumber.phoneNumber}`);
+              }
+              
+              logger.info(
+                {
+                  userId: user.id,
+                  phoneNumber: whatsappNumber.phoneNumber,
+                  normalizedPhone,
+                  reminderId: reminder.id,
+                },
+                'Sending reminder notification via WhatsApp'
+              );
+              
+              const result = await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, message);
+              
+              logger.info(
+                {
+                  userId: user.id,
+                  phoneNumber: whatsappNumber.phoneNumber,
+                  reminderId: reminder.id,
+                  messageId: result.messages?.[0]?.id,
+                  success: true,
+                },
+                'WhatsApp message sent successfully'
+              );
               
               // Log the message
               await logOutgoingWhatsAppMessage(db, {
@@ -387,19 +441,40 @@ export async function GET(req: NextRequest) {
                 }
               }
             } catch (sendError) {
+              const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
+              const errorStack = sendError instanceof Error ? sendError.stack : undefined;
+              
+              // Check if it's an axios error with response data
+              let apiErrorDetails = null;
+              if (sendError && typeof sendError === 'object' && 'response' in sendError) {
+                const axiosError = sendError as any;
+                apiErrorDetails = {
+                  status: axiosError.response?.status,
+                  statusText: axiosError.response?.statusText,
+                  data: axiosError.response?.data,
+                };
+              }
+              
               logger.error(
                 {
                   error: sendError,
-                  errorMessage: sendError instanceof Error ? sendError.message : String(sendError),
-                  errorStack: sendError instanceof Error ? sendError.stack : undefined,
+                  errorMessage,
+                  errorStack,
+                  apiErrorDetails,
                   userId: user.id,
                   phoneNumber: whatsappNumber.phoneNumber,
+                  normalizedPhone: whatsappNumber.phoneNumber.replace(/\D/g, ''),
                   reminderId: reminder.id,
                   reminderTitle: reminder.title,
+                  reminderFrequency: reminder.frequency,
+                  reminderTime: reminderTime.toISOString(),
                 },
                 'Failed to send reminder notification'
               );
-              errors.push(`Failed to send reminder ${reminder.id} to user ${user.id}: ${sendError instanceof Error ? sendError.message : String(sendError)}`);
+              
+              errors.push(
+                `Failed to send reminder ${reminder.id} (${reminder.title}) to user ${user.id} (${whatsappNumber.phoneNumber}): ${errorMessage}${apiErrorDetails ? ` - API Error: ${JSON.stringify(apiErrorDetails)}` : ''}`
+              );
             }
           } catch (reminderError) {
             logger.error(
