@@ -237,6 +237,8 @@ export default function ShoppingListPage() {
     trpc.shoppingList.create.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
         setNewItemName("");
         setNewItemDescription("");
         setIsAddModalOpen(false);
@@ -259,6 +261,8 @@ export default function ShoppingListPage() {
     trpc.shoppingList.update.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
         setEditingItemId(null);
         setEditItemName("");
         setEditItemDescription("");
@@ -282,6 +286,8 @@ export default function ShoppingListPage() {
     trpc.shoppingList.delete.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
         setDeleteConfirmOpen(false);
         setItemToDelete(null);
         toast({
@@ -303,6 +309,8 @@ export default function ShoppingListPage() {
     trpc.shoppingList.toggle.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
       },
       onError: (error) => {
         toast({
