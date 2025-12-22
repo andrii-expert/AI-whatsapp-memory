@@ -717,13 +717,14 @@ export default function ShoppingListPage() {
       } else {
         toast({
           title: "No suggestion",
-          description: "AI couldn't suggest a category for this item",
+          description: "AI couldn't suggest a category for this item. Please try a different item name or select a category manually.",
         });
       }
     } catch (error) {
+      console.error('AI suggestion error:', error);
       toast({
         title: "Error",
-        description: "Failed to get AI suggestion. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to get AI suggestion. Please try again.",
         variant: "error",
       });
     } finally {

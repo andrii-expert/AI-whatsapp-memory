@@ -2,15 +2,49 @@ import type { Database } from '@imaginecalendar/database/client';
 import { getUserShoppingListFolders, createShoppingListFolder } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 
-// Lazy import for AI services to handle module resolution issues
-async function getAISuggestionFunction() {
+// Try to import AI services - use dynamic import as fallback if direct import fails
+let suggestShoppingListCategoryFn: typeof import('@imaginecalendar/ai-services').suggestShoppingListCategory | null = null;
+
+// Initialize AI function on module load
+(async () => {
   try {
     const aiServices = await import('@imaginecalendar/ai-services');
-    return aiServices.suggestShoppingListCategory;
+    if (aiServices && aiServices.suggestShoppingListCategory) {
+      suggestShoppingListCategoryFn = aiServices.suggestShoppingListCategory;
+      logger.info({}, 'AI services module loaded successfully');
+    } else {
+      logger.error({}, 'AI services module loaded but suggestShoppingListCategory function not found');
+    }
   } catch (error) {
-    logger.warn({ error: error instanceof Error ? error.message : String(error) }, 'AI services module not available');
-    return null;
+    logger.error(
+      { 
+        error: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      }, 
+      'Failed to load AI services module'
+    );
   }
+})();
+
+async function getAISuggestionFunction() {
+  // If not loaded yet, try again
+  if (!suggestShoppingListCategoryFn) {
+    try {
+      const aiServices = await import('@imaginecalendar/ai-services');
+      if (aiServices && aiServices.suggestShoppingListCategory) {
+        suggestShoppingListCategoryFn = aiServices.suggestShoppingListCategory;
+        logger.info({}, 'AI services module loaded on demand');
+      }
+    } catch (error) {
+      logger.error(
+        { 
+          error: error instanceof Error ? error.message : String(error),
+        }, 
+        'Failed to load AI services module on demand'
+      );
+    }
+  }
+  return suggestShoppingListCategoryFn;
 }
 
 /**
@@ -88,9 +122,11 @@ export async function getCategorySuggestion(
     const suggestShoppingListCategory = await getAISuggestionFunction();
     
     if (!suggestShoppingListCategory) {
-      logger.warn({ itemName, userId }, 'AI services not available, skipping category suggestion');
+      logger.error({ itemName, userId, itemText }, 'AI services not available - getAISuggestionFunction returned null');
       return { suggestedCategory: null };
     }
+
+    logger.info({ itemName, userId, itemText, existingCategoriesCount: existingCategories.length }, 'Calling AI for category suggestion');
 
     try {
       // Add timeout to prevent long-running AI calls from blocking the request
@@ -107,21 +143,49 @@ export async function getCategorySuggestion(
         aiPromise,
         timeoutPromise,
       ]);
+
+      logger.info({ 
+        itemName, 
+        userId, 
+        hasResult: !!categoryResult,
+        suggestedCategory: categoryResult?.suggestedCategory,
+        confidence: categoryResult?.confidence 
+      }, 'AI category suggestion result');
     } catch (error) {
       logger.error(
         {
           error: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
           itemName,
           userId,
+          itemText,
         },
-        'AI category suggestion failed'
+        'AI category suggestion failed with exception'
       );
       categoryResult = null;
     }
 
-    if (!categoryResult || !categoryResult.suggestedCategory) {
+    if (!categoryResult) {
+      logger.warn({ itemName, userId }, 'AI returned null result');
       return { suggestedCategory: null };
     }
+
+    if (!categoryResult.suggestedCategory) {
+      logger.warn({ 
+        itemName, 
+        userId, 
+        confidence: categoryResult.confidence,
+        hasSuggestedCategory: !!categoryResult.suggestedCategory 
+      }, 'AI result has no suggestedCategory');
+      return { suggestedCategory: null };
+    }
+
+    logger.info({ 
+      itemName, 
+      userId, 
+      suggestedCategory: categoryResult.suggestedCategory,
+      confidence: categoryResult.confidence 
+    }, 'AI category suggestion successful');
 
     return {
       suggestedCategory: categoryResult.suggestedCategory,

@@ -4,7 +4,7 @@ import { logger } from '@imaginecalendar/logger';
 import { z } from 'zod';
 
 const shoppingListCategorySchema = z.object({
-  suggestedCategory: z.string().describe('The suggested category/subfolder name for this item. MUST be a SINGLE WORD only (e.g., "Fruits", "Dairy", "Vegetables", "Meat", "Beverages", "Snacks", "Cleaning", "Bakery", "Frozen", "Pantry", "Spices"). Do NOT use multiple words. Use null if no specific category is needed.'),
+  suggestedCategory: z.string().nullable().describe('The suggested category/subfolder name for this item. MUST be a SINGLE WORD only (e.g., "Fruits", "Dairy", "Vegetables", "Meat", "Beverages", "Snacks", "Cleaning", "Bakery", "Frozen", "Pantry", "Spices"). Do NOT use multiple words. Return a valid category name - only use null if you are absolutely certain no category fits.'),
   confidence: z.number().min(0).max(1).describe('Confidence score (0-1) for the category suggestion'),
   reasoning: z.string().optional().describe('Brief reasoning for the category choice'),
 });
@@ -36,14 +36,16 @@ export async function suggestShoppingListCategory(
 Shopping list item: "${itemName}"
 ${existingCategoriesText}
 
+IMPORTANT: You MUST return a category suggestion. Only use null if the item is completely unclassifiable (very rare).
+
 Categories MUST be:
 - A SINGLE WORD ONLY (not multiple words, not phrases)
 - Common grocery/shopping categories (e.g., Fruits, Vegetables, Dairy, Meat, Beverages, Snacks, Cleaning, Bakery, Frozen, Pantry, Spices, Beverages, etc.)
-- Use null if the item is too generic or doesn't fit into a clear category
 - Match existing category names exactly if applicable
 - If you need to use a compound concept, use one word that best represents it (e.g., "Beverages" not "Drinks and Beverages")
+- Be creative but reasonable - almost every shopping item fits into a category
 
-Return a suggested category name (single word only) or null if no category is needed.`;
+Return a suggested category name (single word only). Only use null in extreme cases where no category makes sense.`;
 
     const result = await generateObject({
       model: openai('gpt-4o-mini'),
@@ -64,8 +66,15 @@ Return a suggested category name (single word only) or null if no category is ne
       'Shopping list category analysis completed'
     );
 
-    // Return null if confidence is too low or category is null
-    if (!categoryResult.suggestedCategory || categoryResult.confidence < 0.5) {
+    // Return null if category is null or empty, but allow lower confidence (0.3 instead of 0.5)
+    // Lower threshold to be more permissive with suggestions
+    if (!categoryResult.suggestedCategory || categoryResult.suggestedCategory.trim() === '') {
+      logger.info({ itemName, confidence: categoryResult.confidence }, 'AI returned null or empty category');
+      return null;
+    }
+
+    if (categoryResult.confidence < 0.3) {
+      logger.info({ itemName, confidence: categoryResult.confidence }, 'AI confidence too low, rejecting suggestion');
       return null;
     }
 
