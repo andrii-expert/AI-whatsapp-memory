@@ -1,6 +1,6 @@
-import { eq, and, desc, asc, or } from "drizzle-orm";
+import { eq, and, desc, asc, or, inArray } from "drizzle-orm";
 import type { Database } from "../client";
-import { shoppingListItems } from "../schema";
+import { shoppingListItems, shoppingListFolders } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
 import { checkShoppingListFolderAccess } from "./task-sharing";
 
@@ -20,7 +20,26 @@ export async function getUserShoppingListItems(
     'getUserShoppingListItems',
     { userId, options },
     async () => {
-      const whereConditions = [eq(shoppingListItems.userId, userId)];
+      // Get all folders owned by the user (to include items created by shared users in owned folders)
+      const ownedFolders = await db.query.shoppingListFolders.findMany({
+        where: eq(shoppingListFolders.userId, userId),
+        columns: { id: true },
+      });
+      const ownedFolderIds = ownedFolders.map(f => f.id);
+      
+      // Build where conditions:
+      // 1. Items created by the user, OR
+      // 2. Items in folders owned by the user (even if created by shared users)
+      const userIdCondition = eq(shoppingListItems.userId, userId);
+      const folderCondition = ownedFolderIds.length > 0 
+        ? inArray(shoppingListItems.folderId, ownedFolderIds)
+        : undefined;
+      
+      const whereConditions: any[] = [
+        folderCondition 
+          ? or(userIdCondition, folderCondition)!
+          : userIdCondition
+      ];
       
       if (options?.folderId) {
         whereConditions.push(eq(shoppingListItems.folderId, options.folderId));
@@ -50,12 +69,40 @@ export async function getShoppingListItemById(
     'getShoppingListItemById',
     { itemId, userId },
     async () => {
-      return db.query.shoppingListItems.findFirst({
-        where: and(
-          eq(shoppingListItems.id, itemId),
-          eq(shoppingListItems.userId, userId)
-        ),
+      // First, get the item without userId filter
+      const item = await db.query.shoppingListItems.findFirst({
+        where: eq(shoppingListItems.id, itemId),
+        with: {
+          folder: true,
+        },
       });
+
+      if (!item) {
+        return null;
+      }
+
+      // Check if user owns the item
+      if (item.userId === userId) {
+        return item;
+      }
+
+      // Check if item is in a folder owned by the user (to allow owner to see items created by shared users)
+      if (item.folderId && item.folder) {
+        if (item.folder.userId === userId) {
+          return item;
+        }
+      }
+
+      // Check if user has access via folder sharing
+      if (item.folderId) {
+        const folderAccess = await checkShoppingListFolderAccess(db, item.folderId, userId);
+        if (folderAccess.hasAccess) {
+          return item;
+        }
+      }
+
+      // User has no access
+      return null;
     }
   );
 }
