@@ -2,18 +2,16 @@ import type { Database } from '@imaginecalendar/database/client';
 import { getUserShoppingListFolders, createShoppingListFolder } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 
-// Try to import AI services - use dynamic import as fallback if direct import fails
-let suggestShoppingListCategoryFn: typeof import('@imaginecalendar/ai-services').suggestShoppingListCategory | null = null;
-
-// Initialize AI function on module load
-(async () => {
+// Lazy load AI services function
+async function getAISuggestionFunction() {
   try {
     const aiServices = await import('@imaginecalendar/ai-services');
     if (aiServices && aiServices.suggestShoppingListCategory) {
-      suggestShoppingListCategoryFn = aiServices.suggestShoppingListCategory;
-      logger.info({}, 'AI services module loaded successfully');
+      logger.debug({}, 'AI services module loaded');
+      return aiServices.suggestShoppingListCategory;
     } else {
-      logger.error({}, 'AI services module loaded but suggestShoppingListCategory function not found');
+      logger.error({ hasModule: !!aiServices, hasFunction: !!aiServices?.suggestShoppingListCategory }, 'AI services module loaded but function not found');
+      return null;
     }
   } catch (error) {
     logger.error(
@@ -23,28 +21,8 @@ let suggestShoppingListCategoryFn: typeof import('@imaginecalendar/ai-services')
       }, 
       'Failed to load AI services module'
     );
+    return null;
   }
-})();
-
-async function getAISuggestionFunction() {
-  // If not loaded yet, try again
-  if (!suggestShoppingListCategoryFn) {
-    try {
-      const aiServices = await import('@imaginecalendar/ai-services');
-      if (aiServices && aiServices.suggestShoppingListCategory) {
-        suggestShoppingListCategoryFn = aiServices.suggestShoppingListCategory;
-        logger.info({}, 'AI services module loaded on demand');
-      }
-    } catch (error) {
-      logger.error(
-        { 
-          error: error instanceof Error ? error.message : String(error),
-        }, 
-        'Failed to load AI services module on demand'
-      );
-    }
-  }
-  return suggestShoppingListCategoryFn;
 }
 
 /**

@@ -696,7 +696,7 @@ export default function ShoppingListPage() {
       const result = await queryClient.fetchQuery(queryOptions);
 
       if (result.suggestedCategory) {
-        // Find the category in available categories
+        // Find the category in available categories (case-insensitive)
         const matchingCategory = availableCategories.find(
           (cat: any) => cat.name.toLowerCase() === result.suggestedCategory!.toLowerCase()
         );
@@ -705,19 +705,41 @@ export default function ShoppingListPage() {
           setSelectedCategoryId(matchingCategory.id);
           toast({
             title: "Category suggested",
-            description: `Suggested category: ${result.suggestedCategory}`,
+            description: `Selected category: ${result.suggestedCategory}`,
           });
         } else {
-          // Category doesn't exist, show message
-          toast({
-            title: "Category suggested",
-            description: `AI suggested: "${result.suggestedCategory}". This category doesn't exist yet. Please select an existing category or create it first.`,
-          });
+          // Category doesn't exist yet - create it using the existing mutation
+          createFolderMutation.mutate(
+            {
+              name: result.suggestedCategory,
+              parentId: selectedFolderId || undefined,
+            },
+            {
+              onSuccess: (newCategory) => {
+                if (newCategory && newCategory.id) {
+                  setSelectedCategoryId(newCategory.id);
+                  toast({
+                    title: "Category created",
+                    description: `Created and selected category: ${result.suggestedCategory}`,
+                  });
+                }
+              },
+              onError: (error) => {
+                console.error('Failed to create category:', error);
+                toast({
+                  title: "Category suggested",
+                  description: `AI suggested: "${result.suggestedCategory}". Please create this category manually or select an existing one.`,
+                  variant: "default",
+                });
+              },
+            }
+          );
         }
       } else {
         toast({
           title: "No suggestion",
           description: "AI couldn't suggest a category for this item. Please try a different item name or select a category manually.",
+          variant: "destructive",
         });
       }
     } catch (error) {

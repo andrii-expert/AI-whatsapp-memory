@@ -4,12 +4,42 @@ import { logger } from '@imaginecalendar/logger';
 import { z } from 'zod';
 
 const shoppingListCategorySchema = z.object({
-  suggestedCategory: z.string().nullable().describe('The suggested category/subfolder name for this item. MUST be a SINGLE WORD only (e.g., "Fruits", "Dairy", "Vegetables", "Meat", "Beverages", "Snacks", "Cleaning", "Bakery", "Frozen", "Pantry", "Spices"). Do NOT use multiple words. Return a valid category name - only use null if you are absolutely certain no category fits.'),
+  suggestedCategory: z.string().min(1).describe('The suggested category/subfolder name for this item. MUST be a SINGLE WORD only (e.g., "Fruits", "Dairy", "Vegetables", "Meat", "Beverages", "Snacks", "Cleaning", "Bakery", "Frozen", "Pantry", "Spices"). Do NOT use multiple words. You MUST always return a valid category name - never return null or empty string.'),
   confidence: z.number().min(0).max(1).describe('Confidence score (0-1) for the category suggestion'),
   reasoning: z.string().optional().describe('Brief reasoning for the category choice'),
 });
 
 export type ShoppingListCategoryResult = z.infer<typeof shoppingListCategorySchema>;
+
+/**
+ * Fallback function to infer a basic category from item name if AI fails
+ */
+function inferBasicCategory(itemName: string): string | null {
+  const name = itemName.toLowerCase();
+  
+  // Basic keyword matching for common categories
+  const categoryKeywords: Record<string, string[]> = {
+    'Fruits': ['apple', 'banana', 'orange', 'grape', 'berry', 'fruit', 'mango', 'pineapple', 'peach', 'pear'],
+    'Vegetables': ['vegetable', 'carrot', 'lettuce', 'tomato', 'onion', 'potato', 'broccoli', 'spinach', 'cucumber'],
+    'Dairy': ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'dairy'],
+    'Meat': ['meat', 'chicken', 'beef', 'pork', 'fish', 'turkey', 'lamb', 'sausage', 'bacon'],
+    'Beverages': ['water', 'juice', 'soda', 'coffee', 'tea', 'drink', 'beverage', 'beer', 'wine'],
+    'Bakery': ['bread', 'bagel', 'muffin', 'croissant', 'cake', 'cookie', 'pastry', 'donut'],
+    'Snacks': ['chip', 'cracker', 'popcorn', 'nuts', 'snack', 'candy', 'chocolate'],
+    'Cleaning': ['soap', 'detergent', 'cleaner', 'bleach', 'sponge', 'towel', 'paper'],
+    'Frozen': ['frozen', 'ice', 'ice cream'],
+    'Pantry': ['rice', 'pasta', 'flour', 'sugar', 'salt', 'spice', 'oil', 'vinegar'],
+  };
+
+  for (const [category, keywords] of Object.entries(categoryKeywords)) {
+    if (keywords.some(keyword => name.includes(keyword))) {
+      return category;
+    }
+  }
+
+  // Default to "Pantry" for unknown items
+  return 'Pantry';
+}
 
 /**
  * Analyzes a shopping list item name and suggests an appropriate category/subfolder
@@ -36,7 +66,7 @@ export async function suggestShoppingListCategory(
 Shopping list item: "${itemName}"
 ${existingCategoriesText}
 
-IMPORTANT: You MUST return a category suggestion. Only use null if the item is completely unclassifiable (very rare).
+CRITICAL: You MUST ALWAYS return a valid category name. Never return null, empty string, or skip this. Every shopping item can be categorized.
 
 Categories MUST be:
 - A SINGLE WORD ONLY (not multiple words, not phrases)
@@ -44,8 +74,18 @@ Categories MUST be:
 - Match existing category names exactly if applicable
 - If you need to use a compound concept, use one word that best represents it (e.g., "Beverages" not "Drinks and Beverages")
 - Be creative but reasonable - almost every shopping item fits into a category
+- If unsure, choose the most common/general category that fits (e.g., "Pantry" for general items, "Snacks" for snack items, "Cleaning" for cleaning products)
 
-Return a suggested category name (single word only). Only use null in extreme cases where no category makes sense.`;
+You MUST return a category name. Examples:
+- "Milk" → "Dairy"
+- "Apples" → "Fruits"  
+- "Bread" → "Bakery"
+- "Soap" → "Cleaning"
+- "Water" → "Beverages"
+- "Rice" → "Pantry"
+- "Chips" → "Snacks"
+
+Return a suggested category name (single word only). This field is REQUIRED and cannot be null or empty.`;
 
     const result = await generateObject({
       model: openai('gpt-4o-mini'),
@@ -66,16 +106,25 @@ Return a suggested category name (single word only). Only use null in extreme ca
       'Shopping list category analysis completed'
     );
 
-    // Return null if category is null or empty, but allow lower confidence (0.3 instead of 0.5)
-    // Lower threshold to be more permissive with suggestions
+    // Validate that we have a category (should always be present due to schema, but check anyway)
     if (!categoryResult.suggestedCategory || categoryResult.suggestedCategory.trim() === '') {
-      logger.info({ itemName, confidence: categoryResult.confidence }, 'AI returned null or empty category');
+      logger.error({ itemName, confidence: categoryResult.confidence, result: categoryResult }, 'AI returned null or empty category despite schema requirement');
+      // Fallback: try to infer a basic category from the item name
+      const fallbackCategory = inferBasicCategory(itemName);
+      if (fallbackCategory) {
+        logger.warn({ itemName, fallbackCategory }, 'Using fallback category inference');
+        return {
+          suggestedCategory: fallbackCategory,
+          confidence: 0.5,
+        };
+      }
       return null;
     }
 
-    if (categoryResult.confidence < 0.3) {
-      logger.info({ itemName, confidence: categoryResult.confidence }, 'AI confidence too low, rejecting suggestion');
-      return null;
+    // Lower confidence threshold to 0.2 to be very permissive
+    if (categoryResult.confidence < 0.2) {
+      logger.warn({ itemName, confidence: categoryResult.confidence }, 'AI confidence very low, but using suggestion anyway');
+      // Still return it, just log the warning
     }
 
     // Ensure the category is a single word (take first word if multiple words)
@@ -98,10 +147,23 @@ Return a suggested category name (single word only). Only use null in extreme ca
         durationMs: duration,
         itemName,
       },
-      'Shopping list category analysis failed'
+      'Shopping list category analysis failed, using fallback'
     );
-    // Return null on error to allow item creation without category
-    return null;
+    // Use fallback category inference instead of returning null
+    const fallbackCategory = inferBasicCategory(itemName);
+    if (fallbackCategory) {
+      logger.info({ itemName, fallbackCategory }, 'Using fallback category after AI error');
+      return {
+        suggestedCategory: fallbackCategory,
+        confidence: 0.5,
+      };
+    }
+    // Last resort: return a generic category
+    logger.warn({ itemName }, 'All category inference methods failed, using generic Pantry');
+    return {
+      suggestedCategory: 'Pantry',
+      confidence: 0.3,
+    };
   }
 }
 
