@@ -4,6 +4,125 @@ import { suggestShoppingListCategory } from '@imaginecalendar/ai-services';
 import { logger } from '@imaginecalendar/logger';
 
 /**
+ * Get AI category suggestion for a shopping list item
+ * @param db - Database instance
+ * @param userId - User ID
+ * @param itemName - Name of the shopping list item
+ * @param description - Optional description
+ * @param parentFolderId - Optional parent folder ID to limit categories to that folder
+ * @returns Suggested category name and confidence, or null if no suggestion
+ */
+export async function getCategorySuggestion(
+  db: Database,
+  userId: string,
+  itemName: string,
+  description?: string,
+  parentFolderId?: string
+): Promise<{ suggestedCategory: string | null; confidence?: number }> {
+  try {
+    // Validate inputs
+    const itemText = description ? `${itemName} ${description}`.trim() : itemName;
+    if (!itemText || !itemText.trim()) {
+      return { suggestedCategory: null };
+    }
+
+    // Get all folders to extract existing categories
+    const allFolders = await getUserShoppingListFolders(db, userId);
+    
+    // Helper function to find a folder by ID recursively
+    const findFolderById = (folders: any[], targetId: string): any | null => {
+      for (const folder of folders) {
+        if (folder.id === targetId) {
+          return folder;
+        }
+        if (folder.subfolders && folder.subfolders.length > 0) {
+          const found = findFolderById(folder.subfolders, targetId);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    
+    // Extract all existing category names (subfolders)
+    const extractCategories = (folders: any[]): string[] => {
+      const categories: string[] = [];
+      for (const folder of folders) {
+        if (folder.subfolders && folder.subfolders.length > 0) {
+          for (const subfolder of folder.subfolders) {
+            categories.push(subfolder.name.toLowerCase());
+            if (subfolder.subfolders && subfolder.subfolders.length > 0) {
+              categories.push(...extractCategories([subfolder]));
+            }
+          }
+        }
+      }
+      return categories;
+    };
+
+    // If parentFolderId is provided, only extract categories from that parent folder
+    let existingCategories: string[];
+    if (parentFolderId) {
+      const parentFolder = findFolderById(allFolders, parentFolderId);
+      if (parentFolder && parentFolder.subfolders) {
+        existingCategories = extractCategories([parentFolder]);
+      } else {
+        existingCategories = [];
+      }
+    } else {
+      existingCategories = extractCategories(allFolders);
+    }
+
+    // Use AI to suggest a category with timeout protection
+    let categoryResult: Awaited<ReturnType<typeof suggestShoppingListCategory>> | null = null;
+    try {
+      // Add timeout to prevent long-running AI calls from blocking the request
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          logger.warn({ itemName, userId }, 'AI category suggestion timed out after 8 seconds');
+          resolve(null);
+        }, 8000); // 8 second timeout
+      });
+      
+      const aiPromise = suggestShoppingListCategory(itemText, existingCategories);
+      
+      categoryResult = await Promise.race([
+        aiPromise,
+        timeoutPromise,
+      ]);
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          itemName,
+          userId,
+        },
+        'AI category suggestion failed'
+      );
+      categoryResult = null;
+    }
+
+    if (!categoryResult || !categoryResult.suggestedCategory) {
+      return { suggestedCategory: null };
+    }
+
+    return {
+      suggestedCategory: categoryResult.suggestedCategory,
+      confidence: categoryResult.confidence,
+    };
+  } catch (error) {
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        itemName,
+        userId,
+      },
+      'Failed to get category suggestion'
+    );
+    return { suggestedCategory: null };
+  }
+}
+
+/**
  * Helper function to find or create an appropriate subfolder for a shopping list item
  * Uses AI to analyze the item name and suggest/create a category
  * @param db - Database instance

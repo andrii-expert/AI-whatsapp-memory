@@ -12,7 +12,7 @@ import {
   updateShoppingListFolder,
   deleteShoppingListFolder,
 } from "@imaginecalendar/database/queries";
-import { suggestShoppingListCategory } from "@imaginecalendar/ai-services";
+import { getCategorySuggestion } from "@api/utils/shopping-list-categorization";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -246,84 +246,12 @@ export const shoppingListRouter = createTRPCRouter({
       parentFolderId: z.string().uuid().optional(),
     }))
     .query(async ({ ctx: { db, session }, input }) => {
-      try {
-        // Get all folders to extract existing categories
-        const allFolders = await getUserShoppingListFolders(db, session.user.id);
-        
-        // Helper function to find a folder by ID recursively
-        const findFolderById = (folders: any[], targetId: string): any | null => {
-          for (const folder of folders) {
-            if (folder.id === targetId) {
-              return folder;
-            }
-            if (folder.subfolders && folder.subfolders.length > 0) {
-              const found = findFolderById(folder.subfolders, targetId);
-              if (found) return found;
-            }
-          }
-          return null;
-        };
-        
-        // Extract all existing category names (subfolders)
-        const extractCategories = (folders: any[]): string[] => {
-          const categories: string[] = [];
-          for (const folder of folders) {
-            if (folder.subfolders && folder.subfolders.length > 0) {
-              for (const subfolder of folder.subfolders) {
-                categories.push(subfolder.name.toLowerCase());
-                if (subfolder.subfolders && subfolder.subfolders.length > 0) {
-                  categories.push(...extractCategories([subfolder]));
-                }
-              }
-            }
-          }
-          return categories;
-        };
-
-        // If parentFolderId is provided, only extract categories from that parent folder
-        let existingCategories: string[];
-        if (input.parentFolderId) {
-          const parentFolder = findFolderById(allFolders, input.parentFolderId);
-          if (parentFolder && parentFolder.subfolders) {
-            existingCategories = extractCategories([parentFolder]);
-          } else {
-            existingCategories = [];
-          }
-        } else {
-          existingCategories = extractCategories(allFolders);
-        }
-
-        // Combine item name and description for AI analysis
-        const itemText = input.description 
-          ? `${input.itemName} ${input.description}`.trim()
-          : input.itemName;
-
-        // Get AI suggestion with timeout
-        const timeoutPromise = new Promise<null>((resolve) => {
-          setTimeout(() => resolve(null), 8000); // 8 second timeout
-        });
-
-        const aiPromise = suggestShoppingListCategory(itemText, existingCategories);
-        const categoryResult = await Promise.race([aiPromise, timeoutPromise]);
-
-        if (!categoryResult || !categoryResult.suggestedCategory) {
-          return { suggestedCategory: null };
-        }
-
-        return {
-          suggestedCategory: categoryResult.suggestedCategory,
-          confidence: categoryResult.confidence,
-        };
-      } catch (error) {
-        logger.error(
-          {
-            error: error instanceof Error ? error.message : String(error),
-            userId: session.user.id,
-            itemName: input.itemName,
-          },
-          "Failed to get AI category suggestion"
-        );
-        return { suggestedCategory: null };
-      }
+      return getCategorySuggestion(
+        db,
+        session.user.id,
+        input.itemName,
+        input.description,
+        input.parentFolderId
+      );
     }),
 });
