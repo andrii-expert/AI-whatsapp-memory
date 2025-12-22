@@ -312,6 +312,51 @@ async function processAIResponse(
       .filter(l => l.length > 0 && !l.startsWith('Title:'));
     
     const actionTemplate = actionLines.join('\n');
+    
+    // Special handling: If AI response is empty or doesn't contain expected action format,
+    // but originalUserText is a simple "delete X,Y" command and titleType is shopping,
+    // handle it directly
+    if (titleType === 'shopping' && originalUserText && /^delete\s+[\d\s,]+/i.test(originalUserText) && (!actionTemplate || actionTemplate.trim().length === 0 || !actionTemplate.toLowerCase().includes('delete'))) {
+      logger.info({ originalUserText, actionTemplate }, 'Detected simple delete command, handling directly');
+      const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+      const numberMatch = originalUserText.match(/delete\s+(?:shopping\s+items?:\s*)?([\d\s,]+(?:and\s*\d+)?)/i);
+      if (numberMatch) {
+        const numbersStr = numberMatch[1].trim();
+        const numbers = numbersStr
+          .split(/[,\s]+|and\s+/i)
+          .map(n => parseInt(n.trim(), 10))
+          .filter(n => !isNaN(n) && n > 0);
+        
+        if (numbers.length > 0) {
+          const parsed: ParsedAction = {
+            action: 'delete',
+            resourceType: 'shopping',
+            itemNumbers: numbers,
+            missingFields: [],
+          };
+          logger.info({ originalUserText, parsed }, 'Handling shopping item deletion directly from user text');
+          const result = await executor.executeAction(parsed, userTimezone);
+          if (result.message.trim().length > 0) {
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'text',
+                  messageContent: result.message,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (logError) {
+              logger.warn({ error: logError, userId }, 'Failed to log outgoing shopping message');
+            }
+            await whatsappService.sendTextMessage(recipient, result.message);
+          }
+          return;
+        }
+      }
+    }
 
     logger.info(
       {
@@ -514,17 +559,11 @@ async function processAIResponse(
       // Split action template into individual lines for multi-item support
       const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       
-      const results: string[] = [];
-      let successCount = 0;
-      let failCount = 0;
-      
-      for (const actionLine of actionLines) {
-        let parsed = executor.parseAction(actionLine);
-        
-        // If parsing failed but we have a shopping context, try to handle "delete X,Y" format
-        if (!parsed && titleType === 'shopping' && /^delete\s+[\d\s,]+/i.test(actionLine)) {
-          // Try to extract numbers from "delete 5,6" or "delete shopping items: 5,6"
-          const numberMatch = actionLine.match(/delete\s+(?:shopping\s+items?:\s*)?([\d\s,]+(?:and\s*\d+)?)/i);
+      // If actionTemplate is empty or doesn't match expected format, check if it's a simple "delete X,Y" command
+      if (actionLines.length === 0 || (!actionTemplate.toLowerCase().includes('delete') && !actionTemplate.toLowerCase().includes('create') && !actionTemplate.toLowerCase().includes('edit') && !actionTemplate.toLowerCase().includes('complete'))) {
+        // Check if the original user message was a simple delete command
+        if (originalUserText && /^delete\s+[\d\s,]+/i.test(originalUserText)) {
+          const numberMatch = originalUserText.match(/delete\s+(?:shopping\s+items?:\s*)?([\d\s,]+(?:and\s*\d+)?)/i);
           if (numberMatch) {
             const numbersStr = numberMatch[1].trim();
             const numbers = numbersStr
@@ -533,13 +572,88 @@ async function processAIResponse(
               .filter(n => !isNaN(n) && n > 0);
             
             if (numbers.length > 0) {
-              parsed = {
+              const parsed: ParsedAction = {
                 action: 'delete',
                 resourceType: 'shopping',
                 itemNumbers: numbers,
                 missingFields: [],
               };
-              logger.info({ actionLine, parsed }, 'Fallback: Created shopping item deletion from numbers');
+              logger.info({ originalUserText, parsed }, 'Fallback: Created shopping item deletion from original user text');
+              const result = await executor.executeAction(parsed, userTimezone);
+              if (result.message.trim().length > 0) {
+                try {
+                  const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                  if (whatsappNumber) {
+                    await logOutgoingWhatsAppMessage(db, {
+                      whatsappNumberId: whatsappNumber.id,
+                      userId,
+                      messageType: 'text',
+                      messageContent: result.message,
+                      isFreeMessage: true,
+                    });
+                  }
+                } catch (logError) {
+                  logger.warn({ error: logError, userId }, 'Failed to log outgoing shopping message');
+                }
+                await whatsappService.sendTextMessage(recipient, result.message);
+              }
+              return;
+            }
+          }
+        }
+      }
+      
+      const results: string[] = [];
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const actionLine of actionLines) {
+        let parsed = executor.parseAction(actionLine);
+        
+        // If parsing failed but we have a shopping context, try to handle "delete X,Y" format
+        // Check both the actionLine and originalUserText
+        if (!parsed && titleType === 'shopping') {
+          // First try actionLine
+          if (/^delete\s+[\d\s,]+/i.test(actionLine)) {
+            const numberMatch = actionLine.match(/delete\s+(?:shopping\s+items?:\s*)?([\d\s,]+(?:and\s*\d+)?)/i);
+            if (numberMatch) {
+              const numbersStr = numberMatch[1].trim();
+              const numbers = numbersStr
+                .split(/[,\s]+|and\s+/i)
+                .map(n => parseInt(n.trim(), 10))
+                .filter(n => !isNaN(n) && n > 0);
+              
+              if (numbers.length > 0) {
+                parsed = {
+                  action: 'delete',
+                  resourceType: 'shopping',
+                  itemNumbers: numbers,
+                  missingFields: [],
+                };
+                logger.info({ actionLine, parsed }, 'Fallback: Created shopping item deletion from actionLine numbers');
+              }
+            }
+          }
+          
+          // If still not parsed, try originalUserText as fallback
+          if (!parsed && originalUserText && /^delete\s+[\d\s,]+/i.test(originalUserText)) {
+            const numberMatch = originalUserText.match(/delete\s+(?:shopping\s+items?:\s*)?([\d\s,]+(?:and\s*\d+)?)/i);
+            if (numberMatch) {
+              const numbersStr = numberMatch[1].trim();
+              const numbers = numbersStr
+                .split(/[,\s]+|and\s+/i)
+                .map(n => parseInt(n.trim(), 10))
+                .filter(n => !isNaN(n) && n > 0);
+              
+              if (numbers.length > 0) {
+                parsed = {
+                  action: 'delete',
+                  resourceType: 'shopping',
+                  itemNumbers: numbers,
+                  missingFields: [],
+                };
+                logger.info({ originalUserText, parsed }, 'Fallback: Created shopping item deletion from originalUserText numbers');
+              }
             }
           }
         }
@@ -567,7 +681,7 @@ async function processAIResponse(
             results.push(result.message);
           }
         } else {
-          logger.warn({ actionLine, titleType }, 'Failed to parse shopping action line');
+          logger.warn({ actionLine, titleType, originalUserText }, 'Failed to parse shopping action line');
         }
       }
       

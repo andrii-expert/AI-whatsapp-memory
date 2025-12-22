@@ -1251,7 +1251,9 @@ export class ActionExecutor {
             return await this.editFolder(parsed);
           }
         case 'delete':
-          if (parsed.resourceType === 'task') {
+          if (parsed.resourceType === 'shopping') {
+            return await this.deleteShoppingItem(parsed);
+          } else if (parsed.resourceType === 'task') {
             return await this.deleteTask(parsed);
           } else if (parsed.resourceType === 'note') {
             return await this.deleteNote(parsed);
