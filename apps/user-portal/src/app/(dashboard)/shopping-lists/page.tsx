@@ -73,8 +73,8 @@ export default function ShoppingListPage() {
 
   // Folder states
   const [newFolderName, setNewFolderName] = useState("");
-  const [newSubfolderName, setNewSubfolderName] = useState("");
-  const [addingSubfolderToId, setAddingSubfolderToId] = useState<string | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [addingCategoryToId, setAddingCategoryToId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editFolderName, setEditFolderName] = useState("");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -147,7 +147,7 @@ export default function ShoppingListPage() {
   // Filter out shared folders from main folder list - only show owned folders
   const folders = allFolders.filter((folder: any) => !folder.isSharedWithMe);
 
-  // Helper function to flatten all folders including subfolders
+  // Helper function to flatten all folders including categories
   const flattenFolders = (folderList: any[]): any[] => {
     const result: any[] = [];
     const flatten = (folder: any) => {
@@ -177,7 +177,7 @@ export default function ShoppingListPage() {
         })
         .map(folder => ({
           ...folder,
-          subfolders: folder.subfolders ? sortFoldersRecursive(folder.subfolders) : []
+          subfolders: folder.subfolders ? sortFoldersRecursive(folder.subfolders) : [] // Note: subfolders is the database relation name, but displayed as "categories"
         }));
     };
     
@@ -333,8 +333,8 @@ export default function ShoppingListPage() {
       onSuccess: (newFolder) => {
         queryClient.invalidateQueries();
         setNewFolderName("");
-        setNewSubfolderName("");
-        setAddingSubfolderToId(null);
+        setNewCategoryName("");
+        setAddingCategoryToId(null);
         if (newFolder) {
           setSelectedFolderId(newFolder.id);
           setViewAllItems(false);
@@ -414,11 +414,11 @@ export default function ShoppingListPage() {
     createFolderMutation.mutate({ name: newFolderName.trim() });
   };
 
-  const handleCreateSubfolder = (e: React.FormEvent, parentId: string) => {
+  const handleCreateCategory = (e: React.FormEvent, parentId: string) => {
     e.preventDefault();
-    if (!newSubfolderName.trim()) return;
+    if (!newCategoryName.trim()) return;
     createFolderMutation.mutate({ 
-      name: newSubfolderName.trim(),
+      name: newCategoryName.trim(),
       parentId: parentId
     });
   };
@@ -749,8 +749,8 @@ export default function ShoppingListPage() {
   const renderFolder = (folder: any, level: number = 0) => {
     const isExpanded = expandedFolders.has(folder.id);
     const isSelected = selectedFolderId === folder.id && !viewAllItems;
-    const hasSubfolders = folder.subfolders && folder.subfolders.length > 0;
-    const isAddingSubfolder = addingSubfolderToId === folder.id;
+    const hasCategories = folder.subfolders && folder.subfolders.length > 0;
+    const isAddingCategory = addingCategoryToId === folder.id;
     const isEditingFolder = editingFolderId === folder.id;
     
     // Check if folder is shared with user (not owned)
@@ -769,7 +769,7 @@ export default function ShoppingListPage() {
         >
           {/* Left side: Expand button + Folder name */}
           <div className="flex items-center gap-1 flex-1 min-w-0">
-            {hasSubfolders ? (
+            {hasCategories ? (
               <button
                 onClick={() => toggleFolderExpanded(folder.id)}
                 className="p-1 hover:bg-gray-200 rounded flex-shrink-0"
@@ -902,12 +902,12 @@ export default function ShoppingListPage() {
                   <DropdownMenuItem
                     onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
-                      setAddingSubfolderToId(folder.id);
+                      setAddingCategoryToId(folder.id);
                     }}
                     className="flex items-center gap-2 cursor-pointer"
                   >
                     <Plus className="h-4 w-4" />
-                    <span>Add subfolder</span>
+                    <span>Add category</span>
                   </DropdownMenuItem>
                 )}
                 {isOwner && folder.name.toLowerCase() !== "general" && (
@@ -927,18 +927,18 @@ export default function ShoppingListPage() {
           )}
         </div>
 
-        {/* Subfolder input form */}
-        {isAddingSubfolder && (
+        {/* Category input form */}
+        {isAddingCategory && (
           <form
-            onSubmit={(e) => handleCreateSubfolder(e, folder.id)}
+            onSubmit={(e) => handleCreateCategory(e, folder.id)}
             className="flex gap-2 mt-1 mb-2"
             style={{ paddingLeft: `${36 + level * 20}px` }}
           >
             <Input
-              placeholder="Subfolder name"
-              value={newSubfolderName}
+              placeholder="Category name"
+              value={newCategoryName}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setNewSubfolderName(e.target.value)
+                setNewCategoryName(e.target.value)
               }
               className="flex-1 h-8 text-sm"
               autoFocus
@@ -957,8 +957,8 @@ export default function ShoppingListPage() {
               variant="outline"
               className="h-8"
               onClick={() => {
-                setAddingSubfolderToId(null);
-                setNewSubfolderName("");
+                setAddingCategoryToId(null);
+                setNewCategoryName("");
               }}
             >
               Cancel
@@ -966,10 +966,10 @@ export default function ShoppingListPage() {
           </form>
         )}
 
-        {/* Render subfolders recursively */}
-        {isExpanded && hasSubfolders && (
+        {/* Render categories recursively */}
+        {isExpanded && hasCategories && (
           <div>
-            {folder.subfolders.map((subfolder: any) => renderFolder(subfolder, level + 1))}
+            {folder.subfolders.map((category: any) => renderFolder(category, level + 1))}
           </div>
         )}
       </div>

@@ -276,7 +276,7 @@ export async function createShoppingListFolder(
     'createShoppingListFolder',
     { userId: data.userId, name: data.name, parentId: data.parentId },
     async () => {
-      // If creating a subfolder, check if user has access to parent
+      // If creating a category (subfolder), check if user has access to parent
       if (data.parentId) {
         const parentFolder = await db.query.shoppingListFolders.findFirst({
           where: eq(shoppingListFolders.id, data.parentId),
@@ -297,7 +297,7 @@ export async function createShoppingListFolder(
             });
 
             if (!share) {
-              throw new Error("No permission to create subfolders in this folder");
+              throw new Error("No permission to create categories in this folder");
             }
           }
         }

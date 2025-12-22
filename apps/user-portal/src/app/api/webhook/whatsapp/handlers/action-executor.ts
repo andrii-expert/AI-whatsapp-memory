@@ -880,16 +880,16 @@ export class ActionExecutor {
       } else {
         missingFields.push('folder name');
       }
-    } else if (trimmed.startsWith('Create a shopping list sub-folder:')) {
+    } else if (trimmed.startsWith('Create a shopping list category:') || trimmed.startsWith('Create a shopping list sub-folder:')) {
       action = 'create_subfolder';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Create a shopping list sub-folder:\s*(.+?)\s*-\s*name:\s*(.+)$/i);
+      const match = trimmed.match(/^Create a shopping list (?:category|sub-folder):\s*(.+?)\s*-\s*name:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim(); // parent folder
-        newName = match[2].trim(); // subfolder name
+        newName = match[2].trim(); // category name
       } else {
-        missingFields.push('parent folder or subfolder name');
+        missingFields.push('parent folder or category name');
       }
     } else if (trimmed.startsWith('List shopping list folders:')) {
       action = 'list_folders';
@@ -1122,6 +1122,7 @@ export class ActionExecutor {
       isShoppingListFolder = trimmed.startsWith('Create a shopping list folder:') ||
         trimmed.startsWith('Edit a shopping list folder:') ||
         trimmed.startsWith('Delete a shopping list folder:') ||
+        trimmed.startsWith('Create a shopping list category:') ||
         trimmed.startsWith('Create a shopping list sub-folder:') ||
         trimmed.startsWith('List shopping list folders:');
       
@@ -5412,11 +5413,12 @@ export class ActionExecutor {
   }
 
   /**
-   * Recursively search for a subfolder by name across all folders and subfolders
+   * Recursively search for a category by name across all folders and categories
+   * Note: Uses subfolders relation name from database, but represents categories for shopping lists
    */
   private findSubfolderByName(folders: any[], folderName: string): any | null {
     for (const folder of folders) {
-      // Check subfolders at this level
+      // Check categories at this level
       if (folder.subfolders && folder.subfolders.length > 0) {
         const found = folder.subfolders.find(
           (sf: any) => sf.name.toLowerCase() === folderName
@@ -5425,9 +5427,9 @@ export class ActionExecutor {
           return found;
         }
         
-        // Recursively search deeper subfolders
-        for (const subfolder of folder.subfolders) {
-          const deeperFound = this.findSubfolderByName([subfolder], folderName);
+        // Recursively search deeper categories
+        for (const category of folder.subfolders) {
+          const deeperFound = this.findSubfolderByName([category], folderName);
           if (deeperFound) {
             return deeperFound;
           }
@@ -5445,7 +5447,7 @@ export class ActionExecutor {
     const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
     const folders = await getUserShoppingListFolders(this.db, this.userId);
     
-    // If only one part is provided, search all subfolders recursively
+    // If only one part is provided, search all categories recursively
     if (parts.length === 1) {
       const folderName = parts[0].toLowerCase();
       
@@ -5455,10 +5457,10 @@ export class ActionExecutor {
         return rootFolder.id;
       }
       
-      // If not found as root folder, search all subfolders recursively
-      const foundSubfolder = this.findSubfolderByName(folders, folderName);
-      if (foundSubfolder) {
-        return foundSubfolder.id;
+      // If not found as root folder, search all categories recursively
+      const foundCategory = this.findSubfolderByName(folders, folderName);
+      if (foundCategory) {
+        return foundCategory.id;
       }
       
       return null;
@@ -5471,15 +5473,15 @@ export class ActionExecutor {
       return null;
     }
 
-    // Navigate through subfolders
+    // Navigate through categories
     for (let i = 1; i < parts.length; i++) {
-      const subfolder = currentFolder.subfolders?.find(
+      const category = currentFolder.subfolders?.find(
         sf => sf.name.toLowerCase() === parts[i].toLowerCase()
       );
-      if (!subfolder) {
+      if (!category) {
         return null;
       }
-      currentFolder = subfolder;
+      currentFolder = category;
     }
 
     return currentFolder.id;
@@ -5600,14 +5602,14 @@ export class ActionExecutor {
     if (!parsed.folderRoute) {
       return {
         success: false,
-        message: "I need to know which parent folder you'd like to create a subfolder in. Please specify the parent folder name.",
+        message: "I need to know which parent folder you'd like to create a category in. Please specify the parent folder name.",
       };
     }
 
     if (!parsed.newName) {
       return {
         success: false,
-        message: "I need to know what you'd like to name the subfolder. Please specify the subfolder name.",
+        message: "I need to know what you'd like to name the category. Please specify the category name.",
       };
     }
 
@@ -5628,13 +5630,13 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *New Shopping Lists Subfolder Created:*\nParent: ${parsed.folderRoute}\nName: ${parsed.newName}`,
+        message: `✅ *New Shopping List Category Created:*\nParent: ${parsed.folderRoute}\nName: ${parsed.newName}`,
       };
     } catch (error) {
-      logger.error({ error, parentFolder: parsed.folderRoute, subfolderName: parsed.newName, userId: this.userId }, 'Failed to create shopping list subfolder');
+      logger.error({ error, parentFolder: parsed.folderRoute, categoryName: parsed.newName, userId: this.userId }, 'Failed to create shopping list category');
       return {
         success: false,
-        message: `I'm sorry, I couldn't create the subfolder "${parsed.newName}" in "${parsed.folderRoute}". Please try again.`,
+        message: `I'm sorry, I couldn't create the category "${parsed.newName}" in "${parsed.folderRoute}". Please try again.`,
       };
     }
   }
@@ -5643,7 +5645,7 @@ export class ActionExecutor {
     try {
       const folders = await getUserShoppingListFolders(this.db, this.userId);
       
-      // If a parent folder is specified, only show its subfolders
+      // If a parent folder is specified, only show its categories
       if (parsed.folderRoute) {
         const parentFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
         if (!parentFolderId) {
@@ -5653,18 +5655,18 @@ export class ActionExecutor {
           };
         }
 
-        // Find the parent folder and its subfolders
+        // Find the parent folder and its categories
         const parentFolder = folders.find(f => f.id === parentFolderId);
         if (!parentFolder || !parentFolder.subfolders || parentFolder.subfolders.length === 0) {
           return {
             success: true,
-            message: `📁 *No subfolders in "${parsed.folderRoute}"*`,
+            message: `📁 *No categories in "${parsed.folderRoute}"*`,
           };
         }
 
-        let message = `📁 *Subfolders in "${parsed.folderRoute}":*\n`;
-        parentFolder.subfolders.forEach((subfolder: any, index: number) => {
-          message += `*${index + 1}.* ${subfolder.name}\n`;
+        let message = `📁 *Categories in "${parsed.folderRoute}":*\n`;
+        parentFolder.subfolders.forEach((category: any, index: number) => {
+          message += `*${index + 1}.* ${category.name}\n`;
         });
 
         return {
@@ -5683,13 +5685,13 @@ export class ActionExecutor {
 
       let message = `📁 *Shopping Lists Folders:*\n`;
       folders.forEach((folder: any, index: number) => {
-        const subfolderCount = folder.subfolders?.length || 0;
+        const categoryCount = folder.subfolders?.length || 0;
         const itemCount = folder.items?.length || 0;
         message += `*${index + 1}.* ${folder.name}`;
-        if (subfolderCount > 0 || itemCount > 0) {
+        if (categoryCount > 0 || itemCount > 0) {
           const details: string[] = [];
-          if (subfolderCount > 0) {
-            details.push(`${subfolderCount} subfolder${subfolderCount > 1 ? 's' : ''}`);
+          if (categoryCount > 0) {
+            details.push(`${categoryCount} categor${categoryCount > 1 ? 'ies' : 'y'}`);
           }
           if (itemCount > 0) {
             details.push(`${itemCount} item${itemCount > 1 ? 's' : ''}`);

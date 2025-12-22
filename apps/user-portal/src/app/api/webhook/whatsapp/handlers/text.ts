@@ -41,6 +41,7 @@ function isValidTemplateResponse(text: string): boolean {
     /^Share a task folder:/i,
     /^Share a shopping list folder:/i,
     /^Create a task sub-folder:/i,
+    /^Create a shopping list category:/i,
     /^Create a reminder:/i,
     /^Update a reminder:/i,
     /^Delete a reminder:/i,
