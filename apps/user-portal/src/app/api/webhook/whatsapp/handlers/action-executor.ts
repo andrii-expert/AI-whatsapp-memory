@@ -11,6 +11,7 @@ import {
   getFolderById,
   getUserTasks,
   getUserNotes,
+  deleteNote,
   getRemindersByUserId,
   getPrimaryCalendar,
   createReminder,
@@ -108,7 +109,13 @@ export interface ParsedAction {
   longitude?: number; // For friend/address operations: longitude
   friendAddressType?: 'home' | 'office' | 'parents_house'; // For friend operations: address type
   permission?: 'view' | 'edit'; // For share operations: permission level
+  itemNumbers?: number[]; // For deletion by numbers: [1, 3, 5]
 }
+
+// In-memory cache to store last displayed list context for each user
+// Key: userId, Value: { type: 'tasks' | 'notes' | 'shopping', items: Array<{ id: string, number: number, name?: string }> }
+const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping', items: Array<{ id: string, number: number, name?: string }>, folderRoute?: string }>();
+const LIST_CONTEXT_TTL = 10 * 60 * 1000; // 10 minutes
 
 export class ActionExecutor {
   constructor(
@@ -117,6 +124,31 @@ export class ActionExecutor {
     private whatsappService: WhatsAppService,
     private recipient: string
   ) {}
+  
+  /**
+   * Store list context for number-based deletion
+   */
+  private storeListContext(type: 'tasks' | 'notes' | 'shopping', items: Array<{ id: string, number: number, name?: string }>, folderRoute?: string): void {
+    listContextCache.set(this.userId, { type, items, folderRoute });
+    // Auto-cleanup after TTL
+    setTimeout(() => {
+      listContextCache.delete(this.userId);
+    }, LIST_CONTEXT_TTL);
+  }
+  
+  /**
+   * Get list context for number-based deletion
+   */
+  private getListContext(): { type: 'tasks' | 'notes' | 'shopping', items: Array<{ id: string, number: number, name?: string }>, folderRoute?: string } | null {
+    return listContextCache.get(this.userId) || null;
+  }
+  
+  /**
+   * Clear list context
+   */
+  private clearListContext(): void {
+    listContextCache.delete(this.userId);
+  }
 
   /**
    * Parse AI template response into structured action
@@ -201,6 +233,30 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('Delete a task:')) {
       action = 'delete';
       resourceType = 'task';
+      // Check if it's a number-based deletion (e.g., "Delete a task: 1,3,5" or "Delete a task: 1 and 3")
+      const numberMatch = trimmed.match(/^Delete a task:\s*([\d\s,]+(?:and\s*\d+)?)\s*(?:-\s*on folder:\s*(.+))?$/i);
+      if (numberMatch) {
+        const numbersStr = numberMatch[1].trim();
+        // Extract numbers from string like "1,3,5" or "1 and 3" or "1, 3, 5"
+        const numbers = numbersStr
+          .split(/[,\s]+|and\s+/i)
+          .map(n => parseInt(n.trim(), 10))
+          .filter(n => !isNaN(n) && n > 0);
+        
+        if (numbers.length > 0) {
+          // This is a number-based deletion
+          const parsed: ParsedAction = {
+            action: 'delete',
+            resourceType: 'task',
+            itemNumbers: numbers,
+            folderRoute: numberMatch[2]?.trim(),
+            missingFields: [],
+          };
+          return parsed;
+        }
+      }
+      
+      // Regular name-based deletion
       const match = trimmed.match(/^Delete a task:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
       if (match) {
         taskName = match[1].trim();
@@ -284,6 +340,40 @@ export class ActionExecutor {
         } else {
           missingFields.push('folder or "all"');
         }
+      }
+    } else if (trimmed.startsWith('Delete a note:')) {
+      action = 'delete';
+      resourceType = 'note';
+      // Check if it's a number-based deletion (e.g., "Delete a note: 1,3,5" or "Delete a note: 1 and 3")
+      const numberMatch = trimmed.match(/^Delete a note:\s*([\d\s,]+(?:and\s*\d+)?)\s*(?:-\s*folder:\s*(.+))?$/i);
+      if (numberMatch) {
+        const numbersStr = numberMatch[1].trim();
+        // Extract numbers from string like "1,3,5" or "1 and 3" or "1, 3, 5"
+        const numbers = numbersStr
+          .split(/[,\s]+|and\s+/i)
+          .map(n => parseInt(n.trim(), 10))
+          .filter(n => !isNaN(n) && n > 0);
+        
+        if (numbers.length > 0) {
+          // This is a number-based deletion
+          const parsed: ParsedAction = {
+            action: 'delete',
+            resourceType: 'note',
+            itemNumbers: numbers,
+            folderRoute: numberMatch[2]?.trim(),
+            missingFields: [],
+          };
+          return parsed;
+        }
+      }
+      
+      // Regular name-based deletion
+      const match = trimmed.match(/^Delete a note:\s*(.+?)\s*(?:-\s*folder:\s*(.+))?$/i);
+      if (match) {
+        taskName = match[1].trim(); // Reuse taskName for note title
+        folderRoute = match[2]?.trim();
+      } else {
+        missingFields.push('note title or folder');
       }
     } else if (trimmed.startsWith('List notes:')) {
       action = 'list';
@@ -1078,6 +1168,8 @@ export class ActionExecutor {
         case 'delete':
           if (parsed.resourceType === 'task') {
             return await this.deleteTask(parsed);
+          } else if (parsed.resourceType === 'note') {
+            return await this.deleteNote(parsed);
           } else if (parsed.resourceType === 'reminder') {
             return await this.deleteReminder(parsed);
           } else if (parsed.resourceType === 'document') {
@@ -1786,10 +1878,102 @@ export class ActionExecutor {
   }
 
   private async deleteTask(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    // Check if this is number-based deletion
+    if (parsed.itemNumbers && parsed.itemNumbers.length > 0) {
+      const context = this.getListContext();
+      if (!context) {
+        return {
+          success: false,
+          message: "I don't have a recent list to reference. Please list your items first, then delete by number.",
+        };
+      }
+
+      // Check if this is shopping list deletion
+      if (context.type === 'shopping') {
+        const itemsToDelete = parsed.itemNumbers
+          .map(num => context.items.find(item => item.number === num))
+          .filter((item): item is { id: string, number: number, name?: string } => item !== undefined);
+
+        if (itemsToDelete.length === 0) {
+          return {
+            success: false,
+            message: `I couldn't find items with those numbers. Please check the numbers and try again.`,
+          };
+        }
+
+        const deletedNames: string[] = [];
+        const errors: string[] = [];
+
+        for (const item of itemsToDelete) {
+          try {
+            await deleteShoppingListItem(this.db, item.id, this.userId);
+            deletedNames.push(item.name || `Item ${item.number}`);
+          } catch (error) {
+            logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item by number');
+            errors.push(`Item ${item.number}`);
+          }
+        }
+
+        if (deletedNames.length > 0) {
+          this.clearListContext(); // Clear context after successful deletion
+          return {
+            success: true,
+            message: `⛔ *Items Removed:*\n${deletedNames.join('\n')}${errors.length > 0 ? `\n\nFailed to delete: ${errors.join(', ')}` : ''}`,
+          };
+        } else {
+          return {
+            success: false,
+            message: `I couldn't delete the items. Please try again.`,
+          };
+        }
+      }
+
+      // Handle regular task deletion by numbers
+      if (context.type === 'tasks') {
+        const tasksToDelete = parsed.itemNumbers
+          .map(num => context.items.find(item => item.number === num))
+          .filter((item): item is { id: string, number: number, name?: string } => item !== undefined);
+
+        if (tasksToDelete.length === 0) {
+          return {
+            success: false,
+            message: `I couldn't find tasks with those numbers. Please check the numbers and try again.`,
+          };
+        }
+
+        const deletedNames: string[] = [];
+        const errors: string[] = [];
+
+        for (const task of tasksToDelete) {
+          try {
+            await deleteTask(this.db, task.id, this.userId);
+            deletedNames.push(task.name || `Task ${task.number}`);
+          } catch (error) {
+            logger.error({ error, taskId: task.id, userId: this.userId }, 'Failed to delete task by number');
+            errors.push(`Task ${task.number}`);
+          }
+        }
+
+        if (deletedNames.length > 0) {
+          this.clearListContext(); // Clear context after successful deletion
+          return {
+            success: true,
+            message: `⛔ *Tasks Deleted:*\n${deletedNames.join('\n')}${errors.length > 0 ? `\n\nFailed to delete: ${errors.join(', ')}` : ''}`,
+          };
+        } else {
+          return {
+            success: false,
+            message: `I couldn't delete the tasks. Please try again.`,
+          };
+        }
+      }
+    }
+
+    // Fallback to name-based deletion
     if (!parsed.taskName) {
       return {
         success: false,
-        message: "I need to know which task you'd like to delete. Please specify the task name.",
+        message: "I need to know which task you'd like to delete. Please specify the task name or number.",
       };
     }
 
@@ -2670,7 +2854,8 @@ export class ActionExecutor {
         const folderText = folderId ? ` - ${parsed.folderRoute}` : '';
         let message = `🛍️ *Shopping Lists${folderText}${statusText}:*\n`;
         
-        items.slice(0, 20).forEach((item, index) => {
+        const displayedItems = items.slice(0, 20);
+        displayedItems.forEach((item, index) => {
           const statusIcon = item.status === 'completed' ? '✅' : '⬜';
           message += `${statusIcon} *${index + 1}.* ${item.name}`;
           if (item.description) {
@@ -2682,6 +2867,13 @@ export class ActionExecutor {
         if (items.length > 20) {
           message += `\n... and ${items.length - 20} more items.`;
         }
+
+        // Store list context for number-based deletion
+        this.storeListContext('shopping', displayedItems.map((item, index) => ({
+          id: item.id,
+          number: index + 1,
+          name: item.name,
+        })), parsed.folderRoute);
 
         return {
           success: true,
@@ -2719,13 +2911,21 @@ export class ActionExecutor {
       
       let message = `📋 *Todays Tasks${statusText}:*\n`;
       
-      tasks.slice(0, 20).forEach((task, index) => {
+      const displayedTasks = tasks.slice(0, 20);
+      displayedTasks.forEach((task, index) => {
         message += `*${index + 1}.* ${task.title}\n`;
       });
 
       if (tasks.length > 20) {
         message += `\n... and ${tasks.length - 20} more tasks.`;
       }
+
+      // Store list context for number-based deletion
+      this.storeListContext('tasks', displayedTasks.map((task, index) => ({
+        id: task.id,
+        number: index + 1,
+        name: task.title,
+      })), parsed.folderRoute);
 
       return {
         success: true,
@@ -2766,7 +2966,8 @@ export class ActionExecutor {
       const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
       let message = `📝 *Your notes${folderText}:*\n`;
       
-      notes.slice(0, 20).forEach((note, index) => {
+      const displayedNotes = notes.slice(0, 20);
+      displayedNotes.forEach((note, index) => {
         const contentPreview = note.content ? (note.content.length > 50 ? note.content.substring(0, 50) + '...' : note.content) : '(no content)';
         message += `*${index + 1}.* "${note.title}"\n   ${contentPreview}\n\n`;
       });
@@ -2774,6 +2975,13 @@ export class ActionExecutor {
       if (notes.length > 20) {
         message += `\n... and ${notes.length - 20} more notes.`;
       }
+
+      // Store list context for number-based deletion
+      this.storeListContext('notes', displayedNotes.map((note, index) => ({
+        id: note.id,
+        number: index + 1,
+        name: note.title,
+      })), parsed.folderRoute);
 
       return {
         success: true,
@@ -2784,6 +2992,90 @@ export class ActionExecutor {
       return {
         success: false,
         message: "I'm sorry, I couldn't retrieve your notes. Please try again.",
+      };
+    }
+  }
+
+  private async deleteNote(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    // Check if this is number-based deletion
+    if (parsed.itemNumbers && parsed.itemNumbers.length > 0) {
+      const context = this.getListContext();
+      if (!context || context.type !== 'notes') {
+        return {
+          success: false,
+          message: "I don't have a recent notes list to reference. Please list your notes first, then delete by number.",
+        };
+      }
+
+      const notesToDelete = parsed.itemNumbers
+        .map(num => context.items.find(item => item.number === num))
+        .filter((item): item is { id: string, number: number, name?: string } => item !== undefined);
+
+      if (notesToDelete.length === 0) {
+        return {
+          success: false,
+          message: `I couldn't find notes with those numbers. Please check the numbers and try again.`,
+        };
+      }
+
+      const deletedNames: string[] = [];
+      const errors: string[] = [];
+
+      for (const note of notesToDelete) {
+        try {
+          await deleteNote(this.db, note.id, this.userId);
+          deletedNames.push(note.name || `Note ${note.number}`);
+        } catch (error) {
+          logger.error({ error, noteId: note.id, userId: this.userId }, 'Failed to delete note by number');
+          errors.push(`Note ${note.number}`);
+        }
+      }
+
+      if (deletedNames.length > 0) {
+        this.clearListContext(); // Clear context after successful deletion
+        return {
+          success: true,
+          message: `⛔ *Notes Deleted:*\n${deletedNames.join('\n')}${errors.length > 0 ? `\n\nFailed to delete: ${errors.join(', ')}` : ''}`,
+        };
+      } else {
+        return {
+          success: false,
+          message: `I couldn't delete the notes. Please try again.`,
+        };
+      }
+    }
+
+    // Fallback to name-based deletion
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which note you'd like to delete. Please specify the note title or number.",
+      };
+    }
+
+    const folderId = parsed.folderRoute ? await this.resolveFolderRoute(parsed.folderRoute) : undefined;
+    const notes = await getUserNotes(this.db, this.userId, { folderId });
+    const note = notes.find((n) => n.title.toLowerCase() === parsed.taskName!.toLowerCase());
+
+    if (!note) {
+      const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+      return {
+        success: false,
+        message: `I couldn't find the note "${parsed.taskName}"${folderText}. Please make sure the note exists.`,
+      };
+    }
+
+    try {
+      await deleteNote(this.db, note.id, this.userId);
+      return {
+        success: true,
+        message: `⛔ *Note Deleted:*\n${note.title}`,
+      };
+    } catch (error) {
+      logger.error({ error, noteId: note.id, userId: this.userId }, 'Failed to delete note');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't delete the note "${parsed.taskName}". Please try again.`,
       };
     }
   }
