@@ -11,6 +11,7 @@ import {
   getFolderById,
   getUserTasks,
   getUserNotes,
+  getUserNoteFolders,
   deleteNote,
   getRemindersByUserId,
   getPrimaryCalendar,
@@ -25,6 +26,8 @@ import {
 } from '@imaginecalendar/database/queries';
 import {
   createTaskShare,
+  deleteTaskShare,
+  getResourceShares,
   searchUsersForSharing,
   getUserById,
   getUserByEmail,
@@ -44,6 +47,8 @@ import {
 } from '@imaginecalendar/database/queries';
 import {
   createFileShare,
+  getFileResourceShares,
+  deleteFileShare,
   searchUsersForFileSharing,
   getUserAddresses,
   createAddress,
@@ -71,6 +76,9 @@ import {
   deleteFriendFolder,
   getFriendFolderById,
   searchUsersByEmailOrPhoneForFriends,
+  getNoteResourceShares,
+  deleteNoteShare,
+  createNoteShare,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -903,6 +911,22 @@ export class ActionExecutor {
       } else {
         folderRoute = undefined; // List all folders
       }
+    } else if (trimmed.startsWith('Remove share:')) {
+      action = 'unshare';
+      // Parse: "Remove share: {recipient} - from: {resource_name|folder_route}"
+      const match = trimmed.match(/^Remove share:\s*(.+?)\s*-\s*from:\s*(.+)$/i);
+      if (match) {
+        recipient = match[1].trim();
+        const resourceName = match[2].trim();
+        
+        // Try to determine resource type based on context
+        // Check if it's a folder route (common folder names or patterns)
+        // For now, we'll try to resolve it as a folder first, then as a task/note
+        folderRoute = resourceName;
+        taskName = resourceName; // Also set as taskName for task/note resources
+      } else {
+        missingFields.push('recipient or resource name');
+      }
     }
 
     // Validate required fields
@@ -910,6 +934,9 @@ export class ActionExecutor {
       missingFields.push('task name');
     }
     if (action === 'share' && !recipient) {
+      missingFields.push('recipient');
+    }
+    if (action === 'unshare' && !recipient) {
       missingFields.push('recipient');
     }
     if (action === 'edit' && !newName) {
@@ -1310,6 +1337,18 @@ export class ActionExecutor {
           } else {
             return await this.shareFolder(parsed);
           }
+        case 'unshare':
+          if (parsed.isShoppingListFolder) {
+            return await this.unshareShoppingListFolder(parsed);
+          } else if (parsed.resourceType === 'task') {
+            return await this.unshareTask(parsed);
+          } else if (parsed.resourceType === 'note') {
+            return await this.unshareNote(parsed);
+          } else if (parsed.resourceType === 'document') {
+            return await this.unshareFile(parsed);
+          } else {
+            return await this.unshareFolder(parsed);
+          }
         case 'view':
           if (parsed.resourceType === 'document') {
             return await this.viewFile(parsed);
@@ -1566,6 +1605,96 @@ export class ActionExecutor {
     }
   }
 
+  private async unshareFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.recipient) {
+      return {
+        success: false,
+        message: "I need to know who you'd like to remove from sharing. Please specify the recipient name.",
+      };
+    }
+
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which folder you'd like to remove sharing from. Please specify the folder name.",
+      };
+    }
+
+    try {
+      // Check if it's a file folder first
+      const fileFolderId = await this.resolveFileFolderRoute(parsed.folderRoute);
+      if (fileFolderId) {
+        const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+        if (!sharedWithUserId) {
+          return {
+            success: false,
+            message: `I couldn't find a user or friend with "${parsed.recipient}". Please check the name and try again.`,
+          };
+        }
+
+        const shares = await getFileResourceShares(this.db, 'file_folder', fileFolderId, this.userId);
+        const share = shares.find(s => s.sharedWithUserId === sharedWithUserId);
+
+        if (!share) {
+          return {
+            success: false,
+            message: `"${parsed.recipient}" is not currently shared on "${parsed.folderRoute}".`,
+          };
+        }
+
+        await deleteFileShare(this.db, share.id, this.userId);
+
+        return {
+          success: true,
+          message: `🔁 *Share Removed*\nRemoved: ${parsed.recipient}\nFrom: ${parsed.folderRoute}`,
+        };
+      }
+
+      // Try task folder
+      const folderId = await this.resolveFolderRoute(parsed.folderRoute);
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+      if (!sharedWithUserId) {
+        return {
+          success: false,
+          message: `I couldn't find a user or friend with "${parsed.recipient}". Please check the name and try again.`,
+        };
+      }
+
+      const shares = await getResourceShares(this.db, 'task_folder', folderId, this.userId);
+      const share = shares.find(s => s.sharedWithUserId === sharedWithUserId);
+
+      if (!share) {
+        return {
+          success: false,
+          message: `"${parsed.recipient}" is not currently shared on "${parsed.folderRoute}".`,
+        };
+      }
+
+      await deleteTaskShare(this.db, share.id, this.userId);
+
+      return {
+        success: true,
+        message: `🔁 *Share Removed*\nRemoved: ${parsed.recipient}\nFrom: ${parsed.folderRoute}`,
+      };
+    } catch (error) {
+      logger.error(
+        { error, folderRoute: parsed.folderRoute, recipient: parsed.recipient, userId: this.userId },
+        'Failed to remove share from folder'
+      );
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't remove "${parsed.recipient}" from "${parsed.folderRoute}" sharing. Please try again.`,
+      };
+    }
+  }
+
   private async shareFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     if (!parsed.folderRoute) {
       return {
@@ -1764,6 +1893,67 @@ export class ActionExecutor {
     }
   }
 
+  private async unshareShoppingListFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.recipient) {
+      return {
+        success: false,
+        message: "I need to know who you'd like to remove from sharing. Please specify the recipient name.",
+      };
+    }
+
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which shopping list folder you'd like to remove sharing from. Please specify the folder name.",
+      };
+    }
+
+    try {
+      const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        };
+      }
+
+      const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+      if (!sharedWithUserId) {
+        return {
+          success: false,
+          message: `I couldn't find a user or friend with "${parsed.recipient}". Please check the name and try again.`,
+        };
+      }
+
+      // Get all shares for this folder
+      const shares = await getResourceShares(this.db, 'shopping_list_folder', folderId, this.userId);
+      const share = shares.find(s => s.sharedWithUserId === sharedWithUserId);
+
+      if (!share) {
+        return {
+          success: false,
+          message: `"${parsed.recipient}" is not currently shared on "${parsed.folderRoute}".`,
+        };
+      }
+
+      await deleteTaskShare(this.db, share.id, this.userId);
+
+      return {
+        success: true,
+        message: `🔁 *Share Removed*\nRemoved: ${parsed.recipient}\nFrom: ${parsed.folderRoute}`,
+      };
+    } catch (error) {
+      logger.error(
+        { error, folderRoute: parsed.folderRoute, recipient: parsed.recipient, userId: this.userId },
+        'Failed to remove share from shopping list folder'
+      );
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't remove "${parsed.recipient}" from "${parsed.folderRoute}" sharing. Please try again.`,
+      };
+    }
+  }
+
   private async shareShoppingListFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     if (!parsed.folderRoute) {
       return {
@@ -1837,6 +2027,75 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't share the shopping lists folder "${parsed.folderRoute}" with ${parsed.recipient}. Please try again.`,
+      };
+    }
+  }
+
+  private async unshareTask(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.recipient) {
+      return {
+        success: false,
+        message: "I need to know who you'd like to remove from sharing. Please specify the recipient name.",
+      };
+    }
+
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which task you'd like to remove sharing from. Please specify the task name.",
+      };
+    }
+
+    try {
+      const folderId = await this.resolveFolderRoute(parsed.folderRoute || 'General');
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the folder "${parsed.folderRoute || 'General'}". Please make sure the folder exists.`,
+        };
+      }
+
+      const task = await this.findTaskByName(parsed.taskName, folderId);
+      if (!task) {
+        return {
+          success: false,
+          message: `I couldn't find the task "${parsed.taskName}" in the "${parsed.folderRoute || 'General'}" folder. Please make sure the task exists.`,
+        };
+      }
+
+      const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+      if (!sharedWithUserId) {
+        return {
+          success: false,
+          message: `I couldn't find a user or friend with "${parsed.recipient}". Please check the name and try again.`,
+        };
+      }
+
+      // Get all shares for this task
+      const shares = await getResourceShares(this.db, 'task', task.id, this.userId);
+      const share = shares.find(s => s.sharedWithUserId === sharedWithUserId);
+
+      if (!share) {
+        return {
+          success: false,
+          message: `"${parsed.recipient}" is not currently shared on "${parsed.taskName}".`,
+        };
+      }
+
+      await deleteTaskShare(this.db, share.id, this.userId);
+
+      return {
+        success: true,
+        message: `🔁 *Share Removed*\nRemoved: ${parsed.recipient}\nFrom: ${parsed.taskName}`,
+      };
+    } catch (error) {
+      logger.error(
+        { error, taskName: parsed.taskName, recipient: parsed.recipient, userId: this.userId },
+        'Failed to remove share from task'
+      );
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't remove "${parsed.recipient}" from "${parsed.taskName}" sharing. Please try again.`,
       };
     }
   }
@@ -2746,6 +3005,165 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't move the file "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  private async unshareFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.recipient) {
+      return {
+        success: false,
+        message: "I need to know who you'd like to remove from sharing. Please specify the recipient name.",
+      };
+    }
+
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which file you'd like to remove sharing from. Please specify the file name.",
+      };
+    }
+
+    try {
+      const folderId = parsed.folderRoute 
+        ? await this.resolveFileFolderRoute(parsed.folderRoute) 
+        : null;
+
+      const file = await this.findFileByName(parsed.taskName, folderId);
+      if (!file) {
+        const folderText = parsed.folderRoute ? ` in the "${parsed.folderRoute}" folder` : '';
+        return {
+          success: false,
+          message: `I couldn't find the file "${parsed.taskName}"${folderText}. Please make sure the file exists.`,
+        };
+      }
+
+      const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+      if (!sharedWithUserId) {
+        return {
+          success: false,
+          message: `I couldn't find a user or friend with "${parsed.recipient}". Please check the name and try again.`,
+        };
+      }
+
+      const shares = await getFileResourceShares(this.db, 'file', file.id, this.userId);
+      const share = shares.find(s => s.sharedWithUserId === sharedWithUserId);
+
+      if (!share) {
+        return {
+          success: false,
+          message: `"${parsed.recipient}" is not currently shared on "${parsed.taskName}".`,
+        };
+      }
+
+      await deleteFileShare(this.db, share.id, this.userId);
+
+      return {
+        success: true,
+        message: `🔁 *Share Removed*\nRemoved: ${parsed.recipient}\nFrom: ${parsed.taskName}`,
+      };
+    } catch (error) {
+      logger.error(
+        { error, fileName: parsed.taskName, recipient: parsed.recipient, userId: this.userId },
+        'Failed to remove share from file'
+      );
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't remove "${parsed.recipient}" from "${parsed.taskName}" sharing. Please try again.`,
+      };
+    }
+  }
+
+  private async unshareNote(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.recipient) {
+      return {
+        success: false,
+        message: "I need to know who you'd like to remove from sharing. Please specify the recipient name.",
+      };
+    }
+
+    if (!parsed.taskName && !parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which note or folder you'd like to remove sharing from. Please specify the name.",
+      };
+    }
+
+    try {
+      // Try to find as note first
+      if (parsed.taskName) {
+        const note = await this.findNoteByName(parsed.taskName, parsed.folderRoute);
+        if (note) {
+          const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+          if (!sharedWithUserId) {
+            return {
+              success: false,
+              message: `I couldn't find a user or friend with "${parsed.recipient}". Please check the name and try again.`,
+            };
+          }
+
+          const shares = await getNoteResourceShares(this.db, 'note', note.id, this.userId);
+          const share = shares.find(s => s.sharedWithUserId === sharedWithUserId);
+
+          if (!share) {
+            return {
+              success: false,
+              message: `"${parsed.recipient}" is not currently shared on "${parsed.taskName}".`,
+            };
+          }
+
+          await deleteNoteShare(this.db, share.id, this.userId);
+
+          return {
+            success: true,
+            message: `🔁 *Share Removed*\nRemoved: ${parsed.recipient}\nFrom: ${parsed.taskName}`,
+          };
+        }
+      }
+
+      // Try as folder
+      if (parsed.folderRoute) {
+        const noteFolder = await this.findNoteFolderByName(parsed.folderRoute);
+        if (noteFolder) {
+          const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+          if (!sharedWithUserId) {
+            return {
+              success: false,
+              message: `I couldn't find a user or friend with "${parsed.recipient}". Please check the name and try again.`,
+            };
+          }
+
+          const shares = await getNoteResourceShares(this.db, 'note_folder', noteFolder.id, this.userId);
+          const share = shares.find(s => s.sharedWithUserId === sharedWithUserId);
+
+          if (!share) {
+            return {
+              success: false,
+              message: `"${parsed.recipient}" is not currently shared on "${parsed.folderRoute}".`,
+            };
+          }
+
+          await deleteNoteShare(this.db, share.id, this.userId);
+
+          return {
+            success: true,
+            message: `🔁 *Share Removed*\nRemoved: ${parsed.recipient}\nFrom: ${parsed.folderRoute}`,
+          };
+        }
+      }
+
+      return {
+        success: false,
+        message: `I couldn't find the note or folder "${parsed.taskName || parsed.folderRoute}". Please make sure it exists.`,
+      };
+    } catch (error) {
+      logger.error(
+        { error, resourceName: parsed.taskName || parsed.folderRoute, recipient: parsed.recipient, userId: this.userId },
+        'Failed to remove share from note'
+      );
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't remove "${parsed.recipient}" from "${parsed.taskName || parsed.folderRoute}" sharing. Please try again.`,
       };
     }
   }
@@ -5418,6 +5836,44 @@ export class ActionExecutor {
    * Recursively search for a category by name across all folders and categories
    * Note: Uses subfolders relation name from database, but represents categories for shopping lists
    */
+  private async findNoteByName(noteName: string, folderRoute?: string | null) {
+    const notes = await getUserNotes(this.db, this.userId, folderRoute ? { folderId: await this.resolveNoteFolderRoute(folderRoute) || undefined } : undefined);
+    const noteNameLower = noteName.toLowerCase();
+    return notes.find(n => n.title.toLowerCase() === noteNameLower) || null;
+  }
+
+  private async findNoteFolderByName(folderName: string) {
+    const folders = await getUserNoteFolders(this.db, this.userId);
+    const folderNameLower = folderName.toLowerCase();
+    return folders.find(f => f.name.toLowerCase() === folderNameLower) || null;
+  }
+
+  private async resolveNoteFolderRoute(folderRoute: string): Promise<string | null> {
+    const folders = await getUserNoteFolders(this.db, this.userId);
+    const parts = folderRoute.split('/').map(p => p.trim()).filter(p => p);
+    
+    if (parts.length === 1) {
+      const folder = folders.find(f => f.name.toLowerCase() === parts[0].toLowerCase());
+      return folder ? folder.id : null;
+    }
+    
+    // Multiple parts: navigate through subfolders
+    let currentFolder = folders.find(f => f.name.toLowerCase() === parts[0].toLowerCase());
+    if (!currentFolder) {
+      return null;
+    }
+
+    for (let i = 1; i < parts.length; i++) {
+      const subfolder = currentFolder.subfolders?.find((sf: any) => sf.name.toLowerCase() === parts[i].toLowerCase());
+      if (!subfolder) {
+        return null;
+      }
+      currentFolder = subfolder;
+    }
+    
+    return currentFolder?.id || null;
+  }
+
   private findSubfolderByName(folders: any[], folderName: string): any | null {
     for (const folder of folders) {
       // Check categories at this level
