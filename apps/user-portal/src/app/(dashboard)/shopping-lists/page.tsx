@@ -687,12 +687,13 @@ export default function ShoppingListPage() {
 
     setIsLoadingAISuggestion(true);
     try {
-      // Use the TRPC client directly for queries
-      const result = await trpc.shoppingList.suggestCategory.query({
+      // Use queryClient to fetch the query
+      const queryOptions = trpc.shoppingList.suggestCategory.queryOptions({
         itemName: newItemName.trim(),
         description: newItemDescription.trim() || undefined,
         parentFolderId: selectedFolderId || undefined,
       });
+      const result = await queryClient.fetchQuery(queryOptions);
 
       if (result.suggestedCategory) {
         // Find the category in available categories
@@ -1766,29 +1767,50 @@ export default function ShoppingListPage() {
                     {isLoadingAISuggestion ? "Analyzing..." : "Use AI Suggestion"}
                   </Button>
                 </div>
-                <Select
-                  value={selectedCategoryId || ""}
-                  onValueChange={(value) => setSelectedCategoryId(value || null)}
-                >
-                  <SelectTrigger id="item-category">
-                    <SelectValue placeholder="Select a category (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">None</SelectItem>
-                    {availableCategories.length === 0 ? (
-                      <SelectItem value="no-categories" disabled>
-                        No categories available
-                        {selectedFolderId ? " in this folder" : ""}
-                      </SelectItem>
-                    ) : (
-                      availableCategories.map((category: any) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
+                <div className="flex gap-2">
+                  <Select
+                    value={selectedCategoryId || undefined}
+                    onValueChange={(value) => {
+                      if (value === "__none__") {
+                        setSelectedCategoryId(null);
+                      } else {
+                        setSelectedCategoryId(value);
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="item-category" className="flex-1">
+                      <SelectValue placeholder="Select a category (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableCategories.length === 0 ? (
+                        <SelectItem value="no-categories" disabled>
+                          No categories available
+                          {selectedFolderId ? " in this folder" : ""}
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                      ) : (
+                        <>
+                          <SelectItem value="__none__">None</SelectItem>
+                          {availableCategories.map((category: any) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {selectedCategoryId && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedCategoryId(null)}
+                      className="shrink-0"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
                 {selectedFolderId && availableCategories.length === 0 && (
                   <p className="text-xs text-gray-500 mt-1">
                     No categories in this folder. Select a category from all folders or create one.
