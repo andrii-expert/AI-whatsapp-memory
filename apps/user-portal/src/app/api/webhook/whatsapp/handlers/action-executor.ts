@@ -82,7 +82,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface ParsedAction {
   action: string;
-  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address' | 'friend';
+  resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address' | 'friend' | 'shopping';
   taskName?: string;
   folderName?: string;
   folderRoute?: string;
@@ -163,7 +163,7 @@ export class ActionExecutor {
 
     const missingFields: string[] = [];
     let action = '';
-    let resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address' | 'friend' = 'task';
+    let resourceType: 'task' | 'folder' | 'note' | 'reminder' | 'event' | 'document' | 'address' | 'friend' | 'shopping' = 'task';
     let taskName: string | undefined;
     let folderName: string | undefined;
     let folderRoute: string | undefined;
@@ -190,7 +190,7 @@ export class ActionExecutor {
     // Shopping item operations (check before regular task)
     if (trimmed.startsWith('Create a shopping item:')) {
       action = 'create_shopping_item';
-      resourceType = 'task';
+      resourceType = 'shopping';
       // Try full format first: "Create a shopping item: {item} - on folder: Shopping Lists"
       const fullMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
       if (fullMatch) {
@@ -206,6 +206,78 @@ export class ActionExecutor {
         } else {
           missingFields.push('item name');
         }
+      }
+    } else if (trimmed.startsWith('List shopping items:')) {
+      action = 'list';
+      resourceType = 'shopping';
+      // Match: "List shopping items: {folder|all} - status: {open|completed|all}"
+      const matchWithStatus = trimmed.match(/^List shopping items:\s*(.+?)\s*-\s*status:\s*(.+)$/i);
+      if (matchWithStatus) {
+        folderRoute = matchWithStatus[1].trim().toLowerCase() === 'all' ? undefined : matchWithStatus[1].trim();
+        status = matchWithStatus[2].trim();
+      } else {
+        // Match: "List shopping items: {folder|all}" (no status)
+        const matchWithoutStatus = trimmed.match(/^List shopping items:\s*(.+)$/i);
+        if (matchWithoutStatus) {
+          const folderOrAll = matchWithoutStatus[1].trim();
+          folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+          status = 'all'; // Default to all statuses
+        } else {
+          missingFields.push('folder or "all"');
+        }
+      }
+    } else if (trimmed.startsWith('Edit a shopping item:')) {
+      action = 'edit';
+      resourceType = 'shopping';
+      const match = trimmed.match(/^Edit a shopping item:\s*(.+?)\s*-\s*to:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      if (match) {
+        taskName = match[1].trim();
+        newName = match[2].trim();
+        folderRoute = match[3]?.trim();
+      } else {
+        missingFields.push('item name, new name, or folder');
+      }
+    } else if (trimmed.startsWith('Delete a shopping item:')) {
+      action = 'delete';
+      resourceType = 'shopping';
+      // Check if it's a number-based deletion
+      const numberMatch = trimmed.match(/^Delete a shopping item:\s*([\d\s,]+(?:and\s*\d+)?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      if (numberMatch) {
+        const numbersStr = numberMatch[1].trim();
+        const numbers = numbersStr
+          .split(/[,\s]+|and\s+/i)
+          .map(n => parseInt(n.trim(), 10))
+          .filter(n => !isNaN(n) && n > 0);
+        
+        if (numbers.length > 0) {
+          const parsed: ParsedAction = {
+            action: 'delete',
+            resourceType: 'shopping',
+            itemNumbers: numbers,
+            folderRoute: numberMatch[2]?.trim(),
+            missingFields: [],
+          };
+          return parsed;
+        }
+      }
+      
+      // Regular name-based deletion
+      const match = trimmed.match(/^Delete a shopping item:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      if (match) {
+        taskName = match[1].trim();
+        folderRoute = match[2]?.trim();
+      } else {
+        missingFields.push('item name or folder');
+      }
+    } else if (trimmed.startsWith('Complete a shopping item:')) {
+      action = 'complete';
+      resourceType = 'shopping';
+      const match = trimmed.match(/^Complete a shopping item:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      if (match) {
+        taskName = match[1].trim();
+        folderRoute = match[2]?.trim();
+      } else {
+        missingFields.push('item name or folder');
       }
     }
     // Task operations
@@ -1091,7 +1163,9 @@ export class ActionExecutor {
 
       switch (parsed.action) {
         case 'list':
-          if (parsed.resourceType === 'task') {
+          if (parsed.resourceType === 'shopping') {
+            return await this.listShoppingItems(parsed);
+          } else if (parsed.resourceType === 'task') {
             return await this.listTasks(parsed);
           } else if (parsed.resourceType === 'note') {
             return await this.listNotes(parsed);
@@ -1142,13 +1216,9 @@ export class ActionExecutor {
             return await this.createFolder(parsed);
           }
         case 'edit':
-          if (parsed.resourceType === 'task') {
-            // Check if this is a shopping list item edit
-            const isShoppingListEdit = parsed.folderRoute?.toLowerCase().includes('shopping') || 
-                                      parsed.folderRoute?.toLowerCase() === 'shopping list';
-            if (isShoppingListEdit) {
-              return await this.editShoppingItem(parsed);
-            }
+          if (parsed.resourceType === 'shopping') {
+            return await this.editShoppingItem(parsed);
+          } else if (parsed.resourceType === 'task') {
             return await this.editTask(parsed);
           } else if (parsed.resourceType === 'reminder') {
             return await this.updateReminder(parsed, timezone);
@@ -1202,7 +1272,11 @@ export class ActionExecutor {
             message: "I'm sorry, I couldn't understand what you want to resume.",
           };
         case 'complete':
-          return await this.completeTask(parsed);
+          if (parsed.resourceType === 'shopping') {
+            return await this.completeShoppingItem(parsed);
+          } else {
+            return await this.completeTask(parsed);
+          }
         case 'move':
           if (parsed.resourceType === 'document') {
             return await this.moveFile(parsed);
@@ -1877,6 +1951,96 @@ export class ActionExecutor {
     }
   }
 
+  private async deleteShoppingItem(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    // Check if this is number-based deletion
+    if (parsed.itemNumbers && parsed.itemNumbers.length > 0) {
+      const context = this.getListContext();
+      if (!context || context.type !== 'shopping') {
+        return {
+          success: false,
+          message: "I don't have a recent shopping list to reference. Please list your shopping items first, then delete by number.",
+        };
+      }
+
+      const itemsToDelete = parsed.itemNumbers
+        .map(num => context.items.find(item => item.number === num))
+        .filter((item): item is { id: string, number: number, name?: string } => item !== undefined);
+
+      if (itemsToDelete.length === 0) {
+        return {
+          success: false,
+          message: `I couldn't find items with those numbers. Please check the numbers and try again.`,
+        };
+      }
+
+      const deletedNames: string[] = [];
+      const errors: string[] = [];
+
+      for (const item of itemsToDelete) {
+        try {
+          await deleteShoppingListItem(this.db, item.id, this.userId);
+          deletedNames.push(item.name || `Item ${item.number}`);
+        } catch (error) {
+          logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item by number');
+          errors.push(`Item ${item.number}`);
+        }
+      }
+
+      if (deletedNames.length > 0) {
+        this.clearListContext(); // Clear context after successful deletion
+        return {
+          success: true,
+          message: `⛔ *Items Removed:*\n${deletedNames.join('\n')}${errors.length > 0 ? `\n\nFailed to delete: ${errors.join(', ')}` : ''}`,
+        };
+      } else {
+        return {
+          success: false,
+          message: `I couldn't delete the items. Please try again.`,
+        };
+      }
+    }
+
+    // Fallback to name-based deletion
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which item you'd like to delete. Please specify the item name or number.",
+      };
+    }
+
+    // Resolve folder if specified
+    let folderId: string | undefined = undefined;
+    if (parsed.folderRoute) {
+      const resolvedFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      folderId = resolvedFolderId || undefined;
+    }
+
+    const items = await getUserShoppingListItems(this.db, this.userId, { folderId });
+    const item = items.find((i) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
+    
+    if (!item) {
+      const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
+      return {
+        success: false,
+        message: `I couldn't find the item "${parsed.taskName}"${folderText}. Please make sure the item exists.`,
+      };
+    }
+
+    try {
+      await deleteShoppingListItem(this.db, item.id, this.userId);
+      return {
+        success: true,
+        message: `⛔ *Item Removed:*\n${item.name}`,
+      };
+    } catch (error) {
+      logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't delete the item "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
   private async deleteTask(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     // Check if this is number-based deletion
     if (parsed.itemNumbers && parsed.itemNumbers.length > 0) {
@@ -1886,46 +2050,6 @@ export class ActionExecutor {
           success: false,
           message: "I don't have a recent list to reference. Please list your items first, then delete by number.",
         };
-      }
-
-      // Check if this is shopping list deletion
-      if (context.type === 'shopping') {
-        const itemsToDelete = parsed.itemNumbers
-          .map(num => context.items.find(item => item.number === num))
-          .filter((item): item is { id: string, number: number, name?: string } => item !== undefined);
-
-        if (itemsToDelete.length === 0) {
-          return {
-            success: false,
-            message: `I couldn't find items with those numbers. Please check the numbers and try again.`,
-          };
-        }
-
-        const deletedNames: string[] = [];
-        const errors: string[] = [];
-
-        for (const item of itemsToDelete) {
-          try {
-            await deleteShoppingListItem(this.db, item.id, this.userId);
-            deletedNames.push(item.name || `Item ${item.number}`);
-          } catch (error) {
-            logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item by number');
-            errors.push(`Item ${item.number}`);
-          }
-        }
-
-        if (deletedNames.length > 0) {
-          this.clearListContext(); // Clear context after successful deletion
-          return {
-            success: true,
-            message: `⛔ *Items Removed:*\n${deletedNames.join('\n')}${errors.length > 0 ? `\n\nFailed to delete: ${errors.join(', ')}` : ''}`,
-          };
-        } else {
-          return {
-            success: false,
-            message: `I couldn't delete the items. Please try again.`,
-          };
-        }
       }
 
       // Handle regular task deletion by numbers
@@ -1977,36 +2101,6 @@ export class ActionExecutor {
       };
     }
 
-    // Check if this is a shopping list operation
-    const isShoppingList = parsed.folderRoute?.toLowerCase() === 'shopping list';
-    
-    if (isShoppingList) {
-      // Handle shopping list item deletion
-      const items = await getUserShoppingListItems(this.db, this.userId, {});
-      const item = items.find((i) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
-      
-      if (!item) {
-        return {
-          success: false,
-          message: `I couldn't find the item "${parsed.taskName}" in your shopping list. Please make sure the item exists.`,
-        };
-      }
-
-      try {
-        await deleteShoppingListItem(this.db, item.id, this.userId);
-        return {
-          success: true,
-          message: `⛔ *Item Removed:*\n${item.name}`,
-        };
-      } catch (error) {
-        logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item');
-        return {
-          success: false,
-          message: `I'm sorry, I couldn't delete the item "${parsed.taskName}". Please try again.`,
-        };
-      }
-    }
-
     // Handle regular task deletion
     const folderId = await this.resolveFolderRoute(parsed.folderRoute || 'General');
     if (!folderId) {
@@ -2039,56 +2133,56 @@ export class ActionExecutor {
     }
   }
 
+  private async completeShoppingItem(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName) {
+      return {
+        success: false,
+        message: "I need to know which item you'd like to complete. Please specify the item name.",
+      };
+    }
+
+    // Resolve folder if specified
+    let folderId: string | undefined = undefined;
+    if (parsed.folderRoute) {
+      const resolvedFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      folderId = resolvedFolderId || undefined;
+    }
+
+    let items = await getUserShoppingListItems(this.db, this.userId, { folderId });
+    const item = items.find((i) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
+    
+    if (!item) {
+      const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
+      return {
+        success: false,
+        message: `I couldn't find the item "${parsed.taskName}"${folderText}. Please make sure the item exists.`,
+      };
+    }
+
+    try {
+      await toggleShoppingListItemStatus(this.db, item.id, this.userId);
+      const newStatus = item.status === 'open' ? 'completed' : 'open';
+      return {
+        success: true,
+        message: newStatus === 'completed' 
+          ? `✅ *Item Completed:*\n${item.name}`
+          : `📝 *Item Reopened:*\n${item.name}`,
+      };
+    } catch (error) {
+      logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to toggle shopping list item status');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't update the item "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
   private async completeTask(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     if (!parsed.taskName) {
       return {
         success: false,
         message: "I need to know which task you'd like to complete. Please specify the task name.",
       };
-    }
-
-    // Check if this is a shopping list operation
-    const isShoppingList = parsed.folderRoute?.toLowerCase().includes('shopping') || 
-                          parsed.folderRoute?.toLowerCase() === 'shopping list';
-    
-    if (isShoppingList) {
-      // Handle shopping list item completion
-      let items = await getUserShoppingListItems(this.db, this.userId, {});
-      
-      // Filter by folder if specified
-      if (parsed.folderRoute && parsed.folderRoute.toLowerCase() !== 'shopping list') {
-        const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
-        if (folderId) {
-          items = items.filter((item: any) => item.folderId === folderId);
-        }
-      }
-
-      const item = items.find((i) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
-      
-      if (!item) {
-        const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
-        return {
-          success: false,
-          message: `I couldn't find the item "${parsed.taskName}"${folderText}. Please make sure the item exists.`,
-        };
-      }
-
-      try {
-        await toggleShoppingListItemStatus(this.db, item.id, this.userId);
-        const newStatus = item.status === 'open' ? 'completed' : 'open';
-        return {
-          success: true,
-          message: newStatus === 'completed' 
-            ? `✅ *Item Completed:*\n${item.name}`
-            : `📝 *Item Reopened:*\n${item.name}`,
-        };
-      } catch (error) {
-        logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to toggle shopping list item status');
-        return {
-          success: false,
-          message: `I'm sorry, I couldn't update the item "${parsed.taskName}". Please try again.`,
-        };
-      }
     }
 
     // Handle regular task completion
@@ -2808,80 +2902,78 @@ export class ActionExecutor {
     }
   }
 
-  private async listTasks(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+  private async listShoppingItems(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     try {
-      // Check if this is a Shopping Lists request
-      // Shopping list can be detected by:
-      // 1. Folder route contains "shopping" or is "shopping list"
-      // 2. List filter contains "shopping"
-      // 3. Folder route is undefined but user asked for shopping list (handled by AI prompt)
-      const isShoppingList = parsed.folderRoute?.toLowerCase().includes('shopping') || 
-                            parsed.folderRoute?.toLowerCase() === 'shopping list' ||
-                            parsed.listFilter?.toLowerCase().includes('shopping');
+      const statusFilter = parsed.status && parsed.status !== 'all' ? parsed.status as 'open' | 'completed' : undefined;
       
-      if (isShoppingList) {
-        // Handle shopping list items
-        const statusFilter = parsed.status && parsed.status !== 'all' ? parsed.status as 'open' | 'completed' : undefined;
-        
-        // Resolve folder if specified
-        let folderId: string | undefined = undefined;
-        if (parsed.folderRoute && parsed.folderRoute.toLowerCase() !== 'shopping list' && parsed.folderRoute.toLowerCase() !== 'all') {
-          const resolvedFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
-          folderId = resolvedFolderId || undefined;
-          if (!folderId) {
-            return {
-              success: false,
-              message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
-            };
-          }
-        }
-
-        const items = await getUserShoppingListItems(this.db, this.userId, {
-          folderId,
-          status: statusFilter,
-        });
-
-        if (items.length === 0) {
-          const statusText = statusFilter ? ` (${statusFilter})` : '';
-          const folderText = folderId ? ` in "${parsed.folderRoute}"` : '';
+      // Resolve folder if specified
+      let folderId: string | undefined = undefined;
+      if (parsed.folderRoute && parsed.folderRoute.toLowerCase() !== 'all') {
+        const resolvedFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+        folderId = resolvedFolderId || undefined;
+        if (!folderId) {
           return {
-            success: true,
-            message: `🛒 *Your shopping list${folderText} is empty${statusText}*`,
+            success: false,
+            message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
+      }
 
+      const items = await getUserShoppingListItems(this.db, this.userId, {
+        folderId,
+        status: statusFilter,
+      });
+
+      if (items.length === 0) {
         const statusText = statusFilter ? ` (${statusFilter})` : '';
-        const folderText = folderId ? ` - ${parsed.folderRoute}` : '';
-        let message = `🛍️ *Shopping Lists${folderText}${statusText}:*\n`;
-        
-        const displayedItems = items.slice(0, 20);
-        displayedItems.forEach((item, index) => {
-          const statusIcon = item.status === 'completed' ? '✅' : '⬜';
-          message += `${statusIcon} *${index + 1}.* ${item.name}`;
-          if (item.description) {
-            message += ` - ${item.description}`;
-          }
-          message += '\n';
-        });
-
-        if (items.length > 20) {
-          message += `\n... and ${items.length - 20} more items.`;
-        }
-
-        // Store list context for number-based deletion
-        this.storeListContext('shopping', displayedItems.map((item, index) => ({
-          id: item.id,
-          number: index + 1,
-          name: item.name,
-        })), parsed.folderRoute);
-
+        const folderText = folderId ? ` in "${parsed.folderRoute}"` : '';
         return {
           success: true,
-          message: message.trim(),
+          message: `🛒 *Your shopping list${folderText} is empty${statusText}*`,
         };
       }
 
-      // Handle regular tasks
+      const statusText = statusFilter ? ` (${statusFilter})` : '';
+      const folderText = folderId ? ` - ${parsed.folderRoute}` : '';
+      let message = `🛍️ *Shopping Lists${folderText}${statusText}:*\n`;
+      
+      const displayedItems = items.slice(0, 20);
+      displayedItems.forEach((item, index) => {
+        const statusIcon = item.status === 'completed' ? '✅' : '⬜';
+        message += `${statusIcon} *${index + 1}.* ${item.name}`;
+        if (item.description) {
+          message += ` - ${item.description}`;
+        }
+        message += '\n';
+      });
+
+      if (items.length > 20) {
+        message += `\n... and ${items.length - 20} more items.`;
+      }
+
+      // Store list context for number-based deletion
+      this.storeListContext('shopping', displayedItems.map((item, index) => ({
+        id: item.id,
+        number: index + 1,
+        name: item.name,
+      })), parsed.folderRoute);
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId, folderRoute: parsed.folderRoute }, 'Failed to list shopping items');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't retrieve your shopping list. Please try again.",
+      };
+    }
+  }
+
+  private async listTasks(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      // Handle regular tasks only (shopping lists are handled separately)
       const folderId = parsed.folderRoute ? await this.resolveFolderRoute(parsed.folderRoute) : undefined;
       
       if (parsed.folderRoute && !folderId) {

@@ -291,7 +291,7 @@ async function processAIResponse(
 ): Promise<void> {
   try {
     // Parse the Title from response
-    const titleMatch = aiResponse.match(/^Title:\s*(task|note|reminder|event|document|address|friend|verification|normal)/i);
+    const titleMatch = aiResponse.match(/^Title:\s*(shopping|task|note|reminder|event|document|address|friend|verification|normal)/i);
     if (!titleMatch || !titleMatch[1]) {
       logger.warn(
         {
@@ -362,7 +362,7 @@ async function processAIResponse(
     const isListEvents = actionTemplate.toLowerCase().startsWith('list events:');
     
     // Handle list operations for all types (tasks, notes, reminders, events, documents, addresses)
-    if (isListOperation && (titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event' || titleType === 'document' || titleType === 'address' || titleType === 'friend')) {
+    if (isListOperation && (titleType === 'shopping' || titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event' || titleType === 'document' || titleType === 'address' || titleType === 'friend')) {
       try {
         logger.info(
           {
@@ -379,7 +379,7 @@ async function processAIResponse(
           // Set resourceType based on titleType for list operations
           // BUT preserve resourceType if it's already set to 'folder' (for folder listing operations)
           if (parsed.action !== 'list_folders' && parsed.resourceType !== 'folder') {
-            parsed.resourceType = titleType as 'task' | 'note' | 'reminder' | 'event' | 'document' | 'address';
+            parsed.resourceType = titleType as 'shopping' | 'task' | 'note' | 'reminder' | 'event' | 'document' | 'address';
           }
           
           logger.info(
@@ -507,6 +507,52 @@ async function processAIResponse(
         await whatsappService.sendTextMessage(recipient, userMessage);
       }
       return; // Exit early after handling list operation
+    }
+    
+    // Handle non-list shopping operations
+    if (titleType === 'shopping') {
+      // Split action template into individual lines for multi-item support
+      const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      const results: string[] = [];
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const actionLine of actionLines) {
+        const parsed = executor.parseAction(actionLine);
+        if (parsed) {
+          parsed.resourceType = 'shopping';
+          const result = await executor.executeAction(parsed, userTimezone);
+          if (result.success) {
+            successCount++;
+            results.push(result.message);
+          } else {
+            failCount++;
+            results.push(result.message);
+          }
+        }
+      }
+      
+      if (results.length > 0) {
+        const combinedMessage = results.join('\n\n');
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: combinedMessage,
+              isFreeMessage: true,
+            });
+          }
+        } catch (logError) {
+          logger.warn({ error: logError, userId }, 'Failed to log outgoing shopping message');
+        }
+        
+        await whatsappService.sendTextMessage(recipient, combinedMessage);
+      }
+      return;
     }
     
     // Handle non-list task operations
