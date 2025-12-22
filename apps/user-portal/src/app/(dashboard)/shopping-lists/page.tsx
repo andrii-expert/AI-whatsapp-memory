@@ -134,6 +134,8 @@ export default function ShoppingListPage() {
           ownerId: folder.shareInfo?.ownerId,
           items: (folder.items || []).map((item: any) => ({
             ...item,
+            // Preserve user information if it exists
+            user: item.user || undefined,
             isSharedWithMe: true,
             sharePermission: folderPermission,
             sharedViaFolder: true,
@@ -565,6 +567,8 @@ export default function ShoppingListPage() {
         const sharedFolder = sharedFolders.find((f: any) => f.id === selectedFolderId);
         items = (sharedFolder?.items || []).map((item: any) => ({
           ...item,
+          // Preserve user information if it exists
+          user: item.user || undefined,
           isSharedWithMe: true,
           sharePermission: sharedFolder.sharePermission || "view",
         }));
@@ -577,9 +581,21 @@ export default function ShoppingListPage() {
     else if (viewAllItems) {
       items = items.filter((item: any) => !item.isSharedWithMe);
     }
-    // When viewing "All Shared", show only shared items
+    // When viewing "All Shared", show only shared items from all shared folders
     else if (viewAllShared) {
-      items = items.filter((item: any) => item.isSharedWithMe);
+      // Collect all items from shared folders
+      const sharedItemsFromFolders = sharedFolders.flatMap((folder: any) => 
+        (folder.items || []).map((item: any) => ({
+          ...item,
+          // Preserve user information if it exists
+          user: item.user || undefined,
+          isSharedWithMe: true,
+          sharePermission: folder.sharePermission || "view",
+        }))
+      );
+      // Combine with items that are already marked as shared
+      const directSharedItems = items.filter((item: any) => item.isSharedWithMe);
+      items = [...directSharedItems, ...sharedItemsFromFolders];
     }
 
     // Filter by status

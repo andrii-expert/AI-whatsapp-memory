@@ -400,8 +400,50 @@ export async function getSharedResourcesForUser(db: Database, userId: string) {
         ? await db.query.shoppingListFolders.findMany({
             where: inArray(shoppingListFolders.id, shoppingListFolderIds),
             with: {
-              items: true,
-              subfolders: true,
+              items: {
+                with: {
+                  user: {
+                    columns: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+              subfolders: {
+                with: {
+                  items: {
+                    with: {
+                      user: {
+                        columns: {
+                          id: true,
+                          firstName: true,
+                          lastName: true,
+                          email: true,
+                        },
+                      },
+                    },
+                  },
+                  subfolders: {
+                    with: {
+                      items: {
+                        with: {
+                          user: {
+                            columns: {
+                              id: true,
+                              firstName: true,
+                              lastName: true,
+                              email: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           })
         : [];
