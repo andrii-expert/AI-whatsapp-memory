@@ -519,9 +519,45 @@ async function processAIResponse(
       let failCount = 0;
       
       for (const actionLine of actionLines) {
-        const parsed = executor.parseAction(actionLine);
+        let parsed = executor.parseAction(actionLine);
+        
+        // If parsing failed but we have a shopping context, try to handle "delete X,Y" format
+        if (!parsed && titleType === 'shopping' && /^delete\s+[\d\s,]+/i.test(actionLine)) {
+          // Try to extract numbers from "delete 5,6" or "delete shopping items: 5,6"
+          const numberMatch = actionLine.match(/delete\s+(?:shopping\s+items?:\s*)?([\d\s,]+(?:and\s*\d+)?)/i);
+          if (numberMatch) {
+            const numbersStr = numberMatch[1].trim();
+            const numbers = numbersStr
+              .split(/[,\s]+|and\s+/i)
+              .map(n => parseInt(n.trim(), 10))
+              .filter(n => !isNaN(n) && n > 0);
+            
+            if (numbers.length > 0) {
+              parsed = {
+                action: 'delete',
+                resourceType: 'shopping',
+                itemNumbers: numbers,
+                missingFields: [],
+              };
+              logger.info({ actionLine, parsed }, 'Fallback: Created shopping item deletion from numbers');
+            }
+          }
+        }
+        
         if (parsed) {
-          parsed.resourceType = 'shopping';
+          // Ensure resourceType is set to shopping for shopping operations
+          if (parsed.action === 'delete' && !parsed.resourceType) {
+            parsed.resourceType = 'shopping';
+          } else if (parsed.resourceType !== 'shopping' && titleType === 'shopping') {
+            parsed.resourceType = 'shopping';
+          }
+          logger.info({ 
+            actionLine, 
+            parsedAction: parsed.action, 
+            parsedResourceType: parsed.resourceType,
+            itemNumbers: parsed.itemNumbers,
+            taskName: parsed.taskName 
+          }, 'Processing shopping action line');
           const result = await executor.executeAction(parsed, userTimezone);
           if (result.success) {
             successCount++;
@@ -530,6 +566,8 @@ async function processAIResponse(
             failCount++;
             results.push(result.message);
           }
+        } else {
+          logger.warn({ actionLine, titleType }, 'Failed to parse shopping action line');
         }
       }
       

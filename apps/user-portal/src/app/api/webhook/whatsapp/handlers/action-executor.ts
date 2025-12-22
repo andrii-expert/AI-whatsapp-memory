@@ -237,13 +237,16 @@ export class ActionExecutor {
       } else {
         missingFields.push('item name, new name, or folder');
       }
-    } else if (trimmed.startsWith('Delete a shopping item:')) {
+    } else if (trimmed.startsWith('Delete a shopping item:') || trimmed.startsWith('Delete shopping items:') || trimmed.startsWith('Delete shopping item:')) {
       action = 'delete';
       resourceType = 'shopping';
-      // Extract everything after "Delete a shopping item:"
-      const afterPrefix = trimmed.replace(/^Delete a shopping item:\s*/i, '').trim();
+      // Extract everything after "Delete a shopping item:" or "Delete shopping items:" or "Delete shopping item:"
+      const afterPrefix = trimmed.replace(/^Delete (a )?shopping items?:\s*/i, '').trim();
+      
+      logger.info({ afterPrefix, trimmed }, 'Parsing Delete shopping item command');
       
       // Check if it's a number-based deletion (numbers can be comma-separated, space-separated, or "and" separated)
+      // More flexible pattern: just numbers with commas/spaces/and, optionally followed by folder
       const numberPattern = /^[\d\s,]+(?:and\s*\d+)?(?:\s*-\s*on folder:\s*(.+))?$/i;
       const numberMatch = afterPrefix.match(numberPattern);
       
@@ -255,6 +258,8 @@ export class ActionExecutor {
           .map(n => parseInt(n.trim(), 10))
           .filter(n => !isNaN(n) && n > 0);
         
+        logger.info({ numbersPart, numbers }, 'Extracted numbers from shopping item deletion');
+        
         if (numbers.length > 0) {
           const folderMatch = afterPrefix.match(/\s*-\s*on folder:\s*(.+)$/i);
           const parsed: ParsedAction = {
@@ -264,16 +269,19 @@ export class ActionExecutor {
             folderRoute: folderMatch ? folderMatch[1].trim() : undefined,
             missingFields: [],
           };
+          logger.info({ parsed }, 'Returning parsed shopping item deletion with numbers');
           return parsed;
         }
       }
       
-      // Regular name-based deletion
-      const match = trimmed.match(/^Delete a shopping item:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      // Regular name-based deletion (handle both singular and plural forms)
+      const match = trimmed.match(/^Delete (a )?shopping items?:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
       if (match) {
-        taskName = match[1].trim();
-        folderRoute = match[2]?.trim();
+        taskName = match[2].trim();
+        folderRoute = match[3]?.trim();
+        logger.info({ taskName, folderRoute }, 'Parsed as name-based shopping item deletion');
       } else {
+        logger.warn({ trimmed, afterPrefix }, 'Failed to parse shopping item deletion');
         missingFields.push('item name or folder');
       }
     } else if (trimmed.startsWith('Complete a shopping item:')) {
