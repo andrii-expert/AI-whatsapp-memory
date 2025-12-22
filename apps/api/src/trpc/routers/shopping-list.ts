@@ -12,7 +12,7 @@ import {
   updateShoppingListFolder,
   deleteShoppingListFolder,
 } from "@imaginecalendar/database/queries";
-import { findOrCreateCategoryForItem } from "@api/utils/shopping-list-categorization";
+import { suggestShoppingListCategory } from "@imaginecalendar/ai-services";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -91,6 +91,13 @@ export const shoppingListRouter = createTRPCRouter({
           ...input,
         });
 
+        if (!folder) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create folder",
+          });
+        }
+
         logger.info({ userId: session.user.id, folderId: folder.id }, "Shopping list folder created");
         return folder;
       }),
@@ -158,46 +165,24 @@ export const shoppingListRouter = createTRPCRouter({
   create: protectedProcedure
     .input(createShoppingListItemSchema)
     .mutation(async ({ ctx: { db, session }, input }) => {
-      logger.info({ userId: session.user.id, itemName: input.name, providedFolderId: input.folderId }, "Creating shopping list item");
-      
-      // If folderId is explicitly provided, check if it's a parent folder and try to find/create a subfolder
-      // Otherwise, use AI to find or create an appropriate subfolder
-      let finalFolderId = input.folderId;
-      
-      try {
-        // Use AI to find or create appropriate category/subfolder
-        // If folderId is provided, it will be used as parentFolderId to create subfolder within it
-        const categoryFolderId = await findOrCreateCategoryForItem(
-          db,
-          session.user.id,
-          input.name,
-          input.folderId // Pass the folderId as parentFolderId if provided
-        );
-        
-        if (categoryFolderId) {
-          finalFolderId = categoryFolderId;
-          logger.info({ userId: session.user.id, itemName: input.name, categoryFolderId, parentFolderId: input.folderId }, "AI selected category for shopping list item");
-        } else if (!input.folderId) {
-          // If no folderId was provided and AI didn't suggest a category, item will be created without folder
-          logger.info({ userId: session.user.id, itemName: input.name }, "No category suggested for shopping list item, creating without folder");
-        }
-      } catch (error) {
-        // Log error but continue with original folderId (or without folder if none was provided)
-        logger.error(
-          { error: error instanceof Error ? error.message : String(error), userId: session.user.id, itemName: input.name },
-          "Failed to find/create category for shopping list item, using provided folder or creating without category"
-        );
-      }
+      logger.info({ userId: session.user.id, itemName: input.name }, "Creating shopping list item");
       
       const item = await createShoppingListItem(db, {
         userId: session.user.id,
-        folderId: finalFolderId,
+        folderId: input.folderId,
         name: input.name,
         description: input.description,
         status: input.status || "open",
       });
 
-      logger.info({ userId: session.user.id, itemId: item.id, folderId: finalFolderId }, "Shopping list item created");
+      if (!item) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create item",
+        });
+      }
+
+      logger.info({ userId: session.user.id, itemId: item.id }, "Shopping list item created");
       return item;
     }),
 
@@ -251,5 +236,94 @@ export const shoppingListRouter = createTRPCRouter({
       
       logger.info({ userId: session.user.id, itemId: item.id, newStatus: item.status }, "Shopping list item status toggled");
       return item;
+    }),
+
+  // Get AI category suggestion
+  suggestCategory: protectedProcedure
+    .input(z.object({
+      itemName: z.string().min(1),
+      description: z.string().optional(),
+      parentFolderId: z.string().uuid().optional(),
+    }))
+    .query(async ({ ctx: { db, session }, input }) => {
+      try {
+        // Get all folders to extract existing categories
+        const allFolders = await getUserShoppingListFolders(db, session.user.id);
+        
+        // Helper function to find a folder by ID recursively
+        const findFolderById = (folders: any[], targetId: string): any | null => {
+          for (const folder of folders) {
+            if (folder.id === targetId) {
+              return folder;
+            }
+            if (folder.subfolders && folder.subfolders.length > 0) {
+              const found = findFolderById(folder.subfolders, targetId);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        
+        // Extract all existing category names (subfolders)
+        const extractCategories = (folders: any[]): string[] => {
+          const categories: string[] = [];
+          for (const folder of folders) {
+            if (folder.subfolders && folder.subfolders.length > 0) {
+              for (const subfolder of folder.subfolders) {
+                categories.push(subfolder.name.toLowerCase());
+                if (subfolder.subfolders && subfolder.subfolders.length > 0) {
+                  categories.push(...extractCategories([subfolder]));
+                }
+              }
+            }
+          }
+          return categories;
+        };
+
+        // If parentFolderId is provided, only extract categories from that parent folder
+        let existingCategories: string[];
+        if (input.parentFolderId) {
+          const parentFolder = findFolderById(allFolders, input.parentFolderId);
+          if (parentFolder && parentFolder.subfolders) {
+            existingCategories = extractCategories([parentFolder]);
+          } else {
+            existingCategories = [];
+          }
+        } else {
+          existingCategories = extractCategories(allFolders);
+        }
+
+        // Combine item name and description for AI analysis
+        const itemText = input.description 
+          ? `${input.itemName} ${input.description}`.trim()
+          : input.itemName;
+
+        // Get AI suggestion with timeout
+        const timeoutPromise = new Promise<null>((resolve) => {
+          setTimeout(() => resolve(null), 8000); // 8 second timeout
+        });
+
+        const aiPromise = suggestShoppingListCategory(itemText, existingCategories);
+        const categoryResult = await Promise.race([aiPromise, timeoutPromise]);
+
+        if (!categoryResult || !categoryResult.suggestedCategory) {
+          return { suggestedCategory: null };
+        }
+
+        return {
+          suggestedCategory: categoryResult.suggestedCategory,
+          confidence: categoryResult.confidence,
+        };
+      } catch (error) {
+        logger.error(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            userId: session.user.id,
+            itemName: input.itemName,
+          },
+          "Failed to get AI category suggestion"
+        );
+        return { suggestedCategory: null };
+      }
     }),
 });

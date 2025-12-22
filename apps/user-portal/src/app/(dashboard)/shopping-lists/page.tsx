@@ -67,6 +67,8 @@ export default function ShoppingListPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [editItemDescription, setEditItemDescription] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [isLoadingAISuggestion, setIsLoadingAISuggestion] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
@@ -209,6 +211,21 @@ export default function ShoppingListPage() {
            null;
   }, [selectedFolderId, allOwnedFolders, sharedFolders]);
 
+  // Get categories (subfolders) from the selected folder
+  const availableCategories = useMemo(() => {
+    if (!selectedFolder) {
+      // If no folder selected, get all categories from all folders
+      const allCategories: any[] = [];
+      folders.forEach((folder: any) => {
+        if (folder.subfolders && folder.subfolders.length > 0) {
+          allCategories.push(...folder.subfolders);
+        }
+      });
+      return allCategories;
+    }
+    return selectedFolder.subfolders || [];
+  }, [selectedFolder, folders]);
+
   // Get folder path (breadcrumb trail)
   const getFolderPath = (folderId: string): string[] => {
     const path: string[] = [];
@@ -246,6 +263,7 @@ export default function ShoppingListPage() {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
         setNewItemName("");
         setNewItemDescription("");
+        setSelectedCategoryId(null);
         setIsAddModalOpen(false);
         toast({
           title: "Item added",
@@ -656,12 +674,71 @@ export default function ShoppingListPage() {
     return filteredItems.filter((item) => item.status === "completed");
   }, [filteredItems]);
 
+  // Get AI category suggestion
+  const getAICategorySuggestion = async () => {
+    if (!newItemName.trim()) {
+      toast({
+        title: "Item name required",
+        description: "Please enter an item name first",
+        variant: "error",
+      });
+      return;
+    }
+
+    setIsLoadingAISuggestion(true);
+    try {
+      // Use the TRPC client directly for queries
+      const result = await trpc.shoppingList.suggestCategory.query({
+        itemName: newItemName.trim(),
+        description: newItemDescription.trim() || undefined,
+        parentFolderId: selectedFolderId || undefined,
+      });
+
+      if (result.suggestedCategory) {
+        // Find the category in available categories
+        const matchingCategory = availableCategories.find(
+          (cat: any) => cat.name.toLowerCase() === result.suggestedCategory!.toLowerCase()
+        );
+
+        if (matchingCategory) {
+          setSelectedCategoryId(matchingCategory.id);
+          toast({
+            title: "Category suggested",
+            description: `Suggested category: ${result.suggestedCategory}`,
+          });
+        } else {
+          // Category doesn't exist, show message
+          toast({
+            title: "Category suggested",
+            description: `AI suggested: "${result.suggestedCategory}". This category doesn't exist yet. Please select an existing category or create it first.`,
+          });
+        }
+      } else {
+        toast({
+          title: "No suggestion",
+          description: "AI couldn't suggest a category for this item",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to get AI suggestion. Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setIsLoadingAISuggestion(false);
+    }
+  };
+
   const handleCreateItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
 
+    // Use selected category if available, otherwise use selected folder
+    const folderIdToUse = selectedCategoryId || selectedFolderId || undefined;
+
     createItemMutation.mutate({
-      folderId: selectedFolderId || undefined,
+      folderId: folderIdToUse,
       name: newItemName.trim(),
       description: newItemDescription.trim() || undefined,
     });
@@ -1675,6 +1752,49 @@ export default function ShoppingListPage() {
                   placeholder="e.g., 2% milk, whole wheat bread"
                 />
               </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="item-category">Category (Optional)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={getAICategorySuggestion}
+                    disabled={isLoadingAISuggestion || !newItemName.trim()}
+                    className="text-xs"
+                  >
+                    {isLoadingAISuggestion ? "Analyzing..." : "Use AI Suggestion"}
+                  </Button>
+                </div>
+                <Select
+                  value={selectedCategoryId || ""}
+                  onValueChange={(value) => setSelectedCategoryId(value || null)}
+                >
+                  <SelectTrigger id="item-category">
+                    <SelectValue placeholder="Select a category (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {availableCategories.length === 0 ? (
+                      <SelectItem value="no-categories" disabled>
+                        No categories available
+                        {selectedFolderId ? " in this folder" : ""}
+                      </SelectItem>
+                    ) : (
+                      availableCategories.map((category: any) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {selectedFolderId && availableCategories.length === 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    No categories in this folder. Select a category from all folders or create one.
+                  </p>
+                )}
+              </div>
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel
@@ -1682,6 +1802,7 @@ export default function ShoppingListPage() {
                   setIsAddModalOpen(false);
                   setNewItemName("");
                   setNewItemDescription("");
+                  setSelectedCategoryId(null);
                 }}
               >
                 Cancel

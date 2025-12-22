@@ -4,7 +4,7 @@ import { logger } from '@imaginecalendar/logger';
 import { z } from 'zod';
 
 const shoppingListCategorySchema = z.object({
-  suggestedCategory: z.string().describe('The suggested category/subfolder name for this item. Should be a single word or short phrase (e.g., "Fruits", "Dairy", "Vegetables", "Meat", "Beverages", "Snacks", "Cleaning", "Personal Care", "Bakery", "Frozen"). Use null if no specific category is needed.'),
+  suggestedCategory: z.string().describe('The suggested category/subfolder name for this item. MUST be a SINGLE WORD only (e.g., "Fruits", "Dairy", "Vegetables", "Meat", "Beverages", "Snacks", "Cleaning", "Bakery", "Frozen", "Pantry", "Spices"). Do NOT use multiple words. Use null if no specific category is needed.'),
   confidence: z.number().min(0).max(1).describe('Confidence score (0-1) for the category suggestion'),
   reasoning: z.string().optional().describe('Brief reasoning for the category choice'),
 });
@@ -36,13 +36,14 @@ export async function suggestShoppingListCategory(
 Shopping list item: "${itemName}"
 ${existingCategoriesText}
 
-Categories should be:
-- Single words or short phrases (1-2 words preferred)
-- Common grocery/shopping categories (e.g., Fruits, Vegetables, Dairy, Meat, Beverages, Snacks, Cleaning, Personal Care, Bakery, Frozen, Pantry, Spices, etc.)
+Categories MUST be:
+- A SINGLE WORD ONLY (not multiple words, not phrases)
+- Common grocery/shopping categories (e.g., Fruits, Vegetables, Dairy, Meat, Beverages, Snacks, Cleaning, Bakery, Frozen, Pantry, Spices, Beverages, etc.)
 - Use null if the item is too generic or doesn't fit into a clear category
 - Match existing category names exactly if applicable
+- If you need to use a compound concept, use one word that best represents it (e.g., "Beverages" not "Drinks and Beverages")
 
-Return a suggested category name or null if no category is needed.`;
+Return a suggested category name (single word only) or null if no category is needed.`;
 
     const result = await generateObject({
       model: openai('gpt-4o-mini'),
@@ -68,7 +69,18 @@ Return a suggested category name or null if no category is needed.`;
       return null;
     }
 
-    return categoryResult;
+    // Ensure the category is a single word (take first word if multiple words)
+    const category = categoryResult.suggestedCategory.trim();
+    const singleWordCategory = category.split(/\s+/)[0]; // Take only the first word
+    
+    if (singleWordCategory !== category) {
+      logger.warn({ originalCategory: category, singleWordCategory, itemName }, 'AI returned multi-word category, using first word only');
+    }
+
+    return {
+      ...categoryResult,
+      suggestedCategory: singleWordCategory,
+    };
   } catch (error) {
     const duration = Date.now() - startTime;
     logger.error(
