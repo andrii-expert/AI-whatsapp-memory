@@ -1,7 +1,17 @@
 import type { Database } from '@imaginecalendar/database/client';
 import { getUserShoppingListFolders, createShoppingListFolder } from '@imaginecalendar/database/queries';
-import { suggestShoppingListCategory } from '@imaginecalendar/ai-services';
 import { logger } from '@imaginecalendar/logger';
+
+// Lazy import for AI services to handle module resolution issues
+async function getAISuggestionFunction() {
+  try {
+    const aiServices = await import('@imaginecalendar/ai-services');
+    return aiServices.suggestShoppingListCategory;
+  } catch (error) {
+    logger.warn({ error: error instanceof Error ? error.message : String(error) }, 'AI services module not available');
+    return null;
+  }
+}
 
 /**
  * Get AI category suggestion for a shopping list item
@@ -73,7 +83,15 @@ export async function getCategorySuggestion(
     }
 
     // Use AI to suggest a category with timeout protection
-    let categoryResult: Awaited<ReturnType<typeof suggestShoppingListCategory>> | null = null;
+    let categoryResult: any = null;
+    
+    const suggestShoppingListCategory = await getAISuggestionFunction();
+    
+    if (!suggestShoppingListCategory) {
+      logger.warn({ itemName, userId }, 'AI services not available, skipping category suggestion');
+      return { suggestedCategory: null };
+    }
+
     try {
       // Add timeout to prevent long-running AI calls from blocking the request
       const timeoutPromise = new Promise<null>((resolve) => {
@@ -194,7 +212,15 @@ export async function findOrCreateCategoryForItem(
     }
 
     // Use AI to suggest a category with timeout protection
-    let categoryResult: Awaited<ReturnType<typeof suggestShoppingListCategory>> | null = null;
+    let categoryResult: any = null;
+    
+    const suggestShoppingListCategory = await getAISuggestionFunction();
+    
+    if (!suggestShoppingListCategory) {
+      logger.warn({ itemName, userId }, 'AI services not available, skipping category suggestion');
+      return undefined;
+    }
+
     try {
       // Add timeout to prevent long-running AI calls from blocking the request
       const timeoutPromise = new Promise<null>((resolve) => {
