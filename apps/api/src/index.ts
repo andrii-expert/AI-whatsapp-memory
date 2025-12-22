@@ -37,19 +37,11 @@ logger.info({}, "Bull Board initialized at /queues");
 
 app.use(secureHeaders());
 
-// Bull Board UI - NO AUTH (for easy monitoring)
-app.route("/queues", serverAdapter.registerPlugin());
-
-// Apply Clerk authentication middleware (but NOT to /queues)
-app.use("*", clerkMiddleware({
-  secretKey: process.env.CLERK_SECRET_KEY,
-  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-}));
-
+// CORS must be applied BEFORE authentication middleware to handle preflight requests
 app.use(
   "*",
   cors({
-    origin: process.env.ALLOWED_API_ORIGINS?.split(",") ?? [
+    origin: process.env.ALLOWED_API_ORIGINS?.split(",").map(o => o.trim()) ?? [
       "http://localhost:3000",
       "http://localhost:3001",
       "https://dashboard.crackon.ai",
@@ -67,8 +59,18 @@ app.use(
     ],
     exposeHeaders: ["Content-Length"],
     maxAge: 86400,
+    credentials: true, // Allow credentials (cookies, auth headers)
   }),
 );
+
+// Bull Board UI - NO AUTH (for easy monitoring)
+app.route("/queues", serverAdapter.registerPlugin());
+
+// Apply Clerk authentication middleware (but NOT to /queues)
+app.use("*", clerkMiddleware({
+  secretKey: process.env.CLERK_SECRET_KEY,
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+}));
 
 app.use(
   "/trpc/*",
