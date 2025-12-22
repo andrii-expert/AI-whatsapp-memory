@@ -54,6 +54,14 @@ export async function getUserShoppingListItems(
         orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
         with: {
           folder: true,
+          user: {
+            columns: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
         },
       });
     }
@@ -74,6 +82,14 @@ export async function getShoppingListItemById(
         where: eq(shoppingListItems.id, itemId),
         with: {
           folder: true,
+          user: {
+            columns: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
         },
       });
 

@@ -28,16 +28,46 @@ export async function getUserShoppingListFolders(db: Database, userId: string) {
                 with: {
                   items: {
                     orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+                    with: {
+                      user: {
+                        columns: {
+                          id: true,
+                          firstName: true,
+                          lastName: true,
+                          email: true,
+                        },
+                      },
+                    },
                   },
                 },
               },
               items: {
                 orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+                with: {
+                  user: {
+                    columns: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                    },
+                  },
+                },
               },
             },
           },
           items: {
             orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+            with: {
+              user: {
+                columns: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
           },
         },
       });
@@ -75,16 +105,46 @@ export async function getUserShoppingListFolders(db: Database, userId: string) {
                   with: {
                     items: {
                       orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+                      with: {
+                        user: {
+                          columns: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            email: true,
+                          },
+                        },
+                      },
                     },
                   },
                 },
                 items: {
                   orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+                  with: {
+                    user: {
+                      columns: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                      },
+                    },
+                  },
                 },
               },
             },
             items: {
               orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+              with: {
+                user: {
+                  columns: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
+              },
             },
           },
         });
@@ -121,11 +181,31 @@ export async function getShoppingListFolderById(db: Database, folderId: string, 
             with: {
               items: {
                 orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+                with: {
+                  user: {
+                    columns: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                    },
+                  },
+                },
               },
             },
           },
           items: {
             orderBy: [asc(shoppingListItems.sortOrder), desc(shoppingListItems.createdAt)],
+            with: {
+              user: {
+                columns: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
           },
         },
       });

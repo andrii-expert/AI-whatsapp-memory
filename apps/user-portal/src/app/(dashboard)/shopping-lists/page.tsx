@@ -101,6 +101,9 @@ export default function ShoppingListPage() {
   const { data: sharedResources, isLoading: isLoadingSharedResources } = useQuery(
     trpc.taskSharing.getSharedWithMe.queryOptions()
   );
+  const { data: userPreferences } = useQuery(
+    trpc.preferences.get.queryOptions()
+  );
 
   // Check if initial data is loading
   const isLoading = isLoadingFolders || isLoadingItems || isLoadingShares || isLoadingSharedResources;
@@ -440,6 +443,65 @@ export default function ShoppingListPage() {
     if (folderToDelete) {
       deleteFolderMutation.mutate({ id: folderToDelete.id });
     }
+  };
+
+  // Format date and time
+  const formatDateTime = (dateTimeStr: string | Date | null | undefined) => {
+    if (!dateTimeStr) return "";
+    const date = new Date(dateTimeStr);
+    if (isNaN(date.getTime())) return "";
+    
+    const dateFormat = userPreferences?.dateFormat || "DD/MM/YYYY";
+    const timeFormat = userPreferences?.timeFormat || "24h";
+    const timezone = userPreferences?.timezone || "Africa/Johannesburg";
+    
+    // Use Intl.DateTimeFormat to get date components in user's timezone
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    
+    const parts = formatter.formatToParts(date);
+    const year = parts.find(p => p.type === "year")?.value || "";
+    const month = parts.find(p => p.type === "month")?.value || "";
+    const day = parts.find(p => p.type === "day")?.value || "";
+    
+    // Format date based on user preference
+    let dateStr = "";
+    switch (dateFormat) {
+      case "DD/MM/YYYY":
+        dateStr = `${day}/${month}/${year}`;
+        break;
+      case "MM/DD/YYYY":
+        dateStr = `${month}/${day}/${year}`;
+        break;
+      case "YYYY-MM-DD":
+        dateStr = `${year}-${month}-${day}`;
+        break;
+      default:
+        dateStr = `${day}/${month}/${year}`;
+    }
+    
+    // Format time based on user preference
+    const timeStr = date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: timeFormat === "12h",
+      timeZone: timezone,
+    });
+    
+    return `${dateStr}, ${timeStr}`;
+  };
+
+  // Get user display name
+  const getUserDisplayName = (user: any) => {
+    if (!user) return "Unknown";
+    if (user.firstName || user.lastName) {
+      return `${user.firstName || ""} ${user.lastName || ""}`.trim();
+    }
+    return user.email || "Unknown";
   };
 
   const handleFolderSelect = (folderId: string) => {
@@ -1546,6 +1608,18 @@ export default function ShoppingListPage() {
                   {item.description && (
                     <div className="text-sm text-gray-500 mt-1">{item.description}</div>
                   )}
+                  {/* Created date and user */}
+                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                    {item.createdAt && (
+                      <span>{formatDateTime(item.createdAt)}</span>
+                    )}
+                    {item.user && (
+                      <>
+                        <span>•</span>
+                        <span>Created by {getUserDisplayName(item.user)}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Actions */}
