@@ -174,6 +174,7 @@ export const shoppingListRouter = createTRPCRouter({
         folderId: input.folderId,
         name: input.name,
         description: input.description,
+        category: input.category,
         status: input.status || "open",
       });
 

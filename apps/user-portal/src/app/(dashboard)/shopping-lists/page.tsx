@@ -629,6 +629,12 @@ export default function ShoppingListPage() {
 
     setIsLoadingAISuggestion(true);
     try {
+      console.log('Requesting AI category suggestion for:', {
+        itemName: newItemName.trim(),
+        description: newItemDescription.trim(),
+        folderId: selectedFolderId
+      });
+      
       const queryOptions = trpc.shoppingList.suggestCategory.queryOptions({
         itemName: newItemName.trim(),
         description: newItemDescription.trim() || undefined,
@@ -636,13 +642,25 @@ export default function ShoppingListPage() {
       });
       const result = await queryClient.fetchQuery(queryOptions);
 
-      if (result.suggestedCategory) {
-        setNewItemCategory(result.suggestedCategory);
-        setIsCategoryInputMode("manual");
-        toast({
-          title: "Category suggested",
-          description: `Suggested category: ${result.suggestedCategory}`,
-        });
+      console.log('AI category suggestion result:', result);
+
+      if (result && result.suggestedCategory) {
+        const suggestedCategory = result.suggestedCategory.trim();
+        if (suggestedCategory) {
+          setNewItemCategory(suggestedCategory);
+          setIsCategoryInputMode("manual");
+          console.log('Setting category to:', suggestedCategory, 'Mode:', "manual");
+          toast({
+            title: "Category suggested",
+            description: `Suggested category: ${suggestedCategory}`,
+          });
+        } else {
+          toast({
+            title: "No suggestion",
+            description: "AI couldn't suggest a category for this item.",
+            variant: "destructive",
+          });
+        }
       } else {
         toast({
           title: "No suggestion",
