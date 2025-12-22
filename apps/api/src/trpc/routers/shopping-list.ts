@@ -11,6 +11,7 @@ import {
   createShoppingListFolder,
   updateShoppingListFolder,
   deleteShoppingListFolder,
+  findOrCreateCategoryForItem,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
@@ -157,17 +158,46 @@ export const shoppingListRouter = createTRPCRouter({
   create: protectedProcedure
     .input(createShoppingListItemSchema)
     .mutation(async ({ ctx: { db, session }, input }) => {
-      logger.info({ userId: session.user.id, itemName: input.name }, "Creating shopping list item");
+      logger.info({ userId: session.user.id, itemName: input.name, providedFolderId: input.folderId }, "Creating shopping list item");
+      
+      // If folderId is explicitly provided, check if it's a parent folder and try to find/create a subfolder
+      // Otherwise, use AI to find or create an appropriate subfolder
+      let finalFolderId = input.folderId;
+      
+      try {
+        // Use AI to find or create appropriate category/subfolder
+        // If folderId is provided, it will be used as parentFolderId to create subfolder within it
+        const categoryFolderId = await findOrCreateCategoryForItem(
+          db,
+          session.user.id,
+          input.name,
+          input.folderId // Pass the folderId as parentFolderId if provided
+        );
+        
+        if (categoryFolderId) {
+          finalFolderId = categoryFolderId;
+          logger.info({ userId: session.user.id, itemName: input.name, categoryFolderId, parentFolderId: input.folderId }, "AI selected category for shopping list item");
+        } else if (!input.folderId) {
+          // If no folderId was provided and AI didn't suggest a category, item will be created without folder
+          logger.info({ userId: session.user.id, itemName: input.name }, "No category suggested for shopping list item, creating without folder");
+        }
+      } catch (error) {
+        // Log error but continue with original folderId (or without folder if none was provided)
+        logger.error(
+          { error: error instanceof Error ? error.message : String(error), userId: session.user.id, itemName: input.name },
+          "Failed to find/create category for shopping list item, using provided folder or creating without category"
+        );
+      }
       
       const item = await createShoppingListItem(db, {
         userId: session.user.id,
-        folderId: input.folderId,
+        folderId: finalFolderId,
         name: input.name,
         description: input.description,
         status: input.status || "open",
       });
 
-      logger.info({ userId: session.user.id, itemId: item.id }, "Shopping list item created");
+      logger.info({ userId: session.user.id, itemId: item.id, folderId: finalFolderId }, "Shopping list item created");
       return item;
     }),
 

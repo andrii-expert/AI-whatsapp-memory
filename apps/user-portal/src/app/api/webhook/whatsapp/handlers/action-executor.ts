@@ -65,6 +65,7 @@ import {
   updateShoppingListFolder,
   deleteShoppingListFolder,
   getShoppingListFolderById,
+  findOrCreateCategoryForItem,
   getUserFriends,
   getFriendById,
   createFriend,
@@ -1507,6 +1508,31 @@ export class ActionExecutor {
             message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
+      }
+
+      // Use AI to find or create an appropriate subfolder
+      // If folderId was resolved from folderRoute, it will be used as parentFolderId to create subfolder within it
+      try {
+        const categoryFolderId = await findOrCreateCategoryForItem(
+          this.db,
+          this.userId,
+          parsed.taskName,
+          folderId // Pass the folderId as parentFolderId if it was specified
+        );
+        
+        if (categoryFolderId) {
+          folderId = categoryFolderId;
+          logger.info({ userId: this.userId, itemName: parsed.taskName, categoryFolderId, parentFolderId: parsed.folderRoute }, 'AI selected category for shopping list item via WhatsApp');
+        } else if (!folderId) {
+          // If no folderId was provided and AI didn't suggest a category, item will be created without folder
+          logger.info({ userId: this.userId, itemName: parsed.taskName }, 'No category suggested for shopping list item via WhatsApp, creating without folder');
+        }
+      } catch (error) {
+        // Log error but continue with original folderId (or without folder if none was provided)
+        logger.error(
+          { error: error instanceof Error ? error.message : String(error), userId: this.userId, itemName: parsed.taskName },
+          'Failed to find/create category for shopping list item via WhatsApp, using provided folder or creating without category'
+        );
       }
 
       await createShoppingListItem(this.db, {

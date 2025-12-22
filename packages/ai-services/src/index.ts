@@ -49,3 +49,7 @@ export type {
   ConflictInfo,
   ICalendarService,
 } from './resolvers';
+
+// Shopping List Categorization
+export { suggestShoppingListCategory } from './intent/shopping-list-categorization';
+export type { ShoppingListCategoryResult } from './intent/shopping-list-categorization';
