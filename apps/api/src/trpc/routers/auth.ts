@@ -168,12 +168,43 @@ export const authRouter = createTRPCRouter({
         error, 
         userId: session.user.id,
         queryDuration: Date.now() - checkStartTime,
+        errorMessage: error instanceof Error ? error.message : String(error),
       }, "[ONBOARDING_CHECK] Error checking onboarding status");
       
-      // On error, assume user needs onboarding to be safe
+      // Try to get user data directly to determine onboarding status
+      // This is more reliable than assuming they need onboarding
+      try {
+        const user = await getUserById(db, session.user.id);
+        const hasRequiredFields = !!(user && (user.firstName || user.name) && user.phone);
+        
+        // If user exists with required fields, they're onboarded
+        // Only return needsOnboarding: true if we can confirm they're missing required fields
+        if (user && !hasRequiredFields) {
+          return { 
+            needsOnboarding: true, 
+            reason: "PROFILE_INCOMPLETE" 
+          };
+        }
+        
+        // If user exists with required fields, they're onboarded (even if timezone check failed)
+        if (hasRequiredFields) {
+          return { 
+            needsOnboarding: false, 
+            reason: null 
+          };
+        }
+      } catch (userError) {
+        logger.error({ 
+          error: userError, 
+          userId: session.user.id,
+        }, "[ONBOARDING_CHECK] Error getting user data as fallback");
+      }
+      
+      // Only assume user needs onboarding if we can't get user data at all
+      // This is a last resort - better to let them through if we're unsure
       return { 
-        needsOnboarding: true, 
-        reason: "ERROR_CHECKING_STATUS" 
+        needsOnboarding: false, 
+        reason: null 
       };
     }
   }),
