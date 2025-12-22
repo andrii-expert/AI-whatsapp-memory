@@ -15,7 +15,6 @@ import {
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { suggestShoppingCategory } from "@imaginecalendar/ai-services/intent";
 
 // Folder schemas
 const createShoppingListFolderSchema = z.object({
@@ -160,76 +159,9 @@ export const shoppingListRouter = createTRPCRouter({
     .mutation(async ({ ctx: { db, session }, input }) => {
       logger.info({ userId: session.user.id, itemName: input.name }, "Creating shopping list item");
       
-      let folderId = input.folderId;
-      
-      // Auto-categorize if no folder is specified
-      if (!folderId) {
-        try {
-          const suggestedCategory = await suggestShoppingCategory(input.name);
-          if (suggestedCategory) {
-            // Get all folders to find the category
-            const allFolders = await getUserShoppingListFolders(db, session.user.id);
-            
-            // Helper function to find category recursively
-            const findCategory = (folderList: any[]): any | null => {
-              for (const folder of folderList) {
-                if (folder.subfolders) {
-                  const found = folder.subfolders.find(
-                    (sf: any) => sf.name.toLowerCase() === suggestedCategory.toLowerCase()
-                  );
-                  if (found) return found;
-                  
-                  // Recursively search deeper
-                  for (const subfolder of folder.subfolders) {
-                    if (subfolder.subfolders) {
-                      const deeperFound = findCategory([subfolder]);
-                      if (deeperFound) return deeperFound;
-                    }
-                  }
-                }
-              }
-              return null;
-            };
-            
-            const foundCategory = findCategory(allFolders);
-            
-            if (foundCategory) {
-              folderId = foundCategory.id;
-              logger.info(
-                { userId: session.user.id, itemName: input.name, category: suggestedCategory },
-                'Auto-categorized item to existing category'
-              );
-            } else {
-              // Category doesn't exist, find a parent folder to create category in
-              const parentFolder = allFolders.find(f => !f.parentId) || allFolders[0];
-              
-              if (parentFolder) {
-                // Create the category in the parent folder
-                const category = await createShoppingListFolder(db, {
-                  userId: session.user.id,
-                  parentId: parentFolder.id,
-                  name: suggestedCategory,
-                });
-                folderId = category.id;
-                logger.info(
-                  { userId: session.user.id, itemName: input.name, category: suggestedCategory, parentFolder: parentFolder.name },
-                  'Auto-created category for item'
-                );
-              }
-            }
-          }
-        } catch (categoryError) {
-          // If category suggestion fails, continue without category
-          logger.warn(
-            { error: categoryError, userId: session.user.id, itemName: input.name },
-            'Failed to auto-categorize item, continuing without category'
-          );
-        }
-      }
-      
       const item = await createShoppingListItem(db, {
         userId: session.user.id,
-        folderId,
+        folderId: input.folderId,
         name: input.name,
         description: input.description,
         status: input.status || "open",
