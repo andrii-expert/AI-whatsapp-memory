@@ -67,19 +67,14 @@ export default function ShoppingListPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [editItemDescription, setEditItemDescription] = useState("");
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [isLoadingAISuggestion, setIsLoadingAISuggestion] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
 
   // Folder states
   const [newFolderName, setNewFolderName] = useState("");
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [addingCategoryToId, setAddingCategoryToId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editFolderName, setEditFolderName] = useState("");
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [deleteFolderConfirmOpen, setDeleteFolderConfirmOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
 
@@ -151,39 +146,25 @@ export default function ShoppingListPage() {
 
   // Helper function to flatten all folders including categories
   const flattenFolders = (folderList: any[]): any[] => {
-    const result: any[] = [];
-    const flatten = (folder: any) => {
-      result.push(folder);
-      if (folder.subfolders && folder.subfolders.length > 0) {
-        folder.subfolders.forEach(flatten);
-      }
-    };
-    folderList.forEach(flatten);
-    return result;
+    // Only return top-level folders, ignore subfolders
+    return folderList.filter((folder: any) => !folder.parentId);
   };
 
   const allOwnedFolders = useMemo(() => flattenFolders(folders), [folders]);
 
   // Sort folders to show "General" at the top
   const sortedFolders = useMemo(() => {
-    const sortFoldersRecursive = (folderList: any[]): any[] => {
-      return [...folderList]
-        .sort((a, b) => {
-          const aIsGeneral = a.name.toLowerCase() === "general";
-          const bIsGeneral = b.name.toLowerCase() === "general";
-          
-          if (aIsGeneral && !bIsGeneral) return -1;
-          if (!aIsGeneral && bIsGeneral) return 1;
-          
-          return 0;
-        })
-        .map(folder => ({
-          ...folder,
-          subfolders: folder.subfolders ? sortFoldersRecursive(folder.subfolders) : [] // Note: subfolders is the database relation name, but displayed as "categories"
-        }));
-    };
-    
-    return sortFoldersRecursive(folders);
+    // Only show top-level folders (no subfolders)
+    const topLevelFolders = folders.filter((folder: any) => !folder.parentId);
+    return [...topLevelFolders].sort((a, b) => {
+      const aIsGeneral = a.name.toLowerCase() === "general";
+      const bIsGeneral = b.name.toLowerCase() === "general";
+      
+      if (aIsGeneral && !bIsGeneral) return -1;
+      if (!aIsGeneral && bIsGeneral) return 1;
+      
+      return 0;
+    });
   }, [folders]);
 
   // Update folders ref when allOwnedFolders changes
@@ -211,38 +192,12 @@ export default function ShoppingListPage() {
            null;
   }, [selectedFolderId, allOwnedFolders, sharedFolders]);
 
-  // Get categories (subfolders) from the selected folder
-  const availableCategories = useMemo(() => {
-    if (!selectedFolder) {
-      // If no folder selected, get all categories from all folders
-      const allCategories: any[] = [];
-      folders.forEach((folder: any) => {
-        if (folder.subfolders && folder.subfolders.length > 0) {
-          allCategories.push(...folder.subfolders);
-        }
-      });
-      return allCategories;
-    }
-    return selectedFolder.subfolders || [];
-  }, [selectedFolder, folders]);
 
-  // Get folder path (breadcrumb trail)
+  // Get folder path (breadcrumb trail) - simplified since no subfolders
   const getFolderPath = (folderId: string): string[] => {
-    const path: string[] = [];
-    let currentId: string | null = folderId;
-    
-    while (currentId) {
-      const folder = allOwnedFolders.find((f) => f.id === currentId) || 
-                     sharedFolders.find((f: any) => f.id === currentId);
-      if (folder) {
-        path.unshift(folder.name);
-        currentId = folder.parentId;
-      } else {
-        break;
-      }
-    }
-    
-    return path;
+    const folder = allOwnedFolders.find((f) => f.id === folderId) || 
+                   sharedFolders.find((f: any) => f.id === folderId);
+    return folder ? [folder.name] : [];
   };
 
   const folderPath = selectedFolder ? getFolderPath(selectedFolder.id) : [];
@@ -263,7 +218,6 @@ export default function ShoppingListPage() {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
         setNewItemName("");
         setNewItemDescription("");
-        setSelectedCategoryId(null);
         setIsAddModalOpen(false);
         toast({
           title: "Item added",
@@ -351,18 +305,9 @@ export default function ShoppingListPage() {
       onSuccess: (newFolder) => {
         queryClient.invalidateQueries();
         setNewFolderName("");
-        setNewCategoryName("");
-        setAddingCategoryToId(null);
         if (newFolder) {
           setSelectedFolderId(newFolder.id);
           setViewAllItems(false);
-          if (newFolder.parentId) {
-            setExpandedFolders((prev) => {
-              const next = new Set(prev);
-              next.add(newFolder.parentId as string);
-              return next;
-            });
-          }
         }
         toast({
           title: "Success",
@@ -432,14 +377,6 @@ export default function ShoppingListPage() {
     createFolderMutation.mutate({ name: newFolderName.trim() });
   };
 
-  const handleCreateCategory = (e: React.FormEvent, parentId: string) => {
-    e.preventDefault();
-    if (!newCategoryName.trim()) return;
-    createFolderMutation.mutate({ 
-      name: newCategoryName.trim(),
-      parentId: parentId
-    });
-  };
 
   const handleEditFolder = (folderId: string, folderName: string) => {
     setEditingFolderId(folderId);
@@ -526,17 +463,6 @@ export default function ShoppingListPage() {
     setIsMobileSidebarOpen(false);
   };
 
-  const toggleFolderExpanded = (folderId: string) => {
-    setExpandedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-      return next;
-    });
-  };
 
   // Get share count for a resource
   const getShareCount = (resourceType: "task" | "task_folder" | "shopping_list_folder", resourceId: string): number => {
@@ -675,94 +601,13 @@ export default function ShoppingListPage() {
   }, [filteredItems]);
 
   // Get AI category suggestion
-  const getAICategorySuggestion = async () => {
-    if (!newItemName.trim()) {
-      toast({
-        title: "Item name required",
-        description: "Please enter an item name first",
-        variant: "error",
-      });
-      return;
-    }
-
-    setIsLoadingAISuggestion(true);
-    try {
-      // Use queryClient to fetch the query
-      const queryOptions = trpc.shoppingList.suggestCategory.queryOptions({
-        itemName: newItemName.trim(),
-        description: newItemDescription.trim() || undefined,
-        parentFolderId: selectedFolderId || undefined,
-      });
-      const result = await queryClient.fetchQuery(queryOptions);
-
-      if (result.suggestedCategory) {
-        // Find the category in available categories (case-insensitive)
-        const matchingCategory = availableCategories.find(
-          (cat: any) => cat.name.toLowerCase() === result.suggestedCategory!.toLowerCase()
-        );
-
-        if (matchingCategory) {
-          setSelectedCategoryId(matchingCategory.id);
-          toast({
-            title: "Category suggested",
-            description: `Selected category: ${result.suggestedCategory}`,
-          });
-        } else {
-          // Category doesn't exist yet - create it using the existing mutation
-          createFolderMutation.mutate(
-            {
-              name: result.suggestedCategory,
-              parentId: selectedFolderId || undefined,
-            },
-            {
-              onSuccess: (newCategory) => {
-                if (newCategory && newCategory.id) {
-                  setSelectedCategoryId(newCategory.id);
-                  toast({
-                    title: "Category created",
-                    description: `Created and selected category: ${result.suggestedCategory}`,
-                  });
-                }
-              },
-              onError: (error) => {
-                console.error('Failed to create category:', error);
-                toast({
-                  title: "Category suggested",
-                  description: `AI suggested: "${result.suggestedCategory}". Please create this category manually or select an existing one.`,
-                  variant: "default",
-                });
-              },
-            }
-          );
-        }
-      } else {
-        toast({
-          title: "No suggestion",
-          description: "AI couldn't suggest a category for this item. Please try a different item name or select a category manually.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('AI suggestion error:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to get AI suggestion. Please try again.",
-        variant: "error",
-      });
-    } finally {
-      setIsLoadingAISuggestion(false);
-    }
-  };
 
   const handleCreateItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
 
-    // Use selected category if available, otherwise use selected folder
-    const folderIdToUse = selectedCategoryId || selectedFolderId || undefined;
-
     createItemMutation.mutate({
-      folderId: folderIdToUse,
+      folderId: selectedFolderId || undefined,
       name: newItemName.trim(),
       description: newItemDescription.trim() || undefined,
     });
@@ -820,12 +665,9 @@ export default function ShoppingListPage() {
 
 
 
-  // Recursive folder rendering component
-  const renderFolder = (folder: any, level: number = 0) => {
-    const isExpanded = expandedFolders.has(folder.id);
+  // Folder rendering component
+  const renderFolder = (folder: any) => {
     const isSelected = selectedFolderId === folder.id && !viewAllItems;
-    const hasCategories = folder.subfolders && folder.subfolders.length > 0;
-    const isAddingCategory = addingCategoryToId === folder.id;
     const isEditingFolder = editingFolderId === folder.id;
     
     // Check if folder is shared with user (not owned)
@@ -840,25 +682,9 @@ export default function ShoppingListPage() {
             "flex items-center justify-between px-4 py-2 rounded-lg transition-colors group",
             isSelected ? "bg-blue-100 text-blue-900" : "hover:bg-gray-100 text-gray-700"
           )}
-          style={{ paddingLeft: `${5 + level * 20}px` }}
         >
-          {/* Left side: Expand button + Folder name */}
+          {/* Left side: Folder name */}
           <div className="flex items-center gap-1 flex-1 min-w-0">
-            {hasCategories ? (
-              <button
-                onClick={() => toggleFolderExpanded(folder.id)}
-                className="p-1 hover:bg-gray-200 rounded flex-shrink-0"
-              >
-                {isExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </button>
-            ) : (
-              <div className="w-5 flex-shrink-0" />
-            )}
-            
             {isEditingFolder ? (
               <Input
                 value={editFolderName}
@@ -973,18 +799,6 @@ export default function ShoppingListPage() {
                     <span>Edit</span>
                   </DropdownMenuItem>
                 )}
-                {level === 0 && canEdit && (
-                  <DropdownMenuItem
-                    onClick={(e: React.MouseEvent) => {
-                      e.stopPropagation();
-                      setAddingCategoryToId(folder.id);
-                    }}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Add category</span>
-                  </DropdownMenuItem>
-                )}
                 {isOwner && folder.name.toLowerCase() !== "general" && (
                   <DropdownMenuItem
                     onClick={(e: React.MouseEvent) => {
@@ -1002,51 +816,6 @@ export default function ShoppingListPage() {
           )}
         </div>
 
-        {/* Category input form */}
-        {isAddingCategory && (
-          <form
-            onSubmit={(e) => handleCreateCategory(e, folder.id)}
-            className="flex gap-2 mt-1 mb-2"
-            style={{ paddingLeft: `${36 + level * 20}px` }}
-          >
-            <Input
-              placeholder="Category name"
-              value={newCategoryName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setNewCategoryName(e.target.value)
-              }
-              className="flex-1 h-8 text-sm"
-              autoFocus
-            />
-            <Button
-              type="submit"
-              size="sm"
-              variant="blue-primary"
-              className="h-8" disabled={createFolderMutation.isPending}
-            >
-              Add
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8"
-              onClick={() => {
-                setAddingCategoryToId(null);
-                setNewCategoryName("");
-              }}
-            >
-              Cancel
-            </Button>
-          </form>
-        )}
-
-        {/* Render categories recursively */}
-        {isExpanded && hasCategories && (
-          <div>
-            {folder.subfolders.map((category: any) => renderFolder(category, level + 1))}
-          </div>
-        )}
       </div>
     );
   };
@@ -1174,7 +943,7 @@ export default function ShoppingListPage() {
               ) : (
                 <>
                   <div className="h-px bg-gray-200 my-2" />
-                  {sortedFolders.map((folder) => renderFolder(folder, 0))}
+                  {sortedFolders.map((folder) => renderFolder(folder))}
                 </>
               )}
 
@@ -1269,7 +1038,7 @@ export default function ShoppingListPage() {
               ) : (
                 <>
                   <div className="h-px bg-gray-200 my-2" />
-                  {sortedFolders.map((folder) => renderFolder(folder, 0))}
+                  {sortedFolders.map((folder) => renderFolder(folder))}
                 </>
               )}
 
@@ -1776,70 +1545,6 @@ export default function ShoppingListPage() {
                   placeholder="e.g., 2% milk, whole wheat bread"
                 />
               </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label htmlFor="item-category">Category (Optional)</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={getAICategorySuggestion}
-                    disabled={isLoadingAISuggestion || !newItemName.trim()}
-                    className="text-xs"
-                  >
-                    {isLoadingAISuggestion ? "Analyzing..." : "Use AI Suggestion"}
-                  </Button>
-                </div>
-                <div className="flex gap-2">
-                  <Select
-                    value={selectedCategoryId || undefined}
-                    onValueChange={(value) => {
-                      if (value === "__none__") {
-                        setSelectedCategoryId(null);
-                      } else {
-                        setSelectedCategoryId(value);
-                      }
-                    }}
-                  >
-                    <SelectTrigger id="item-category" className="flex-1">
-                      <SelectValue placeholder="Select a category (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableCategories.length === 0 ? (
-                        <SelectItem value="no-categories" disabled>
-                          No categories available
-                          {selectedFolderId ? " in this folder" : ""}
-                        </SelectItem>
-                      ) : (
-                        <>
-                          <SelectItem value="__none__">None</SelectItem>
-                          {availableCategories.map((category: any) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {selectedCategoryId && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedCategoryId(null)}
-                      className="shrink-0"
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-                {selectedFolderId && availableCategories.length === 0 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    No categories in this folder. Select a category from all folders or create one.
-                  </p>
-                )}
-              </div>
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel
@@ -1847,7 +1552,6 @@ export default function ShoppingListPage() {
                   setIsAddModalOpen(false);
                   setNewItemName("");
                   setNewItemDescription("");
-                  setSelectedCategoryId(null);
                 }}
               >
                 Cancel
