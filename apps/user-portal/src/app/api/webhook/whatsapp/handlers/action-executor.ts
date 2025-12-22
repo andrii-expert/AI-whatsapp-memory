@@ -65,7 +65,6 @@ import {
   updateShoppingListFolder,
   deleteShoppingListFolder,
   getShoppingListFolderById,
-  findOrCreateCategoryForItem,
   getUserFriends,
   getFriendById,
   createFriend,
@@ -85,6 +84,7 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { CalendarService } from './calendar-service';
 import type { CalendarIntent } from '@imaginecalendar/ai-services';
+import { findOrCreateCategoryForItem } from '@/lib/shopping-list-categorization';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';

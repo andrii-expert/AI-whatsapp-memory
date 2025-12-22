@@ -21,6 +21,7 @@
     "@clerk/nextjs": "^6.31.6",
     "@hookform/resolvers": "^5.1.1",
     "ai": "^5.0.59",
+    "@imaginecalendar/ai-services": "workspace:*",
     "@imaginecalendar/api": "workspace:*",
     "@imaginecalendar/calendar-integrations": "workspace:*",
     "@imaginecalendar/database": "workspace:*",

@@ -29,4 +29,3 @@ export * from "./friends";
 
 // Re-export utility functions
 export * from "../utils/plan-limits";
-export * from "../utils/shopping-list-categorization";

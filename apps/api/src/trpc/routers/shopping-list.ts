@@ -11,8 +11,8 @@ import {
   createShoppingListFolder,
   updateShoppingListFolder,
   deleteShoppingListFolder,
-  findOrCreateCategoryForItem,
 } from "@imaginecalendar/database/queries";
+import { findOrCreateCategoryForItem } from "@api/utils/shopping-list-categorization";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";

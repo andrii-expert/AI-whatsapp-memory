@@ -1,7 +1,7 @@
-import type { Database } from "../client";
-import { getUserShoppingListFolders, createShoppingListFolder } from "../queries/shopping-list-folders";
-import { suggestShoppingListCategory } from "@imaginecalendar/ai-services";
-import { logger } from "@imaginecalendar/logger";
+import type { Database } from '@imaginecalendar/database/client';
+import { getUserShoppingListFolders, createShoppingListFolder } from '@imaginecalendar/database/queries';
+import { suggestShoppingListCategory } from '@imaginecalendar/ai-services';
+import { logger } from '@imaginecalendar/logger';
 
 /**
  * Helper function to find or create an appropriate subfolder for a shopping list item
