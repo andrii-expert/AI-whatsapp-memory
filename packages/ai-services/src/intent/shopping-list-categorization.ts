@@ -1,5 +1,5 @@
 import { generateObject } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { logger } from '@imaginecalendar/logger';
 import { z } from 'zod';
 
@@ -54,6 +54,18 @@ export async function suggestShoppingListCategory(
   const startTime = Date.now();
 
   try {
+    // Check for OpenAI API key
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      logger.error({}, 'OPENAI_API_KEY is not set in environment variables');
+      throw new Error('OPENAI_API_KEY environment variable is required. Please set it in your environment.');
+    }
+
+    // Create OpenAI client with explicit API key
+    const openaiClient = createOpenAI({
+      apiKey: apiKey,
+    });
+
     logger.info({ itemName, existingCategoriesCount: existingCategories.length }, 'Analyzing shopping list item for category');
 
     // Build the prompt
@@ -87,8 +99,10 @@ You MUST return a category name. Examples:
 
 Return a suggested category name (single word only). This field is REQUIRED and cannot be null or empty.`;
 
+    logger.debug({ itemName, promptLength: prompt.length }, 'Calling OpenAI API for category suggestion');
+
     const result = await generateObject({
-      model: openai('gpt-4o-mini'),
+      model: openaiClient('gpt-4o-mini'),
       schema: shoppingListCategorySchema,
       prompt: prompt,
     });
