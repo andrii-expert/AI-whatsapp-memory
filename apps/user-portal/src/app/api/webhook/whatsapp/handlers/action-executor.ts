@@ -1479,7 +1479,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *Added to Shopping List:*\nItem/s: ${parsed.taskName}`,
+        message: `✅ *Added to Shopping Lists:*\nItem/s: ${parsed.taskName}`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
@@ -2960,12 +2960,14 @@ export class ActionExecutor {
           message: `🛒 *Your shopping list${folderText} is empty${statusText}*`,
         };
       }
+      const statusText = statusFilter ? ` (${statusFilter})` : '';
+      const folderText = folderId ? ` - ${parsed.folderRoute}` : '';
+      let message = `🛍️ *Shopping Lists${folderText}${statusText}:*\n`;
 
-      let message = `🛍️ *Shopping List*\n`;
-      
       const displayedItems = items.slice(0, 20);
       displayedItems.forEach((item, index) => {
-        message += `*${index + 1}.* ${item.name}`;
+        const statusIcon = item.status === 'completed' ? '✅' : '⬜';
+        message += `${statusIcon} *${index + 1}.* ${item.name}`;
         if (item.description) {
           message += ` - ${item.description}`;
         }

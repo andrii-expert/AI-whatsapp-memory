@@ -447,22 +447,20 @@ export default function ShoppingListPage() {
     }
   };
 
-  // Format date and time
-  const formatDateTime = (dateTimeStr: string | Date | null | undefined) => {
+  // Format date for shopping list items: "16 Dec, 2025"
+  const formatShoppingListDate = (dateTimeStr: string | Date | null | undefined) => {
     if (!dateTimeStr) return "";
     const date = new Date(dateTimeStr);
     if (isNaN(date.getTime())) return "";
     
-    const dateFormat = userPreferences?.dateFormat || "DD/MM/YYYY";
-    const timeFormat = userPreferences?.timeFormat || "24h";
     const timezone = userPreferences?.timezone || "Africa/Johannesburg";
     
-    // Use Intl.DateTimeFormat to get date components in user's timezone
+    // Use Intl.DateTimeFormat to format date in user's timezone
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
       year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
+      month: "short",
+      day: "numeric",
     });
     
     const parts = formatter.formatToParts(date);
@@ -470,31 +468,7 @@ export default function ShoppingListPage() {
     const month = parts.find(p => p.type === "month")?.value || "";
     const day = parts.find(p => p.type === "day")?.value || "";
     
-    // Format date based on user preference
-    let dateStr = "";
-    switch (dateFormat) {
-      case "DD/MM/YYYY":
-        dateStr = `${day}/${month}/${year}`;
-        break;
-      case "MM/DD/YYYY":
-        dateStr = `${month}/${day}/${year}`;
-        break;
-      case "YYYY-MM-DD":
-        dateStr = `${year}-${month}-${day}`;
-        break;
-      default:
-        dateStr = `${day}/${month}/${year}`;
-    }
-    
-    // Format time based on user preference
-    const timeStr = date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: timeFormat === "12h",
-      timeZone: timezone,
-    });
-    
-    return `${dateStr}, ${timeStr}`;
+    return `${day} ${month}, ${year}`;
   };
 
   // Get user display name
@@ -1624,18 +1598,15 @@ export default function ShoppingListPage() {
                   {item.description && (
                     <div className="text-sm text-gray-500 mt-1">{item.description}</div>
                   )}
-                  {/* Created date and user */}
-                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-                    {item.createdAt && (
-                      <span>{formatDateTime(item.createdAt)}</span>
-                    )}
-                    {item.user && (
-                      <>
-                        <span>•</span>
-                        <span>Created by {getUserDisplayName(item.user)}</span>
-                      </>
-                    )}
-                  </div>
+                  {/* Added by and date */}
+                  {(item.createdAt || item.user) && (
+                    <div className="mt-1 text-xs text-gray-400">
+                      <span>
+                        Added by: {item.user ? getUserDisplayName(item.user) : "Unknown"}
+                        {item.createdAt && ` on ${formatShoppingListDate(item.createdAt)}`}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions */}
