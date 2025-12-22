@@ -765,7 +765,7 @@ async function processAIResponse(
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          combinedMessage = `✅ *Added to Shopping Lists:*\nItem/s: ${itemsText}`;
+          combinedMessage = `✅ *Added to Shopping List:*\nItem/s: ${itemsText}`;
         }
         
         // Add other messages

@@ -1399,7 +1399,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✏️ *Item Updated:*\n"${parsed.taskName}" → "${parsed.newName}"`,
+        message: `⚠️ *Shopping Item Updated:*\nNew: ${parsed.newName}`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to edit shopping item');
@@ -1476,10 +1476,9 @@ export class ActionExecutor {
         status: 'open',
       });
 
-      const folderText = folderId && parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
       return {
         success: true,
-        message: `✓ Added "${parsed.taskName}" to Shopping Lists${folderText}`,
+        message: `✅ *Added to Shopping List:*\nItem/s: ${parsed.taskName}`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
@@ -1827,7 +1826,7 @@ export class ActionExecutor {
       const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
       return {
         success: true,
-        message: `🔁 *Shopping Lists Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
+        message: `🔁 *Shopping List Shared*\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(
@@ -2012,9 +2011,13 @@ export class ActionExecutor {
 
       if (deletedNames.length > 0) {
         this.clearListContext(); // Clear context after successful deletion
+        // Format multiple items
+        const itemsText = deletedNames.length === 1
+          ? `Title: ${deletedNames[0]}`
+          : deletedNames.map(name => `Title: ${name}`).join('\n');
         return {
           success: true,
-          message: `⛔ *Items Removed:*\n${deletedNames.join('\n')}${errors.length > 0 ? `\n\nFailed to delete: ${errors.join(', ')}` : ''}`,
+          message: `⛔ *Item Removed:*\n${itemsText}${errors.length > 0 ? `\n\nFailed to delete: ${errors.join(', ')}` : ''}`,
         };
       } else {
         return {
@@ -2054,7 +2057,7 @@ export class ActionExecutor {
       await deleteShoppingListItem(this.db, item.id, this.userId);
       return {
         success: true,
-        message: `⛔ *Item Removed:*\n${item.name}`,
+        message: `⛔ *Item Removed:*\nTitle: ${item.name}`,
       };
     } catch (error) {
       logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item');
@@ -2957,14 +2960,11 @@ export class ActionExecutor {
         };
       }
 
-      const statusText = statusFilter ? ` (${statusFilter})` : '';
-      const folderText = folderId ? ` - ${parsed.folderRoute}` : '';
-      let message = `🛍️ *Shopping Lists${folderText}${statusText}:*\n`;
+      let message = `🛍️ *Shopping List*\n`;
       
       const displayedItems = items.slice(0, 20);
       displayedItems.forEach((item, index) => {
-        const statusIcon = item.status === 'completed' ? '✅' : '⬜';
-        message += `${statusIcon} *${index + 1}.* ${item.name}`;
+        message += `*${index + 1}.* ${item.name}`;
         if (item.description) {
           message += ` - ${item.description}`;
         }
