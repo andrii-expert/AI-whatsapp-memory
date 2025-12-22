@@ -15,9 +15,6 @@ import {
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import type { Database } from '@imaginecalendar/database/client';
 
 // Folder schemas
 const createShoppingListFolderSchema = z.object({
@@ -56,170 +53,6 @@ const getShoppingListItemsSchema = z.object({
   folderId: z.string().uuid().optional(),
   status: z.enum(["open", "completed", "archived"]).optional(),
 });
-
-/**
- * Use AI to automatically categorize a shopping item based on its name
- */
-async function categorizeShoppingItem(
-  db: Database,
-  userId: string,
-  itemName: string
-): Promise<string | undefined> {
-  try {
-    // Get all folders and categories for the user
-    const folders = await getUserShoppingListFolders(db, userId);
-    
-    // Build a flat list of all categories (folders and subfolders)
-    const allCategories: Array<{ name: string; path: string }> = [];
-    
-    const collectCategories = (folderList: any[], parentPath: string = '') => {
-      for (const folder of folderList) {
-        const fullPath = parentPath ? `${parentPath}/${folder.name}` : folder.name;
-        allCategories.push({ name: folder.name, path: fullPath });
-        
-        if (folder.subfolders && folder.subfolders.length > 0) {
-          collectCategories(folder.subfolders, fullPath);
-        }
-      }
-    };
-    
-    collectCategories(folders);
-    
-    // If no categories exist, return undefined (item will be added without category)
-    if (allCategories.length === 0) {
-      return undefined;
-    }
-    
-    // Build AI prompt to categorize the item
-    const categoryList = allCategories.map(cat => `- ${cat.path}`).join('\n');
-    const prompt = `You are a shopping list categorization assistant. Analyze the shopping item name and determine which category it belongs to.
-
-Shopping Item: "${itemName}"
-
-Available Categories:
-${categoryList}
-
-Instructions:
-1. Analyze the item name and determine the most appropriate category
-2. Return ONLY the category path (e.g., "Groceries" or "Groceries/Fruits")
-3. If the item doesn't fit any category well, return "NONE"
-4. Be smart about categorization - "milk" should go in "Groceries" or "Dairy", "toothpaste" should go in "Personal Care" or "Health", etc.
-
-Category:`;
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      logger.warn({}, 'OPENAI_API_KEY not set, skipping auto-categorization');
-      return undefined;
-    }
-
-    const openaiClient = createOpenAI({ apiKey });
-    const model = openaiClient('gpt-4o-mini');
-    
-    const result = await generateText({
-      model,
-      prompt,
-      temperature: 0.3,
-    });
-
-    const categoryPath = result.text.trim();
-    
-    // Check if AI returned "NONE" or empty
-    if (!categoryPath || categoryPath.toUpperCase() === 'NONE' || categoryPath.length === 0) {
-      return undefined;
-    }
-    
-    // Resolve the category path to folder ID
-    const folderId = await resolveShoppingListFolderRoute(db, userId, categoryPath);
-    
-    if (folderId) {
-      logger.info({ itemName, categoryPath, folderId, userId }, 'AI categorized shopping item');
-      return folderId;
-    }
-    
-    logger.warn({ itemName, categoryPath, userId }, 'AI suggested category but could not resolve folder ID');
-    return undefined;
-  } catch (error) {
-    logger.error({ error, itemName, userId }, 'Failed to categorize shopping item with AI');
-    // Don't fail the item creation if categorization fails - just return undefined
-    return undefined;
-  }
-}
-
-/**
- * Resolve shopping list folder route to folder ID (helper function for categorization)
- */
-async function resolveShoppingListFolderRoute(
-  db: Database,
-  userId: string,
-  folderRoute: string
-): Promise<string | null> {
-  const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
-  const folders = await getUserShoppingListFolders(db, userId);
-  
-  // If only one part is provided, search all categories recursively
-  if (parts.length === 1) {
-    const folderName = parts[0].toLowerCase();
-    
-    // First check if it's a root folder
-    const rootFolder = folders.find((f: any) => f.name.toLowerCase() === folderName);
-    if (rootFolder) {
-      return rootFolder.id;
-    }
-    
-    // If not found as root folder, search all categories recursively
-    const foundCategory = findSubfolderByName(folders, folderName);
-    if (foundCategory) {
-      return foundCategory.id;
-    }
-    
-    return null;
-  }
-  
-  // Multiple parts: navigate through path
-  let currentFolder = folders.find((f: any) => f.name.toLowerCase() === parts[0].toLowerCase());
-  if (!currentFolder) {
-    return null;
-  }
-
-  // Navigate through categories
-  for (let i = 1; i < parts.length; i++) {
-    const category = currentFolder.subfolders?.find(
-      (sf: any) => sf.name.toLowerCase() === parts[i].toLowerCase()
-    );
-    if (!category) {
-      return null;
-    }
-    currentFolder = category;
-  }
-
-  return currentFolder.id;
-}
-
-/**
- * Helper function to find subfolder by name recursively
- */
-function findSubfolderByName(folders: any[], folderName: string): any | null {
-  for (const folder of folders) {
-    if (folder.subfolders && folder.subfolders.length > 0) {
-      const found = folder.subfolders.find(
-        (sf: any) => sf.name.toLowerCase() === folderName.toLowerCase()
-      );
-      if (found) {
-        return found;
-      }
-      
-      // Recursively search deeper categories
-      for (const category of folder.subfolders) {
-        const deeperFound = findSubfolderByName([category], folderName);
-        if (deeperFound) {
-          return deeperFound;
-        }
-      }
-    }
-  }
-  return null;
-}
 
 export const shoppingListRouter = createTRPCRouter({
   // ============================================
@@ -326,21 +159,15 @@ export const shoppingListRouter = createTRPCRouter({
     .mutation(async ({ ctx: { db, session }, input }) => {
       logger.info({ userId: session.user.id, itemName: input.name }, "Creating shopping list item");
       
-      // Auto-categorize if no folder specified
-      let folderId = input.folderId;
-      if (!folderId) {
-        folderId = await categorizeShoppingItem(db, session.user.id, input.name);
-      }
-      
       const item = await createShoppingListItem(db, {
         userId: session.user.id,
-        folderId,
+        folderId: input.folderId,
         name: input.name,
         description: input.description,
         status: input.status || "open",
       });
 
-      logger.info({ userId: session.user.id, itemId: item.id, folderId }, "Shopping list item created");
+      logger.info({ userId: session.user.id, itemId: item.id }, "Shopping list item created");
       return item;
     }),
 
@@ -396,4 +223,3 @@ export const shoppingListRouter = createTRPCRouter({
       return item;
     }),
 });
-

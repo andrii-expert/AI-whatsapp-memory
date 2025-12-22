@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "show_welcome_modal" boolean DEFAULT false NOT NULL;
