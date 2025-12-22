@@ -87,6 +87,8 @@ import type { CalendarIntent } from '@imaginecalendar/ai-services';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { generateText } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
 
 export interface ParsedAction {
   action: string;
@@ -1507,6 +1509,9 @@ export class ActionExecutor {
             message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
+      } else {
+        // Auto-categorize if no folder specified
+        folderId = await this.categorizeShoppingItem(parsed.taskName);
       }
 
       await createShoppingListItem(this.db, {
@@ -1516,9 +1521,19 @@ export class ActionExecutor {
         status: 'open',
       });
 
+      // Build response message with category info if auto-categorized
+      let message = `✅ *Added to Shopping List:*\nItem/s: ${parsed.taskName}`;
+      if (folderId && !parsed.folderRoute) {
+        // Item was auto-categorized, get folder name for display
+        const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
+        if (folder) {
+          message += `\nCategory: ${folder.name}`;
+        }
+      }
+
       return {
         success: true,
-        message: `✅ *Added to Shopping Lists:*\nItem/s: ${parsed.taskName}`,
+        message,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
@@ -5872,6 +5887,91 @@ export class ActionExecutor {
     }
     
     return currentFolder?.id || null;
+  }
+
+  /**
+   * Use AI to automatically categorize a shopping item based on its name
+   */
+  private async categorizeShoppingItem(itemName: string): Promise<string | undefined> {
+    try {
+      // Get all folders and categories for the user
+      const folders = await getUserShoppingListFolders(this.db, this.userId);
+      
+      // Build a flat list of all categories (folders and subfolders)
+      const allCategories: Array<{ name: string; path: string; id: string }> = [];
+      
+      const collectCategories = (folderList: any[], parentPath: string = '') => {
+        for (const folder of folderList) {
+          const fullPath = parentPath ? `${parentPath}/${folder.name}` : folder.name;
+          allCategories.push({ name: folder.name, path: fullPath, id: folder.id });
+          
+          if (folder.subfolders && folder.subfolders.length > 0) {
+            collectCategories(folder.subfolders, fullPath);
+          }
+        }
+      };
+      
+      collectCategories(folders);
+      
+      // If no categories exist, return undefined (item will be added without category)
+      if (allCategories.length === 0) {
+        return undefined;
+      }
+      
+      // Build AI prompt to categorize the item
+      const categoryList = allCategories.map(cat => `- ${cat.path}`).join('\n');
+      const prompt = `You are a shopping list categorization assistant. Analyze the shopping item name and determine which category it belongs to.
+
+Shopping Item: "${itemName}"
+
+Available Categories:
+${categoryList}
+
+Instructions:
+1. Analyze the item name and determine the most appropriate category
+2. Return ONLY the category path (e.g., "Groceries" or "Groceries/Fruits")
+3. If the item doesn't fit any category well, return "NONE"
+4. Be smart about categorization - "milk" should go in "Groceries" or "Dairy", "toothpaste" should go in "Personal Care" or "Health", etc.
+
+Category:`;
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        logger.warn({}, 'OPENAI_API_KEY not set, skipping auto-categorization');
+        return undefined;
+      }
+
+      const openaiClient = createOpenAI({ apiKey });
+      const model = openaiClient('gpt-4o-mini');
+      
+      const result = await generateText({
+        model,
+        prompt,
+        temperature: 0.3,
+      });
+
+      const categoryPath = result.text.trim();
+      
+      // Check if AI returned "NONE" or empty
+      if (!categoryPath || categoryPath.toUpperCase() === 'NONE' || categoryPath.length === 0) {
+        return undefined;
+      }
+      
+      // Resolve the category path to folder ID
+      const folderId = await this.resolveShoppingListFolderRoute(categoryPath);
+      
+      if (folderId) {
+        logger.info({ itemName, categoryPath, folderId, userId: this.userId }, 'AI categorized shopping item');
+        return folderId;
+      }
+      
+      logger.warn({ itemName, categoryPath, userId: this.userId }, 'AI suggested category but could not resolve folder ID');
+      return undefined;
+    } catch (error) {
+      logger.error({ error, itemName, userId: this.userId }, 'Failed to categorize shopping item with AI');
+      // Don't fail the item creation if categorization fails - just return undefined
+      return undefined;
+    }
   }
 
   private findSubfolderByName(folders: any[], folderName: string): any | null {
