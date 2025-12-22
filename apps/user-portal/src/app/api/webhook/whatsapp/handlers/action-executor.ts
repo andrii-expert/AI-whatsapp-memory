@@ -240,21 +240,28 @@ export class ActionExecutor {
     } else if (trimmed.startsWith('Delete a shopping item:')) {
       action = 'delete';
       resourceType = 'shopping';
-      // Check if it's a number-based deletion
-      const numberMatch = trimmed.match(/^Delete a shopping item:\s*([\d\s,]+(?:and\s*\d+)?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      // Extract everything after "Delete a shopping item:"
+      const afterPrefix = trimmed.replace(/^Delete a shopping item:\s*/i, '').trim();
+      
+      // Check if it's a number-based deletion (numbers can be comma-separated, space-separated, or "and" separated)
+      const numberPattern = /^[\d\s,]+(?:and\s*\d+)?(?:\s*-\s*on folder:\s*(.+))?$/i;
+      const numberMatch = afterPrefix.match(numberPattern);
+      
       if (numberMatch) {
-        const numbersStr = numberMatch[1].trim();
-        const numbers = numbersStr
+        // Extract numbers part (before optional folder part)
+        const numbersPart = afterPrefix.split(/\s*-\s*on folder:/i)[0].trim();
+        const numbers = numbersPart
           .split(/[,\s]+|and\s+/i)
           .map(n => parseInt(n.trim(), 10))
           .filter(n => !isNaN(n) && n > 0);
         
         if (numbers.length > 0) {
+          const folderMatch = afterPrefix.match(/\s*-\s*on folder:\s*(.+)$/i);
           const parsed: ParsedAction = {
             action: 'delete',
             resourceType: 'shopping',
             itemNumbers: numbers,
-            folderRoute: numberMatch[2]?.trim(),
+            folderRoute: folderMatch ? folderMatch[1].trim() : undefined,
             missingFields: [],
           };
           return parsed;
@@ -1952,6 +1959,13 @@ export class ActionExecutor {
   }
 
   private async deleteShoppingItem(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    logger.info({ 
+      itemNumbers: parsed.itemNumbers, 
+      taskName: parsed.taskName, 
+      folderRoute: parsed.folderRoute,
+      userId: this.userId 
+    }, 'deleteShoppingItem called');
+    
     // Check if this is number-based deletion
     if (parsed.itemNumbers && parsed.itemNumbers.length > 0) {
       const context = this.getListContext();
