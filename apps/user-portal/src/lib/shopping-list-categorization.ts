@@ -23,6 +23,20 @@ export async function findOrCreateCategoryForItem(
     // Get all folders to extract existing categories
     const allFolders = await getUserShoppingListFolders(db, userId);
     
+    // Helper function to find a folder by ID recursively
+    const findFolderById = (folders: any[], targetId: string): any | null => {
+      for (const folder of folders) {
+        if (folder.id === targetId) {
+          return folder;
+        }
+        if (folder.subfolders && folder.subfolders.length > 0) {
+          const found = findFolderById(folder.subfolders, targetId);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    
     // Extract all existing category names (subfolders)
     const extractCategories = (folders: any[]): string[] => {
       const categories: string[] = [];
@@ -40,7 +54,19 @@ export async function findOrCreateCategoryForItem(
       return categories;
     };
 
-    const existingCategories = extractCategories(allFolders);
+    // If parentFolderId is provided, only extract categories from that parent folder
+    // Otherwise, extract from all folders
+    let existingCategories: string[];
+    if (parentFolderId) {
+      const parentFolder = findFolderById(allFolders, parentFolderId);
+      if (parentFolder && parentFolder.subfolders) {
+        existingCategories = extractCategories([parentFolder]);
+      } else {
+        existingCategories = [];
+      }
+    } else {
+      existingCategories = extractCategories(allFolders);
+    }
 
     // Use AI to suggest a category
     const categoryResult = await suggestShoppingListCategory(itemName, existingCategories);
@@ -54,12 +80,32 @@ export async function findOrCreateCategoryForItem(
 
     // Find existing category (case-insensitive)
     const findCategoryInFolders = (folders: any[], categoryName: string, parentId?: string): string | null => {
-      for (const folder of folders) {
-        // If parentFolderId is specified, only search within that folder
-        if (parentFolderId && folder.id !== parentFolderId) {
-          continue;
+      // If parentFolderId is specified, only search within that parent folder's subfolders
+      if (parentId) {
+        const parentFolder = findFolderById(allFolders, parentId);
+        if (!parentFolder) {
+          logger.warn({ parentId, userId }, 'Parent folder not found for category search');
+          return null;
         }
+        
+        // Search only within the parent folder's subfolders
+        if (parentFolder.subfolders && parentFolder.subfolders.length > 0) {
+          for (const subfolder of parentFolder.subfolders) {
+            if (subfolder.name.toLowerCase() === categoryName.toLowerCase()) {
+              return subfolder.id;
+            }
+            // Check nested subfolders
+            if (subfolder.subfolders && subfolder.subfolders.length > 0) {
+              const found = findCategoryInFolders([subfolder], categoryName);
+              if (found) return found;
+            }
+          }
+        }
+        return null;
+      }
 
+      // No parent specified, search all folders
+      for (const folder of folders) {
         if (folder.subfolders && folder.subfolders.length > 0) {
           for (const subfolder of folder.subfolders) {
             if (subfolder.name.toLowerCase() === categoryName.toLowerCase()) {
@@ -88,6 +134,15 @@ export async function findOrCreateCategoryForItem(
     // If parentFolderId is specified, create subfolder under that folder
     // Otherwise, find or create a "General" folder to put categories under
     let targetParentId = parentFolderId;
+
+    if (targetParentId) {
+      // Verify that the parent folder exists and is accessible
+      const parentFolder = findFolderById(allFolders, targetParentId);
+      if (!parentFolder) {
+        logger.warn({ parentId: targetParentId, userId, itemName }, 'Parent folder not found or not accessible, falling back to General folder');
+        targetParentId = undefined; // Fall back to General folder
+      }
+    }
 
     if (!targetParentId) {
       // Find or create "General" folder

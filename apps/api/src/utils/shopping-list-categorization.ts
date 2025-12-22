@@ -20,8 +20,28 @@ export async function findOrCreateCategoryForItem(
   parentFolderId?: string
 ): Promise<string | undefined> {
   try {
+    // Validate inputs
+    if (!itemName || !itemName.trim()) {
+      logger.warn({ userId, itemName }, 'Invalid item name provided for category creation');
+      return undefined;
+    }
+
     // Get all folders to extract existing categories
     const allFolders = await getUserShoppingListFolders(db, userId);
+    
+    // Helper function to find a folder by ID recursively
+    const findFolderById = (folders: any[], targetId: string): any | null => {
+      for (const folder of folders) {
+        if (folder.id === targetId) {
+          return folder;
+        }
+        if (folder.subfolders && folder.subfolders.length > 0) {
+          const found = findFolderById(folder.subfolders, targetId);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
     
     // Extract all existing category names (subfolders)
     const extractCategories = (folders: any[]): string[] => {
@@ -40,10 +60,48 @@ export async function findOrCreateCategoryForItem(
       return categories;
     };
 
-    const existingCategories = extractCategories(allFolders);
+    // If parentFolderId is provided, only extract categories from that parent folder
+    // Otherwise, extract from all folders
+    let existingCategories: string[];
+    if (parentFolderId) {
+      const parentFolder = findFolderById(allFolders, parentFolderId);
+      if (parentFolder && parentFolder.subfolders) {
+        existingCategories = extractCategories([parentFolder]);
+      } else {
+        existingCategories = [];
+      }
+    } else {
+      existingCategories = extractCategories(allFolders);
+    }
 
-    // Use AI to suggest a category
-    const categoryResult = await suggestShoppingListCategory(itemName, existingCategories);
+    // Use AI to suggest a category with timeout protection
+    let categoryResult: Awaited<ReturnType<typeof suggestShoppingListCategory>> | null = null;
+    try {
+      // Add timeout to prevent long-running AI calls from blocking the request
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          logger.warn({ itemName, userId }, 'AI category suggestion timed out after 8 seconds');
+          resolve(null);
+        }, 8000); // 8 second timeout
+      });
+      
+      const aiPromise = suggestShoppingListCategory(itemName, existingCategories);
+      
+      categoryResult = await Promise.race([
+        aiPromise,
+        timeoutPromise,
+      ]);
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          itemName,
+          userId,
+        },
+        'AI category suggestion failed, continuing without category'
+      );
+      categoryResult = null;
+    }
 
     if (!categoryResult || !categoryResult.suggestedCategory) {
       logger.info({ itemName, userId }, 'No category suggested for shopping list item');
@@ -54,12 +112,32 @@ export async function findOrCreateCategoryForItem(
 
     // Find existing category (case-insensitive)
     const findCategoryInFolders = (folders: any[], categoryName: string, parentId?: string): string | null => {
-      for (const folder of folders) {
-        // If parentFolderId is specified, only search within that folder
-        if (parentFolderId && folder.id !== parentFolderId) {
-          continue;
+      // If parentFolderId is specified, only search within that parent folder's subfolders
+      if (parentId) {
+        const parentFolder = findFolderById(allFolders, parentId);
+        if (!parentFolder) {
+          logger.warn({ parentId, userId }, 'Parent folder not found for category search');
+          return null;
         }
+        
+        // Search only within the parent folder's subfolders
+        if (parentFolder.subfolders && parentFolder.subfolders.length > 0) {
+          for (const subfolder of parentFolder.subfolders) {
+            if (subfolder.name.toLowerCase() === categoryName.toLowerCase()) {
+              return subfolder.id;
+            }
+            // Check nested subfolders
+            if (subfolder.subfolders && subfolder.subfolders.length > 0) {
+              const found = findCategoryInFolders([subfolder], categoryName);
+              if (found) return found;
+            }
+          }
+        }
+        return null;
+      }
 
+      // No parent specified, search all folders
+      for (const folder of folders) {
         if (folder.subfolders && folder.subfolders.length > 0) {
           for (const subfolder of folder.subfolders) {
             if (subfolder.name.toLowerCase() === categoryName.toLowerCase()) {
@@ -89,16 +167,41 @@ export async function findOrCreateCategoryForItem(
     // Otherwise, find or create a "General" folder to put categories under
     let targetParentId = parentFolderId;
 
+    if (targetParentId) {
+      // Verify that the parent folder exists and is accessible
+      const parentFolder = findFolderById(allFolders, targetParentId);
+      if (!parentFolder) {
+        logger.warn({ parentId: targetParentId, userId, itemName }, 'Parent folder not found or not accessible, falling back to General folder');
+        targetParentId = undefined; // Fall back to General folder
+      }
+    }
+
     if (!targetParentId) {
       // Find or create "General" folder
       let generalFolder = allFolders.find(f => f.name.toLowerCase() === 'general');
       
       if (!generalFolder) {
-        logger.info({ userId }, 'Creating General folder for shopping list categories');
-        generalFolder = await createShoppingListFolder(db, {
-          userId,
-          name: 'General',
-        });
+        try {
+          logger.info({ userId }, 'Creating General folder for shopping list categories');
+          generalFolder = await createShoppingListFolder(db, {
+            userId,
+            name: 'General',
+          });
+          
+          if (!generalFolder || !generalFolder.id) {
+            logger.error({ userId }, 'Failed to create General folder - no ID returned');
+            return undefined;
+          }
+        } catch (generalError) {
+          logger.error(
+            {
+              error: generalError instanceof Error ? generalError.message : String(generalError),
+              userId,
+            },
+            'Failed to create General folder'
+          );
+          return undefined;
+        }
       }
       
       targetParentId = generalFolder.id;
@@ -106,13 +209,33 @@ export async function findOrCreateCategoryForItem(
 
     // Create the new category/subfolder
     logger.info({ itemName, categoryName: suggestedCategory, parentId: targetParentId, userId }, 'Creating new category for shopping list item');
-    const newCategory = await createShoppingListFolder(db, {
-      userId,
-      parentId: targetParentId,
-      name: suggestedCategory,
-    });
+    
+    try {
+      const newCategory = await createShoppingListFolder(db, {
+        userId,
+        parentId: targetParentId,
+        name: suggestedCategory,
+      });
 
-    return newCategory.id;
+      if (!newCategory || !newCategory.id) {
+        logger.error({ itemName, categoryName: suggestedCategory, parentId: targetParentId, userId }, 'Failed to create category folder - no ID returned');
+        return undefined;
+      }
+
+      return newCategory.id;
+    } catch (createError) {
+      logger.error(
+        {
+          error: createError instanceof Error ? createError.message : String(createError),
+          itemName,
+          categoryName: suggestedCategory,
+          parentId: targetParentId,
+          userId,
+        },
+        'Failed to create category folder'
+      );
+      return undefined;
+    }
   } catch (error) {
     logger.error(
       {
