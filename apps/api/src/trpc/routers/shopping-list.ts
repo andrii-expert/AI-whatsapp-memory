@@ -38,6 +38,7 @@ const createShoppingListItemSchema = z.object({
   folderId: z.string().uuid().optional(),
   name: z.string().min(1, "Item name is required").max(500),
   description: z.string().optional(),
+  category: z.string().optional(),
   status: z.enum(["open", "completed", "archived"]).optional(),
 });
 
@@ -46,6 +47,7 @@ const updateShoppingListItemSchema = z.object({
   name: z.string().min(1).max(500).optional(),
   description: z.string().optional(),
   folderId: z.string().uuid().nullable().optional(),
+  category: z.string().nullable().optional(),
   status: z.enum(["open", "completed", "archived"]).optional(),
   sortOrder: z.number().optional(),
 });
@@ -189,13 +191,14 @@ export const shoppingListRouter = createTRPCRouter({
   update: protectedProcedure
     .input(updateShoppingListItemSchema)
     .mutation(async ({ ctx: { db, session }, input }) => {
-      const { id, folderId, ...updateData } = input;
+      const { id, folderId, category, ...updateData } = input;
       
       logger.info({ userId: session.user.id, itemId: id, updates: Object.keys(updateData) }, "Updating shopping list item");
       
       const item = await updateShoppingListItem(db, id, session.user.id, {
         ...updateData,
         folderId: folderId !== undefined ? folderId : undefined,
+        category: category !== undefined ? category : undefined,
       });
       
       if (!item) {
@@ -243,15 +246,50 @@ export const shoppingListRouter = createTRPCRouter({
     .input(z.object({
       itemName: z.string().min(1),
       description: z.string().optional(),
-      parentFolderId: z.string().uuid().optional(),
+      folderId: z.string().uuid().optional(),
     }))
     .query(async ({ ctx: { db, session }, input }) => {
-      return getCategorySuggestion(
+      // Get existing categories from items in the folder
+      const items = await getUserShoppingListItems(db, session.user.id, {
+        folderId: input.folderId,
+      });
+      const existingCategories = Array.from(
+        new Set(
+          items
+            .map((item) => item.category)
+            .filter((cat): cat is string => !!cat)
+            .map((cat) => cat.toLowerCase())
+        )
+      );
+
+      // Use AI to suggest category
+      const result = await getCategorySuggestion(
         db,
         session.user.id,
         input.itemName,
         input.description,
-        input.parentFolderId
+        input.folderId
       );
+
+      return result;
+    }),
+
+  // Get existing categories in a folder
+  getCategories: protectedProcedure
+    .input(z.object({
+      folderId: z.string().uuid().optional(),
+    }))
+    .query(async ({ ctx: { db, session }, input }) => {
+      const items = await getUserShoppingListItems(db, session.user.id, {
+        folderId: input.folderId,
+      });
+      const categories = Array.from(
+        new Set(
+          items
+            .map((item) => item.category)
+            .filter((cat): cat is string => !!cat)
+        )
+      ).sort();
+      return categories;
     }),
 });

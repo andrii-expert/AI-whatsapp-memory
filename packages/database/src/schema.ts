@@ -1051,6 +1051,7 @@ export const shoppingListItems = pgTable("shopping_list_items", {
   
   name: text("name").notNull(),
   description: text("description"),
+  category: text("category"), // Category name for grouping items
   status: taskStatusEnum("status").default("open").notNull(), // Reuse task status enum: open, completed, archived
   
   completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -1064,6 +1065,7 @@ export const shoppingListItems = pgTable("shopping_list_items", {
   folderIdIdx: index("shopping_list_items_folder_id_idx").on(table.folderId),
   statusIdx: index("shopping_list_items_status_idx").on(table.status),
   sortOrderIdx: index("shopping_list_items_sort_order_idx").on(table.sortOrder),
+  categoryIdx: index("shopping_list_items_category_idx").on(table.category),
 }));
 
 export const shoppingListFoldersRelations = relations(shoppingListFolders, ({ one, many }) => ({

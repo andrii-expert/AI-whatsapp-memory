@@ -67,6 +67,10 @@ export default function ShoppingListPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [editItemDescription, setEditItemDescription] = useState("");
+  const [newItemCategory, setNewItemCategory] = useState("");
+  const [editItemCategory, setEditItemCategory] = useState("");
+  const [isCategoryInputMode, setIsCategoryInputMode] = useState<"select" | "manual">("select");
+  const [isLoadingAISuggestion, setIsLoadingAISuggestion] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
@@ -91,6 +95,13 @@ export default function ShoppingListPage() {
   );
   const { data: allItems = [], isLoading: isLoadingItems } = useQuery(
     trpc.shoppingList.list.queryOptions({})
+  );
+  
+  // Get existing categories in the selected folder
+  const { data: existingCategories = [] } = useQuery(
+    trpc.shoppingList.getCategories.queryOptions({
+      folderId: selectedFolderId || undefined,
+    })
   );
   const { data: myShares = [], isLoading: isLoadingShares } = useQuery(
     trpc.taskSharing.getMyShares.queryOptions()
@@ -216,8 +227,11 @@ export default function ShoppingListPage() {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.getCategories.queryKey() });
         setNewItemName("");
         setNewItemDescription("");
+        setNewItemCategory("");
+        setIsCategoryInputMode("select");
         setIsAddModalOpen(false);
         toast({
           title: "Item added",
@@ -240,9 +254,11 @@ export default function ShoppingListPage() {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.getCategories.queryKey() });
         setEditingItemId(null);
         setEditItemName("");
         setEditItemDescription("");
+        setEditItemCategory("");
         setIsEditModalOpen(false);
         toast({
           title: "Item updated",
@@ -601,6 +617,50 @@ export default function ShoppingListPage() {
   }, [filteredItems]);
 
   // Get AI category suggestion
+  const getAICategorySuggestion = async () => {
+    if (!newItemName.trim()) {
+      toast({
+        title: "Item name required",
+        description: "Please enter an item name first",
+        variant: "error",
+      });
+      return;
+    }
+
+    setIsLoadingAISuggestion(true);
+    try {
+      const queryOptions = trpc.shoppingList.suggestCategory.queryOptions({
+        itemName: newItemName.trim(),
+        description: newItemDescription.trim() || undefined,
+        folderId: selectedFolderId || undefined,
+      });
+      const result = await queryClient.fetchQuery(queryOptions);
+
+      if (result.suggestedCategory) {
+        setNewItemCategory(result.suggestedCategory);
+        setIsCategoryInputMode("manual");
+        toast({
+          title: "Category suggested",
+          description: `Suggested category: ${result.suggestedCategory}`,
+        });
+      } else {
+        toast({
+          title: "No suggestion",
+          description: "AI couldn't suggest a category for this item.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('AI suggestion error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to get AI suggestion. Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setIsLoadingAISuggestion(false);
+    }
+  };
 
   const handleCreateItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -610,6 +670,7 @@ export default function ShoppingListPage() {
       folderId: selectedFolderId || undefined,
       name: newItemName.trim(),
       description: newItemDescription.trim() || undefined,
+      category: newItemCategory.trim() || undefined,
     });
   };
 
@@ -621,6 +682,7 @@ export default function ShoppingListPage() {
       id: editingItemId,
       name: editItemName.trim(),
       description: editItemDescription.trim() || undefined,
+      category: editItemCategory.trim() || null,
     });
   };
 
@@ -1409,29 +1471,53 @@ export default function ShoppingListPage() {
             </p>
           </div>
         ) : (
-          filteredItems.map((item) => {
-            // Check if item is shared and what permission the user has
-            // Items inherit permission from their folder
-            const isSharedItem = (item as any).isSharedWithMe || false;
-            const itemPermission = (item as any).sharePermission || (isSharedItem ? "view" : undefined);
-            // If item doesn't have explicit permission, check if it's in a shared folder
-            let finalPermission = itemPermission;
-            if (!finalPermission && selectedFolder) {
-              const folder = selectedFolder as any;
-              if (folder.isSharedWithMe) {
-                finalPermission = folder.sharePermission || "view";
+          (() => {
+            // Group items by category
+            const groupedByCategory = filteredItems.reduce((acc: Record<string, any[]>, item: any) => {
+              const category = item.category || "Uncategorized";
+              if (!acc[category]) {
+                acc[category] = [];
               }
-            }
-            const canEditItem = !isSharedItem || finalPermission === "edit";
-            
-            return (
-              <div
-                key={item.id}
-                className={cn(
-                  "flex items-center gap-3 p-4 bg-white border rounded-lg hover:shadow-md transition-all",
-                  item.status === "completed" && "opacity-60"
-                )}
-              >
+              acc[category].push(item);
+              return acc;
+            }, {});
+
+            // Sort categories alphabetically, with "Uncategorized" at the end
+            const sortedCategories = Object.keys(groupedByCategory).sort((a, b) => {
+              if (a === "Uncategorized") return 1;
+              if (b === "Uncategorized") return -1;
+              return a.localeCompare(b);
+            });
+
+            return sortedCategories.map((category) => (
+              <div key={category} className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2">
+                  {category}
+                </h3>
+                <div className="space-y-2">
+                  {groupedByCategory[category]?.map((item) => {
+                    // Check if item is shared and what permission the user has
+                    // Items inherit permission from their folder
+                    const isSharedItem = (item as any).isSharedWithMe || false;
+                    const itemPermission = (item as any).sharePermission || (isSharedItem ? "view" : undefined);
+                    // If item doesn't have explicit permission, check if it's in a shared folder
+                    let finalPermission = itemPermission;
+                    if (!finalPermission && selectedFolder) {
+                      const folder = selectedFolder as any;
+                      if (folder.isSharedWithMe) {
+                        finalPermission = folder.sharePermission || "view";
+                      }
+                    }
+                    const canEditItem = !isSharedItem || finalPermission === "edit";
+                    
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "flex items-center gap-3 p-4 bg-white border rounded-lg hover:shadow-md transition-all",
+                          item.status === "completed" && "opacity-60"
+                        )}
+                      >
                 {/* Checkbox */}
                 <button
                   onClick={() => canEditItem && handleToggleItem(item.id)}
@@ -1510,8 +1596,12 @@ export default function ShoppingListPage() {
                   </Button>
                 </div>
               </div>
-            );
-          })
+                    );
+                  })}
+                </div>
+              </div>
+            ));
+          })()
         )}
           </div>
         </div>
@@ -1545,6 +1635,69 @@ export default function ShoppingListPage() {
                   placeholder="e.g., 2% milk, whole wheat bread"
                 />
               </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="item-category">Category (Optional)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={getAICategorySuggestion}
+                    disabled={isLoadingAISuggestion || !newItemName.trim()}
+                    className="text-xs"
+                  >
+                    {isLoadingAISuggestion ? "Analyzing..." : "Use AI Suggestion"}
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  {isCategoryInputMode === "select" ? (
+                    <Select
+                      value={newItemCategory || undefined}
+                      onValueChange={(value) => {
+                        if (value === "__none__") {
+                          setNewItemCategory("");
+                        } else {
+                          setNewItemCategory(value);
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="item-category" className="flex-1">
+                        <SelectValue placeholder="Select a category (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {existingCategories.map((category: string) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id="item-category"
+                      value={newItemCategory}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
+                      placeholder="Enter category name"
+                      className="flex-1"
+                    />
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsCategoryInputMode(isCategoryInputMode === "select" ? "manual" : "select");
+                      if (isCategoryInputMode === "select") {
+                        setNewItemCategory("");
+                      }
+                    }}
+                    className="shrink-0"
+                  >
+                    {isCategoryInputMode === "select" ? "Manual" : "Select"}
+                  </Button>
+                </div>
+              </div>
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel
@@ -1552,6 +1705,8 @@ export default function ShoppingListPage() {
                   setIsAddModalOpen(false);
                   setNewItemName("");
                   setNewItemDescription("");
+                  setNewItemCategory("");
+                  setIsCategoryInputMode("select");
                 }}
               >
                 Cancel
@@ -1594,6 +1749,39 @@ export default function ShoppingListPage() {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemDescription(e.target.value)}
                 />
               </div>
+              <div>
+                <Label htmlFor="edit-item-category">Category (Optional)</Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={editItemCategory || undefined}
+                    onValueChange={(value) => {
+                      if (value === "__none__") {
+                        setEditItemCategory("");
+                      } else {
+                        setEditItemCategory(value);
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="edit-item-category" className="flex-1">
+                      <SelectValue placeholder="Select a category (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {existingCategories.map((category: string) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    value={editItemCategory}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemCategory(e.target.value)}
+                    placeholder="Or enter manually"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel
@@ -1602,6 +1790,7 @@ export default function ShoppingListPage() {
                   setEditingItemId(null);
                   setEditItemName("");
                   setEditItemDescription("");
+                  setEditItemCategory("");
                 }}
               >
                 Cancel

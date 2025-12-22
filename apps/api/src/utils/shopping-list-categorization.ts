@@ -39,7 +39,7 @@ export async function getCategorySuggestion(
   userId: string,
   itemName: string,
   description?: string,
-  parentFolderId?: string
+  folderId?: string
 ): Promise<{ suggestedCategory: string | null; confidence?: number }> {
   try {
     // Validate inputs
@@ -48,51 +48,21 @@ export async function getCategorySuggestion(
       return { suggestedCategory: null };
     }
 
-    // Get all folders to extract existing categories
-    const allFolders = await getUserShoppingListFolders(db, userId);
+    // Get existing categories from items in the folder (or all items if no folder)
+    const { getUserShoppingListItems } = await import('@imaginecalendar/database/queries');
+    const items = await getUserShoppingListItems(db, userId, {
+      folderId: folderId,
+    });
     
-    // Helper function to find a folder by ID recursively
-    const findFolderById = (folders: any[], targetId: string): any | null => {
-      for (const folder of folders) {
-        if (folder.id === targetId) {
-          return folder;
-        }
-        if (folder.subfolders && folder.subfolders.length > 0) {
-          const found = findFolderById(folder.subfolders, targetId);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-    
-    // Extract all existing category names (subfolders)
-    const extractCategories = (folders: any[]): string[] => {
-      const categories: string[] = [];
-      for (const folder of folders) {
-        if (folder.subfolders && folder.subfolders.length > 0) {
-          for (const subfolder of folder.subfolders) {
-            categories.push(subfolder.name.toLowerCase());
-            if (subfolder.subfolders && subfolder.subfolders.length > 0) {
-              categories.push(...extractCategories([subfolder]));
-            }
-          }
-        }
-      }
-      return categories;
-    };
-
-    // If parentFolderId is provided, only extract categories from that parent folder
-    let existingCategories: string[];
-    if (parentFolderId) {
-      const parentFolder = findFolderById(allFolders, parentFolderId);
-      if (parentFolder && parentFolder.subfolders) {
-        existingCategories = extractCategories([parentFolder]);
-      } else {
-        existingCategories = [];
-      }
-    } else {
-      existingCategories = extractCategories(allFolders);
-    }
+    // Extract unique categories from items
+    const existingCategories = Array.from(
+      new Set(
+        items
+          .map((item: any) => item.category)
+          .filter((cat): cat is string => !!cat)
+          .map((cat) => cat.toLowerCase())
+      )
+    );
 
     // Use AI to suggest a category with timeout protection
     let categoryResult: any = null;

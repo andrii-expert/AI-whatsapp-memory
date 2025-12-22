@@ -130,6 +130,7 @@ export async function createShoppingListItem(
     folderId?: string;
     name: string;
     description?: string;
+    category?: string;
     status?: "open" | "completed" | "archived";
     sortOrder?: number;
   }
@@ -145,6 +146,7 @@ export async function createShoppingListItem(
           folderId: data.folderId,
           name: data.name,
           description: data.description,
+          category: data.category,
           status: data.status || "open",
           sortOrder: data.sortOrder ?? 0,
           updatedAt: new Date(),
@@ -164,6 +166,7 @@ export async function updateShoppingListItem(
     name?: string;
     description?: string;
     folderId?: string | null;
+    category?: string | null;
     status?: "open" | "completed" | "archived";
     sortOrder?: number;
   }
@@ -209,6 +212,9 @@ export async function updateShoppingListItem(
       }
       if (data.description !== undefined) {
         updateData.description = data.description;
+      }
+      if (data.category !== undefined) {
+        updateData.category = data.category;
       }
       if (data.folderId !== undefined) {
         updateData.folderId = data.folderId;
