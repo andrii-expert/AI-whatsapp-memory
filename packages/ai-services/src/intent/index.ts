@@ -104,3 +104,4 @@ export {
   type NormalizedIntentSnapshot,
   type IntentPromptContext,
 } from './pipeline';
+export { suggestShoppingCategory } from './shopping-category';

@@ -84,6 +84,7 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { CalendarService } from './calendar-service';
 import type { CalendarIntent } from '@imaginecalendar/ai-services';
+import { suggestShoppingCategory } from '@imaginecalendar/ai-services/intent';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -1507,6 +1508,59 @@ export class ActionExecutor {
             message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
+      } else {
+        // Auto-categorize: Use AI to suggest category and find/create it
+        try {
+          const suggestedCategory = await suggestShoppingCategory(parsed.taskName);
+          if (suggestedCategory) {
+            // Get all folders to find the category
+            const allFolders = await getUserShoppingListFolders(this.db, this.userId);
+            
+            // First, try to find the category as a subfolder (category) in any folder
+            const foundCategory = this.findSubfolderByName(allFolders, suggestedCategory);
+            if (foundCategory) {
+              folderId = foundCategory.id;
+              logger.info(
+                { itemName: parsed.taskName, category: suggestedCategory, categoryId: folderId },
+                'Auto-categorized item to existing category'
+              );
+            } else {
+              // Category doesn't exist, try to find a default folder to create category in
+              // Use the first folder, or create a default "Shopping" folder
+              let parentFolder = allFolders.find(f => !f.parentId);
+              
+              if (!parentFolder && allFolders.length > 0) {
+                parentFolder = allFolders[0];
+              }
+              
+              if (parentFolder) {
+                // Create the category in the parent folder
+                const category = await createShoppingListFolder(this.db, {
+                  userId: this.userId,
+                  parentId: parentFolder.id,
+                  name: suggestedCategory,
+                });
+                folderId = category?.id;
+                logger.info(
+                  { itemName: parsed.taskName, category: suggestedCategory, parentFolder: parentFolder.name },
+                  'Auto-created category for item'
+                );
+              } else {
+                // No folders exist, create item without category
+                logger.info(
+                  { itemName: parsed.taskName, suggestedCategory },
+                  'No folders exist, skipping auto-categorization'
+                );
+              }
+            }
+          }
+        } catch (categoryError) {
+          // If category suggestion fails, continue without category
+          logger.warn(
+            { error: categoryError, itemName: parsed.taskName },
+            'Failed to auto-categorize item, continuing without category'
+          );
+        }
       }
 
       await createShoppingListItem(this.db, {
@@ -1516,9 +1570,10 @@ export class ActionExecutor {
         status: 'open',
       });
 
+      const categoryText = folderId ? ` (Category: ${await this.getCategoryName(folderId)})` : '';
       return {
         success: true,
-        message: `✅ *Added to Shopping Lists:*\nItem/s: ${parsed.taskName}`,
+        message: `✅ *Added to Shopping Lists:*\nItem/s: ${parsed.taskName}${categoryText}`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
@@ -1526,6 +1581,27 @@ export class ActionExecutor {
         success: false,
         message: `I'm sorry, I couldn't add "${parsed.taskName}" to your shopping list. Please try again.`,
       };
+    }
+  }
+
+  private async getCategoryName(categoryId: string): Promise<string> {
+    try {
+      const folders = await getUserShoppingListFolders(this.db, this.userId);
+      const findCategory = (folderList: any[]): string | null => {
+        for (const folder of folderList) {
+          if (folder.id === categoryId) {
+            return folder.name;
+          }
+          if (folder.subfolders) {
+            const found = findCategory(folder.subfolders);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return findCategory(folders) || 'Unknown';
+    } catch {
+      return 'Unknown';
     }
   }
 
