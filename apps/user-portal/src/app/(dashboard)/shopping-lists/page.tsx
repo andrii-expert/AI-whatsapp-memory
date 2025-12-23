@@ -238,7 +238,7 @@ export default function ShoppingListPage() {
   const createItemMutation = useMutation(
     trpc.shoppingList.create.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey({}) });
         queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.getCategories.queryKey() });
@@ -265,7 +265,7 @@ export default function ShoppingListPage() {
   const updateItemMutation = useMutation(
     trpc.shoppingList.update.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey({}) });
         queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.getCategories.queryKey() });
@@ -292,7 +292,7 @@ export default function ShoppingListPage() {
   const deleteItemMutation = useMutation(
     trpc.shoppingList.delete.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey({}) });
         queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
         setDeleteConfirmOpen(false);
@@ -316,13 +316,13 @@ export default function ShoppingListPage() {
     trpc.shoppingList.toggle.mutationOptions({
       onMutate: async ({ id }) => {
         // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
-        await queryClient.cancelQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        await queryClient.cancelQueries({ queryKey: trpc.shoppingList.list.queryKey({}) });
 
         // Snapshot the previous value
-        const previousItems = queryClient.getQueryData(trpc.shoppingList.list.queryKey());
+        const previousItems = queryClient.getQueryData(trpc.shoppingList.list.queryKey({}));
 
         // Optimistically update to the new value
-        queryClient.setQueryData(trpc.shoppingList.list.queryKey(), (old: any) => {
+        queryClient.setQueryData(trpc.shoppingList.list.queryKey({}), (old: any) => {
           if (!old) return old;
           return old.map((item: any) => {
             if (item.id === id) {
@@ -341,7 +341,7 @@ export default function ShoppingListPage() {
       onError: (error, variables, context) => {
         // If the mutation fails, use the context returned from onMutate to roll back
         if (context?.previousItems) {
-          queryClient.setQueryData(trpc.shoppingList.list.queryKey(), context.previousItems);
+          queryClient.setQueryData(trpc.shoppingList.list.queryKey({}), context.previousItems);
         }
         toast({
           title: "Error",
@@ -351,7 +351,7 @@ export default function ShoppingListPage() {
       },
       onSettled: () => {
         // Always refetch after error or success to ensure we have the latest data
-        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey({}) });
         queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
       },
