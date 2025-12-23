@@ -4,8 +4,37 @@ import { suggestShoppingListCategory } from '@imaginecalendar/ai-services';
 import { logger } from '@imaginecalendar/logger';
 
 /**
+ * Fallback function to infer a basic category from item name if AI fails
+ */
+function inferBasicCategory(itemName: string): string {
+  const name = itemName.toLowerCase();
+  
+  // Basic keyword matching for common categories
+  const categoryKeywords: Record<string, string[]> = {
+    'Fruits': ['apple', 'banana', 'orange', 'grape', 'berry', 'fruit', 'mango', 'pineapple', 'peach', 'pear'],
+    'Vegetables': ['vegetable', 'carrot', 'lettuce', 'tomato', 'onion', 'potato', 'broccoli', 'spinach', 'cucumber'],
+    'Dairy': ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'dairy'],
+    'Meat': ['meat', 'chicken', 'beef', 'pork', 'fish', 'turkey', 'lamb', 'sausage', 'bacon'],
+    'Beverages': ['water', 'juice', 'soda', 'coffee', 'tea', 'drink', 'beverage', 'beer', 'wine'],
+    'Bakery': ['bread', 'bagel', 'muffin', 'croissant', 'cake', 'cookie', 'pastry', 'donut'],
+    'Snacks': ['chip', 'cracker', 'popcorn', 'nuts', 'snack', 'candy', 'chocolate'],
+    'Cleaning': ['soap', 'detergent', 'cleaner', 'bleach', 'sponge', 'towel', 'paper'],
+    'Frozen': ['frozen', 'ice', 'ice cream'],
+    'Pantry': ['rice', 'pasta', 'flour', 'sugar', 'salt', 'spice', 'oil', 'vinegar'],
+  };
+
+  for (const [category, keywords] of Object.entries(categoryKeywords)) {
+    if (keywords.some(keyword => name.includes(keyword))) {
+      return category;
+    }
+  }
+
+  // Default to "Pantry" for unknown items
+  return 'Pantry';
+}
+
+/**
  * Get AI category suggestion for a shopping list item
- * Wrapper around the API utility function
  */
 export async function getCategorySuggestion(
   db: Database,
@@ -14,9 +43,112 @@ export async function getCategorySuggestion(
   description?: string,
   folderId?: string
 ): Promise<{ suggestedCategory: string | null; confidence?: number }> {
-  // Dynamic import to avoid module resolution issues
-  const { getCategorySuggestion: getCategorySuggestionImpl } = await import('../../api/src/utils/shopping-list-categorization');
-  return getCategorySuggestionImpl(db, userId, itemName, description, folderId);
+  try {
+    // Validate inputs
+    const itemText = description ? `${itemName} ${description}`.trim() : itemName;
+    if (!itemText || !itemText.trim()) {
+      logger.warn({ itemName, description }, 'Empty item text, using fallback');
+      const fallbackCategory = inferBasicCategory(itemName || 'Item');
+      return { suggestedCategory: fallbackCategory, confidence: 0.5 };
+    }
+
+    // Get existing categories from items in the folder (or all items if no folder)
+    const { getUserShoppingListItems } = await import('@imaginecalendar/database/queries');
+    const items = await getUserShoppingListItems(db, userId, {
+      folderId: folderId,
+    });
+    
+    // Extract unique categories from items
+    const existingCategories = Array.from(
+      new Set(
+        items
+          .map((item: any) => item.category)
+          .filter((cat): cat is string => !!cat)
+          .map((cat) => cat.toLowerCase())
+      )
+    );
+
+    // Use AI to suggest a category with timeout protection
+    let categoryResult: any = null;
+    
+    try {
+      // Add timeout to prevent long-running AI calls from blocking the request
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => {
+          logger.warn({ itemName, userId }, 'AI category suggestion timed out after 8 seconds');
+          resolve(null);
+        }, 8000); // 8 second timeout
+      });
+      
+      const aiPromise = suggestShoppingListCategory(itemText, existingCategories);
+      
+      categoryResult = await Promise.race([
+        aiPromise,
+        timeoutPromise,
+      ]);
+
+      logger.info({ 
+        itemName, 
+        userId, 
+        hasResult: !!categoryResult,
+        suggestedCategory: categoryResult?.suggestedCategory,
+        confidence: categoryResult?.confidence 
+      }, 'AI category suggestion result');
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          itemName,
+          userId,
+          itemText,
+        },
+        'AI category suggestion failed with exception'
+      );
+      categoryResult = null;
+    }
+
+    if (!categoryResult) {
+      logger.warn({ itemName, userId }, 'AI returned null result, using fallback');
+      const fallbackCategory = inferBasicCategory(itemName);
+      return { suggestedCategory: fallbackCategory, confidence: 0.5 };
+    }
+
+    if (!categoryResult.suggestedCategory) {
+      logger.warn({ 
+        itemName, 
+        userId, 
+        confidence: categoryResult.confidence,
+        hasSuggestedCategory: !!categoryResult.suggestedCategory 
+      }, 'AI result has no suggestedCategory, using fallback');
+      const fallbackCategory = inferBasicCategory(itemName);
+      return { suggestedCategory: fallbackCategory, confidence: 0.5 };
+    }
+
+    logger.info({ 
+      itemName, 
+      userId, 
+      suggestedCategory: categoryResult.suggestedCategory,
+      confidence: categoryResult.confidence 
+    }, 'AI category suggestion successful');
+
+    return {
+      suggestedCategory: categoryResult.suggestedCategory,
+      confidence: categoryResult.confidence,
+    };
+  } catch (error) {
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        itemName,
+        userId,
+        errorStack: error instanceof Error ? error.stack : undefined,
+      },
+      'Failed to get category suggestion, using fallback'
+    );
+    const fallbackCategory = inferBasicCategory(itemName);
+    return { suggestedCategory: fallbackCategory, confidence: 0.5 };
+  }
 }
 
 /**
