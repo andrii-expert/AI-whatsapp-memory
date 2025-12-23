@@ -1371,9 +1371,9 @@ export default function ShoppingListPage() {
                         </button>
                         <span
                           className={cn(
-                            "ml-2 whitespace-nowrap font-medium text-gray-900 transition-all duration-300 ease-in-out bg-gray-100 rounded-r-xl pl-8 pr-2 py-1 ml-[-20px]",
+                            "ml-2 whitespace-nowrap font-medium text-gray-900 transition-all duration-300 ease-in-out",
                             isExpanded
-                              ? "max-w-[200px] opacity-100 ml-2"
+                              ? "max-w-[200px] opacity-100 bg-gray-100 rounded-r-xl pl-8 pr-2 py-1 ml-[-20px]"
                               : "max-w-0 overflow-hidden opacity-0 ml-0"
                           )}
                         >
