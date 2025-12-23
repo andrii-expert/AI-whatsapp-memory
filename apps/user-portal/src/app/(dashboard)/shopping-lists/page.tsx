@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye, GripVertical } from "lucide-react";
+import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -53,7 +53,7 @@ export default function ShoppingListPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [viewAllItems, setViewAllItems] = useState(true); // Default to All Items view
   const [viewAllShared, setViewAllShared] = useState(false); // View all shared items
-  const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("open");
+  const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [searchQuery, setSearchQuery] = useState("");
@@ -111,6 +111,11 @@ export default function ShoppingListPage() {
   );
   const { data: userPreferences } = useQuery(
     trpc.preferences.get.queryOptions()
+  );
+  
+  // Get friends list to check if shared users are friends
+  const { data: friendsList = [] } = useQuery(
+    trpc.friends.list.queryOptions()
   );
 
   // Check if initial data is loading
@@ -202,6 +207,15 @@ export default function ShoppingListPage() {
            sharedFolders.find((f: any) => f.id === selectedFolderId) || 
            null;
   }, [selectedFolderId, allOwnedFolders, sharedFolders]);
+  
+  // Get shared users for selected folder (if it's owned by current user)
+  const { data: folderShares = [] } = useQuery({
+    ...trpc.taskSharing.getResourceShares.queryOptions({
+      resourceType: "shopping_list_folder",
+      resourceId: selectedFolderId || "",
+    }),
+    enabled: !!selectedFolderId && !!selectedFolder && !selectedFolder.isSharedWithMe,
+  });
 
 
   // Get folder path (breadcrumb trail) - simplified since no subfolders
@@ -449,6 +463,52 @@ export default function ShoppingListPage() {
       return `${user.firstName || ""} ${user.lastName || ""}`.trim();
     }
     return user.email || "Unknown";
+  };
+  
+  // Get display name for shared user (friend name if exists, otherwise full name)
+  const getSharedUserDisplayName = (sharedUser: any) => {
+    if (!sharedUser) return "Unknown";
+    
+    // Check if this user is in friends list
+    const friend = friendsList.find((f: any) => f.connectedUserId === sharedUser.id);
+    if (friend) {
+      return friend.name;
+    }
+    
+    // Otherwise return full name
+    return getUserDisplayName(sharedUser);
+  };
+  
+  // Get user initials for avatar
+  const getUserInitials = (user: any) => {
+    if (!user) return "U";
+    
+    const displayName = getSharedUserDisplayName(user);
+    if (displayName === "Unknown") return "U";
+    
+    const parts = displayName.split(" ");
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return displayName.substring(0, 2).toUpperCase();
+  };
+  
+  // Get avatar color based on user ID
+  const getAvatarColor = (userId: string) => {
+    if (!userId) return "bg-blue-500";
+    
+    const colors = [
+      "bg-blue-500",
+      "bg-purple-500",
+      "bg-green-500",
+      "bg-orange-500",
+      "bg-pink-500",
+      "bg-indigo-500",
+      "bg-teal-500",
+    ];
+    
+    const hash = userId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
   };
 
   const handleFolderSelect = (folderId: string) => {
@@ -944,6 +1004,17 @@ export default function ShoppingListPage() {
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
           <span className="font-medium">Shopping Lists</span>
         </div>
+        {/* Mobile: Lists button */}
+        <div className="lg:hidden">
+          <Button
+            variant="outline"
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
+          >
+            <Menu className="h-4 w-4" />
+            <span className="font-medium">Lists</span>
+          </Button>
+        </div>
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -1160,86 +1231,111 @@ export default function ShoppingListPage() {
         {/* Right Panel - Items */}
         <div className="space-y-4 w-full min-w-0">
 
-          {/* Folder breadcrumb and Add Item button */}
-          <div className="flex items-center justify-between mb-4 gap-4">
-            {viewAllItems ? (
-              <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
-                <span className="font-bold text-gray-900">All Items</span>
-              </div>
-            ) : viewAllShared ? (
-              <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
-                <span className="font-bold text-gray-900">All Shared</span>
-              </div>
-            ) : selectedFolder && folderPath.length > 0 ? (
-              <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                <FolderClosed className="h-6 w-6 flex-shrink-0" />
-                {folderPath.map((name, index) => (
-                  <span key={index} className="flex items-center gap-2">
-                    {index > 0 && <span className="text-gray-400">/</span>}
-                    <span
-                      className={cn(
-                        index === folderPath.length - 1
-                          ? "font-semibold text-gray-900"
-                          : "",
-                        "truncate"
-                      )}
-                    >
-                      {name}
-                    </span>
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div className="flex-1" />
-            )}
-
-            <div className="flex gap-2">
-              {(() => {
-                // Check if selected folder is shared and user has view permission only
-                const isSharedFolder = selectedFolder?.isSharedWithMe || false;
-                const folderPermission = selectedFolder?.sharePermission;
-                const canAddToFolder = !isSharedFolder || folderPermission === "edit";
-                const isDisabled = viewAllShared || (!selectedFolderId && !viewAllItems) || (selectedFolderId && !canAddToFolder);
+          {/* Folder breadcrumb, Shared with, and Add Item button */}
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                {viewAllItems ? (
+                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                    <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
+                    <span className="font-bold text-gray-900">All Items</span>
+                  </div>
+                ) : viewAllShared ? (
+                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                    <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
+                    <span className="font-bold text-gray-900">All Shared</span>
+                  </div>
+                ) : selectedFolder && folderPath.length > 0 ? (
+                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
+                    <FolderClosed className="h-6 w-6 flex-shrink-0" />
+                    {folderPath.map((name, index) => (
+                      <span key={index} className="flex items-center gap-2">
+                        {index > 0 && <span className="text-gray-400">/</span>}
+                        <span
+                          className={cn(
+                            index === folderPath.length - 1
+                              ? "font-semibold text-gray-900"
+                              : "",
+                            "truncate"
+                          )}
+                        >
+                          {name}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex-1" />
+                )}
                 
-                return (
-                  <>
+                {/* Desktop: Lists button */}
+                <div className="hidden lg:block">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                    className="flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
+                  >
+                    <Menu className="h-4 w-4" />
+                    <span className="font-medium">Lists</span>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                {(() => {
+                  // Check if selected folder is shared and user has view permission only
+                  const isSharedFolder = selectedFolder?.isSharedWithMe || false;
+                  const folderPermission = selectedFolder?.sharePermission;
+                  const canAddToFolder = !isSharedFolder || folderPermission === "edit";
+                  const isDisabled = viewAllShared || (!selectedFolderId && !viewAllItems) || (selectedFolderId && !canAddToFolder);
+                  
+                  return (
                     <Button
                       onClick={() => setIsAddModalOpen(true)}
                       variant="orange-primary"
-                      className="flex-shrink-0 hidden lg:flex"
+                      className="flex-shrink-0"
                       disabled={isDisabled}
                       title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : undefined}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add Item
                     </Button>
-                    {/* Mobile - Folder Menu and Add Item Button */}
-                    <div className="lg:hidden flex gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsMobileSidebarOpen(true)}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-                      >
-                        <Menu className="h-4 w-4" />
-                        <span className="font-medium">Folders</span>
-                      </Button>
-                      <Button
-                        onClick={() => setIsAddModalOpen(true)}
-                        variant="orange-primary"
-                        className="flex-shrink-0"
-                        disabled={isDisabled}
-                        title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : undefined}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Item
-                      </Button>
-                    </div>
-                  </>
-                );
-              })()}
+                  );
+                })()}
+              </div>
             </div>
+            
+            {/* Shared with section */}
+            {selectedFolder && !selectedFolder.isSharedWithMe && folderShares.length > 0 && (
+              <div className="flex items-center gap-3 text-sm text-gray-600">
+                <span className="font-medium">Shared with</span>
+                <div className="flex items-center gap-2">
+                  {folderShares.map((share: any) => {
+                    const sharedUser = share.sharedWithUser;
+                    if (!sharedUser) return null;
+                    
+                    return (
+                      <div
+                        key={share.id}
+                        className="flex items-center gap-2"
+                      >
+                        <div
+                          className={cn(
+                            "h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                            getAvatarColor(sharedUser.id)
+                          )}
+                        >
+                          {getUserInitials(sharedUser)}
+                        </div>
+                        <span className="font-medium text-gray-900">
+                          {getSharedUserDisplayName(sharedUser)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Search Bar */}
@@ -1339,15 +1435,27 @@ export default function ShoppingListPage() {
         {/* Filter Buttons and Delete All */}
         <div className="flex w-full sm:w-auto justify-start gap-1.5 sm:gap-2 flex-wrap items-center">
           <Button
+            variant={filterStatus === "all" ? "blue-primary" : "outline"}
+            size="sm"
+            onClick={() => setFilterStatus("all")}
+            className="relative"
+          >
+            All
+            {itemCounts.all > 0 && filterStatus !== "all" && (
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+                {itemCounts.all}
+              </span>
+            )}
+          </Button>
+          <Button
             variant={filterStatus === "open" ? "blue-primary" : "outline"}
             size="sm"
             onClick={() => setFilterStatus("open")}
             className="relative"
           >
-            <span className="max-xl:hidden">Open</span>
-            <span className="xl:hidden">Open {itemCounts.open}</span>
+            Open
             {itemCounts.open > 0 && filterStatus !== "open" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold max-xl:hidden">
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
                 {itemCounts.open}
               </span>
             )}
@@ -1360,25 +1468,10 @@ export default function ShoppingListPage() {
             onClick={() => setFilterStatus("completed")}
             className="relative"
           >
-            <span className="max-xl:hidden">Completed</span>
-            <span className="xl:hidden">Completed {itemCounts.completed}</span>
+            Completed
             {itemCounts.completed > 0 && filterStatus !== "completed" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold max-xl:hidden">
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
                 {itemCounts.completed}
-              </span>
-            )}
-          </Button>
-          <Button
-            variant={filterStatus === "all" ? "blue-primary" : "outline"}
-            size="sm"
-            onClick={() => setFilterStatus("all")}
-            className="relative"
-          >
-            <span className="max-xl:hidden">All</span>
-            <span className="xl:hidden">All {itemCounts.all}</span>
-            {itemCounts.all > 0 && filterStatus !== "all" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold max-xl:hidden">
-                {itemCounts.all}
               </span>
             )}
           </Button>
@@ -1510,18 +1603,13 @@ export default function ShoppingListPage() {
               return a.localeCompare(b);
             });
 
-            return sortedCategories.map((category) => {
-              const categoryItems = groupedByCategory[category] || [];
-              const itemCount = categoryItems.length;
-              
-              return (
-                <div key={category} className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2 flex items-center justify-between">
-                  <span>{category}</span>
-                  <span className="text-xs font-normal text-gray-500">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
+            return sortedCategories.map((category) => (
+              <div key={category} className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2">
+                  {category}
                 </h3>
                 <div className="space-y-2">
-                  {categoryItems.map((item) => {
+                  {groupedByCategory[category]?.map((item) => {
                     // Check if item is shared and what permission the user has
                     // Items inherit permission from their folder
                     const isSharedItem = (item as any).isSharedWithMe || false;
@@ -1541,8 +1629,6 @@ export default function ShoppingListPage() {
                         key={item.id}
                         className={cn(
                           "flex items-center gap-3 p-4 bg-white border rounded-lg hover:shadow-md transition-all",
-                          "xl:gap-3 xl:p-4",
-                          "max-xl:gap-2 max-xl:p-3",
                           item.status === "completed" && "opacity-60"
                         )}
                       >
@@ -1551,9 +1637,7 @@ export default function ShoppingListPage() {
                   onClick={() => canEditItem && handleToggleItem(item.id)}
                   disabled={!canEditItem}
                   className={cn(
-                    "flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors",
-                    "xl:w-6 xl:h-6",
-                    "max-xl:w-5 max-xl:h-5",
+                    "flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors",
                     !canEditItem && "opacity-50 cursor-not-allowed",
                     item.status === "completed"
                       ? "bg-green-500 border-green-500 text-white"
@@ -1561,39 +1645,32 @@ export default function ShoppingListPage() {
                   )}
                   title={!canEditItem ? "View only - You cannot edit this item" : undefined}
                 >
-                  {item.status === "completed" && <Check className="h-3.5 w-3.5 max-xl:h-3 max-xl:w-3" />}
+                  {item.status === "completed" && <Check className="h-4 w-4" />}
                 </button>
 
                 {/* Item Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
                     <div
                       className={cn(
                         "font-medium text-gray-900",
-                        "xl:text-base",
-                        "max-xl:text-sm max-xl:font-semibold",
                         item.status === "completed" && "line-through text-gray-500"
                       )}
                     >
                       {item.name}
                     </div>
-                    {item.description && (
-                      <span className="text-sm text-gray-600 max-xl:text-xs">
-                        {item.description}
-                      </span>
-                    )}
                     {isSharedItem && finalPermission === "view" && (
                       <span title="View only" className="flex items-center">
-                        <Eye className="h-3.5 w-3.5 text-blue-600 flex-shrink-0 max-xl:h-3 max-xl:w-3" />
+                        <Eye className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
                       </span>
                     )}
                   </div>
-                  {/* Added by and date - Mobile style */}
+                  {item.description && (
+                    <div className="text-sm text-gray-500 mt-1">{item.description}</div>
+                  )}
+                  {/* Added by and date */}
                   {(item.createdAt || item.user) && (
-                    <div className={cn(
-                      "text-xs text-gray-400 mt-1",
-                      "max-xl:mt-0.5"
-                    )}>
+                    <div className="mt-1 text-xs text-gray-400">
                       <span>
                         Added by: {item.user ? getUserDisplayName(item.user) : "Unknown"}
                         {item.createdAt && ` on ${formatShoppingListDate(item.createdAt)}`}
@@ -1603,37 +1680,21 @@ export default function ShoppingListPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-2">
                   {/* Shopping list items don't have direct sharing - only folders can be shared */}
-                  {/* Mobile: Show edit and reorder icons */}
-                  <div className="flex items-center gap-1 max-xl:gap-0.5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEditItem(item)}
-                      disabled={!canEditItem}
-                      className={cn(
-                        "h-8 w-8",
-                        "max-xl:h-6 max-xl:w-6 max-xl:p-0",
-                        !canEditItem && "opacity-50 cursor-not-allowed"
-                      )}
-                      title={!canEditItem ? "View only - You cannot edit this item" : "Edit item"}
-                    >
-                      <Edit2 className="h-4 w-4 max-xl:h-3.5 max-xl:w-3.5" />
-                    </Button>
-                    {/* Reorder icon for mobile */}
-                    <button
-                      className={cn(
-                        "flex items-center justify-center text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing",
-                        "max-xl:block xl:hidden",
-                        "h-6 w-6"
-                      )}
-                      title="Reorder item"
-                    >
-                      <GripVertical className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {/* Desktop: Show delete button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleEditItem(item)}
+                    disabled={!canEditItem}
+                    className={cn(
+                      "h-8 w-8",
+                      !canEditItem && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={!canEditItem ? "View only - You cannot edit this item" : "Edit item"}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1641,7 +1702,6 @@ export default function ShoppingListPage() {
                     disabled={!canEditItem}
                     className={cn(
                       "h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50",
-                      "max-xl:hidden",
                       !canEditItem && "opacity-50 cursor-not-allowed"
                     )}
                     title={!canEditItem ? "View only - You cannot delete this item" : "Delete item"}
@@ -1654,8 +1714,7 @@ export default function ShoppingListPage() {
                   })}
                 </div>
               </div>
-              );
-            });
+            ));
           })()
         )}
           </div>
