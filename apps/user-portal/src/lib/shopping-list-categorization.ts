@@ -4,6 +4,22 @@ import { suggestShoppingListCategory } from '@imaginecalendar/ai-services';
 import { logger } from '@imaginecalendar/logger';
 
 /**
+ * Get AI category suggestion for a shopping list item
+ * Wrapper around the API utility function
+ */
+export async function getCategorySuggestion(
+  db: Database,
+  userId: string,
+  itemName: string,
+  description?: string,
+  folderId?: string
+): Promise<{ suggestedCategory: string | null; confidence?: number }> {
+  // Dynamic import to avoid module resolution issues
+  const { getCategorySuggestion: getCategorySuggestionImpl } = await import('../../api/src/utils/shopping-list-categorization');
+  return getCategorySuggestionImpl(db, userId, itemName, description, folderId);
+}
+
+/**
  * Helper function to find or create an appropriate subfolder for a shopping list item
  * Uses AI to analyze the item name and suggest/create a category
  * @param db - Database instance

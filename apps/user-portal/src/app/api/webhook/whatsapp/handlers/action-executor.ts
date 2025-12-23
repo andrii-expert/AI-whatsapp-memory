@@ -84,7 +84,7 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { CalendarService } from './calendar-service';
 import type { CalendarIntent } from '@imaginecalendar/ai-services';
-import { findOrCreateCategoryForItem } from '@/lib/shopping-list-categorization';
+import { getCategorySuggestion } from '@/lib/shopping-list-categorization';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -119,6 +119,7 @@ export interface ParsedAction {
   friendAddressType?: 'home' | 'office' | 'parents_house'; // For friend operations: address type
   permission?: 'view' | 'edit'; // For share operations: permission level
   itemNumbers?: number[]; // For deletion by numbers: [1, 3, 5]
+  category?: string; // For shopping list items: category name
 }
 
 // In-memory cache to store last displayed list context for each user
@@ -181,6 +182,7 @@ export class ActionExecutor {
     let newName: string | undefined;
     let status: string | undefined;
     let listFilter: string | undefined;
+    let category: string | undefined;
     let typeFilter: ReminderFrequency | undefined;
     let isShoppingListFolder: boolean | undefined;
     let isFriendFolder: boolean | undefined;
@@ -200,22 +202,40 @@ export class ActionExecutor {
     if (trimmed.startsWith('Create a shopping item:')) {
       action = 'create_shopping_item';
       resourceType = 'shopping';
-      // Try full format first: "Create a shopping item: {item} - on folder: Shopping Lists"
-      const fullMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
-      if (fullMatch) {
-        taskName = fullMatch[1].trim();
-        folderRoute = fullMatch[2].trim();
+      let category: string | undefined;
+      
+      // Try format with both folder and category: "Create a shopping item: {item} - on folder: {folder} - category: {category}"
+      const folderAndCategoryMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
+      if (folderAndCategoryMatch) {
+        taskName = folderAndCategoryMatch[1].trim();
+        folderRoute = folderAndCategoryMatch[2].trim();
+        category = folderAndCategoryMatch[3].trim();
       } else {
-        // Fallback: just extract the item name after "Create a shopping item:"
-        const simpleMatch = trimmed.match(/^Create a shopping item:\s*(.+)$/i);
-        if (simpleMatch) {
-          taskName = simpleMatch[1].trim();
-          // Don't set default folder - let it be undefined so item goes to root
+        // Try format with category only: "Create a shopping item: {item} - category: {category}"
+        const categoryOnlyMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
+        if (categoryOnlyMatch) {
+          taskName = categoryOnlyMatch[1].trim();
+          category = categoryOnlyMatch[2].trim();
           folderRoute = undefined;
         } else {
-          missingFields.push('item name');
+          // Try format with folder only: "Create a shopping item: {item} - on folder: {folder}"
+          const folderOnlyMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+          if (folderOnlyMatch) {
+            taskName = folderOnlyMatch[1].trim();
+            folderRoute = folderOnlyMatch[2].trim();
+          } else {
+            // Simple format: "Create a shopping item: {item}"
+            const simpleMatch = trimmed.match(/^Create a shopping item:\s*(.+)$/i);
+            if (simpleMatch) {
+              taskName = simpleMatch[1].trim();
+              folderRoute = undefined;
+            } else {
+              missingFields.push('item name');
+            }
+          }
         }
       }
+      
     } else if (trimmed.startsWith('List shopping items:')) {
       action = 'list';
       resourceType = 'shopping';
@@ -1176,6 +1196,7 @@ export class ActionExecutor {
       typeFilter,
       missingFields,
       permission,
+      category,
       addressName: taskName, // Map taskName to addressName for address operations
       addressType: status, // Map status to addressType for address operations
       email,
@@ -1510,35 +1531,47 @@ export class ActionExecutor {
         }
       }
 
-      // Use AI to find or create an appropriate subfolder
-      // If folderId was resolved from folderRoute, it will be used as parentFolderId to create subfolder within it
-      try {
-        const categoryFolderId = await findOrCreateCategoryForItem(
-          this.db,
-          this.userId,
-          parsed.taskName,
-          folderId // Pass the folderId as parentFolderId if it was specified
-        );
-        
-        if (categoryFolderId) {
-          folderId = categoryFolderId;
-          logger.info({ userId: this.userId, itemName: parsed.taskName, categoryFolderId, parentFolderId: parsed.folderRoute }, 'AI selected category for shopping list item via WhatsApp');
-        } else if (!folderId) {
-          // If no folderId was provided and AI didn't suggest a category, item will be created without folder
-          logger.info({ userId: this.userId, itemName: parsed.taskName }, 'No category suggested for shopping list item via WhatsApp, creating without folder');
+      // Determine category: use extracted category if provided, otherwise use AI suggestion
+      let category: string | undefined = parsed.category;
+      
+      if (!category) {
+        // Use AI to suggest a category
+        try {
+          const categorySuggestion = await getCategorySuggestion(
+            this.db,
+            this.userId,
+            parsed.taskName,
+            undefined, // No description from WhatsApp
+            folderId
+          );
+          
+          if (categorySuggestion?.suggestedCategory) {
+            category = categorySuggestion.suggestedCategory;
+            logger.info({ 
+              userId: this.userId, 
+              itemName: parsed.taskName, 
+              suggestedCategory: category,
+              confidence: categorySuggestion.confidence 
+            }, 'AI suggested category for shopping list item via WhatsApp');
+          } else {
+            logger.info({ userId: this.userId, itemName: parsed.taskName }, 'No category suggested by AI for shopping list item via WhatsApp');
+          }
+        } catch (error) {
+          // Log error but continue without category
+          logger.error(
+            { error: error instanceof Error ? error.message : String(error), userId: this.userId, itemName: parsed.taskName },
+            'Failed to get AI category suggestion for shopping list item via WhatsApp, creating without category'
+          );
         }
-      } catch (error) {
-        // Log error but continue with original folderId (or without folder if none was provided)
-        logger.error(
-          { error: error instanceof Error ? error.message : String(error), userId: this.userId, itemName: parsed.taskName },
-          'Failed to find/create category for shopping list item via WhatsApp, using provided folder or creating without category'
-        );
+      } else {
+        logger.info({ userId: this.userId, itemName: parsed.taskName, category }, 'Using extracted category for shopping list item via WhatsApp');
       }
 
       await createShoppingListItem(this.db, {
         userId: this.userId,
         folderId,
         name: parsed.taskName,
+        category,
         status: 'open',
       });
 
