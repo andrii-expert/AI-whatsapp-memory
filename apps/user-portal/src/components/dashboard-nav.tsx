@@ -85,7 +85,7 @@ export function DashboardNav() {
   ];
 
   return (
-    <nav className="bg-primary text-white shadow-md">
+    <nav className="bg-[#036cea] text-white shadow-md">
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
