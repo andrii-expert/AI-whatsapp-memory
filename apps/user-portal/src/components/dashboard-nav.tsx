@@ -33,13 +33,13 @@ import { useQuery } from "@tanstack/react-query";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Shopping Lists", href: "/shopping-lists", icon: ShoppingCart },
+  { name: "Shopping", href: "/shopping-lists", icon: ShoppingCart },
   { name: "Calendar", href: "/calendars", icon: Calendar },
   { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Notes", href: "/notes", icon: StickyNote },
   { name: "Documents", href: "/document", icon: FolderOpen },
-  { name: "Address Book", href: "/address", icon: BookOpen },
+  { name: "Address", href: "/address", icon: BookOpen },
 ];
 
 export function DashboardNav() {

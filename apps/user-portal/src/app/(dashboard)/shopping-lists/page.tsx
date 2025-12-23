@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye } from "lucide-react";
+import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye, GripVertical } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -1344,9 +1344,10 @@ export default function ShoppingListPage() {
             onClick={() => setFilterStatus("open")}
             className="relative"
           >
-            Open
+            <span className="max-xl:hidden">Open</span>
+            <span className="xl:hidden">Open {itemCounts.open}</span>
             {itemCounts.open > 0 && filterStatus !== "open" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold max-xl:hidden">
                 {itemCounts.open}
               </span>
             )}
@@ -1359,9 +1360,10 @@ export default function ShoppingListPage() {
             onClick={() => setFilterStatus("completed")}
             className="relative"
           >
-            Completed
+            <span className="max-xl:hidden">Completed</span>
+            <span className="xl:hidden">Completed {itemCounts.completed}</span>
             {itemCounts.completed > 0 && filterStatus !== "completed" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold max-xl:hidden">
                 {itemCounts.completed}
               </span>
             )}
@@ -1372,9 +1374,10 @@ export default function ShoppingListPage() {
             onClick={() => setFilterStatus("all")}
             className="relative"
           >
-            All
+            <span className="max-xl:hidden">All</span>
+            <span className="xl:hidden">All {itemCounts.all}</span>
             {itemCounts.all > 0 && filterStatus !== "all" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
+              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold max-xl:hidden">
                 {itemCounts.all}
               </span>
             )}
@@ -1507,13 +1510,18 @@ export default function ShoppingListPage() {
               return a.localeCompare(b);
             });
 
-            return sortedCategories.map((category) => (
-              <div key={category} className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2">
-                  {category}
+            return sortedCategories.map((category) => {
+              const categoryItems = groupedByCategory[category] || [];
+              const itemCount = categoryItems.length;
+              
+              return (
+                <div key={category} className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2 flex items-center justify-between">
+                  <span>{category}</span>
+                  <span className="text-xs font-normal text-gray-500">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
                 </h3>
                 <div className="space-y-2">
-                  {groupedByCategory[category]?.map((item) => {
+                  {categoryItems.map((item) => {
                     // Check if item is shared and what permission the user has
                     // Items inherit permission from their folder
                     const isSharedItem = (item as any).isSharedWithMe || false;
@@ -1533,6 +1541,8 @@ export default function ShoppingListPage() {
                         key={item.id}
                         className={cn(
                           "flex items-center gap-3 p-4 bg-white border rounded-lg hover:shadow-md transition-all",
+                          "xl:gap-3 xl:p-4",
+                          "max-xl:gap-2 max-xl:p-3",
                           item.status === "completed" && "opacity-60"
                         )}
                       >
@@ -1541,7 +1551,9 @@ export default function ShoppingListPage() {
                   onClick={() => canEditItem && handleToggleItem(item.id)}
                   disabled={!canEditItem}
                   className={cn(
-                    "flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors",
+                    "flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors",
+                    "xl:w-6 xl:h-6",
+                    "max-xl:w-5 max-xl:h-5",
                     !canEditItem && "opacity-50 cursor-not-allowed",
                     item.status === "completed"
                       ? "bg-green-500 border-green-500 text-white"
@@ -1549,32 +1561,39 @@ export default function ShoppingListPage() {
                   )}
                   title={!canEditItem ? "View only - You cannot edit this item" : undefined}
                 >
-                  {item.status === "completed" && <Check className="h-4 w-4" />}
+                  {item.status === "completed" && <Check className="h-3.5 w-3.5 max-xl:h-3 max-xl:w-3" />}
                 </button>
 
                 {/* Item Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <div
                       className={cn(
                         "font-medium text-gray-900",
+                        "xl:text-base",
+                        "max-xl:text-sm max-xl:font-semibold",
                         item.status === "completed" && "line-through text-gray-500"
                       )}
                     >
                       {item.name}
                     </div>
+                    {item.description && (
+                      <span className="text-sm text-gray-600 max-xl:text-xs">
+                        {item.description}
+                      </span>
+                    )}
                     {isSharedItem && finalPermission === "view" && (
                       <span title="View only" className="flex items-center">
-                        <Eye className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+                        <Eye className="h-3.5 w-3.5 text-blue-600 flex-shrink-0 max-xl:h-3 max-xl:w-3" />
                       </span>
                     )}
                   </div>
-                  {item.description && (
-                    <div className="text-sm text-gray-500 mt-1">{item.description}</div>
-                  )}
-                  {/* Added by and date */}
+                  {/* Added by and date - Mobile style */}
                   {(item.createdAt || item.user) && (
-                    <div className="mt-1 text-xs text-gray-400">
+                    <div className={cn(
+                      "text-xs text-gray-400 mt-1",
+                      "max-xl:mt-0.5"
+                    )}>
                       <span>
                         Added by: {item.user ? getUserDisplayName(item.user) : "Unknown"}
                         {item.createdAt && ` on ${formatShoppingListDate(item.createdAt)}`}
@@ -1584,21 +1603,37 @@ export default function ShoppingListPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   {/* Shopping list items don't have direct sharing - only folders can be shared */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEditItem(item)}
-                    disabled={!canEditItem}
-                    className={cn(
-                      "h-8 w-8",
-                      !canEditItem && "opacity-50 cursor-not-allowed"
-                    )}
-                    title={!canEditItem ? "View only - You cannot edit this item" : "Edit item"}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
+                  {/* Mobile: Show edit and reorder icons */}
+                  <div className="flex items-center gap-1 max-xl:gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEditItem(item)}
+                      disabled={!canEditItem}
+                      className={cn(
+                        "h-8 w-8",
+                        "max-xl:h-6 max-xl:w-6 max-xl:p-0",
+                        !canEditItem && "opacity-50 cursor-not-allowed"
+                      )}
+                      title={!canEditItem ? "View only - You cannot edit this item" : "Edit item"}
+                    >
+                      <Edit2 className="h-4 w-4 max-xl:h-3.5 max-xl:w-3.5" />
+                    </Button>
+                    {/* Reorder icon for mobile */}
+                    <button
+                      className={cn(
+                        "flex items-center justify-center text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing",
+                        "max-xl:block xl:hidden",
+                        "h-6 w-6"
+                      )}
+                      title="Reorder item"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {/* Desktop: Show delete button */}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1606,6 +1641,7 @@ export default function ShoppingListPage() {
                     disabled={!canEditItem}
                     className={cn(
                       "h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50",
+                      "max-xl:hidden",
                       !canEditItem && "opacity-50 cursor-not-allowed"
                     )}
                     title={!canEditItem ? "View only - You cannot delete this item" : "Delete item"}
@@ -1618,7 +1654,8 @@ export default function ShoppingListPage() {
                   })}
                 </div>
               </div>
-            ));
+              );
+            });
           })()
         )}
           </div>
