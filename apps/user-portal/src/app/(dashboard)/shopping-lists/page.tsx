@@ -1698,8 +1698,8 @@ export default function ShoppingListPage() {
                     "flex-shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors",
                     !canEditItem && "opacity-50 cursor-not-allowed",
                     item.status === "completed"
-                      ? "bg-[#036cea] border-[#036cea] text-white"
-                      : "border-gray-300 hover:border-[#036cea]"
+                      ? "bg-[#1f299b] border-[#1f299b] text-white"
+                      : "border-gray-300 hover:border-[#1f299b]"
                   )}
                   title={!canEditItem ? "View only - You cannot edit this item" : undefined}
                 >
