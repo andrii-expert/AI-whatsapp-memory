@@ -49,9 +49,21 @@ export default function ShoppingListPage() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
 
-  // State
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [viewAllItems, setViewAllItems] = useState(true); // Default to All Items view
+  // State - Initialize from sessionStorage if available
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem("shopping-list-selected-folder-id");
+      return saved || null;
+    }
+    return null;
+  });
+  const [viewAllItems, setViewAllItems] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem("shopping-list-view-all-items");
+      return saved === "true";
+    }
+    return true; // Default to All Items view
+  });
   const [viewAllShared, setViewAllShared] = useState(false); // View all shared items
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
@@ -74,6 +86,7 @@ export default function ShoppingListPage() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
+  const hasRestoredFromSessionRef = useRef(false);
 
   // Folder states
   const [newFolderName, setNewFolderName] = useState("");
@@ -189,17 +202,56 @@ export default function ShoppingListPage() {
     foldersRef.current = allOwnedFolders;
   }, [allOwnedFolders]);
 
-  // Handle folderId from URL parameters
+  // Handle folderId from URL parameters (takes precedence over sessionStorage)
   useEffect(() => {
+    if (allOwnedFolders.length === 0 && sharedFolders.length === 0) return;
+    
     const folderIdFromUrl = searchParams.get("folderId");
-    if (folderIdFromUrl && allOwnedFolders.length > 0) {
-      const folderExists = allOwnedFolders.some((f: any) => f.id === folderIdFromUrl);
+    if (folderIdFromUrl) {
+      // URL parameter takes precedence
+      const folderExists = allOwnedFolders.some((f: any) => f.id === folderIdFromUrl) ||
+                          sharedFolders.some((f: any) => f.id === folderIdFromUrl);
       if (folderExists) {
         setSelectedFolderId(folderIdFromUrl);
         setViewAllItems(false);
+        // Save to sessionStorage
+        sessionStorage.setItem("shopping-list-selected-folder-id", folderIdFromUrl);
+        sessionStorage.setItem("shopping-list-view-all-items", "false");
+        hasRestoredFromSessionRef.current = true;
+      }
+    } else if (!hasRestoredFromSessionRef.current) {
+      // If no URL parameter, try to restore from sessionStorage (only once on initial load)
+      const savedFolderId = sessionStorage.getItem("shopping-list-selected-folder-id");
+      if (savedFolderId) {
+        const folderExists = allOwnedFolders.some((f: any) => f.id === savedFolderId) ||
+                            sharedFolders.some((f: any) => f.id === savedFolderId);
+        if (folderExists) {
+          setSelectedFolderId(savedFolderId);
+          const savedViewAll = sessionStorage.getItem("shopping-list-view-all-items");
+          setViewAllItems(savedViewAll !== "false");
+        } else {
+          // Folder no longer exists, clear sessionStorage
+          sessionStorage.removeItem("shopping-list-selected-folder-id");
+          sessionStorage.removeItem("shopping-list-view-all-items");
+        }
+      }
+      hasRestoredFromSessionRef.current = true;
+    }
+  }, [searchParams, allOwnedFolders, sharedFolders]);
+  
+  // Save selectedFolderId to sessionStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (selectedFolderId) {
+        sessionStorage.setItem("shopping-list-selected-folder-id", selectedFolderId);
+        sessionStorage.setItem("shopping-list-view-all-items", "false");
+      } else {
+        // When viewing all items, clear folder ID but save view state
+        sessionStorage.removeItem("shopping-list-selected-folder-id");
+        sessionStorage.setItem("shopping-list-view-all-items", viewAllItems ? "true" : "false");
       }
     }
-  }, [searchParams, allOwnedFolders]);
+  }, [selectedFolderId, viewAllItems]);
 
   // Get selected folder
   const selectedFolder = useMemo(() => {
