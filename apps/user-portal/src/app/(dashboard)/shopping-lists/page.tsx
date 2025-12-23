@@ -1362,7 +1362,7 @@ export default function ShoppingListPage() {
                             setExpandedSharedUserId(isExpanded ? null : sharedUser.id);
                           }}
                           className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-all duration-200 cursor-pointer",
+                            "z-50 h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-all duration-200 cursor-pointer",
                             isExpanded ? "scale-110 shadow-md" : "hover:scale-110 hover:shadow-md",
                             getAvatarColor(sharedUser.id)
                           )}
@@ -1373,7 +1373,7 @@ export default function ShoppingListPage() {
                           className={cn(
                             "ml-2 whitespace-nowrap font-medium text-gray-900 transition-all duration-300 ease-in-out",
                             isExpanded
-                              ? "max-w-[200px] opacity-100 bg-gray-100 rounded-r-xl pl-8 pr-2 py-1 ml-[-20px]"
+                              ? "max-w-[200px] opacity-100 bg-gray-100 rounded-r-xl pl-6 pr-2 py-1 ml-[-20px]"
                               : "max-w-0 overflow-hidden opacity-0 ml-0"
                           )}
                         >
