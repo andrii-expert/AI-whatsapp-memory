@@ -1343,7 +1343,7 @@ export default function ShoppingListPage() {
             {selectedFolder && !selectedFolder.isSharedWithMe && folderShares.length > 0 && (
               <div className="flex items-center gap-3 text-sm text-gray-600">
                 <span className="font-medium">Shared with</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   {folderShares.map((share: any) => {
                     const sharedUser = share.sharedWithUser;
                     if (!sharedUser) return null;
@@ -1351,17 +1351,17 @@ export default function ShoppingListPage() {
                     return (
                       <div
                         key={share.id}
-                        className="flex items-center gap-2"
+                        className="group relative flex items-center overflow-visible"
                       >
                         <div
                           className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                            "h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-all duration-200 hover:scale-110 hover:shadow-md",
                             getAvatarColor(sharedUser.id)
                           )}
                         >
                           {getUserInitials(sharedUser)}
                         </div>
-                        <span className="font-medium text-gray-900">
+                        <span className="ml-2 max-w-0 overflow-hidden whitespace-nowrap font-medium text-gray-900 opacity-0 group-hover:max-w-[200px] group-hover:opacity-100 group-hover:ml-2 transition-all duration-300 ease-in-out">
                           {getSharedUserDisplayName(sharedUser)}
                         </span>
                       </div>
