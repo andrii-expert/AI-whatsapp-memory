@@ -37,7 +37,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#7C3AED] md:hidden shadow-lg">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#1f299b] md:hidden shadow-lg">
       <div className="flex items-center justify-around h-16 px-1">
         {navigationItems.map((item) => {
           const isActive =

@@ -456,16 +456,21 @@ export default function ShoppingListPage() {
     return `${day} ${month}, ${year}`;
   };
 
-  // Get user display name
+  // Get user display name (first name + first letter of last name)
   const getUserDisplayName = (user: any) => {
     if (!user) return "Unknown";
     if (user.firstName || user.lastName) {
-      return `${user.firstName || ""} ${user.lastName || ""}`.trim();
+      const firstName = user.firstName || "";
+      const lastName = user.lastName || "";
+      if (firstName && lastName) {
+        return `${firstName} ${lastName.charAt(0)}`;
+      }
+      return firstName || lastName || "Unknown";
     }
     return user.email || "Unknown";
   };
   
-  // Get display name for shared user (friend name if exists, otherwise full name)
+  // Get display name for shared user (friend name if exists, otherwise first name + first letter of last name)
   const getSharedUserDisplayName = (sharedUser: any) => {
     if (!sharedUser) return "Unknown";
     
@@ -475,7 +480,7 @@ export default function ShoppingListPage() {
       return friend.name;
     }
     
-    // Otherwise return full name
+    // Otherwise return first name + first letter of last name
     return getUserDisplayName(sharedUser);
   };
   
@@ -1628,8 +1633,8 @@ export default function ShoppingListPage() {
                       <div
                         key={item.id}
                         className={cn(
-                          "flex items-center gap-3 p-4 bg-white border rounded-lg hover:shadow-md transition-all",
-                          item.status === "completed" && "opacity-60"
+                          "flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-all",
+                          item.status === "completed" && "opacity-70"
                         )}
                       >
                 {/* Checkbox */}
@@ -1637,11 +1642,11 @@ export default function ShoppingListPage() {
                   onClick={() => canEditItem && handleToggleItem(item.id)}
                   disabled={!canEditItem}
                   className={cn(
-                    "flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors",
+                    "flex-shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors",
                     !canEditItem && "opacity-50 cursor-not-allowed",
                     item.status === "completed"
-                      ? "bg-green-500 border-green-500 text-white"
-                      : "border-gray-300 hover:border-green-500"
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "border-gray-300 hover:border-blue-600"
                   )}
                   title={!canEditItem ? "View only - You cannot edit this item" : undefined}
                 >
@@ -1650,24 +1655,26 @@ export default function ShoppingListPage() {
 
                 {/* Item Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <div
                       className={cn(
-                        "font-medium text-gray-900",
-                        item.status === "completed" && "line-through text-gray-500"
+                        "font-medium text-gray-700",
+                        item.status === "completed" && "line-through text-gray-400"
                       )}
                     >
                       {item.name}
                     </div>
+                    {item.description && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-xs font-medium">
+                        {item.description}
+                      </span>
+                    )}
                     {isSharedItem && finalPermission === "view" && (
                       <span title="View only" className="flex items-center">
                         <Eye className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
                       </span>
                     )}
                   </div>
-                  {item.description && (
-                    <div className="text-sm text-gray-500 mt-1">{item.description}</div>
-                  )}
                   {/* Added by and date */}
                   {(item.createdAt || item.user) && (
                     <div className="mt-1 text-xs text-gray-400">
@@ -1679,35 +1686,57 @@ export default function ShoppingListPage() {
                   )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  {/* Shopping list items don't have direct sharing - only folders can be shared */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEditItem(item)}
-                    disabled={!canEditItem}
-                    className={cn(
-                      "h-8 w-8",
-                      !canEditItem && "opacity-50 cursor-not-allowed"
-                    )}
-                    title={!canEditItem ? "View only - You cannot edit this item" : "Edit item"}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteItem(item.id, item.name)}
-                    disabled={!canEditItem}
-                    className={cn(
-                      "h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50",
-                      !canEditItem && "opacity-50 cursor-not-allowed"
-                    )}
-                    title={!canEditItem ? "View only - You cannot delete this item" : "Delete item"}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                {/* Actions - Single Edit Icon with Dropdown */}
+                <div className="flex items-center">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={!canEditItem}
+                        className={cn(
+                          "h-8 w-8 text-gray-500 hover:text-gray-700",
+                          !canEditItem && "opacity-50 cursor-not-allowed"
+                        )}
+                        onClick={(e: React.MouseEvent) => {
+                          if (!canEditItem) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }
+                        }}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                      <DropdownMenuItem
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          if (canEditItem) {
+                            handleEditItem(item);
+                          }
+                        }}
+                        disabled={!canEditItem}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        <span>Edit</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          if (canEditItem) {
+                            handleDeleteItem(item.id, item.name);
+                          }
+                        }}
+                        disabled={!canEditItem}
+                        className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>Delete</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
                     );
