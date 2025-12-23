@@ -1,0 +1,75 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Calendar, ShoppingCart, CheckSquare, Bell, Users } from "lucide-react";
+import { cn } from "@imaginecalendar/ui/cn";
+
+const navigationItems = [
+  { name: "Events", href: "/calendars", icon: Calendar },
+  { name: "Shopping", href: "/shopping-lists", icon: ShoppingCart },
+  { name: "Tasks", href: "/tasks", icon: CheckSquare },
+  { name: "Reminders", href: "/reminders", icon: Bell },
+  { name: "Friends", href: "/friends", icon: Users },
+];
+
+// Pages where the bottom nav should be shown
+const pagesWithBottomNav = [
+  "/dashboard",
+  "/calendars",
+  "/notes",
+  "/reminders",
+  "/shopping-lists",
+  "/tasks",
+  "/friends",
+];
+
+export function MobileBottomNav() {
+  const pathname = usePathname();
+
+  // Check if current page should show bottom nav
+  const shouldShow = pagesWithBottomNav.some(
+    (page) => pathname === page || pathname.startsWith(page + "/")
+  );
+
+  if (!shouldShow) {
+    return null;
+  }
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#7C3AED] md:hidden shadow-lg">
+      <div className="flex items-center justify-around h-16 px-1">
+        {navigationItems.map((item) => {
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + "/");
+          
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={cn(
+                "flex flex-col items-center justify-center flex-1 h-full min-w-0 px-1 transition-all relative",
+                isActive && "mx-0.5"
+              )}
+            >
+              <div
+                className={cn(
+                  "flex flex-col items-center justify-center w-full h-full rounded-lg transition-all",
+                  isActive && "bg-[#9F7AEA]"
+                )}
+              >
+                <item.icon
+                  className="h-5 w-5 mb-0.5 flex-shrink-0 text-white"
+                />
+                <span className="text-xs font-medium whitespace-nowrap text-white text-center">
+                  {item.name}
+                </span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
