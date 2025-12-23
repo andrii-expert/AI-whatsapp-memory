@@ -1354,18 +1354,6 @@ export default function ShoppingListPage() {
                 ) : (
                   <div className="flex-1" />
                 )}
-                
-                {/* Desktop: Lists button */}
-                <div className="hidden lg:block">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsMobileSidebarOpen(true)}
-                    className="flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-                  >
-                    <Menu className="h-4 w-4" />
-                    <span className="font-medium">Lists</span>
-                  </Button>
-                </div>
               </div>
 
               <div className="flex gap-2">
