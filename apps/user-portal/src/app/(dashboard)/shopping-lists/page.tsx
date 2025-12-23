@@ -1648,6 +1648,12 @@ export default function ShoppingListPage() {
                     // Items inherit permission from their folder
                     const isSharedItem = (item as any).isSharedWithMe || false;
                     const itemPermission = (item as any).sharePermission || (isSharedItem ? "view" : undefined);
+                    
+                    // Check if current user owns the folder
+                    // Folder owners always have full edit permission for all items in their folders,
+                    // even if the items were created by shared users
+                    const isFolderOwner = selectedFolder && !selectedFolder.isSharedWithMe;
+                    
                     // If item doesn't have explicit permission, check if it's in a shared folder
                     let finalPermission = itemPermission;
                     if (!finalPermission && selectedFolder) {
@@ -1656,7 +1662,10 @@ export default function ShoppingListPage() {
                         finalPermission = folder.sharePermission || "view";
                       }
                     }
-                    const canEditItem = !isSharedItem || finalPermission === "edit";
+                    
+                    // Folder owners can always edit items in their folders, even if created by shared users
+                    // Otherwise, check if user has edit permission
+                    const canEditItem = isFolderOwner || (!isSharedItem || finalPermission === "edit");
                     
                     return (
                       <div

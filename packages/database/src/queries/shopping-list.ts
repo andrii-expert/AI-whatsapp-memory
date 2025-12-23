@@ -190,7 +190,8 @@ export async function updateShoppingListItem(
       // If not owner, check folder permission
       if (!isOwner && existingItem.folderId) {
         const folderAccess = await checkShoppingListFolderAccess(db, existingItem.folderId, userId);
-        if (!folderAccess.hasAccess || folderAccess.permission !== "edit") {
+        // Folder owners always have full edit permission, even for items created by shared users
+        if (!folderAccess.hasAccess || (folderAccess.permission !== "edit" && folderAccess.permission !== "owner")) {
           throw new Error("You have view permission only. You cannot edit this item because you are on view permission.");
         }
       }
@@ -198,7 +199,8 @@ export async function updateShoppingListItem(
       // If moving to a different folder, check permission on target folder
       if (data.folderId !== undefined && data.folderId !== existingItem.folderId && data.folderId) {
         const targetFolderAccess = await checkShoppingListFolderAccess(db, data.folderId, userId);
-        if (!targetFolderAccess.hasAccess || targetFolderAccess.permission !== "edit") {
+        // Folder owners always have full edit permission
+        if (!targetFolderAccess.hasAccess || (targetFolderAccess.permission !== "edit" && targetFolderAccess.permission !== "owner")) {
           throw new Error("You have view permission only. You cannot move this item because you are on view permission.");
         }
       }
@@ -273,7 +275,8 @@ export async function deleteShoppingListItem(
       // If not owner, check folder permission
       if (!isOwner && existingItem.folderId) {
         const folderAccess = await checkShoppingListFolderAccess(db, existingItem.folderId, userId);
-        if (!folderAccess.hasAccess || folderAccess.permission !== "edit") {
+        // Folder owners always have full edit permission, even for items created by shared users
+        if (!folderAccess.hasAccess || (folderAccess.permission !== "edit" && folderAccess.permission !== "owner")) {
           throw new Error("You have view permission only. You cannot delete this item because you are on view permission.");
         }
       }
@@ -312,7 +315,8 @@ export async function toggleShoppingListItemStatus(
       // If not owner, check folder permission
       if (!isOwner && item.folderId) {
         const folderAccess = await checkShoppingListFolderAccess(db, item.folderId, userId);
-        if (!folderAccess.hasAccess || folderAccess.permission !== "edit") {
+        // Folder owners always have full edit permission, even for items created by shared users
+        if (!folderAccess.hasAccess || (folderAccess.permission !== "edit" && folderAccess.permission !== "owner")) {
           throw new Error("You have view permission only. You cannot edit this item because you are on view permission.");
         }
       }
