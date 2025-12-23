@@ -88,6 +88,7 @@ export default function ShoppingListPage() {
   const [shareResourceType, setShareResourceType] = useState<"task" | "task_folder" | "shopping_list_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder">("task");
   const [shareResourceId, setShareResourceId] = useState<string | null>(null);
   const [shareResourceName, setShareResourceName] = useState("");
+  const [expandedSharedUserId, setExpandedSharedUserId] = useState<string | null>(null);
 
   // Fetch folders and items
   const { data: allFolders = [], isLoading: isLoadingFolders } = useQuery(
@@ -1348,20 +1349,34 @@ export default function ShoppingListPage() {
                     const sharedUser = share.sharedWithUser;
                     if (!sharedUser) return null;
                     
+                    const isExpanded = expandedSharedUserId === sharedUser.id;
+                    
                     return (
                       <div
                         key={share.id}
-                        className="group relative flex items-center overflow-visible"
+                        className="relative flex items-center overflow-visible"
                       >
-                        <div
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedSharedUserId(isExpanded ? null : sharedUser.id);
+                          }}
                           className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-all duration-200 hover:scale-110 hover:shadow-md",
+                            "h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-all duration-200 cursor-pointer",
+                            isExpanded ? "scale-110 shadow-md" : "hover:scale-110 hover:shadow-md",
                             getAvatarColor(sharedUser.id)
                           )}
                         >
                           {getUserInitials(sharedUser)}
-                        </div>
-                        <span className="ml-2 max-w-0 overflow-hidden whitespace-nowrap font-medium text-gray-900 opacity-0 group-hover:max-w-[200px] group-hover:opacity-100 group-hover:ml-2 transition-all duration-300 ease-in-out">
+                        </button>
+                        <span
+                          className={cn(
+                            "ml-2 whitespace-nowrap font-medium text-gray-900 transition-all duration-300 ease-in-out",
+                            isExpanded
+                              ? "max-w-[200px] opacity-100 ml-2"
+                              : "max-w-0 overflow-hidden opacity-0 ml-0"
+                          )}
+                        >
                           {getSharedUserDisplayName(sharedUser)}
                         </span>
                       </div>
