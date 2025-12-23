@@ -37,7 +37,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#1f299b] md:hidden shadow-lg">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#036cea] md:hidden shadow-lg">
       <div className="flex items-center justify-around h-16 px-1">
         {navigationItems.map((item) => {
           const isActive =
@@ -55,7 +55,7 @@ export function MobileBottomNav() {
               <div
                 className={cn(
                   "flex flex-col items-center justify-center w-full h-full rounded-lg transition-all",
-                  isActive && "bg-[#9F7AEA]"
+                  isActive && "bg-[#1f299b]"
                 )}
               >
                 <item.icon

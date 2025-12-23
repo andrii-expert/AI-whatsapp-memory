@@ -314,17 +314,46 @@ export default function ShoppingListPage() {
 
   const toggleItemMutation = useMutation(
     trpc.shoppingList.toggle.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
-        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
-        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
+      onMutate: async ({ id }) => {
+        // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+        await queryClient.cancelQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+
+        // Snapshot the previous value
+        const previousItems = queryClient.getQueryData(trpc.shoppingList.list.queryKey());
+
+        // Optimistically update to the new value
+        queryClient.setQueryData(trpc.shoppingList.list.queryKey(), (old: any) => {
+          if (!old) return old;
+          return old.map((item: any) => {
+            if (item.id === id) {
+              return {
+                ...item,
+                status: item.status === "completed" ? "open" : "completed",
+              };
+            }
+            return item;
+          });
+        });
+
+        // Return a context object with the snapshotted value
+        return { previousItems };
       },
-      onError: (error) => {
+      onError: (error, variables, context) => {
+        // If the mutation fails, use the context returned from onMutate to roll back
+        if (context?.previousItems) {
+          queryClient.setQueryData(trpc.shoppingList.list.queryKey(), context.previousItems);
+        }
         toast({
           title: "Error",
           description: error.message || "Failed to update item",
           variant: "error",
         });
+      },
+      onSettled: () => {
+        // Always refetch after error or success to ensure we have the latest data
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
       },
     })
   );
@@ -1645,8 +1674,8 @@ export default function ShoppingListPage() {
                     "flex-shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors",
                     !canEditItem && "opacity-50 cursor-not-allowed",
                     item.status === "completed"
-                      ? "bg-blue-600 border-blue-600 text-white"
-                      : "border-gray-300 hover:border-blue-600"
+                      ? "bg-[#036cea] border-[#036cea] text-white"
+                      : "border-gray-300 hover:border-[#036cea]"
                   )}
                   title={!canEditItem ? "View only - You cannot edit this item" : undefined}
                 >
