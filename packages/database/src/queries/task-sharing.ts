@@ -170,19 +170,22 @@ export async function updateSharePermission(
 }
 
 /**
- * Delete a share
+ * Delete a share - allows both owners and recipients to delete
  */
 export async function deleteTaskShare(
   db: Database,
   shareId: string,
-  ownerId: string
+  userId: string
 ) {
   return withMutationLogging(
     'deleteTaskShare',
-    { shareId, ownerId },
+    { shareId, userId },
     () => db.delete(taskShares).where(and(
       eq(taskShares.id, shareId),
-      eq(taskShares.ownerId, ownerId)
+      or(
+        eq(taskShares.ownerId, userId), // Owner can delete
+        eq(taskShares.sharedWithUserId, userId) // Recipient can delete (exit)
+      )
     ))
   );
 }
