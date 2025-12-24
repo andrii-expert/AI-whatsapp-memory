@@ -691,6 +691,136 @@ export const calendarRouter = createTRPCRouter({
       }
     }),
 
+  updateEvent: protectedProcedure
+    .input(z.object({
+      calendarId: z.string(),
+      eventId: z.string(),
+      title: z.string().min(1, "Event title is required").optional(),
+      start: z.string().optional(), // ISO date string
+      end: z.string().optional(), // ISO date string
+      description: z.string().optional(),
+      location: z.string().optional(),
+      allDay: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ ctx: { db, session }, input }) => {
+      const calendar = await getCalendarById(db, input.calendarId);
+
+      if (!calendar || calendar.userId !== session.user.id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Calendar not found",
+        });
+      }
+
+      if (!calendar.accessToken || !calendar.isActive) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Calendar is not connected or active",
+        });
+      }
+
+      try {
+        logger.info({
+          userId: session.user.id,
+          calendarId: input.calendarId,
+          eventId: input.eventId,
+          eventTitle: input.title
+        }, "Updating calendar event");
+
+        const provider = createCalendarProvider(calendar.provider);
+        let accessToken = calendar.accessToken;
+
+        // Parse dates if provided
+        const startDate = input.start ? new Date(input.start) : undefined;
+        const endDate = input.end ? new Date(input.end) : undefined;
+
+        // Try to update event
+        try {
+          const updatedEvent = await provider.updateEvent(accessToken, {
+            calendarId: calendar.calendarId,
+            eventId: input.eventId,
+            title: input.title,
+            description: input.description,
+            start: startDate,
+            end: endDate,
+            allDay: input.allDay || false,
+            location: input.location,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          });
+
+          logger.info({
+            userId: session.user.id,
+            calendarId: input.calendarId,
+            eventId: input.eventId
+          }, "Calendar event updated successfully");
+
+          return {
+            success: true,
+            event: updatedEvent,
+            message: "Event updated successfully"
+          };
+        } catch (error: any) {
+          // If authentication fails and we have a refresh token, try refreshing
+          if (calendar.refreshToken && error.message?.includes("authentication")) {
+            logger.info({
+              userId: session.user.id,
+              calendarId: input.calendarId,
+              provider: calendar.provider
+            }, "Access token failed during event update, attempting refresh");
+
+            const refreshedTokens = await provider.refreshTokens(calendar.refreshToken);
+            accessToken = refreshedTokens.accessToken;
+
+            // Update the calendar with the new tokens
+            await updateCalendarConnection(db, calendar.id, {
+              accessToken: refreshedTokens.accessToken,
+              refreshToken: refreshedTokens.refreshToken,
+              expiresAt: refreshedTokens.expiresAt,
+            });
+
+            // Retry with the new access token
+            const updatedEvent = await provider.updateEvent(accessToken, {
+              calendarId: calendar.calendarId,
+              eventId: input.eventId,
+              title: input.title,
+              description: input.description,
+              start: startDate,
+              end: endDate,
+              allDay: input.allDay || false,
+              location: input.location,
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            });
+
+            logger.info({
+              userId: session.user.id,
+              calendarId: input.calendarId,
+              eventId: input.eventId
+            }, "Calendar event updated successfully after token refresh");
+
+            return {
+              success: true,
+              event: updatedEvent,
+              message: "Event updated successfully"
+            };
+          } else {
+            throw error;
+          }
+        }
+      } catch (error: any) {
+        logger.error({
+          userId: session.user.id,
+          calendarId: input.calendarId,
+          eventId: input.eventId,
+          error: error.message
+        }, "Failed to update calendar event");
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to update event: ${error.message}`,
+        });
+      }
+    }),
+
   getEvents: protectedProcedure
     .input(z.object({
       calendarId: z.string(),

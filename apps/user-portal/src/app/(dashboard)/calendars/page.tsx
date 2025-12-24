@@ -11,6 +11,7 @@ import { Badge } from "@imaginecalendar/ui/badge";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { Calendar as CalendarComponent } from "@imaginecalendar/ui/calendar";
 import { Input } from "@imaginecalendar/ui/input";
+import { Textarea } from "@imaginecalendar/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -35,6 +36,7 @@ import {
   CalendarCheck,
   Settings,
   Link2,
+  Save,
 } from "lucide-react";
 
 // Google Icon Component
@@ -246,10 +248,19 @@ export default function CalendarsPage() {
   const [eventDetailsModal, setEventDetailsModal] = useState<{
     open: boolean;
     event: any | null;
+    isEditing: boolean;
   }>({
     open: false,
     event: null,
+    isEditing: false,
   });
+
+  // Edit event form state
+  const [editEventTitle, setEditEventTitle] = useState("");
+  const [editEventDate, setEditEventDate] = useState("");
+  const [editEventTime, setEditEventTime] = useState("");
+  const [editEventDescription, setEditEventDescription] = useState("");
+  const [editEventLocation, setEditEventLocation] = useState("");
 
   // Fetch user's calendars
   const { data: calendars = [], isLoading, refetch } = useQuery(
@@ -510,6 +521,31 @@ export default function CalendarsPage() {
     })
   );
 
+  // Update event mutation
+  const updateEventMutation = useMutation(
+    trpc.calendar.updateEvent.mutationOptions({
+      onSuccess: (data) => {
+        toast({
+          title: "Event updated",
+          description: data.message || "Event has been updated successfully.",
+          variant: "success",
+        });
+        // Exit edit mode
+        setEventDetailsModal(prev => ({ ...prev, isEditing: false }));
+        // Refresh events
+        eventQueries.forEach((query) => query.refetch());
+      },
+      onError: (error) => {
+        toast({
+          title: "Event update failed",
+          description: error.message || "Failed to update event. Please try again.",
+          variant: "error",
+          duration: 3500,
+        });
+      },
+    })
+  );
+
   const handleConnectCalendar = async (provider: "google" | "microsoft") => {
     if (!user) {
       toast({
@@ -650,9 +686,23 @@ export default function CalendarsPage() {
   };
 
   const handleEventClick = (event: any) => {
+    // Populate edit form fields with current event data
+    setEditEventTitle(event.title || "");
+    setEditEventDescription(event.description || "");
+    setEditEventLocation(event.location || "");
+
+    // Format date and time for form inputs
+    const eventDate = new Date(event.start);
+    const dateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    const timeStr = eventDate.toTimeString().slice(0, 5); // HH:MM
+
+    setEditEventDate(dateStr);
+    setEditEventTime(timeStr);
+
     setEventDetailsModal({
       open: true,
       event: event,
+      isEditing: false,
     });
   };
 
@@ -662,9 +712,58 @@ export default function CalendarsPage() {
     }
   };
 
-  const handleEditEvent = (event: any) => {
-    // For now, just go to the calendar link since we don't have edit functionality yet
-    handleGoToCalendar(event);
+  const handleEditEvent = () => {
+    setEventDetailsModal(prev => ({ ...prev, isEditing: true }));
+  };
+
+  const handleCancelEdit = () => {
+    setEventDetailsModal(prev => ({ ...prev, isEditing: false }));
+  };
+
+  const handleSaveEdit = () => {
+    if (!eventDetailsModal.event) return;
+
+    // Parse date and time
+    let startDate: Date | undefined;
+    if (editEventDate) {
+      const dateParts = editEventDate.split('-').map(Number);
+      if (dateParts.length === 3 && !dateParts.some(isNaN)) {
+        const year = dateParts[0]!;
+        const month = dateParts[1]!;
+        const day = dateParts[2]!;
+        startDate = new Date(year, month - 1, day);
+
+        // Add time if provided
+        if (editEventTime) {
+          const timeParts = editEventTime.split(':').map(Number);
+          if (timeParts.length >= 2 && !timeParts.some(isNaN) && timeParts[0] !== undefined && timeParts[1] !== undefined) {
+            startDate.setHours(timeParts[0], timeParts[1], 0, 0);
+          }
+        }
+      }
+    }
+
+    // Calculate end date (1 hour after start, or end of day if no time)
+    let endDate: Date | undefined;
+    if (startDate) {
+      endDate = new Date(startDate);
+      if (editEventTime) {
+        endDate.setHours(startDate.getHours() + 1);
+      } else {
+        endDate.setHours(23, 59, 59, 999); // End of day for all-day events
+      }
+    }
+
+    updateEventMutation.mutate({
+      calendarId: eventDetailsModal.event.calendarId,
+      eventId: eventDetailsModal.event.id,
+      title: editEventTitle.trim() || undefined,
+      start: startDate?.toISOString(),
+      end: endDate?.toISOString(),
+      description: editEventDescription.trim() || undefined,
+      location: editEventLocation.trim() || undefined,
+      allDay: !editEventTime,
+    });
   };
 
   // Group calendars by provider
@@ -1644,86 +1743,177 @@ export default function CalendarsPage() {
 
           {eventDetailsModal.event && (
             <div className="space-y-4 py-2">
-              {/* Event Details */}
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm text-gray-900">
-                      {formatInTimezone(
-                        eventDetailsModal.event.start,
-                        eventDetailsModal.event.calendarTimezone || 'Africa/Johannesburg',
-                        'datetime'
-                      )}
+              {eventDetailsModal.isEditing ? (
+                /* Edit Mode */
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="edit-event-title" className="text-sm font-medium">
+                      Event Title
+                    </label>
+                    <Input
+                      id="edit-event-title"
+                      value={editEventTitle}
+                      onChange={(e) => setEditEventTitle(e.target.value)}
+                      placeholder="Enter event title"
+                      className="text-sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label htmlFor="edit-event-date" className="text-sm font-medium">
+                        Date
+                      </label>
+                      <Input
+                        id="edit-event-date"
+                        type="date"
+                        value={editEventDate}
+                        onChange={(e) => setEditEventDate(e.target.value)}
+                        className="text-sm"
+                      />
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {formatInTimezone(
-                        eventDetailsModal.event.start,
-                        eventDetailsModal.event.calendarTimezone || 'Africa/Johannesburg',
-                        'date'
-                      )}
+                    <div className="space-y-2">
+                      <label htmlFor="edit-event-time" className="text-sm font-medium">
+                        Time
+                      </label>
+                      <Input
+                        id="edit-event-time"
+                        type="time"
+                        value={editEventTime}
+                        onChange={(e) => setEditEventTime(e.target.value)}
+                        className="text-sm"
+                      />
                     </div>
                   </div>
-                </div>
 
-                {eventDetailsModal.event.location && (
+                  <div className="space-y-2">
+                    <label htmlFor="edit-event-location" className="text-sm font-medium">
+                      Location
+                    </label>
+                    <Input
+                      id="edit-event-location"
+                      value={editEventLocation}
+                      onChange={(e) => setEditEventLocation(e.target.value)}
+                      placeholder="Enter location (optional)"
+                      className="text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="edit-event-description" className="text-sm font-medium">
+                      Description
+                    </label>
+                    <Textarea
+                      id="edit-event-description"
+                      value={editEventDescription}
+                      onChange={(e) => setEditEventDescription(e.target.value)}
+                      placeholder="Enter description (optional)"
+                      className="text-sm min-h-[80px]"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* View Mode */
+                <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
+                    <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-700">
-                        📍 {eventDetailsModal.event.location}
+                      <div className="font-medium text-sm text-gray-900">
+                        {formatInTimezone(
+                          eventDetailsModal.event.start,
+                          eventDetailsModal.event.calendarTimezone || 'Africa/Johannesburg',
+                          'datetime'
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {formatInTimezone(
+                          eventDetailsModal.event.start,
+                          eventDetailsModal.event.calendarTimezone || 'Africa/Johannesburg',
+                          'date'
+                        )}
                       </div>
                     </div>
                   </div>
-                )}
 
-                {eventDetailsModal.event.description && (
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-purple-500 mt-2 flex-shrink-0"></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-700">
-                        <div className="font-medium mb-1">Description:</div>
-                        <div className="whitespace-pre-wrap break-words">
-                          {eventDetailsModal.event.description}
+                  {eventDetailsModal.event.location && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-700">
+                          📍 {eventDetailsModal.event.location}
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+
+                  {eventDetailsModal.event.description && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-2 h-2 rounded-full bg-purple-500 mt-2 flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-700">
+                          <div className="font-medium mb-1">Description:</div>
+                          <div className="whitespace-pre-wrap break-words">
+                            {eventDetailsModal.event.description}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-            <AlertDialogCancel className="bg-orange-500 text-white hover:bg-orange-600 hover:font-bold border-0 w-full sm:w-auto order-2 sm:order-1">
-              Close
+            <AlertDialogCancel
+              onClick={eventDetailsModal.isEditing ? handleCancelEdit : undefined}
+              className="bg-orange-500 text-white hover:bg-orange-600 hover:font-bold border-0 w-full sm:w-auto order-2 sm:order-1"
+            >
+              {eventDetailsModal.isEditing ? "Cancel" : "Close"}
             </AlertDialogCancel>
             <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (eventDetailsModal.event) {
-                    handleEditEvent(eventDetailsModal.event);
-                    setEventDetailsModal({ open: false, event: null });
-                  }
-                }}
-                className="flex-1 sm:flex-none"
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-              <Button
-                onClick={() => {
-                  if (eventDetailsModal.event) {
-                    handleGoToCalendar(eventDetailsModal.event);
-                    setEventDetailsModal({ open: false, event: null });
-                  }
-                }}
-                className="flex-1 sm:flex-none bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Link2 className="h-4 w-4 mr-2" />
-                Go to Calendar
-              </Button>
+              {eventDetailsModal.isEditing ? (
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={updateEventMutation.isPending || !editEventTitle.trim()}
+                  className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {updateEventMutation.isPending ? (
+                    <>
+                      <Clock className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleEditEvent}
+                    className="flex-1 sm:flex-none"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (eventDetailsModal.event) {
+                        handleGoToCalendar(eventDetailsModal.event);
+                        setEventDetailsModal({ open: false, event: null, isEditing: false });
+                      }
+                    }}
+                    className="flex-1 sm:flex-none bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Go to Calendar
+                  </Button>
+                </>
+              )}
             </div>
           </AlertDialogFooter>
         </AlertDialogContent>
