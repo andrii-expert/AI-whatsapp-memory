@@ -226,7 +226,6 @@ export default function CalendarsPage() {
   const [eventDate, setEventDate] = useState("");
   const [eventTime, setEventTime] = useState("");
   const [eventLocation, setEventLocation] = useState("");
-  const [eventDescription, setEventDescription] = useState("");
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month" | "year">("month");
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
@@ -281,7 +280,6 @@ export default function CalendarsPage() {
   const [editEventTitle, setEditEventTitle] = useState("");
   const [editEventDate, setEditEventDate] = useState("");
   const [editEventTime, setEditEventTime] = useState("");
-  const [editEventDescription, setEditEventDescription] = useState("");
   const [editEventLocation, setEditEventLocation] = useState("");
 
   // Fetch user's calendars
@@ -541,7 +539,6 @@ export default function CalendarsPage() {
         setEventDate("");
         setEventTime("");
         setEventLocation("");
-        setEventDescription("");
         setSelectedCalendarId("");
         // Close modal
         setCreateEventDialogOpen(false);
@@ -721,7 +718,6 @@ export default function CalendarsPage() {
       start: startDate.toISOString(),
       end: endDate.toISOString(),
       location: eventLocation.trim() || undefined,
-      description: eventDescription.trim() || undefined,
       allDay: !eventTime, // If no time, treat as all-day
     });
   };
@@ -729,7 +725,6 @@ export default function CalendarsPage() {
   const handleEventClick = (event: any) => {
     // Populate edit form fields with current event data
     setEditEventTitle(event.title || "");
-    setEditEventDescription(event.description || "");
     setEditEventLocation(event.location || "");
 
     // Format date and time for form inputs
@@ -783,7 +778,6 @@ export default function CalendarsPage() {
     if (eventDetailsModal.event) {
       const event = eventDetailsModal.event;
       setEditEventTitle(event.title || "");
-      setEditEventDescription(event.description || "");
       setEditEventLocation(event.location || "");
 
       // Format date and time for form inputs
@@ -803,7 +797,6 @@ export default function CalendarsPage() {
     setEditEventDate("");
     setEditEventTime("");
     setEditEventLocation("");
-    setEditEventDescription("");
   };
 
   const handleCancelEdit = () => {
@@ -851,7 +844,6 @@ export default function CalendarsPage() {
       title: editEventTitle.trim() || undefined,
       start: startDate?.toISOString(),
       end: endDate?.toISOString(),
-      description: editEventDescription.trim() || undefined,
       location: editEventLocation.trim() || undefined,
       allDay: !editEventTime,
     });
@@ -1909,7 +1901,6 @@ export default function CalendarsPage() {
                         setEventDate(format(displayDate, "yyyy-MM-dd"));
                         setEventTime("");
                         setEventLocation("");
-                        setEventDescription("");
                         setSelectedCalendarId("");
                         setCreateEventDialogOpen(true);
                       }}
@@ -1969,16 +1960,6 @@ export default function CalendarsPage() {
                                     <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
                                       <MapPin className="h-3 w-3 flex-shrink-0" />
                                       <span className="truncate">{event.location}</span>
-                                    </div>
-                                  )}
-
-                                  {/* Description preview */}
-                                  {event.description && (
-                                    <div className="text-xs text-gray-500 line-clamp-2">
-                                      {event.description.length > 100
-                                        ? `${event.description.substring(0, 100)}...`
-                                        : event.description
-                                      }
                                     </div>
                                   )}
                                 </div>
@@ -2099,20 +2080,6 @@ export default function CalendarsPage() {
                   setEventLocation(e.target.value)
                 }
                 className="text-sm sm:text-base"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="event-description" className="text-sm font-medium">
-                Description (optional)
-              </label>
-              <Textarea
-                id="event-description"
-                placeholder="Enter event description"
-                value={eventDescription}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                  setEventDescription(e.target.value)
-                }
-                className="text-sm sm:text-base min-h-[80px]"
               />
             </div>
             <div className="space-y-2">
@@ -2468,18 +2435,6 @@ export default function CalendarsPage() {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <label htmlFor="edit-event-description" className="text-sm font-medium">
-                      Description
-                    </label>
-                    <Textarea
-                      id="edit-event-description"
-                      value={editEventDescription}
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditEventDescription(e.target.value)}
-                      placeholder="Enter description (optional)"
-                      className="text-sm min-h-[80px]"
-                    />
-                  </div>
                 </div>
               ) : (
                 /* View Mode */
@@ -2509,21 +2464,7 @@ export default function CalendarsPage() {
                       <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-gray-700">
-                          📍 {eventDetailsModal.event.location}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {eventDetailsModal.event.description && (
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-purple-500 mt-2 flex-shrink-0"></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-700">
-                          <div className="font-medium mb-1">Description:</div>
-                          <div className="whitespace-pre-wrap break-words">
-                            {eventDetailsModal.event.description}
-                          </div>
+                          {eventDetailsModal.event.location}
                         </div>
                       </div>
                     </div>
