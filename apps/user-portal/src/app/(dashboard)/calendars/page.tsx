@@ -930,7 +930,7 @@ export default function CalendarsPage() {
   return (
     <div>
       {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-xs sm:text-sm overflow-x-auto">
+      <div className="flex items-center gap-2 text-sm overflow-x-auto">
         <Link
           href="/dashboard"
           className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
