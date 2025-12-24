@@ -171,8 +171,11 @@ export default function ShoppingListPage() {
       });
   }, [sharedResources, myShares]);
 
-  // Filter out shared folders from main folder list - only show owned folders
-  const folders = allFolders.filter((folder: any) => !folder.isSharedWithMe);
+  // Combine owned and shared folders - treat shared folders the same as owned folders
+  const folders = useMemo(() => {
+    const ownedFolders = allFolders.filter((folder: any) => !folder.isSharedWithMe);
+    return [...ownedFolders, ...sharedFolders];
+  }, [allFolders, sharedFolders]);
 
   // Helper function to flatten all folders including categories
   const flattenFolders = (folderList: any[]): any[] => {
@@ -261,14 +264,59 @@ export default function ShoppingListPage() {
            null;
   }, [selectedFolderId, allOwnedFolders, sharedFolders]);
   
-  // Get shared users for selected folder (if it's owned by current user)
-  const { data: folderShares = [] } = useQuery({
+  // Get shared users for selected folder (both owned and shared folders)
+  const { data: ownedFolderShares = [] } = useQuery({
     ...trpc.taskSharing.getResourceShares.queryOptions({
       resourceType: "shopping_list_folder",
       resourceId: selectedFolderId || "",
     }),
     enabled: !!selectedFolderId && !!selectedFolder && !selectedFolder.isSharedWithMe,
   });
+
+  // For shared folders, get all shares for that folder from myShares
+  const sharedFolderShares = useMemo(() => {
+    if (!selectedFolderId || !selectedFolder?.isSharedWithMe) return [];
+
+    return myShares.filter((share: any) =>
+      share.resourceType === "shopping_list_folder" && share.resourceId === selectedFolderId
+    ).map((share: any) => ({
+      ...share,
+      sharedWithUser: share.sharedWithUser,
+    }));
+  }, [selectedFolderId, selectedFolder, myShares]);
+
+  // Combine owned folder shares and shared folder shares
+  const folderShares = useMemo(() => {
+    if (!selectedFolderId || !selectedFolder) return [];
+
+    if (selectedFolder.isSharedWithMe) {
+      // For shared folders, show all shares including the owner
+      const allShares = [...sharedFolderShares];
+
+      // Add the owner as a "share" entry if not already included
+      const ownerAlreadyIncluded = allShares.some(share =>
+        share.sharedWithUser?.id === selectedFolder.ownerId
+      );
+
+      if (!ownerAlreadyIncluded && selectedFolder.ownerId) {
+        // Find owner info from the shared folder data
+        const ownerInfo = selectedFolder.shareInfo?.owner;
+        if (ownerInfo) {
+          allShares.unshift({
+            id: `owner-${selectedFolder.ownerId}`,
+            sharedWithUser: ownerInfo,
+            permission: 'owner',
+            isOwner: true,
+          });
+        }
+      }
+
+      return allShares;
+    } else {
+      // For owned folders, use the existing logic
+      return ownedFolderShares;
+    }
+  }, [selectedFolderId, selectedFolder, ownedFolderShares, sharedFolderShares]);
 
 
   // Get folder path (breadcrumb trail) - simplified since no subfolders
@@ -1381,16 +1429,17 @@ export default function ShoppingListPage() {
             </div>
             
             {/* Shared with section */}
-            {selectedFolder && !selectedFolder.isSharedWithMe && folderShares.length > 0 && (
+            {selectedFolder && folderShares.length > 0 && (
               <div className="flex items-center gap-3 text-sm text-gray-600">
                 <span className="font-medium">Shared with</span>
                 <div className="flex items-center gap-1.5">
                   {folderShares.map((share: any) => {
                     const sharedUser = share.sharedWithUser;
                     if (!sharedUser) return null;
-                    
+
                     const isExpanded = expandedSharedUserId === sharedUser.id;
-                    
+                    const isOwner = share.isOwner || share.permission === 'owner';
+
                     return (
                       <div
                         key={share.id}
@@ -1402,22 +1451,32 @@ export default function ShoppingListPage() {
                             setExpandedSharedUserId(isExpanded ? null : sharedUser.id);
                           }}
                           className={cn(
-                            "z-50 h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-all duration-200 cursor-pointer",
+                            "z-50 h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-all duration-200 cursor-pointer relative",
                             isExpanded ? "scale-110 shadow-md" : "hover:scale-110 hover:shadow-md",
+                            isOwner ? "ring-2 ring-yellow-400 ring-offset-1" : "",
                             getAvatarColor(sharedUser.id)
                           )}
+                          title={isOwner ? "Owner" : share.permission === 'edit' ? 'Can Edit' : 'View Only'}
                         >
                           {getUserInitials(sharedUser)}
+                          {isOwner && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full flex items-center justify-center">
+                              <span className="text-[8px] font-bold text-yellow-900">★</span>
+                            </div>
+                          )}
                         </button>
                         <span
                           className={cn(
-                            "ml-2 whitespace-nowrap text-md font-semibold text-gray-900 transition-all duration-300 ease-in-out",
+                            "ml-2 whitespace-nowrap text-md font-semibold transition-all duration-300 ease-in-out",
+                            isOwner ? "text-yellow-700" : "text-gray-900",
                             isExpanded
-                              ? "max-w-[200px] opacity-100 bg-gray-100 rounded-r-xl pl-8 pr-2 py-1 ml-[-22px]"
-                              : "max-w-0 overflow-hidden opacity-0 ml-0"
+                              ? "max-w-[200px] opacity-100 rounded-r-xl pl-8 pr-2 py-1 ml-[-22px]"
+                              : "max-w-0 overflow-hidden opacity-0 ml-0",
+                            isExpanded && isOwner ? "bg-yellow-50" : isExpanded ? "bg-gray-100" : ""
                           )}
                         >
                           {getSharedUserDisplayName(sharedUser)}
+                          {isOwner && <span className="ml-1 text-xs">(Owner)</span>}
                         </span>
                       </div>
                     );
