@@ -981,10 +981,10 @@ export default function CalendarsPage() {
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Left Column: Connected Calendars */}
-        <div className="lg:col-span-1 space-y-4 md:space-y-6">
+        <div className="lg:col-span-1">
           {/* Mobile: Connected Calendars first, View Mode second */}
           {/* Desktop: View Mode first, Connected Calendars second */}
-          <div className="lg:hidden">
+          <div className="lg:hidden space-y-4 md:space-y-6">
             {/* Connected Calendars - Mobile first */}
             <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
             <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
@@ -1210,7 +1210,7 @@ export default function CalendarsPage() {
           </div>
 
           {/* Desktop: View Mode first, Connected Calendars second */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:block space-y-4 md:space-y-6">
             {/* View Mode Selector - Desktop first */}
             <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
               <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
