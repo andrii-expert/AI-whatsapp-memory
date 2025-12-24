@@ -1013,183 +1013,183 @@ export default function CalendarsPage() {
           <div className="lg:hidden space-y-4 md:space-y-6">
             {/* Connected Calendars - Mobile first */}
             <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
-              <h2 className="text-xs font-semibold text-gray-900 uppercase tracking-wide">
-                Connected Calendars
-              </h2>
-              <Badge variant="secondary" className="text-xs">
-                {activeCalendars.length} active
-              </Badge>
-            </div>
-
-            {calendars.length === 0 ? (
-              <div className="text-center py-8">
-                <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No calendars connected</p>
+              <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
+                <h2 className="text-xs font-semibold text-gray-900 uppercase tracking-wide">
+                  Connected Calendars
+                </h2>
+                <Badge variant="secondary" className="text-xs">
+                  {activeCalendars.length} active
+                </Badge>
               </div>
-            ) : (
-              <div className="space-y-3 md:space-y-4">
-                {Object.entries(groupedCalendars).map(
-                  ([provider, providerCalendars]: [string, any]) => (
-                    <Card key={provider} className="border-gray-200 shadow-sm">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div
-                                className={cn(
-                                  "h-3 w-3 rounded-full flex-shrink-0",
-                                  providerCalendars[0]?.isActive
-                                    ? provider === "google"
-                                      ? "bg-blue-500"
-                                      : "bg-purple-500"
-                                    : "bg-gray-300"
-                                )}
-                              ></div>
-                              <span className="text-sm font-semibold text-gray-900 capitalize">
-                                {provider === "google" ? "Google" : "Microsoft"}
-                              </span>
-                              {providerCalendars[0]?.isActive && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
-                                >
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  Active
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-600 truncate ml-5">
-                              {providerCalendars[0]?.email || "N/A"}
-                            </p>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 mb-3">
-                          {providerCalendars[0]?.isActive ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleDisconnectCalendar(
-                                  providerCalendars[0].id,
-                                  providerCalendars[0].calendarName ||
-                                    providerCalendars[0].email
-                                )
-                              }
-                              disabled={disconnectCalendarMutation.isPending}
-                              className="text-xs h-7 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                            >
-                              {disconnectCalendarMutation.isPending ? (
-                                <>
-                                  <Clock className="h-3 w-3 mr-1 animate-spin" />
-                                  Disconnecting...
-                                </>
-                              ) : (
-                                <>
-                                  <Link2 className="h-3 w-3 mr-1" />
-                                  Disconnect
-                                </>
-                              )}
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleConnectCalendar(
-                                  provider as "google" | "microsoft"
-                                )
-                              }
-                              disabled={
-                                connectingProvider === provider || !canAddMore
-                              }
-                              className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Connect
-                            </Button>
-                          )}
-                        </div>
-
-                        {/* Sub-calendars */}
-                        {providerCalendars.length > 1 && (
-                          <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
-                            <p className="text-xs font-medium text-gray-500 mb-2">
-                              Sub-calendars
-                            </p>
-                            {providerCalendars.map((cal: any) => (
-                              <div
-                                key={cal.id}
-                                className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 transition-colors"
-                              >
+              {calendars.length === 0 ? (
+                <div className="text-center py-8">
+                  <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No calendars connected</p>
+                </div>
+              ) : (
+                <div className="space-y-3 md:space-y-4">
+                  {Object.entries(groupedCalendars).map(
+                    ([provider, providerCalendars]: [string, any]) => (
+                      <Card key={provider} className="border-gray-200 shadow-sm">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
                                 <div
                                   className={cn(
-                                    "h-2.5 w-2.5 rounded-full flex-shrink-0",
-                                    cal.provider === "google"
-                                      ? "bg-blue-500"
-                                      : "bg-purple-500"
+                                    "h-3 w-3 rounded-full flex-shrink-0",
+                                    providerCalendars[0]?.isActive
+                                      ? provider === "google"
+                                        ? "bg-blue-500"
+                                        : "bg-purple-500"
+                                      : "bg-gray-300"
                                   )}
                                 ></div>
-                                <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
-                                  <input
-                                    type="checkbox"
-                                    checked={cal.isActive}
-                                    onChange={() =>
-                                      handleToggleCalendarActive(
-                                        cal.id,
-                                        cal.isActive
-                                      )
-                                    }
-                                    disabled={updateCalendarMutation.isPending}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 flex-shrink-0"
-                                  />
-                                  <span className="text-xs text-gray-700 truncate">
-                                    {cal.calendarName || "Main"}
-                                  </span>
-                                </label>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {providerCalendars.length === 1 &&
-                          providerCalendars[0]?.isActive && (
-                            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div
-                                  className={cn(
-                                    "h-2.5 w-2.5 rounded-full flex-shrink-0",
-                                    providerCalendars[0].provider === "google"
-                                      ? "bg-blue-500"
-                                      : "bg-purple-500"
-                                  )}
-                                ></div>
-                                <span className="text-xs text-gray-700 truncate">
-                                  {providerCalendars[0].calendarName || "Main"}
+                                <span className="text-sm font-semibold text-gray-900 capitalize">
+                                  {provider === "google" ? "Google" : "Microsoft"}
                                 </span>
+                                {providerCalendars[0]?.isActive && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
+                                  >
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Active
+                                  </Badge>
+                                )}
                               </div>
+                              <p className="text-xs text-gray-600 truncate ml-5">
+                                {providerCalendars[0]?.email || "N/A"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 mb-3">
+                            {providerCalendars[0]?.isActive ? (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() =>
-                                  handleChangeCalendar(
+                                  handleDisconnectCalendar(
                                     providerCalendars[0].id,
-                                    providerCalendars[0].calendarId
+                                    providerCalendars[0].calendarName ||
+                                      providerCalendars[0].email
                                   )
+                                }
+                                disabled={disconnectCalendarMutation.isPending}
+                                className="text-xs h-7 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                              >
+                                {disconnectCalendarMutation.isPending ? (
+                                  <>
+                                    <Clock className="h-3 w-3 mr-1 animate-spin" />
+                                    Disconnecting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Link2 className="h-3 w-3 mr-1" />
+                                    Disconnect
+                                  </>
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleConnectCalendar(
+                                    provider as "google" | "microsoft"
+                                  )
+                                }
+                                disabled={
+                                  connectingProvider === provider || !canAddMore
                                 }
                                 className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                               >
-                                <Settings className="h-3 w-3 mr-1" />
-                                Change
+                                <Plus className="h-3 w-3 mr-1" />
+                                Connect
                               </Button>
+                            )}
+                          </div>
+
+                          {/* Sub-calendars */}
+                          {providerCalendars.length > 1 && (
+                            <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                              <p className="text-xs font-medium text-gray-500 mb-2">
+                                Sub-calendars
+                              </p>
+                              {providerCalendars.map((cal: any) => (
+                                <div
+                                  key={cal.id}
+                                  className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 transition-colors"
+                                >
+                                  <div
+                                    className={cn(
+                                      "h-2.5 w-2.5 rounded-full flex-shrink-0",
+                                      cal.provider === "google"
+                                        ? "bg-blue-500"
+                                        : "bg-purple-500"
+                                    )}
+                                  ></div>
+                                  <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={cal.isActive}
+                                      onChange={() =>
+                                        handleToggleCalendarActive(
+                                          cal.id,
+                                          cal.isActive
+                                        )
+                                      }
+                                      disabled={updateCalendarMutation.isPending}
+                                      className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 flex-shrink-0"
+                                    />
+                                    <span className="text-xs text-gray-700 truncate">
+                                      {cal.calendarName || "Main"}
+                                    </span>
+                                  </label>
+                                </div>
+                              ))}
                             </div>
                           )}
-                      </CardContent>
-                    </Card>
-                  )
-                )}
-              </div>
-            )}
+                          {providerCalendars.length === 1 &&
+                            providerCalendars[0]?.isActive && (
+                              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className={cn(
+                                      "h-2.5 w-2.5 rounded-full flex-shrink-0",
+                                      providerCalendars[0].provider === "google"
+                                        ? "bg-blue-500"
+                                        : "bg-purple-500"
+                                    )}
+                                  ></div>
+                                  <span className="text-xs text-gray-700 truncate">
+                                    {providerCalendars[0].calendarName || "Main"}
+                                  </span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleChangeCalendar(
+                                      providerCalendars[0].id,
+                                      providerCalendars[0].calendarId
+                                    )
+                                  }
+                                  className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                >
+                                  <Settings className="h-3 w-3 mr-1" />
+                                  Change
+                                </Button>
+                              </div>
+                            )}
+                        </CardContent>
+                      </Card>
+                    )
+                  )}
+                </div>
+              )}
             </div>
 
             {/* View Mode Selector - Mobile second */}
@@ -1327,49 +1327,131 @@ export default function CalendarsPage() {
                                   </Badge>
                                 )}
                               </div>
-                              <p className="text-xs text-gray-500">
-                                {providerCalendars.length} calendar{providerCalendars.length !== 1 ? "s" : ""}
+                              <p className="text-xs text-gray-600 truncate ml-5">
+                                {providerCalendars[0]?.email || "N/A"}
                               </p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleChangeCalendar(
-                                  providerCalendars[0].id,
-                                  providerCalendars[0].calendarId
-                                )
-                              }
-                              className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            >
-                              <Settings className="h-3 w-3 mr-1" />
-                              Change
-                            </Button>
                           </div>
-                          <div className="space-y-2">
-                            {providerCalendars.map((calendar: any) => (
-                              <div
-                                key={calendar.id}
-                                className="flex items-center justify-between gap-2 p-2 bg-gray-50 rounded-md"
+
+                          <div className="flex items-center gap-2 mb-3">
+                            {providerCalendars[0]?.isActive ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleDisconnectCalendar(
+                                    providerCalendars[0].id,
+                                    providerCalendars[0].calendarName ||
+                                      providerCalendars[0].email
+                                  )
+                                }
+                                disabled={disconnectCalendarMutation.isPending}
+                                className="text-xs h-7 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                               >
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-gray-900 truncate">
-                                    {calendar.calendarName || calendar.email}
-                                  </p>
-                                  <p className="text-[10px] text-gray-500">
-                                    {calendar.isActive ? "Active" : "Inactive"}
-                                  </p>
-                                </div>
-                                <div
-                                  className={cn(
-                                    "w-2 h-2 rounded-full flex-shrink-0",
-                                    calendar.isActive ? "bg-green-500" : "bg-gray-400"
-                                  )}
-                                  title={calendar.isActive ? "Active" : "Inactive"}
-                                />
-                              </div>
-                            ))}
+                                {disconnectCalendarMutation.isPending ? (
+                                  <>
+                                    <Clock className="h-3 w-3 mr-1 animate-spin" />
+                                    Disconnecting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Link2 className="h-3 w-3 mr-1" />
+                                    Disconnect
+                                  </>
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleConnectCalendar(
+                                    provider as "google" | "microsoft"
+                                  )
+                                }
+                                disabled={
+                                  connectingProvider === provider || !canAddMore
+                                }
+                                className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                Connect
+                              </Button>
+                            )}
                           </div>
+
+                          {/* Sub-calendars */}
+                          {providerCalendars.length > 1 && (
+                            <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                              <p className="text-xs font-medium text-gray-500 mb-2">
+                                Sub-calendars
+                              </p>
+                              {providerCalendars.map((cal: any) => (
+                                <div
+                                  key={cal.id}
+                                  className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50 transition-colors"
+                                >
+                                  <div
+                                    className={cn(
+                                      "h-2.5 w-2.5 rounded-full flex-shrink-0",
+                                      cal.provider === "google"
+                                        ? "bg-blue-500"
+                                        : "bg-purple-500"
+                                    )}
+                                  ></div>
+                                  <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={cal.isActive}
+                                      onChange={() =>
+                                        handleToggleCalendarActive(
+                                          cal.id,
+                                          cal.isActive
+                                        )
+                                      }
+                                      disabled={updateCalendarMutation.isPending}
+                                      className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 flex-shrink-0"
+                                    />
+                                    <span className="text-xs text-gray-700 truncate">
+                                      {cal.calendarName || "Main"}
+                                    </span>
+                                  </label>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {providerCalendars.length === 1 &&
+                            providerCalendars[0]?.isActive && (
+                              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div
+                                    className={cn(
+                                      "h-2.5 w-2.5 rounded-full flex-shrink-0",
+                                      providerCalendars[0].provider === "google"
+                                        ? "bg-blue-500"
+                                        : "bg-purple-500"
+                                    )}
+                                  ></div>
+                                  <span className="text-xs text-gray-700 truncate">
+                                    {providerCalendars[0].calendarName || "Main"}
+                                  </span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleChangeCalendar(
+                                      providerCalendars[0].id,
+                                      providerCalendars[0].calendarId
+                                    )
+                                  }
+                                  className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                >
+                                  <Settings className="h-3 w-3 mr-1" />
+                                  Change
+                                </Button>
+                              </div>
+                            )}
                         </CardContent>
                       </Card>
                     )
@@ -1750,45 +1832,55 @@ export default function CalendarsPage() {
       </div>
 
       {/* Mobile Day Details Section */}
-      {selectedMobileDay.date && (
-        <div className="lg:hidden mt-6">
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-                  {format(selectedMobileDay.date, "EEEE, MMMM d, yyyy")}
-                </h2>
-                {selectedMobileDay.events.length > 0 && (
-                  <Badge variant="secondary" className="text-sm">
-                    {selectedMobileDay.events.length} event{selectedMobileDay.events.length === 1 ? '' : 's'}
-                  </Badge>
-                )}
-              </div>
+      <div className="lg:hidden mt-6">
+        {(() => {
+          // Show today's events by default, or selected date's events if one is selected
+          const displayDate = selectedMobileDay.date || new Date();
+          const displayEvents = selectedMobileDay.date ? selectedMobileDay.events : getEventsForDate(displayDate);
 
-              {selectedMobileDay.events.length === 0 ? (
-                <div className="text-center py-8">
-                  <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-gray-500 text-sm mb-4">No events scheduled for this day</p>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setEventTitle("");
-                      setEventDate(format(selectedMobileDay.date!, "yyyy-MM-dd"));
-                      setEventTime("");
-                      setSelectedCalendarId("");
-                      setCreateEventDialogOpen(true);
-                    }}
-                    className="text-sm"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Event
-                  </Button>
+          return (
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+              <div className="p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                    {format(displayDate, "EEEE, MMMM d, yyyy")}
+                    {!selectedMobileDay.date && (
+                      <span className="block text-sm font-normal text-gray-500 mt-1">
+                        Today
+                      </span>
+                    )}
+                  </h2>
+                  {displayEvents.length > 0 && (
+                    <Badge variant="secondary" className="text-sm">
+                      {displayEvents.length} event{displayEvents.length === 1 ? '' : 's'}
+                    </Badge>
+                  )}
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {selectedMobileDay.events
-                    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-                    .map((event, index) => {
+
+                {displayEvents.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500 text-sm mb-4">No events scheduled for this day</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEventTitle("");
+                        setEventDate(format(displayDate, "yyyy-MM-dd"));
+                        setEventTime("");
+                        setSelectedCalendarId("");
+                        setCreateEventDialogOpen(true);
+                      }}
+                      className="text-sm"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Event
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {displayEvents
+                      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+                      .map((event, index) => {
                       const start = new Date(event.start);
                       const end = new Date(event.end);
                       const duration = end.getTime() - start.getTime();
@@ -1865,8 +1957,9 @@ export default function CalendarsPage() {
               )}
             </div>
           </div>
-        </div>
-      )}
+        );
+        })()}
+      </div>
 
       {/* Calendar Selection Dialog */}
       {calendarSelectionDialog.connectionId && (
