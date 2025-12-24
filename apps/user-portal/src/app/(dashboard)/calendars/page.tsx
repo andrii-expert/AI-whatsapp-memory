@@ -276,6 +276,11 @@ export default function CalendarsPage() {
   const { data: calendars = [], isLoading, refetch } = useQuery(
     trpc.calendar.list.queryOptions()
   );
+
+  // Fetch user preferences for timezone
+  const { data: userPreferences } = useQuery(
+    trpc.preferences.get.queryOptions()
+  );
   
   // Get plan limits
   const { limits, canAddCalendar, getCalendarsRemaining, tier } = usePlanLimits();
@@ -826,13 +831,13 @@ export default function CalendarsPage() {
     const calendar = calendars.find((cal: any) => cal.id === event.calendarId) as any;
     const provider = calendar?.provider || "google";
     const color = provider === "google" ? "bg-blue-500" : "bg-purple-500";
-    
-    // Get calendar timezone - try to get from calendar, fallback to default
-    const calendarTimezone = calendar?.timeZone || 'Africa/Johannesburg';
-    
+
+    // Use user's timezone instead of calendar timezone
+    const userTimezone = userPreferences?.timezone || 'Africa/Johannesburg';
+
     const startDate = new Date(event.start);
     const endDate = new Date(event.end);
-    
+
     return {
       id: event.id,
       title: event.title,
@@ -842,7 +847,7 @@ export default function CalendarsPage() {
       location: event.location,
       htmlLink: event.htmlLink,
       webLink: event.webLink,
-      calendarTimezone, // Store timezone for formatting
+      userTimezone, // Use user's timezone for all formatting
     };
   });
 
@@ -1357,7 +1362,7 @@ export default function CalendarsPage() {
                                 {event.title}
                               </div>
                               <div className="text-[10px] opacity-90">
-                                {formatInTimezone(event.start, event.calendarTimezone || 'Africa/Johannesburg', 'time')}
+                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
                               </div>
                             </div>
                           ))}
@@ -1504,13 +1509,13 @@ export default function CalendarsPage() {
                                 event.color,
                                 "text-white font-medium shadow-sm"
                               )}
-                              title={`${event.title} - ${formatInTimezone(event.start, event.calendarTimezone || 'Africa/Johannesburg', 'time')}`}
+                              title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
                               onClick={() => handleEventClick(event)}
                             >
                               <span className="hidden md:inline">• </span>
                               <span className="truncate">{event.title}</span>
                               <span className="hidden lg:inline ml-1">
-                                {formatInTimezone(event.start, event.calendarTimezone || 'Africa/Johannesburg', 'time')}
+                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
                               </span>
                             </div>
                           ))}
@@ -1747,9 +1752,9 @@ export default function CalendarsPage() {
 
                       <div className="flex items-start gap-3">
                         {/* Time */}
-                        <div className="flex-shrink-0 w-16 text-center">
+                        <div className="flex-shrink-0 w-20 text-center">
                           <div className="text-sm font-semibold text-gray-900">
-                            {formatInTimezone(event.start, event.calendarTimezone || 'Africa/Johannesburg', 'time')}
+                            {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
                           </div>
                           <div className="text-xs text-gray-500">
                             {(() => {
@@ -1823,7 +1828,8 @@ export default function CalendarsPage() {
                     setDayDetailsModal({ open: false, date: null, events: [] });
                   }
                 }}
-                className="flex-1 sm:flex-none bg-primary text-primary-foreground hover:bg-primary/90"
+                variant="blue-primary"
+                className="w-full sm:w-auto text-sm sm:text-base"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Event
@@ -1986,14 +1992,14 @@ export default function CalendarsPage() {
                       <div className="font-medium text-sm text-gray-900">
                         {formatInTimezone(
                           eventDetailsModal.event.start,
-                          eventDetailsModal.event.calendarTimezone || 'Africa/Johannesburg',
+                          eventDetailsModal.event.userTimezone || 'Africa/Johannesburg',
                           'datetime'
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
                         {formatInTimezone(
                           eventDetailsModal.event.start,
-                          eventDetailsModal.event.calendarTimezone || 'Africa/Johannesburg',
+                          eventDetailsModal.event.userTimezone || 'Africa/Johannesburg',
                           'date'
                         )}
                       </div>
@@ -2072,7 +2078,8 @@ export default function CalendarsPage() {
                         setEventDetailsModal({ open: false, event: null, isEditing: false });
                       }
                     }}
-                    className="flex-1 sm:flex-none bg-primary text-primary-foreground hover:bg-primary/90"
+                    variant="blue-primary"
+                    className="w-full sm:w-auto text-sm sm:text-base m-2"
                   >
                     <Link2 className="h-4 w-4 mr-2" />
                     Go to Calendar
