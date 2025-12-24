@@ -142,8 +142,8 @@ export function CalendarSelectionDialog({
                   />
                   <div className="flex-1">
                       {calendar.primary && (
-                        <div className="flex justify-end w-full">
-                          <Badge variant="secondary" className="text-xs">
+                        <div className="flex justify-start w-full">
+                          <Badge variant="secondary" className="text-xs text-green-600">
                             Primary
                           </Badge>
                         </div>

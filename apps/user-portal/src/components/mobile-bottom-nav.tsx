@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Calendar, ShoppingCart, CheckSquare, Bell, Users } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
+import { useEffect, useState } from "react";
 
 const navigationItems = [
   { name: "Events", href: "/calendars", icon: Calendar },
@@ -26,6 +27,21 @@ const pagesWithBottomNav = [
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const [calendarsClickHandler, setCalendarsClickHandler] = useState<(() => void) | null>(null);
+
+  useEffect(() => {
+    const handleCalendarsSidebarOpen = (event: CustomEvent) => {
+      if (event.detail && typeof event.detail === 'function') {
+        setCalendarsClickHandler(() => event.detail);
+      }
+    };
+
+    window.addEventListener('calendars-sidebar-open', handleCalendarsSidebarOpen as EventListener);
+
+    return () => {
+      window.removeEventListener('calendars-sidebar-open', handleCalendarsSidebarOpen as EventListener);
+    };
+  }, []);
 
   // Check if current page should show bottom nav
   const shouldShow = pagesWithBottomNav.some(
@@ -42,7 +58,39 @@ export function MobileBottomNav() {
         {navigationItems.map((item) => {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
-          
+          const isCalendarsItem = item.href === "/calendars";
+
+          const content = (
+            <div
+              className={cn(
+                "flex flex-col items-center justify-center w-full h-full rounded-lg transition-all",
+                isActive && "bg-[#1f299b]"
+              )}
+            >
+              <item.icon
+                className="h-5 w-5 mb-0.5 flex-shrink-0 text-white"
+              />
+              <span className="text-xs font-medium whitespace-nowrap text-white text-center">
+                {item.name}
+              </span>
+            </div>
+          );
+
+          if (isCalendarsItem && calendarsClickHandler) {
+            return (
+              <button
+                key={item.name}
+                onClick={calendarsClickHandler}
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full min-w-0 px-1 transition-all relative",
+                  isActive && "mx-0.5"
+                )}
+              >
+                {content}
+              </button>
+            );
+          }
+
           return (
             <Link
               key={item.name}
@@ -52,19 +100,7 @@ export function MobileBottomNav() {
                 isActive && "mx-0.5"
               )}
             >
-              <div
-                className={cn(
-                  "flex flex-col items-center justify-center w-full h-full rounded-lg transition-all",
-                  isActive && "bg-[#1f299b]"
-                )}
-              >
-                <item.icon
-                  className="h-5 w-5 mb-0.5 flex-shrink-0 text-white"
-                />
-                <span className="text-xs font-medium whitespace-nowrap text-white text-center">
-                  {item.name}
-                </span>
-              </div>
+              {content}
             </Link>
           );
         })}

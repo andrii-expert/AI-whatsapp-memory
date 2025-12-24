@@ -212,6 +212,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@imaginecalendar/ui/sheet";
 
 export default function CalendarsPage() {
   const trpc = useTRPC();
@@ -256,6 +261,23 @@ export default function CalendarsPage() {
     event: null,
     isEditing: false,
   });
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Dispatch custom event for mobile bottom nav
+  useEffect(() => {
+    const event = new CustomEvent('calendars-sidebar-open', {
+      detail: () => setMobileSidebarOpen(true)
+    });
+    window.dispatchEvent(event);
+
+    return () => {
+      // Clean up by dispatching null
+      const cleanupEvent = new CustomEvent('calendars-sidebar-open', {
+        detail: null
+      });
+      window.dispatchEvent(cleanupEvent);
+    };
+  }, []);
 
   const [dayDetailsModal, setDayDetailsModal] = useState<{
     open: boolean;
@@ -729,8 +751,8 @@ export default function CalendarsPage() {
 
     // Format date and time for form inputs
     const eventDate = new Date(event.start);
-    const dateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
-    const timeStr = eventDate.toTimeString().slice(0, 5); // HH:MM
+    const dateStr = eventDate.toISOString().split('T')[0] || ""; // YYYY-MM-DD
+    const timeStr = eventDate.toTimeString().slice(0, 5) || ""; // HH:MM
 
     setEditEventDate(dateStr);
     setEditEventTime(timeStr);
@@ -782,8 +804,8 @@ export default function CalendarsPage() {
 
       // Format date and time for form inputs
       const eventDate = new Date(event.start);
-      const dateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      const timeStr = eventDate.toTimeString().slice(0, 5); // HH:MM
+      const dateStr = eventDate.toISOString().split('T')[0] || ""; // YYYY-MM-DD
+      const timeStr = eventDate.toTimeString().slice(0, 5) || ""; // HH:MM
 
       setEditEventDate(dateStr);
       setEditEventTime(timeStr);
@@ -988,7 +1010,7 @@ export default function CalendarsPage() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+          <div className="hidden lg:flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
             <Button
               onClick={() => handleConnectCalendar("google")}
               disabled={connectingProvider === "google" || !canAddMore}
@@ -1037,13 +1059,204 @@ export default function CalendarsPage() {
         </div>
       </div>
 
+      {/* Mobile Sidebar */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent side="left" className="w-full sm:w-96 p-0">
+          <div className="flex flex-col h-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Calendars</h2>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+              {/* Connect Calendar Buttons */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-900">Connect Calendars</h3>
+                <div className="space-y-3">
+                  <Button
+                    onClick={() => {
+                      handleConnectCalendar("google");
+                      setMobileSidebarOpen(false);
+                    }}
+                    disabled={connectingProvider === "google" || !canAddMore}
+                    variant="outline"
+                    size="default"
+                    className={cn(
+                      "w-full flex items-center justify-center gap-3",
+                      "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
+                      "px-4 py-3 h-auto font-medium text-sm",
+                      "transition-all duration-200 shadow-sm hover:shadow-md",
+                      "disabled:opacity-50 disabled:cursor-not-allowed"
+                    )}
+                  >
+                    {connectingProvider === "google" ? (
+                      <Clock className="h-5 w-5 animate-spin text-gray-600" />
+                    ) : (
+                      <GoogleIcon className="h-5 w-5 flex-shrink-0" />
+                    )}
+                    <span className="whitespace-nowrap text-gray-900">
+                      Connect Google Calendar
+                    </span>
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      handleConnectCalendar("microsoft");
+                      setMobileSidebarOpen(false);
+                    }}
+                    disabled={connectingProvider === "microsoft" || !canAddMore}
+                    variant="outline"
+                    size="default"
+                    className={cn(
+                      "w-full flex items-center justify-center gap-3",
+                      "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
+                      "px-4 py-3 h-auto font-medium text-sm",
+                      "transition-all duration-200 shadow-sm hover:shadow-md",
+                      "disabled:opacity-50 disabled:cursor-not-allowed"
+                    )}
+                  >
+                    {connectingProvider === "microsoft" ? (
+                      <Clock className="h-5 w-5 animate-spin text-gray-600" />
+                    ) : (
+                      <MicrosoftIcon className="h-5 w-5 flex-shrink-0" />
+                    )}
+                    <span className="whitespace-nowrap text-gray-900">
+                      Connect Microsoft Calendar
+                    </span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Connected Calendars Card */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide">
+                    Connected Calendars
+                  </h3>
+                  <Badge variant="secondary" className="text-xs">
+                    {activeCalendars.length} active
+                  </Badge>
+                </div>
+
+                {calendars.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No calendars connected</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(groupedCalendars).map(
+                      ([provider, providerCalendars]: [string, any]) => (
+                        <Card key={provider} className="border-gray-200 shadow-sm">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div
+                                    className={cn(
+                                      "h-3 w-3 rounded-full flex-shrink-0",
+                                      providerCalendars[0]?.isActive
+                                        ? provider === "google"
+                                          ? "bg-blue-500"
+                                          : "bg-purple-500"
+                                        : "bg-gray-300"
+                                    )}
+                                  ></div>
+                                  <span className="text-sm font-semibold text-gray-900 capitalize">
+                                    {provider === "google" ? "Google" : "Microsoft"}
+                                  </span>
+                                  {providerCalendars[0]?.isActive && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
+                                    >
+                                      <CheckCircle className="h-3 w-3 mr-1" />
+                                      Active
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-600 truncate ml-5">
+                                  {providerCalendars[0]?.email || "N/A"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {providerCalendars[0]?.isActive ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    handleDisconnectCalendar(
+                                      providerCalendars[0].id,
+                                      providerCalendars[0].calendarName ||
+                                        providerCalendars[0].email
+                                    );
+                                    setMobileSidebarOpen(false);
+                                  }}
+                                  disabled={disconnectCalendarMutation.isPending}
+                                  className="text-xs h-7 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                                >
+                                  {disconnectCalendarMutation.isPending ? (
+                                    <>
+                                      <Clock className="h-3 w-3 mr-1 animate-spin" />
+                                      Disconnecting...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Link2 className="h-3 w-3 mr-1" />
+                                      Disconnect
+                                    </>
+                                  )}
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    handleConnectCalendar(
+                                      provider as "google" | "microsoft"
+                                    );
+                                    setMobileSidebarOpen(false);
+                                  }}
+                                  disabled={
+                                    connectingProvider === provider || !canAddMore
+                                  }
+                                  className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                >
+                                  {connectingProvider === provider ? (
+                                    <>
+                                      <Clock className="h-3 w-3 mr-1 animate-spin" />
+                                      Connecting...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Link2 className="h-3 w-3 mr-1" />
+                                      Connect
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Left Column: Connected Calendars */}
         <div className="lg:col-span-1">
           {/* Mobile: Connected Calendars first, View Mode second */}
           {/* Desktop: View Mode first, Connected Calendars second */}
-          <div className="lg:hidden space-y-4 md:space-y-6">
+          <div className="hidden lg:block space-y-4 md:space-y-6">
             {/* Connected Calendars - Mobile first */}
             <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
               <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
@@ -2362,6 +2575,7 @@ export default function CalendarsPage() {
             setEventDetailsModal({
               open: false,
               event: null,
+              isEditing: false,
             });
           }
         }}
@@ -2389,7 +2603,7 @@ export default function CalendarsPage() {
                     <Input
                       id="edit-event-title"
                       value={editEventTitle}
-                      onChange={(e) => setEditEventTitle(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventTitle(e.target.value)}
                       placeholder="Enter event title"
                       className="text-sm"
                     />
@@ -2404,7 +2618,7 @@ export default function CalendarsPage() {
                         id="edit-event-date"
                         type="date"
                         value={editEventDate}
-                        onChange={(e) => setEditEventDate(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventDate(e.target.value)}
                         className="text-sm"
                       />
                     </div>
@@ -2416,7 +2630,7 @@ export default function CalendarsPage() {
                         id="edit-event-time"
                         type="time"
                         value={editEventTime}
-                        onChange={(e) => setEditEventTime(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventTime(e.target.value)}
                         className="text-sm"
                       />
                     </div>
@@ -2429,7 +2643,7 @@ export default function CalendarsPage() {
                     <Input
                       id="edit-event-location"
                       value={editEventLocation}
-                      onChange={(e) => setEditEventLocation(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventLocation(e.target.value)}
                       placeholder="Enter location (optional)"
                       className="text-sm"
                     />
