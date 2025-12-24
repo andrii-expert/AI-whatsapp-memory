@@ -902,7 +902,7 @@ export default function CalendarsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-4 sm:px-6 md:px-4 md:py-8 max-w-7xl space-y-4 sm:space-y-6">
+    <div>
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-xs sm:text-sm overflow-x-auto">
         <Link
@@ -982,8 +982,11 @@ export default function CalendarsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Left Column: Connected Calendars */}
         <div className="lg:col-span-1 space-y-4 md:space-y-6">
-          {/* Connected Calendars */}
-          <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
+          {/* Mobile: Connected Calendars first, View Mode second */}
+          {/* Desktop: View Mode first, Connected Calendars second */}
+          <div className="lg:hidden">
+            {/* Connected Calendars - Mobile first */}
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
             <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
               <h2 className="text-xs font-semibold text-gray-900 uppercase tracking-wide">
                 Connected Calendars
@@ -1161,49 +1164,195 @@ export default function CalendarsPage() {
                 )}
               </div>
             )}
-          </div>
+            </div>
 
-          {/* View Mode Selector */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
-              View Mode
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                variant={viewMode === "week" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("week")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <CalendarDays className="h-4 w-4" />
-                <span className="hidden sm:inline">Week</span>
-              </Button>
-              <Button
-                variant={viewMode === "month" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("month")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <CalendarRange className="h-4 w-4" />
-                <span className="hidden sm:inline">Month</span>
-              </Button>
-              <Button
-                variant={viewMode === "year" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("year")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <CalendarCheck className="h-4 w-4" />
-                <span className="hidden sm:inline">Year</span>
-              </Button>
+            {/* View Mode Selector - Mobile second */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+              <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
+                View Mode
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant={viewMode === "week" ? "blue-primary" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("week")}
+                  className={cn(
+                    "flex items-center justify-center gap-2"
+                  )}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  <span className="hidden sm:inline">Week</span>
+                </Button>
+                <Button
+                  variant={viewMode === "month" ? "blue-primary" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("month")}
+                  className={cn(
+                    "flex items-center justify-center gap-2"
+                  )}
+                >
+                  <CalendarRange className="h-4 w-4" />
+                  <span className="hidden sm:inline">Month</span>
+                </Button>
+                <Button
+                  variant={viewMode === "year" ? "blue-primary" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("year")}
+                  className={cn(
+                    "flex items-center justify-center gap-2"
+                  )}
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span className="hidden sm:inline">Year</span>
+                </Button>
+              </div>
             </div>
           </div>
+
+          {/* Desktop: View Mode first, Connected Calendars second */}
+          <div className="hidden lg:block">
+            {/* View Mode Selector - Desktop first */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+              <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
+                View Mode
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant={viewMode === "week" ? "blue-primary" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("week")}
+                  className={cn(
+                    "flex items-center justify-center gap-2"
+                  )}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  <span className="hidden sm:inline">Week</span>
+                </Button>
+                <Button
+                  variant={viewMode === "month" ? "blue-primary" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("month")}
+                  className={cn(
+                    "flex items-center justify-center gap-2"
+                  )}
+                >
+                  <CalendarRange className="h-4 w-4" />
+                  <span className="hidden sm:inline">Month</span>
+                </Button>
+                <Button
+                  variant={viewMode === "year" ? "blue-primary" : "outline"}
+                  size="sm"
+                  onClick={() => setViewMode("year")}
+                  className={cn(
+                    "flex items-center justify-center gap-2"
+                  )}
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span className="hidden sm:inline">Year</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Connected Calendars - Desktop second */}
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
+                <h2 className="text-xs font-semibold text-gray-900 uppercase tracking-wide">
+                  Connected Calendars
+                </h2>
+                <Badge variant="secondary" className="text-xs">
+                  {activeCalendars.length} active
+                </Badge>
+              </div>
+
+              {calendars.length === 0 ? (
+                <div className="text-center py-8">
+                  <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No calendars connected</p>
+                </div>
+              ) : (
+                <div className="space-y-3 md:space-y-4">
+                  {Object.entries(groupedCalendars).map(
+                    ([provider, providerCalendars]: [string, any]) => (
+                      <Card key={provider} className="border-gray-200 shadow-sm">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div
+                                  className={cn(
+                                    "h-3 w-3 rounded-full flex-shrink-0",
+                                    providerCalendars[0]?.isActive
+                                      ? provider === "google"
+                                        ? "bg-blue-500"
+                                        : "bg-purple-500"
+                                      : "bg-gray-300"
+                                  )}
+                                ></div>
+                                <span className="text-sm font-semibold text-gray-900 capitalize">
+                                  {provider === "google" ? "Google" : "Microsoft"}
+                                </span>
+                                {providerCalendars[0]?.isActive && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
+                                  >
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Active
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                {providerCalendars.length} calendar{providerCalendars.length !== 1 ? "s" : ""}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleChangeCalendar(
+                                  providerCalendars[0].id,
+                                  providerCalendars[0].calendarId
+                                )
+                              }
+                              className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            >
+                              <Settings className="h-3 w-3 mr-1" />
+                              Change
+                            </Button>
+                          </div>
+                          <div className="space-y-2">
+                            {providerCalendars.map((calendar: any) => (
+                              <div
+                                key={calendar.id}
+                                className="flex items-center justify-between gap-2 p-2 bg-gray-50 rounded-md"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-gray-900 truncate">
+                                    {calendar.calendarName || calendar.email}
+                                  </p>
+                                  <p className="text-[10px] text-gray-500">
+                                    {calendar.isActive ? "Active" : "Inactive"}
+                                  </p>
+                                </div>
+                                <div
+                                  className={cn(
+                                    "w-2 h-2 rounded-full flex-shrink-0",
+                                    calendar.isActive ? "bg-green-500" : "bg-gray-400"
+                                  )}
+                                  title={calendar.isActive ? "Active" : "Inactive"}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
 
         {/* Right Column: Monthly Calendar View */}
@@ -1528,7 +1677,7 @@ export default function CalendarsPage() {
                           <button
                             onClick={() => handleDateClick(day)}
                             className={cn(
-                              "text-xs md:text-sm font-medium transition-all duration-200",
+                              "text-xs md:text-sm font-medium transition-all duration-200 relative",
                               isToday &&
                                 "h-6 w-6 md:h-7 md:w-7 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-sm",
                               isSelected &&
@@ -1537,6 +1686,12 @@ export default function CalendarsPage() {
                               !isToday &&
                                 !isSelected &&
                                 isCurrentMonth &&
+                                dayEvents.length > 0 &&
+                                "text-blue-700 font-semibold hover:bg-blue-50 rounded-full h-6 w-6 md:h-7 md:w-7 flex items-center justify-center",
+                              !isToday &&
+                                !isSelected &&
+                                isCurrentMonth &&
+                                dayEvents.length === 0 &&
                                 "text-gray-900 hover:bg-gray-100 rounded-full h-6 w-6 md:h-7 md:w-7 flex items-center justify-center",
                               !isCurrentMonth && "text-gray-400"
                             )}
@@ -1544,7 +1699,8 @@ export default function CalendarsPage() {
                             {format(day, "d")}
                           </button>
                         </div>
-                        <div className="space-y-0.5 md:space-y-1 flex-1 overflow-hidden">
+                        {/* Desktop/Tablet: Show events */}
+                        <div className="hidden md:block space-y-0.5 md:space-y-1 flex-1 overflow-hidden">
                           {dayEvents.slice(0, 2).map((event, eventIdx) => (
                             <div
                               key={eventIdx}
@@ -1567,6 +1723,32 @@ export default function CalendarsPage() {
                             <div className="text-[10px] md:text-xs text-gray-500 px-1">
                               +{dayEvents.length - 2} more
                             </div>
+                          )}
+                        </div>
+
+                        {/* Mobile: Show event dots */}
+                        <div className="md:hidden flex justify-center space-x-1 mt-1">
+                          {dayEvents.length > 0 && (
+                            <>
+                              {dayEvents.slice(0, 5).map((event, eventIdx) => (
+                                <div
+                                  key={eventIdx}
+                                  className="w-2 h-2 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+                                  style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
+                                  title={event.title}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEventClick(event);
+                                  }}
+                                />
+                              ))}
+                              {dayEvents.length > 5 && (
+                                <div
+                                  className="w-2 h-2 rounded-full bg-gray-400 cursor-pointer hover:opacity-80 transition-opacity"
+                                  title={`+${dayEvents.length - 5} more events`}
+                                />
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
