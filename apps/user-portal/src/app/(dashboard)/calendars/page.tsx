@@ -943,7 +943,7 @@ export default function CalendarsPage() {
       </div>
 
       {/* Page Header */}
-      <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+      <div className="my-4 sm:my-6 space-y-3 sm:space-y-4">
         <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary">
@@ -1549,29 +1549,13 @@ export default function CalendarsPage() {
                           ))}
                         </div>
 
-                        {/* Mobile: Show event dots */}
-                        <div className="md:hidden flex justify-center space-x-1 mt-1">
+                        {/* Mobile: Show event indicator dot */}
+                        <div className="md:hidden flex justify-center mt-1">
                           {dayEvents.length > 0 && (
-                            <>
-                              {dayEvents.slice(0, 5).map((event, eventIdx) => (
-                                <div
-                                  key={eventIdx}
-                                  className="w-2 h-2 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
-                                  style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
-                                  title={event.title}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEventClick(event);
-                                  }}
-                                />
-                              ))}
-                              {dayEvents.length > 5 && (
-                                <div
-                                  className="w-2 h-2 rounded-full bg-gray-400 cursor-pointer hover:opacity-80 transition-opacity"
-                                  title={`+${dayEvents.length - 5} more events`}
-                                />
-                              )}
-                            </>
+                            <div
+                              className="w-1.5 h-1.5 rounded-full bg-blue-500"
+                              title={`${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
+                            />
                           )}
                         </div>
                       </div>
@@ -1643,16 +1627,10 @@ export default function CalendarsPage() {
                                 }
                               >
                                 {format(day, "d")}
-                                {/* Event dots for mobile */}
-                                <div className="md:hidden absolute -bottom-1 left-1/2 transform -translate-x-1/2 flex space-x-0.5">
-                                  {dayEvents.length > 0 && Array.from({ length: Math.min(dayEvents.length, 3) }, (_, i) => (
-                                    <div
-                                      key={i}
-                                      className="w-0.5 h-0.5 rounded-full bg-blue-600"
-                                    />
-                                  ))}
-                                  {dayEvents.length > 3 && (
-                                    <div className="w-0.5 h-0.5 rounded-full bg-gray-400" />
+                                {/* Event indicator for mobile */}
+                                <div className="md:hidden absolute -bottom-1 left-1/2 transform -translate-x-1/2">
+                                  {dayEvents.length > 0 && (
+                                    <div className="w-0.5 h-0.5 rounded-full bg-blue-600" />
                                   )}
                                 </div>
                               </button>
@@ -1752,29 +1730,13 @@ export default function CalendarsPage() {
                           )}
                         </div>
 
-                        {/* Mobile: Show event dots */}
-                        <div className="md:hidden flex justify-center space-x-1 mt-1">
+                        {/* Mobile: Show event indicator dot */}
+                        <div className="md:hidden flex justify-center mt-1">
                           {dayEvents.length > 0 && (
-                            <>
-                              {dayEvents.slice(0, 5).map((event, eventIdx) => (
-                                <div
-                                  key={eventIdx}
-                                  className="w-2 h-2 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
-                                  style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
-                                  title={event.title}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEventClick(event);
-                                  }}
-                                />
-                              ))}
-                              {dayEvents.length > 5 && (
-                                <div
-                                  className="w-2 h-2 rounded-full bg-gray-400 cursor-pointer hover:opacity-80 transition-opacity"
-                                  title={`+${dayEvents.length - 5} more events`}
-                                />
-                              )}
-                            </>
+                            <div
+                              className="w-1.5 h-1.5 rounded-full bg-blue-500"
+                              title={`${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
+                            />
                           )}
                         </div>
                       </div>
