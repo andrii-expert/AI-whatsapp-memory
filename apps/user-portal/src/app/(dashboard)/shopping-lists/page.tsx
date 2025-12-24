@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye } from "lucide-react";
+import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye, LogOut } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -15,6 +15,7 @@ import {
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
+import { useUser } from "@clerk/nextjs";
 import { cn } from "@imaginecalendar/ui/cn";
 import {
   AlertDialog,
@@ -48,6 +49,8 @@ export default function ShoppingListPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const searchParams = useSearchParams();
+  const { user } = useUser();
+  const userId = user?.id;
 
   // State - Initialize from sessionStorage if available
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
@@ -171,11 +174,8 @@ export default function ShoppingListPage() {
       });
   }, [sharedResources, myShares]);
 
-  // Combine owned and shared folders - treat shared folders the same as owned folders
-  const folders = useMemo(() => {
-    const ownedFolders = allFolders.filter((folder: any) => !folder.isSharedWithMe);
-    return [...ownedFolders, ...sharedFolders];
-  }, [allFolders, sharedFolders]);
+  // Filter out shared folders from main folder list - only show owned folders
+  const folders = allFolders.filter((folder: any) => !folder.isSharedWithMe);
 
   // Helper function to flatten all folders including categories
   const flattenFolders = (folderList: any[]): any[] => {
@@ -530,6 +530,30 @@ export default function ShoppingListPage() {
     })
   );
 
+  const exitSharedFolderMutation = useMutation(
+    trpc.taskSharing.deleteShare.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        // If the user just exited the currently selected folder, navigate away
+        if (selectedFolderId) {
+          setSelectedFolderId(null);
+          setViewAllItems(true);
+        }
+        toast({
+          title: "Exited folder",
+          description: "You have been removed from this shared folder",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to exit shared folder",
+          variant: "error",
+        });
+      },
+    })
+  );
+
   // Folder handlers
   const handleCreateFolder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -559,6 +583,22 @@ export default function ShoppingListPage() {
   const confirmDeleteFolder = () => {
     if (folderToDelete) {
       deleteFolderMutation.mutate({ id: folderToDelete.id });
+    }
+  };
+
+  const handleExitSharedFolder = (folderId: string, folderName: string) => {
+    // Find the share for this user and folder
+    const userShare = myShares.find((share: any) =>
+      share.resourceType === "shopping_list_folder" &&
+      share.resourceId === folderId &&
+      share.sharedWithUserId === userId
+    );
+
+    if (userShare) {
+      // Use the taskSharing mutation to remove the share
+      exitSharedFolderMutation.mutate({
+        shareId: userShare.id
+      });
     }
   };
 
@@ -1062,29 +1102,46 @@ export default function ShoppingListPage() {
                     </DropdownMenuItem>
                   );
                 })()}
-                {canEdit && (
+                {isSharedFolder && !isOwner ? (
+                  // For shared folders that user doesn't own, show Exit option
                   <DropdownMenuItem
                     onClick={(e: React.MouseEvent) => {
                       e.stopPropagation();
-                      handleEditFolder(folder.id, folder.name);
+                      // Handle exiting the shared folder
+                      handleExitSharedFolder(folder.id, folder.name);
                     }}
-                    className="flex items-center gap-2 cursor-pointer"
+                    className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
                   >
-                    <Edit2 className="h-4 w-4" />
-                    <span>Edit</span>
+                    <LogOut className="h-4 w-4" />
+                    <span>Exit</span>
                   </DropdownMenuItem>
-                )}
-                {isOwner && folder.name.toLowerCase() !== "general" && (
-                  <DropdownMenuItem
-                    onClick={(e: React.MouseEvent) => {
-                      e.stopPropagation();
-                      handleDeleteFolder(folder.id, folder.name);
-                    }}
-                    className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span>Delete</span>
-                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    {canEdit && (
+                      <DropdownMenuItem
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          handleEditFolder(folder.id, folder.name);
+                        }}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        <span>Edit</span>
+                      </DropdownMenuItem>
+                    )}
+                    {isOwner && folder.name.toLowerCase() !== "general" && (
+                      <DropdownMenuItem
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          handleDeleteFolder(folder.id, folder.name);
+                        }}
+                        className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>Delete</span>
+                      </DropdownMenuItem>
+                    )}
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1243,25 +1300,7 @@ export default function ShoppingListPage() {
                       Shared with me
                     </h3>
                   </div>
-                  {sharedFolders.map((folder: any) => (
-                    <button
-                      key={folder.id}
-                      onClick={() => handleSharedFolderSelect(folder.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                        selectedFolderId === folder.id && !viewAllItems && !viewAllShared
-                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300"
-                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                      )}
-                    >
-                      {folder.icon === "shopping-cart" ? (
-                        <ShoppingCart className="h-4 w-4 flex-shrink-0" />
-                      ) : (
-                        <FolderClosed className="h-4 w-4 flex-shrink-0" />
-                      )}
-                      <span className="flex-1 text-left truncate">{folder.name}</span>
-                    </button>
-                  ))}
+                  {sharedFolders.map((folder) => renderFolder(folder))}
                 </>
               )}
             </div>
@@ -1338,25 +1377,7 @@ export default function ShoppingListPage() {
                       Shared with me
                     </h3>
                   </div>
-                  {sharedFolders.map((folder: any) => (
-                    <button
-                      key={folder.id}
-                      onClick={() => handleSharedFolderSelect(folder.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                        selectedFolderId === folder.id && !viewAllItems && !viewAllShared
-                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300"
-                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                      )}
-                    >
-                      {folder.icon === "shopping-cart" ? (
-                        <ShoppingCart className="h-4 w-4 flex-shrink-0" />
-                      ) : (
-                        <FolderClosed className="h-4 w-4 flex-shrink-0" />
-                      )}
-                      <span className="flex-1 text-left truncate">{folder.name}</span>
-                    </button>
-                  ))}
+                  {sharedFolders.map((folder) => renderFolder(folder))}
                 </>
               )}
             </div>
