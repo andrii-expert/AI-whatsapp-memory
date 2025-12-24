@@ -243,6 +243,13 @@ export default function CalendarsPage() {
     calendarName: null,
   });
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
+  const [eventDetailsModal, setEventDetailsModal] = useState<{
+    open: boolean;
+    event: any | null;
+  }>({
+    open: false,
+    event: null,
+  });
 
   // Fetch user's calendars
   const { data: calendars = [], isLoading, refetch } = useQuery(
@@ -617,7 +624,7 @@ export default function CalendarsPage() {
     const month = dateParts[1]!;
     const day = dateParts[2]!;
     const startDate = new Date(year, month - 1, day);
-    
+
     // If time is provided, set it
     if (eventTime) {
       const timeParts = eventTime.split(':').map(Number);
@@ -640,6 +647,24 @@ export default function CalendarsPage() {
       end: endDate.toISOString(),
       allDay: !eventTime, // If no time, treat as all-day
     });
+  };
+
+  const handleEventClick = (event: any) => {
+    setEventDetailsModal({
+      open: true,
+      event: event,
+    });
+  };
+
+  const handleGoToCalendar = (event: any) => {
+    if (event.htmlLink) {
+      window.open(event.htmlLink, "_blank");
+    }
+  };
+
+  const handleEditEvent = (event: any) => {
+    // For now, just go to the calendar link since we don't have edit functionality yet
+    handleGoToCalendar(event);
   };
 
   // Group calendars by provider
@@ -1212,10 +1237,7 @@ export default function CalendarsPage() {
                                 "text-white font-medium shadow-sm"
                               )}
                               title={event.title}
-                              onClick={() =>
-                                event.htmlLink &&
-                                window.open(event.htmlLink, "_blank")
-                              }
+                              onClick={() => handleEventClick(event)}
                             >
                               <div className="font-semibold truncate">
                                 {event.title}
@@ -1380,10 +1402,7 @@ export default function CalendarsPage() {
                                 "text-white font-medium shadow-sm"
                               )}
                               title={`${event.title} - ${formatInTimezone(event.start, event.calendarTimezone || 'Africa/Johannesburg', 'time')}`}
-                              onClick={() =>
-                                event.htmlLink &&
-                                window.open(event.htmlLink, "_blank")
-                              }
+                              onClick={() => handleEventClick(event)}
                             >
                               <span className="hidden md:inline">• </span>
                               <span className="truncate">{event.title}</span>
@@ -1596,6 +1615,116 @@ export default function CalendarsPage() {
                 "Disconnect"
               )}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Event Details Modal */}
+      <AlertDialog
+        open={eventDetailsModal.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEventDetailsModal({
+              open: false,
+              event: null,
+            });
+          }
+        }}
+      >
+        <AlertDialogContent className="w-[95vw] max-w-[500px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
+              <span className="truncate">{eventDetailsModal.event?.title || "Event Details"}</span>
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">
+              Event details and actions
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {eventDetailsModal.event && (
+            <div className="space-y-4 py-2">
+              {/* Event Details */}
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm text-gray-900">
+                      {formatInTimezone(
+                        eventDetailsModal.event.start,
+                        eventDetailsModal.event.calendarTimezone || 'Africa/Johannesburg',
+                        'datetime'
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {formatInTimezone(
+                        eventDetailsModal.event.start,
+                        eventDetailsModal.event.calendarTimezone || 'Africa/Johannesburg',
+                        'date'
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {eventDetailsModal.event.location && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-700">
+                        📍 {eventDetailsModal.event.location}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {eventDetailsModal.event.description && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 rounded-full bg-purple-500 mt-2 flex-shrink-0"></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-700">
+                        <div className="font-medium mb-1">Description:</div>
+                        <div className="whitespace-pre-wrap break-words">
+                          {eventDetailsModal.event.description}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <AlertDialogCancel className="bg-orange-500 text-white hover:bg-orange-600 hover:font-bold border-0 w-full sm:w-auto order-2 sm:order-1">
+              Close
+            </AlertDialogCancel>
+            <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (eventDetailsModal.event) {
+                    handleEditEvent(eventDetailsModal.event);
+                    setEventDetailsModal({ open: false, event: null });
+                  }
+                }}
+                className="flex-1 sm:flex-none"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+              <Button
+                onClick={() => {
+                  if (eventDetailsModal.event) {
+                    handleGoToCalendar(eventDetailsModal.event);
+                    setEventDetailsModal({ open: false, event: null });
+                  }
+                }}
+                className="flex-1 sm:flex-none bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Link2 className="h-4 w-4 mr-2" />
+                Go to Calendar
+              </Button>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
