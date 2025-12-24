@@ -587,19 +587,34 @@ export default function ShoppingListPage() {
   };
 
   const handleExitSharedFolder = (folderId: string, folderName: string) => {
-    // Find the share for this user and folder
-    const userShare = myShares.find((share: any) =>
-      share.resourceType === "shopping_list_folder" &&
-      share.resourceId === folderId &&
-      share.sharedWithUserId === userId
-    );
+    // Find the shared folder to get the share ID
+    const sharedFolder = sharedFolders.find((folder: any) => folder.id === folderId);
 
-    if (userShare) {
-      // Use the taskSharing mutation to remove the share
-      exitSharedFolderMutation.mutate({
-        shareId: userShare.id
+    if (!sharedFolder) {
+      toast({
+        title: "Error",
+        description: "Unable to find the shared folder. Please refresh the page and try again.",
+        variant: "error",
       });
+      return;
     }
+
+    // Get the share ID from the shared folder's shareInfo
+    const shareId = sharedFolder.shareInfo?.id;
+
+    if (!shareId) {
+      toast({
+        title: "Error",
+        description: "Unable to find share information for this folder. Please refresh the page and try again.",
+        variant: "error",
+      });
+      return;
+    }
+
+    // Use the taskSharing mutation to remove the share
+    exitSharedFolderMutation.mutate({
+      shareId: shareId
+    });
   };
 
   // Format date for shopping list items: "16 Dec, 2025"
