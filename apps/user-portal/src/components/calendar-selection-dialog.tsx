@@ -142,9 +142,11 @@ export function CalendarSelectionDialog({
                   />
                   <div className="flex-1">
                       {calendar.primary && (
-                        <Badge variant="secondary" className="text-xs justify-end w-full">
-                          Primary
-                        </Badge>
+                        <div className="flex justify-end w-full">
+                          <Badge variant="secondary" className="text-xs">
+                            Primary
+                          </Badge>
+                        </div>
                       )}
                     <Label
                       htmlFor={calendar.id}
