@@ -126,6 +126,11 @@ export default function ShoppingListPage() {
   const { data: sharedResources, isLoading: isLoadingSharedResources } = useQuery(
     trpc.taskSharing.getSharedWithMe.queryOptions()
   );
+
+  // Get raw shares where current user is recipient for exit functionality
+  const { data: myRecipientShares = [] } = useQuery(
+    trpc.taskSharing.getMySharesAsRecipient.queryOptions()
+  );
   const { data: userPreferences } = useQuery(
     trpc.preferences.get.queryOptions()
   );
@@ -587,17 +592,23 @@ export default function ShoppingListPage() {
   };
 
   const handleExitSharedFolder = (folderId: string, folderName: string) => {
-    // Find the share for this user and folder
-    const userShare = myShares.find((share: any) =>
+    // Find the share for this user and folder from myRecipientShares
+    // myRecipientShares contains shares where current user is the recipient
+    const userShare = myRecipientShares.find((share: any) =>
       share.resourceType === "shopping_list_folder" &&
-      share.resourceId === folderId &&
-      share.sharedWithUserId === userId
+      share.resourceId === folderId
     );
 
     if (userShare) {
       // Use the taskSharing mutation to remove the share
       exitSharedFolderMutation.mutate({
         shareId: userShare.id
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "Unable to find share information for this folder. Please refresh the page and try again.",
+        variant: "error",
       });
     }
   };

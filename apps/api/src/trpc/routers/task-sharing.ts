@@ -276,6 +276,10 @@ export const taskSharingRouter = createTRPCRouter({
     return getSharedResourcesForUser(db, session.user.id);
   }),
 
+  getMySharesAsRecipient: protectedProcedure.query(async ({ ctx: { db, session } }) => {
+    return getSharedWithMe(db, session.user.id);
+  }),
+
   /**
    * Update share permission
    */
