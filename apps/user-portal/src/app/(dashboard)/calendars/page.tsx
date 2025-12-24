@@ -1647,7 +1647,7 @@ export default function CalendarsPage() {
               </div>
             ) : viewMode === "year" ? (
               <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-4 p-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
                   {Array.from({ length: 12 }, (_, i) => {
                     const monthDate = new Date(
                       currentMonth.getFullYear(),
@@ -1841,9 +1841,9 @@ export default function CalendarsPage() {
           return (
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
               <div className="p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col items-center justify-between mb-4">
                   <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-                    {format(displayDate, "EEEE, MMMM d, yyyy")}
+                    {format(displayDate, "MMMM d, yyyy")}
                     {!selectedMobileDay.date && (
                       <span className="block text-sm font-normal text-gray-500 mt-1">
                         Today
