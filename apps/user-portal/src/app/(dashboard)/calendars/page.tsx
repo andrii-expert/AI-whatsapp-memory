@@ -1477,14 +1477,7 @@ export default function CalendarsPage() {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <button
-                            onClick={() => {
-                              setSelectedDate(day);
-                              // Set the event date when clicking on a day
-                              if (isCurrentMonth) {
-                                setEventDate(format(day, "yyyy-MM-dd"));
-                                setCreateEventDialogOpen(true);
-                              }
-                            }}
+                            onClick={() => handleDateClick(day)}
                             className={cn(
                               "text-xs md:text-sm font-medium transition-all duration-200",
                               isToday &&
