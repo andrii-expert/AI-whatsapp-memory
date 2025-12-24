@@ -207,17 +207,27 @@ export default function ShoppingListPage() {
 
   // Calculate folder stats (open/total items)
   const getFolderStats = useMemo(() => {
-    return (folderId: string) => {
-      const folderItems = allItems.filter((item: any) =>
-        item.folderId === folderId && item.status !== "archived"
-      );
+    return (folderId: string, isSharedFolder: boolean = false) => {
+      let folderItems: any[] = [];
+
+      if (isSharedFolder) {
+        // For shared folders, get items from sharedResources
+        const sharedFolder = sharedFolders.find((folder: any) => folder.id === folderId);
+        folderItems = sharedFolder?.items || [];
+      } else {
+        // For owned folders, get items from allItems
+        folderItems = allItems.filter((item: any) =>
+          item.folderId === folderId && item.status !== "archived"
+        );
+      }
+
       const totalItems = folderItems.length;
       const openItems = folderItems.filter((item: any) =>
         item.status === "open" || !item.status // Default to open if no status
       ).length;
       return { openItems, totalItems };
     };
-  }, [allItems]);
+  }, [allItems, sharedFolders]);
 
   // Update folders ref when allOwnedFolders changes
   useEffect(() => {
@@ -1058,7 +1068,7 @@ export default function ShoppingListPage() {
                 <span className="font-medium truncate">{folder.name}</span>
                 {/* Folder stats badge */}
                 {(() => {
-                  const { openItems, totalItems } = getFolderStats(folder.id);
+                  const { openItems, totalItems } = getFolderStats(folder.id, isSharedFolder);
                   if (totalItems > 0) {
                     return (
                       <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-800 rounded">
