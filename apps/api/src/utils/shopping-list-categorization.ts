@@ -1,7 +1,6 @@
 import type { Database } from '@imaginecalendar/database/client';
 import { getUserShoppingListFolders, createShoppingListFolder } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
-import { suggestShoppingListCategory } from '@imaginecalendar/ai-services';
 
 /**
  * Fallback function to infer a basic category from item name if AI fails
@@ -91,7 +90,28 @@ function inferBasicCategory(itemName: string): string {
   return 'Miscellaneous';
 }
 
-// AI service is now imported directly at the top
+// Robust AI service loading with proper error handling
+async function getAISuggestionFunction() {
+  try {
+    const aiServices = await import('@imaginecalendar/ai-services');
+    if (aiServices && aiServices.suggestShoppingListCategory) {
+      logger.debug({}, 'AI services module loaded successfully');
+      return aiServices.suggestShoppingListCategory;
+    } else {
+      logger.error({ hasModule: !!aiServices, hasFunction: !!aiServices?.suggestShoppingListCategory }, 'AI services module loaded but suggestShoppingListCategory function not found');
+      return null;
+    }
+  } catch (error) {
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      },
+      'Failed to import AI services module - this may be expected in some environments'
+    );
+    return null;
+  }
+}
 
 /**
  * Get AI category suggestion for a shopping list item
@@ -136,6 +156,14 @@ export async function getCategorySuggestion(
 
     // Use AI to suggest a category with timeout protection
     let categoryResult: any = null;
+
+    const suggestShoppingListCategory = await getAISuggestionFunction();
+
+    if (!suggestShoppingListCategory) {
+      logger.info({ itemName, userId }, 'AI services not available, using fallback categorization');
+      const fallbackCategory = inferBasicCategory(itemName);
+      return { suggestedCategory: fallbackCategory, confidence: 0.5 };
+    }
 
     logger.info({ itemName, userId, itemText, existingCategoriesCount: existingCategories.length }, 'Calling AI for category suggestion');
 
