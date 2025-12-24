@@ -265,14 +265,6 @@ export default function CalendarsPage() {
     events: [],
   });
 
-  const [selectedDayDetails, setSelectedDayDetails] = useState<{
-    date: Date | null;
-    events: any[];
-  }>({
-    date: new Date(), // Default to today
-    events: [],
-  });
-
   // Edit event form state
   const [editEventTitle, setEditEventTitle] = useState("");
   const [editEventDate, setEditEventDate] = useState("");
@@ -327,18 +319,6 @@ export default function CalendarsPage() {
       enabled: cal.isActive && !!cal.id,
     })),
   });
-
-  // Initialize selected day details with today's events
-  useEffect(() => {
-    if (allEvents.length > 0) {
-      const today = new Date();
-      const todayEvents = getEventsForDate(today);
-      setSelectedDayDetails({
-        date: today,
-        events: todayEvents,
-      });
-    }
-  }, [allEvents]);
 
   const allEvents = useMemo(() => {
     return eventQueries
@@ -743,7 +723,8 @@ export default function CalendarsPage() {
 
   const handleDateClick = (date: Date) => {
     const dayEvents = getEventsForDate(date);
-    setSelectedDayDetails({
+    setDayDetailsModal({
+      open: true,
       date: date,
       events: dayEvents,
     });
@@ -1366,25 +1347,25 @@ export default function CalendarsPage() {
                           </button>
                         </div>
                         <div className="space-y-1 flex-1 overflow-y-auto">
-                          {dayEvents.length > 0 && (
-                            <div className="flex justify-center space-x-1 mt-1">
-                              {dayEvents.slice(0, 3).map((event, eventIdx) => (
-                                <div
-                                  key={eventIdx}
-                                  className="w-1.5 h-1.5 rounded-full cursor-pointer hover:opacity-90"
-                                  style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
-                                  title={event.title}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEventClick(event);
-                                  }}
-                                />
-                              ))}
-                              {dayEvents.length > 3 && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-gray-400 cursor-pointer" title={`+${dayEvents.length - 3} more events`} />
+                          {dayEvents.map((event, eventIdx) => (
+                            <div
+                              key={eventIdx}
+                              className={cn(
+                                "text-xs px-2 py-1 rounded truncate cursor-pointer hover:opacity-90",
+                                event.color,
+                                "text-white font-medium shadow-sm"
                               )}
+                              title={event.title}
+                              onClick={() => handleEventClick(event)}
+                            >
+                              <div className="font-semibold truncate">
+                                {event.title}
+                              </div>
+                              <div className="text-[10px] opacity-90">
+                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
+                              </div>
                             </div>
-                          )}
+                          ))}
                         </div>
                       </div>
                     );
@@ -1520,181 +1501,34 @@ export default function CalendarsPage() {
                           </button>
                         </div>
                         <div className="space-y-0.5 md:space-y-1 flex-1 overflow-hidden">
-                          {/* Desktop: Show event text */}
-                          <div className="hidden md:block">
-                            {dayEvents.slice(0, 2).map((event, eventIdx) => (
-                              <div
-                                key={eventIdx}
-                                className={cn(
-                                  "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90",
-                                  event.color,
-                                  "text-white font-medium shadow-sm"
-                                )}
-                                title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEventClick(event);
-                                }}
-                              >
-                                <span>• </span>
-                                <span className="truncate">{event.title}</span>
-                                <span className="hidden lg:inline ml-1">
-                                  {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
-                                </span>
-                              </div>
-                            ))}
-                            {dayEvents.length > 2 && (
-                              <div className="text-[10px] md:text-xs text-gray-500 px-1">
-                                +{dayEvents.length - 2} more
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Mobile: Show event dots */}
-                          <div className="md:hidden flex justify-center space-x-1 mt-1">
-                            {dayEvents.length > 0 && (
-                              <>
-                                {dayEvents.slice(0, 3).map((event, eventIdx) => (
-                                  <div
-                                    key={eventIdx}
-                                    className="w-1.5 h-1.5 rounded-full cursor-pointer hover:opacity-90"
-                                    style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
-                                    title={event.title}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEventClick(event);
-                                    }}
-                                  />
-                                ))}
-                                {dayEvents.length > 3 && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-gray-400 cursor-pointer" title={`+${dayEvents.length - 3} more events`} />
-                                )}
-                              </>
-                            )}
-                          </div>
+                          {dayEvents.slice(0, 2).map((event, eventIdx) => (
+                            <div
+                              key={eventIdx}
+                              className={cn(
+                                "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90",
+                                event.color,
+                                "text-white font-medium shadow-sm"
+                              )}
+                              title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
+                              onClick={() => handleEventClick(event)}
+                            >
+                              <span className="hidden md:inline">• </span>
+                              <span className="truncate">{event.title}</span>
+                              <span className="hidden lg:inline ml-1">
+                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
+                              </span>
+                            </div>
+                          ))}
+                          {dayEvents.length > 2 && (
+                            <div className="text-[10px] md:text-xs text-gray-500 px-1">
+                              +{dayEvents.length - 2} more
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Day Details Section - Below Calendar */}
-      <div className="mt-6">
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-          <div className="p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
-                {selectedDayDetails.date
-                  ? format(selectedDayDetails.date, "EEEE, MMMM d, yyyy")
-                  : "Loading..."
-                }
-              </h2>
-              {selectedDayDetails.events.length > 0 && (
-                <Badge variant="secondary" className="text-sm">
-                  {selectedDayDetails.events.length} event{selectedDayDetails.events.length === 1 ? '' : 's'}
-                </Badge>
-              )}
-            </div>
-
-            {selectedDayDetails.events.length === 0 ? (
-              <div className="text-center py-8">
-                <Calendar className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm mb-4">No events scheduled for this day</p>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (selectedDayDetails.date) {
-                      setEventDate(format(selectedDayDetails.date, "yyyy-MM-dd"));
-                      setCreateEventDialogOpen(true);
-                    }
-                  }}
-                  className="text-sm"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Event
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {selectedDayDetails.events
-                  .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-                  .map((event, index) => (
-                    <div
-                      key={index}
-                      className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200 cursor-pointer"
-                      onClick={() => handleEventClick(event)}
-                    >
-                      {/* Event color indicator */}
-                      <div
-                        className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
-                        style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
-                      />
-
-                      <div className="flex items-start gap-4">
-                        {/* Time */}
-                        <div className="flex-shrink-0 w-20 text-center">
-                          <div className="text-sm font-semibold text-gray-900">
-                            {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {(() => {
-                              const start = new Date(event.start);
-                              const end = new Date(event.end);
-                              const duration = end.getTime() - start.getTime();
-                              const hours = Math.floor(duration / (1000 * 60 * 60));
-                              const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
-                              if (hours > 0) {
-                                return `${hours}h ${minutes}m`;
-                              }
-                              return `${minutes}m`;
-                            })()}
-                          </div>
-                        </div>
-
-                        {/* Event details */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
-                                {event.title}
-                              </h3>
-
-                              {/* Location */}
-                              {event.location && (
-                                <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
-                                  <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
-                                  <span className="truncate">📍 {event.location}</span>
-                                </div>
-                              )}
-
-                              {/* Description preview */}
-                              {event.description && (
-                                <div className="text-xs text-gray-500 line-clamp-2">
-                                  {event.description.length > 100
-                                    ? `${event.description.substring(0, 100)}...`
-                                    : event.description
-                                  }
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Action indicator */}
-                            <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <ChevronRight className="h-4 w-4 text-gray-400" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-5 rounded-lg transition-all duration-200 pointer-events-none" />
-                    </div>
-                  ))}
               </div>
             )}
           </div>
