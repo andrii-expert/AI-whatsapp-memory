@@ -263,15 +263,40 @@ export default function CalendarsPage() {
   });
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // Dispatch custom event for mobile bottom nav
+  // Listen for mobile calendars button click
   useEffect(() => {
-    const event = new CustomEvent('calendars-sidebar-open', {
-      detail: () => setMobileSidebarOpen(true)
-    });
-    window.dispatchEvent(event);
+    const handleMobileCalendarsClick = () => {
+      console.log('CalendarsPage: Received mobile-calendars-click event');
+      setMobileSidebarOpen(true);
+    };
+
+    window.addEventListener('mobile-calendars-click', handleMobileCalendarsClick);
 
     return () => {
+      window.removeEventListener('mobile-calendars-click', handleMobileCalendarsClick);
+    };
+  }, []);
+
+  // Dispatch custom event for mobile bottom nav
+  useEffect(() => {
+    const dispatchEvent = () => {
+      console.log('CalendarsPage: Dispatching calendars-sidebar-open event');
+      const event = new CustomEvent('calendars-sidebar-open', {
+        detail: () => setMobileSidebarOpen(true)
+      });
+      window.dispatchEvent(event);
+    };
+
+    // Dispatch immediately
+    dispatchEvent();
+
+    // Also dispatch after a short delay to ensure listeners are ready
+    const timeoutId = setTimeout(dispatchEvent, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
       // Clean up by dispatching null
+      console.log('CalendarsPage: Dispatching cleanup event');
       const cleanupEvent = new CustomEvent('calendars-sidebar-open', {
         detail: null
       });

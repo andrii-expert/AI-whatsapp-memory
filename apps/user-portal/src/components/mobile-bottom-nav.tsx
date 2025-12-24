@@ -31,15 +31,20 @@ export function MobileBottomNav() {
 
   useEffect(() => {
     const handleCalendarsSidebarOpen = (event: CustomEvent) => {
+      console.log('MobileBottomNav: Received calendars-sidebar-open event', event.detail);
       if (event.detail && typeof event.detail === 'function') {
-        setCalendarsClickHandler(() => event.detail);
+        setCalendarsClickHandler(event.detail);
+      } else if (event.detail === null) {
+        setCalendarsClickHandler(null);
       }
     };
 
     window.addEventListener('calendars-sidebar-open', handleCalendarsSidebarOpen as EventListener);
+    console.log('MobileBottomNav: Added event listener for calendars-sidebar-open');
 
     return () => {
       window.removeEventListener('calendars-sidebar-open', handleCalendarsSidebarOpen as EventListener);
+      console.log('MobileBottomNav: Removed event listener for calendars-sidebar-open');
     };
   }, []);
 
@@ -53,7 +58,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#036cea] md:hidden shadow-lg">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#036cea] lg:hidden shadow-lg">
       <div className="flex items-center justify-around h-16 px-1">
         {navigationItems.map((item) => {
           const isActive =
@@ -76,11 +81,19 @@ export function MobileBottomNav() {
             </div>
           );
 
-          if (isCalendarsItem && calendarsClickHandler) {
+          if (isCalendarsItem) {
             return (
               <button
                 key={item.name}
-                onClick={calendarsClickHandler}
+                onClick={() => {
+                  console.log('MobileBottomNav: Calendars button clicked');
+                  if (calendarsClickHandler) {
+                    calendarsClickHandler();
+                  } else {
+                    // Fallback: dispatch a global event that the page can listen for
+                    window.dispatchEvent(new CustomEvent('mobile-calendars-click'));
+                  }
+                }}
                 className={cn(
                   "flex flex-col items-center justify-center flex-1 h-full min-w-0 px-1 transition-all relative",
                   isActive && "mx-0.5"
