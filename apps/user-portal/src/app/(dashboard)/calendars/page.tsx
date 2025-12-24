@@ -1814,7 +1814,7 @@ export default function CalendarsPage() {
             )}
           </div>
 
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0 pt-4 border-t">
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2 pt-4 border-t">
             <AlertDialogCancel className="bg-orange-500 text-white hover:bg-orange-600 hover:font-bold border-0 w-full sm:w-auto order-2 sm:order-1">
               Close
             </AlertDialogCancel>
@@ -1829,7 +1829,7 @@ export default function CalendarsPage() {
                   }
                 }}
                 variant="blue-primary"
-                className="w-full sm:w-auto mx-2"
+                className="w-full sm:w-auto"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Event
