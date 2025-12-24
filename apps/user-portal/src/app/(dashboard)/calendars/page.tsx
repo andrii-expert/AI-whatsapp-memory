@@ -289,6 +289,16 @@ export default function CalendarsPage() {
     trpc.calendar.list.queryOptions()
   );
 
+  // Auto-select first active calendar when calendars load
+  useEffect(() => {
+    if (calendars.length > 0 && !selectedCalendarId) {
+      const firstActiveCalendar = calendars.find((cal: any) => cal.isActive);
+      if (firstActiveCalendar) {
+        setSelectedCalendarId(firstActiveCalendar.id);
+      }
+    }
+  }, [calendars, selectedCalendarId]);
+
   // Fetch user preferences for timezone
   const { data: userPreferences } = useQuery(
     trpc.preferences.get.queryOptions()
@@ -666,7 +676,7 @@ export default function CalendarsPage() {
       return;
     }
 
-    if (!selectedCalendarId) {
+    if (!selectedCalendarId || selectedCalendarId.trim() === "") {
       toast({
         title: "Calendar required",
         description: "Please select a calendar for the event.",
