@@ -538,7 +538,13 @@ export default function ShoppingListPage() {
   const exitSharedFolderMutation = useMutation(
     trpc.taskSharing.deleteShare.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries();
+        // Specifically invalidate all related queries to ensure UI updates
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getMySharesAsRecipient.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getMyShares.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey() });
+
         // If the user just exited the currently selected folder, navigate away
         if (selectedFolderId) {
           setSelectedFolderId(null);
