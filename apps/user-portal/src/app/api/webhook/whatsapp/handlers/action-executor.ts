@@ -939,7 +939,7 @@ export class ActionExecutor {
       if (match) {
         recipient = match[1].trim();
         const resourceName = match[2].trim();
-        
+
         // Try to determine resource type based on context
         // Check if it's a folder route (common folder names or patterns)
         // For now, we'll try to resolve it as a folder first, then as a task/note
@@ -947,6 +947,39 @@ export class ActionExecutor {
         taskName = resourceName; // Also set as taskName for task/note resources
       } else {
         missingFields.push('recipient or resource name');
+      }
+    } else if (/^remove\s+(.+?)\s+from\s+(.+?)\s+share$/i.test(trimmed) ||
+               /^remove\s+(.+?)\s+from\s+(.+)$/i.test(trimmed) ||
+               /^unshare\s+(.+?)\s+with\s+(.+)$/i.test(trimmed) ||
+               /^stop\s+sharing\s+(.+?)\s+with\s+(.+)$/i.test(trimmed)) {
+      // Handle flexible unshare commands like:
+      // "remove drala from groceries shopping list share"
+      // "remove john from groceries"
+      // "unshare groceries with drala"
+      // "stop sharing groceries with john"
+      action = 'unshare';
+
+      let match;
+      if ((match = trimmed.match(/^remove\s+(.+?)\s+from\s+(.+?)\s+share$/i))) {
+        // "remove [person] from [resource] share"
+        recipient = match[1].trim();
+        folderRoute = match[2].trim();
+        taskName = match[2].trim();
+      } else if ((match = trimmed.match(/^remove\s+(.+?)\s+from\s+(.+)$/i))) {
+        // "remove [person] from [resource]"
+        recipient = match[1].trim();
+        folderRoute = match[2].trim();
+        taskName = match[2].trim();
+      } else if ((match = trimmed.match(/^unshare\s+(.+?)\s+with\s+(.+)$/i))) {
+        // "unshare [resource] with [person]"
+        folderRoute = match[1].trim();
+        taskName = match[1].trim();
+        recipient = match[2].trim();
+      } else if ((match = trimmed.match(/^stop\s+sharing\s+(.+?)\s+with\s+(.+)$/i))) {
+        // "stop sharing [resource] with [person]"
+        folderRoute = match[1].trim();
+        taskName = match[1].trim();
+        recipient = match[2].trim();
       }
     }
 
