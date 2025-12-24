@@ -158,7 +158,7 @@ export async function resetPreferencesToDefault(db: Database, userId: string) {
           reminderNotifications: true,
           calendarNotifications: true,
           reminderMinutes: 10,
-          calendarNotificationMinutes: 15,
+          calendarNotificationMinutes: 10,
           defaultCalendarId: null,
           timezone: "Africa/Johannesburg",
           dateFormat: "DD/MM/YYYY",

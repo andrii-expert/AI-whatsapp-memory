@@ -18,9 +18,7 @@ import Link from "next/link";
 // Define the form schema
 const preferencesSchema = z.object({
   marketingEmails: z.boolean(),
-  reminderNotifications: z.boolean(),
   calendarNotifications: z.boolean(),
-  reminderMinutes: z.number().min(1).max(1440),
   calendarNotificationMinutes: z.number().min(1).max(1440),
 });
 
@@ -39,10 +37,8 @@ export default function PreferencesPage() {
   const form = useZodForm(preferencesSchema, {
     defaultValues: {
       marketingEmails: false,
-      reminderNotifications: true,
       calendarNotifications: true,
-      reminderMinutes: 10,
-      calendarNotificationMinutes: 15,
+      calendarNotificationMinutes: 10,
     },
   });
 
@@ -56,7 +52,6 @@ export default function PreferencesPage() {
   } = form;
 
   // Watch form values
-  const reminderNotifications = watch("reminderNotifications");
   const calendarNotifications = watch("calendarNotifications");
 
   // Update form when preferences are loaded
@@ -64,9 +59,7 @@ export default function PreferencesPage() {
     if (preferences) {
       reset({
         marketingEmails: preferences.marketingEmails,
-        reminderNotifications: preferences.reminderNotifications,
         calendarNotifications: preferences.calendarNotifications,
-        reminderMinutes: preferences.reminderMinutes,
         calendarNotificationMinutes: preferences.calendarNotificationMinutes,
       });
     }
@@ -101,11 +94,7 @@ export default function PreferencesPage() {
     updatePreferencesMutation.mutate({
       notifications: {
         marketingEmails: values.marketingEmails,
-        reminderNotifications: values.reminderNotifications,
         calendarNotifications: values.calendarNotifications,
-      },
-      reminders: {
-        reminderMinutes: values.reminderMinutes,
       },
       calendar: {
         calendarNotificationMinutes: values.calendarNotificationMinutes,
@@ -167,64 +156,6 @@ export default function PreferencesPage() {
                 checked={watch("marketingEmails")}
                 onCheckedChange={(checked) => setValue("marketingEmails", checked)}
               />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* WhatsApp Reminders */}
-        <Card>
-          <CardHeader>
-            <CardTitle>WhatsApp Reminders</CardTitle>
-            <CardDescription>
-              Configure when you receive meeting reminders via WhatsApp
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-4">
-              {/* Toggle for WhatsApp reminders */}
-              <div className="flex items-center justify-between space-x-2">
-                <div className="space-y-0.5">
-                  <Label htmlFor="whatsapp-reminders" className="text-base">
-                    Enable WhatsApp reminders
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Get reminder notifications for your meetings via WhatsApp
-                  </p>
-                </div>
-                <Switch
-                  id="whatsapp-reminders"
-                  checked={watch("reminderNotifications")}
-                  onCheckedChange={(checked) => setValue("reminderNotifications", checked)}
-                />
-              </div>
-
-              {/* Reminder interval (only show when enabled) */}
-              {reminderNotifications && (
-                <div className="space-y-2 pl-2 border-l-2 border-muted ml-2">
-                  <Label htmlFor="reminder-minutes">
-                    Reminder time before meetings
-                  </Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      id="reminder-minutes"
-                      type="number"
-                      min="1"
-                      max="1440"
-                      {...register("reminderMinutes", { valueAsNumber: true })}
-                      className={errors.reminderMinutes ? "border-red-500 w-24" : "w-24"}
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      minutes before meeting
-                    </span>
-                  </div>
-                  {errors.reminderMinutes && (
-                    <p className="text-sm text-red-500">{errors.reminderMinutes.message || "Invalid value"}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    You'll receive a WhatsApp message {watch("reminderMinutes")} {watch("reminderMinutes") === 1 ? 'minute' : 'minutes'} before your scheduled meetings
-                  </p>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>

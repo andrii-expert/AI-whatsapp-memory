@@ -132,7 +132,7 @@ export async function GET(req: NextRequest) {
 
         // Get user's calendar notification minutes
         const userPreferences = (userConnections[0] as any).user?.preferences?.[0];
-        const calendarNotificationMinutes = userPreferences?.calendarNotificationMinutes || 15;
+        const calendarNotificationMinutes = userPreferences?.calendarNotificationMinutes || 10;
 
         // Get current time in user's timezone using Intl.DateTimeFormat for accurate conversion
         const formatter = new Intl.DateTimeFormat('en-US', {

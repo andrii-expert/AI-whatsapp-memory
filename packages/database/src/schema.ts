@@ -252,7 +252,7 @@ export const userPreferences = pgTable("user_preferences", {
 
   // WhatsApp settings
   reminderMinutes: integer("reminder_minutes").default(10).notNull(),
-  calendarNotificationMinutes: integer("calendar_notification_minutes").default(15).notNull(),
+  calendarNotificationMinutes: integer("calendar_notification_minutes").default(10).notNull(),
   defaultCalendarId: text("default_calendar_id"),
   
   // Locale settings
