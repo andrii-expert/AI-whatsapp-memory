@@ -910,7 +910,7 @@ export default function CalendarsPage() {
           className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
         >
           <Home className="h-3 w-3 sm:h-4 sm:w-4" />
-          <span className="hidden sm:inline">Dashboard</span>
+          <span>Dashboard</span>
         </Link>
         <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4 rotate-180 text-muted-foreground flex-shrink-0" />
         <span className="font-medium whitespace-nowrap">Calendar Connections</span>
@@ -982,48 +982,6 @@ export default function CalendarsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Left Column: Connected Calendars */}
         <div className="lg:col-span-1 space-y-4 md:space-y-6">
-          {/* View Mode Selector */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
-              View Mode
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                variant={viewMode === "week" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("week")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <CalendarDays className="h-4 w-4" />
-                <span className="hidden sm:inline">Week</span>
-              </Button>
-              <Button
-                variant={viewMode === "month" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("month")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <CalendarRange className="h-4 w-4" />
-                <span className="hidden sm:inline">Month</span>
-              </Button>
-              <Button
-                variant={viewMode === "year" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("year")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <CalendarCheck className="h-4 w-4" />
-                <span className="hidden sm:inline">Year</span>
-              </Button>
-            </div>
-          </div>
-
           {/* Connected Calendars */}
           <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
             <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
@@ -1203,6 +1161,48 @@ export default function CalendarsPage() {
                 )}
               </div>
             )}
+          </div>
+
+          {/* View Mode Selector */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
+              View Mode
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={viewMode === "week" ? "blue-primary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("week")}
+                className={cn(
+                  "flex items-center justify-center gap-2"
+                )}
+              >
+                <CalendarDays className="h-4 w-4" />
+                <span className="hidden sm:inline">Week</span>
+              </Button>
+              <Button
+                variant={viewMode === "month" ? "blue-primary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("month")}
+                className={cn(
+                  "flex items-center justify-center gap-2"
+                )}
+              >
+                <CalendarRange className="h-4 w-4" />
+                <span className="hidden sm:inline">Month</span>
+              </Button>
+              <Button
+                variant={viewMode === "year" ? "blue-primary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("year")}
+                className={cn(
+                  "flex items-center justify-center gap-2"
+                )}
+              >
+                <CalendarCheck className="h-4 w-4" />
+                <span className="hidden sm:inline">Year</span>
+              </Button>
+            </div>
           </div>
         </div>
 
