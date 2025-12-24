@@ -141,16 +141,16 @@ export function CalendarSelectionDialog({
                     className="mt-1"
                   />
                   <div className="flex-1">
+                      {calendar.primary && (
+                        <Badge variant="secondary" className="text-xs justify-end w-full">
+                          Primary
+                        </Badge>
+                      )}
                     <Label
                       htmlFor={calendar.id}
                       className="flex items-center gap-2 font-medium cursor-pointer"
                     >
                       {calendar.name}
-                      {calendar.primary && (
-                        <Badge variant="secondary" className="text-xs">
-                          Primary
-                        </Badge>
-                      )}
                       {selectedCalendarId === calendar.id && (
                         <Check className="h-4 w-4 text-blue-600" />
                       )}
