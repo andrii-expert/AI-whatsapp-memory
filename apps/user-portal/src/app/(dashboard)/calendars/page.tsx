@@ -1829,7 +1829,7 @@ export default function CalendarsPage() {
                   }
                 }}
                 variant="blue-primary"
-                className="w-full sm:w-auto text-sm sm:text-base"
+                className="w-full sm:w-auto mx-2"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Event
@@ -2079,7 +2079,7 @@ export default function CalendarsPage() {
                       }
                     }}
                     variant="blue-primary"
-                    className="w-full sm:w-auto text-sm sm:text-base m-2"
+                    className="w-full sm:w-auto"
                   >
                     <Link2 className="h-4 w-4 mr-2" />
                     Go to Calendar
