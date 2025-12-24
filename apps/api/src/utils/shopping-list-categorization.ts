@@ -1,6 +1,7 @@
 import type { Database } from '@imaginecalendar/database/client';
 import { getUserShoppingListFolders, createShoppingListFolder } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
+import { suggestShoppingListCategory } from '@imaginecalendar/ai-services';
 
 /**
  * Fallback function to infer a basic category from item name if AI fails
@@ -90,28 +91,7 @@ function inferBasicCategory(itemName: string): string {
   return 'Miscellaneous';
 }
 
-// Lazy load AI services function
-async function getAISuggestionFunction() {
-  try {
-    const aiServices = await import('@imaginecalendar/ai-services');
-    if (aiServices && aiServices.suggestShoppingListCategory) {
-      logger.debug({}, 'AI services module loaded');
-      return aiServices.suggestShoppingListCategory;
-    } else {
-      logger.error({ hasModule: !!aiServices, hasFunction: !!aiServices?.suggestShoppingListCategory }, 'AI services module loaded but function not found');
-      return null;
-    }
-  } catch (error) {
-    logger.error(
-      { 
-        error: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-      }, 
-      'Failed to load AI services module'
-    );
-    return null;
-  }
-}
+// AI service is now imported directly at the top
 
 /**
  * Get AI category suggestion for a shopping list item
@@ -156,14 +136,6 @@ export async function getCategorySuggestion(
 
     // Use AI to suggest a category with timeout protection
     let categoryResult: any = null;
-    
-    const suggestShoppingListCategory = await getAISuggestionFunction();
-    
-    if (!suggestShoppingListCategory) {
-      logger.error({ itemName, userId, itemText }, 'AI services not available - getAISuggestionFunction returned null, using fallback');
-      const fallbackCategory = inferBasicCategory(itemName);
-      return { suggestedCategory: fallbackCategory, confidence: 0.5 };
-    }
 
     logger.info({ itemName, userId, itemText, existingCategoriesCount: existingCategories.length }, 'Calling AI for category suggestion');
 
@@ -320,13 +292,6 @@ export async function findOrCreateCategoryForItem(
 
     // Use AI to suggest a category with timeout protection
     let categoryResult: any = null;
-    
-    const suggestShoppingListCategory = await getAISuggestionFunction();
-    
-    if (!suggestShoppingListCategory) {
-      logger.warn({ itemName, userId }, 'AI services not available, skipping category suggestion');
-      return undefined;
-    }
 
     try {
       // Add timeout to prevent long-running AI calls from blocking the request
