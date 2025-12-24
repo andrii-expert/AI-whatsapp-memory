@@ -37,6 +37,7 @@ import {
   Settings,
   Link2,
   Save,
+  MapPin,
 } from "lucide-react";
 
 // Google Icon Component
@@ -261,6 +262,15 @@ export default function CalendarsPage() {
     events: any[];
   }>({
     open: false,
+    date: null,
+    events: [],
+  });
+
+  // Mobile day selection state
+  const [selectedMobileDay, setSelectedMobileDay] = useState<{
+    date: Date | null;
+    events: any[];
+  }>({
     date: null,
     events: [],
   });
@@ -721,13 +731,29 @@ export default function CalendarsPage() {
     });
   };
 
+  // Check if device is mobile
+  const isMobile = () => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 1024; // lg breakpoint in Tailwind
+  };
+
   const handleDateClick = (date: Date) => {
     const dayEvents = getEventsForDate(date);
-    setDayDetailsModal({
-      open: true,
-      date: date,
-      events: dayEvents,
-    });
+
+    if (isMobile()) {
+      // On mobile, show events below calendar instead of modal
+      setSelectedMobileDay({
+        date: date,
+        events: dayEvents,
+      });
+    } else {
+      // On desktop/tablet, open modal
+      setDayDetailsModal({
+        open: true,
+        date: date,
+        events: dayEvents,
+      });
+    }
   };
 
   const handleGoToCalendar = (event: any) => {
@@ -1760,6 +1786,125 @@ export default function CalendarsPage() {
           </div>
         </div>
       </div>
+
+      {/* Mobile Day Details Section */}
+      {selectedMobileDay.date && (
+        <div className="lg:hidden mt-6">
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                  {format(selectedMobileDay.date, "EEEE, MMMM d, yyyy")}
+                </h2>
+                {selectedMobileDay.events.length > 0 && (
+                  <Badge variant="secondary" className="text-sm">
+                    {selectedMobileDay.events.length} event{selectedMobileDay.events.length === 1 ? '' : 's'}
+                  </Badge>
+                )}
+              </div>
+
+              {selectedMobileDay.events.length === 0 ? (
+                <div className="text-center py-8">
+                  <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm mb-4">No events scheduled for this day</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setEventTitle("");
+                      setEventDate(format(selectedMobileDay.date!, "yyyy-MM-dd"));
+                      setEventTime("");
+                      setSelectedCalendarId("");
+                      setCreateEventDialogOpen(true);
+                    }}
+                    className="text-sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Event
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {selectedMobileDay.events
+                    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+                    .map((event, index) => {
+                      const start = new Date(event.start);
+                      const end = new Date(event.end);
+                      const duration = end.getTime() - start.getTime();
+                      const hours = Math.floor(duration / (1000 * 60 * 60));
+                      const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
+                      const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+                      return (
+                        <div
+                          key={index}
+                          className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200 cursor-pointer"
+                          onClick={() => handleEventClick(event)}
+                        >
+                          {/* Event color indicator */}
+                          <div
+                            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
+                            style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
+                          />
+
+                          <div className="flex items-start gap-4">
+                            {/* Time */}
+                            <div className="flex-shrink-0 w-20 text-center">
+                              <div className="text-sm font-semibold text-gray-900">
+                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
+                              </div>
+                              {duration > 0 && (
+                                <div className="text-xs text-gray-500">
+                                  {durationText}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Event details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
+                                    {event.title}
+                                  </h3>
+
+                                  {/* Location */}
+                                  {event.location && (
+                                    <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
+                                      <MapPin className="h-3 w-3 flex-shrink-0" />
+                                      <span className="truncate">{event.location}</span>
+                                    </div>
+                                  )}
+
+                                  {/* Description preview */}
+                                  {event.description && (
+                                    <div className="text-xs text-gray-500 line-clamp-2">
+                                      {event.description.length > 100
+                                        ? `${event.description.substring(0, 100)}...`
+                                        : event.description
+                                      }
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Action indicator */}
+                                <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Hover overlay */}
+                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-5 rounded-lg transition-all duration-200 pointer-events-none" />
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Calendar Selection Dialog */}
       {calendarSelectionDialog.connectionId && (
