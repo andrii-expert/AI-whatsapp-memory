@@ -788,7 +788,16 @@ export default function CalendarsPage() {
     setEventDetailsModal(prev => ({ ...prev, isEditing: true }));
   };
 
+  const resetEditFields = () => {
+    setEditEventTitle("");
+    setEditEventDate("");
+    setEditEventTime("");
+    setEditEventLocation("");
+    setEditEventDescription("");
+  };
+
   const handleCancelEdit = () => {
+    resetEditFields();
     setEventDetailsModal(prev => ({ ...prev, isEditing: false }));
   };
 
@@ -2261,7 +2270,7 @@ export default function CalendarsPage() {
                               {event.location && (
                                 <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
                                   <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
-                                  <span className="truncate">📍 {event.location}</span>
+                                  <span className="truncate">{event.location}</span>
                                 </div>
                               )}
 
@@ -2372,6 +2381,7 @@ export default function CalendarsPage() {
         open={eventDetailsModal.open}
         onOpenChange={(open) => {
           if (!open) {
+            resetEditFields();
             setEventDetailsModal({
               open: false,
               event: null,
@@ -2455,7 +2465,7 @@ export default function CalendarsPage() {
                     <Textarea
                       id="edit-event-description"
                       value={editEventDescription}
-                      onChange={(e) => setEditEventDescription(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditEventDescription(e.target.value)}
                       placeholder="Enter description (optional)"
                       className="text-sm min-h-[80px]"
                     />
