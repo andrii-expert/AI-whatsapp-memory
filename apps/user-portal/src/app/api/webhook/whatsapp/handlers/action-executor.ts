@@ -1369,7 +1369,77 @@ export class ActionExecutor {
           } else if (parsed.resourceType === 'document') {
             return await this.unshareFile(parsed);
           } else {
-            return await this.unshareFolder(parsed);
+            // For "Remove share:" commands, we need to determine the resource type
+            // Try resolving as shopping list folder first
+            if (parsed.folderRoute) {
+              try {
+                const shoppingListFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+                if (shoppingListFolderId) {
+                  // It's a shopping list folder
+                  return await this.unshareShoppingListFolder(parsed);
+                }
+              } catch (error) {
+                // Not a shopping list folder, continue to try other types
+              }
+            }
+
+            // Try resolving as task folder
+            if (parsed.folderRoute) {
+              try {
+                const folderId = await this.resolveFolderRoute(parsed.folderRoute);
+                if (folderId) {
+                  // It's a task folder
+                  return await this.unshareFolder(parsed);
+                }
+              } catch (error) {
+                // Not a task folder, continue to try other types
+              }
+            }
+
+            // Try resolving as task
+            if (parsed.taskName) {
+              try {
+                const task = await this.resolveTask(parsed.taskName);
+                if (task) {
+                  // It's a task
+                  return await this.unshareTask(parsed);
+                }
+              } catch (error) {
+                // Not a task, continue to try other types
+              }
+            }
+
+            // Try resolving as note
+            if (parsed.taskName) {
+              try {
+                const note = await this.resolveNote(parsed.taskName);
+                if (note) {
+                  // It's a note
+                  return await this.unshareNote(parsed);
+                }
+              } catch (error) {
+                // Not a note, continue to try other types
+              }
+            }
+
+            // Try resolving as file
+            if (parsed.taskName) {
+              try {
+                const file = await this.resolveFile(parsed.taskName);
+                if (file) {
+                  // It's a file
+                  return await this.unshareFile(parsed);
+                }
+              } catch (error) {
+                // Not a file either
+              }
+            }
+
+            // If we can't determine the type, return an error
+            return {
+              success: false,
+              message: `I couldn't identify what "${parsed.folderRoute || parsed.taskName}" refers to. Please make sure it's a valid folder, task, note, or file name.`,
+            };
           }
         case 'view':
           if (parsed.resourceType === 'document') {

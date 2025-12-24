@@ -1447,7 +1447,7 @@ export default function ShoppingListPage() {
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         </div>
         {/* Mobile: Dropdown Menu */}
-        <div className="w-full sm:max-w-[200px] max-w-[100px]">
+        <div className="sm:hidden w-full max-w-[100px]">
           <Select
             value={`${sortBy}-${sortOrder}`}
             onValueChange={(value) => {
