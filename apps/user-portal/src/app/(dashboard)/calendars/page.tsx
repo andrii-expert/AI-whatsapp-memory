@@ -225,6 +225,8 @@ export default function CalendarsPage() {
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [eventTime, setEventTime] = useState("");
+  const [eventLocation, setEventLocation] = useState("");
+  const [eventDescription, setEventDescription] = useState("");
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month" | "year">("month");
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
@@ -528,6 +530,8 @@ export default function CalendarsPage() {
         setEventTitle("");
         setEventDate("");
         setEventTime("");
+        setEventLocation("");
+        setEventDescription("");
         setSelectedCalendarId("");
         // Close modal
         setCreateEventDialogOpen(false);
@@ -706,6 +710,8 @@ export default function CalendarsPage() {
       title: eventTitle.trim(),
       start: startDate.toISOString(),
       end: endDate.toISOString(),
+      location: eventLocation.trim() || undefined,
+      description: eventDescription.trim() || undefined,
       allDay: !eventTime, // If no time, treat as all-day
     });
   };
@@ -763,6 +769,22 @@ export default function CalendarsPage() {
   };
 
   const handleEditEvent = () => {
+    // Populate edit form fields with current event data
+    if (eventDetailsModal.event) {
+      const event = eventDetailsModal.event;
+      setEditEventTitle(event.title || "");
+      setEditEventDescription(event.description || "");
+      setEditEventLocation(event.location || "");
+
+      // Format date and time for form inputs
+      const eventDate = new Date(event.start);
+      const dateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = eventDate.toTimeString().slice(0, 5); // HH:MM
+
+      setEditEventDate(dateStr);
+      setEditEventTime(timeStr);
+    }
+
     setEventDetailsModal(prev => ({ ...prev, isEditing: true }));
   };
 
@@ -1867,6 +1889,8 @@ export default function CalendarsPage() {
                         setEventTitle("");
                         setEventDate(format(displayDate, "yyyy-MM-dd"));
                         setEventTime("");
+                        setEventLocation("");
+                        setEventDescription("");
                         setSelectedCalendarId("");
                         setCreateEventDialogOpen(true);
                       }}
@@ -2043,6 +2067,34 @@ export default function CalendarsPage() {
                   onChange={setEventTime}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="event-location" className="text-sm font-medium">
+                Location (optional)
+              </label>
+              <Input
+                id="event-location"
+                placeholder="Enter event location or address"
+                value={eventLocation}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEventLocation(e.target.value)
+                }
+                className="text-sm sm:text-base"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="event-description" className="text-sm font-medium">
+                Description (optional)
+              </label>
+              <Textarea
+                id="event-description"
+                placeholder="Enter event description"
+                value={eventDescription}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                  setEventDescription(e.target.value)
+                }
+                className="text-sm sm:text-base min-h-[80px]"
+              />
             </div>
             <div className="space-y-2">
               <label htmlFor="event-calendar" className="text-sm font-medium">
