@@ -205,6 +205,20 @@ export default function ShoppingListPage() {
     });
   }, [folders]);
 
+  // Calculate folder stats (open/total items)
+  const getFolderStats = useMemo(() => {
+    return (folderId: string) => {
+      const folderItems = allItems.filter((item: any) =>
+        item.folderId === folderId && item.status !== "archived"
+      );
+      const totalItems = folderItems.length;
+      const openItems = folderItems.filter((item: any) =>
+        item.status === "open" || !item.status // Default to open if no status
+      ).length;
+      return { openItems, totalItems };
+    };
+  }, [allItems]);
+
   // Update folders ref when allOwnedFolders changes
   useEffect(() => {
     foldersRef.current = allOwnedFolders;
@@ -1042,6 +1056,18 @@ export default function ShoppingListPage() {
                   <FolderClosed className="h-4 w-4 flex-shrink-0" />
                 )}
                 <span className="font-medium truncate">{folder.name}</span>
+                {/* Folder stats badge */}
+                {(() => {
+                  const { openItems, totalItems } = getFolderStats(folder.id);
+                  if (totalItems > 0) {
+                    return (
+                      <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold bg-orange-100 text-orange-800 rounded">
+                        {openItems}/{totalItems}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
                 {isSharedFolder && (
                   <button
                     onClick={(e) => {
