@@ -1,6 +1,6 @@
 import { eq, and, desc } from "drizzle-orm";
 import type { Database } from "../client";
-import { calendarConnections } from "../schema";
+import { calendarConnections, userPreferences } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
 
 export async function getUserCalendars(db: Database, userId: string) {
@@ -233,6 +233,25 @@ export async function recordSuccessfulSync(db: Database, id: string) {
     })
     .where(eq(calendarConnections.id, id))
     .returning();
-    
+
   return updated;
+}
+
+export async function getUsersWithCalendarNotifications(db: Database) {
+  return withQueryLogging(
+    'getUsersWithCalendarNotifications',
+    {},
+    () => db.query.calendarConnections.findMany({
+      where: and(
+        eq(calendarConnections.isActive, true)
+      ),
+      with: {
+        user: {
+          with: {
+            preferences: true
+          }
+        }
+      }
+    })
+  );
 }

@@ -5,11 +5,16 @@ export const updatePreferencesSchema = z.object({
     marketingEmails: z.boolean().optional(),
     productUpdates: z.boolean().optional(),
     reminderNotifications: z.boolean().optional(),
+    calendarNotifications: z.boolean().optional(),
   }).optional(),
 
   reminders: z.object({
     reminderMinutes: z.number().min(0).max(1440).optional(),
     defaultCalendarId: z.string().nullable().optional(),
+  }).optional(),
+
+  calendar: z.object({
+    calendarNotificationMinutes: z.number().min(0).max(1440).optional(),
   }).optional(),
 
   locale: z.object({
@@ -24,7 +29,9 @@ export const preferencesSchema = z.object({
   marketingEmails: z.boolean(),
   productUpdates: z.boolean(),
   reminderNotifications: z.boolean(),
+  calendarNotifications: z.boolean(),
   reminderMinutes: z.number(),
+  calendarNotificationMinutes: z.number(),
   defaultCalendarId: z.string().nullable(),
   timezone: z.string(),
   dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]),

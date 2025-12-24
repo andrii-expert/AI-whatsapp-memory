@@ -248,9 +248,11 @@ export const userPreferences = pgTable("user_preferences", {
   marketingEmails: boolean("marketing_emails").default(true).notNull(),
   productUpdates: boolean("product_updates").default(true).notNull(),
   reminderNotifications: boolean("reminder_notifications").default(true).notNull(),
-  
+  calendarNotifications: boolean("calendar_notifications").default(true).notNull(),
+
   // WhatsApp settings
   reminderMinutes: integer("reminder_minutes").default(10).notNull(),
+  calendarNotificationMinutes: integer("calendar_notification_minutes").default(15).notNull(),
   defaultCalendarId: text("default_calendar_id"),
   
   // Locale settings

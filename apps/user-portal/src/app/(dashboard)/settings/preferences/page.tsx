@@ -19,7 +19,9 @@ import Link from "next/link";
 const preferencesSchema = z.object({
   marketingEmails: z.boolean(),
   reminderNotifications: z.boolean(),
+  calendarNotifications: z.boolean(),
   reminderMinutes: z.number().min(1).max(1440),
+  calendarNotificationMinutes: z.number().min(1).max(1440),
 });
 
 export default function PreferencesPage() {
@@ -38,7 +40,9 @@ export default function PreferencesPage() {
     defaultValues: {
       marketingEmails: false,
       reminderNotifications: true,
+      calendarNotifications: true,
       reminderMinutes: 10,
+      calendarNotificationMinutes: 15,
     },
   });
 
@@ -53,6 +57,7 @@ export default function PreferencesPage() {
 
   // Watch form values
   const reminderNotifications = watch("reminderNotifications");
+  const calendarNotifications = watch("calendarNotifications");
 
   // Update form when preferences are loaded
   useEffect(() => {
@@ -60,7 +65,9 @@ export default function PreferencesPage() {
       reset({
         marketingEmails: preferences.marketingEmails,
         reminderNotifications: preferences.reminderNotifications,
+        calendarNotifications: preferences.calendarNotifications,
         reminderMinutes: preferences.reminderMinutes,
+        calendarNotificationMinutes: preferences.calendarNotificationMinutes,
       });
     }
   }, [preferences, reset]);
@@ -95,9 +102,13 @@ export default function PreferencesPage() {
       notifications: {
         marketingEmails: values.marketingEmails,
         reminderNotifications: values.reminderNotifications,
+        calendarNotifications: values.calendarNotifications,
       },
       reminders: {
         reminderMinutes: values.reminderMinutes,
+      },
+      calendar: {
+        calendarNotificationMinutes: values.calendarNotificationMinutes,
       },
     });
   }
@@ -211,6 +222,64 @@ export default function PreferencesPage() {
                   )}
                   <p className="text-xs text-muted-foreground">
                     You'll receive a WhatsApp message {watch("reminderMinutes")} {watch("reminderMinutes") === 1 ? 'minute' : 'minutes'} before your scheduled meetings
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* WhatsApp Calendar Notifications */}
+        <Card>
+          <CardHeader>
+            <CardTitle>WhatsApp Calendar Notifications</CardTitle>
+            <CardDescription>
+              Configure when you receive calendar event notifications via WhatsApp
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-4">
+              {/* Toggle for WhatsApp calendar notifications */}
+              <div className="flex items-center justify-between space-x-2">
+                <div className="space-y-0.5">
+                  <Label htmlFor="whatsapp-calendar-notifications" className="text-base">
+                    Enable WhatsApp calendar notifications
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Get notifications for your upcoming calendar events via WhatsApp
+                  </p>
+                </div>
+                <Switch
+                  id="whatsapp-calendar-notifications"
+                  checked={watch("calendarNotifications")}
+                  onCheckedChange={(checked) => setValue("calendarNotifications", checked)}
+                />
+              </div>
+
+              {/* Calendar notification interval (only show when enabled) */}
+              {calendarNotifications && (
+                <div className="space-y-2 pl-2 border-l-2 border-muted ml-2">
+                  <Label htmlFor="calendar-notification-minutes">
+                    Notification time before events
+                  </Label>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      id="calendar-notification-minutes"
+                      type="number"
+                      min="1"
+                      max="1440"
+                      {...register("calendarNotificationMinutes", { valueAsNumber: true })}
+                      className={errors.calendarNotificationMinutes ? "border-red-500 w-24" : "w-24"}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      minutes before event
+                    </span>
+                  </div>
+                  {errors.calendarNotificationMinutes && (
+                    <p className="text-sm text-red-500">{errors.calendarNotificationMinutes.message || "Invalid value"}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    You'll receive a WhatsApp message {watch("calendarNotificationMinutes")} {watch("calendarNotificationMinutes") === 1 ? 'minute' : 'minutes'} before your scheduled calendar events
                   </p>
                 </div>
               )}

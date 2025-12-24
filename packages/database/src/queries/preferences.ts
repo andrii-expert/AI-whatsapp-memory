@@ -27,6 +27,7 @@ export async function updateNotificationPreferences(
     marketingEmails?: boolean;
     productUpdates?: boolean;
     reminderNotifications?: boolean;
+    calendarNotifications?: boolean;
   }
 ) {
   return withMutationLogging(
@@ -100,6 +101,31 @@ export async function updateLocaleSettings(
   );
 }
 
+export async function updateCalendarSettings(
+  db: Database,
+  userId: string,
+  settings: {
+    calendarNotificationMinutes?: number;
+  }
+) {
+  return withMutationLogging(
+    'updateCalendarSettings',
+    { userId, calendarNotificationMinutes: settings.calendarNotificationMinutes },
+    async () => {
+      const [updated] = await db
+        .update(userPreferences)
+        .set({
+          ...settings,
+          updatedAt: new Date(),
+        })
+        .where(eq(userPreferences.userId, userId))
+        .returning();
+
+      return updated;
+    }
+  );
+}
+
 export async function setDefaultCalendar(db: Database, userId: string, calendarId: string | null) {
   return withMutationLogging(
     'setDefaultCalendar',
@@ -113,7 +139,7 @@ export async function setDefaultCalendar(db: Database, userId: string, calendarI
         })
         .where(eq(userPreferences.userId, userId))
         .returning();
-        
+
       return updated;
     }
   );
@@ -130,7 +156,9 @@ export async function resetPreferencesToDefault(db: Database, userId: string) {
           marketingEmails: true,
           productUpdates: true,
           reminderNotifications: true,
+          calendarNotifications: true,
           reminderMinutes: 10,
+          calendarNotificationMinutes: 15,
           defaultCalendarId: null,
           timezone: "Africa/Johannesburg",
           dateFormat: "DD/MM/YYYY",
@@ -139,7 +167,7 @@ export async function resetPreferencesToDefault(db: Database, userId: string) {
         })
         .where(eq(userPreferences.userId, userId))
         .returning();
-        
+
       return reset;
     }
   );

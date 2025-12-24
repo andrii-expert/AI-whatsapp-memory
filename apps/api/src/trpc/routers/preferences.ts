@@ -5,6 +5,7 @@ import {
   updateNotificationPreferences,
   updateReminderSettings,
   updateLocaleSettings,
+  updateCalendarSettings,
   resetPreferencesToDefault,
   setDefaultCalendar,
 } from "@imaginecalendar/database/queries";
@@ -53,6 +54,12 @@ export const preferencesRouter = createTRPCRouter({
             );
           }
         }
+      }
+
+      if (input.calendar) {
+        promises.push(
+          updateCalendarSettings(db, session.user.id, input.calendar)
+        );
       }
 
       if (input.locale) {
