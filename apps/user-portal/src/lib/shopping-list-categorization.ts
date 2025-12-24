@@ -132,9 +132,9 @@ export async function getCategorySuggestion(
       // Add timeout to prevent long-running AI calls from blocking the request
       const timeoutPromise = new Promise<null>((resolve) => {
         setTimeout(() => {
-          logger.warn({ itemName, userId }, 'AI category suggestion timed out after 8 seconds');
+          logger.warn({ itemName, userId }, 'AI category suggestion timed out after 12 seconds');
           resolve(null);
-        }, 8000); // 8 second timeout
+        }, 12000); // 12 second timeout for better AI processing
       });
       
       const aiPromise = suggestShoppingListCategory(itemText, existingCategories);
