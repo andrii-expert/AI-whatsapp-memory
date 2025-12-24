@@ -89,25 +89,43 @@ function inferBasicCategory(itemName: string): string {
   return 'Miscellaneous';
 }
 
-// Robust AI service loading with proper error handling
+// Prioritized OpenAI service loading - always attempts to use AI first
 async function getAISuggestionFunction() {
   try {
+    // Always try to load AI services first - this is the primary method
     const aiServices = await import('@imaginecalendar/ai-services');
-    if (aiServices && aiServices.suggestShoppingListCategory) {
-      logger.debug({}, 'AI services module loaded successfully');
+    if (aiServices && typeof aiServices.suggestShoppingListCategory === 'function') {
+      logger.info('OpenAI services loaded successfully - using AI categorization');
       return aiServices.suggestShoppingListCategory;
     } else {
-      logger.error({ hasModule: !!aiServices, hasFunction: !!aiServices?.suggestShoppingListCategory }, 'AI services module loaded but suggestShoppingListCategory function not found');
-      return null;
+      logger.error({
+        hasModule: !!aiServices,
+        hasFunction: !!aiServices?.suggestShoppingListCategory,
+        functionType: typeof aiServices?.suggestShoppingListCategory
+      }, 'AI services module loaded but suggestShoppingListCategory is not a valid function');
+      throw new Error('AI services function not available');
     }
   } catch (error) {
-    logger.error(
+    // Only log as warning - we'll still try to use AI through other means
+    logger.warn(
       {
         error: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
       },
-      'Failed to import AI services module - this may be expected in some environments'
+      'Failed to load AI services module - attempting alternative loading method'
     );
+
+    // As a last resort, try to access the function directly if it's already loaded
+    try {
+      const { suggestShoppingListCategory } = await import('@imaginecalendar/ai-services');
+      if (typeof suggestShoppingListCategory === 'function') {
+        logger.info('Alternative AI loading successful');
+        return suggestShoppingListCategory;
+      }
+    } catch (fallbackError) {
+      logger.error('All AI loading methods failed', { fallbackError });
+    }
+
+    // Only return null if all methods fail - this should be extremely rare
     return null;
   }
 }
@@ -150,66 +168,124 @@ export async function getCategorySuggestion(
     // Use AI to suggest a category with timeout protection
     let categoryResult: any = null;
 
+    // Prioritize OpenAI analysis - this is the primary categorization method
     const suggestShoppingListCategoryFn = await getAISuggestionFunction();
 
     if (!suggestShoppingListCategoryFn) {
-      logger.info({ itemName, userId }, 'AI services not available, using fallback categorization');
+      logger.error({ itemName, userId }, 'CRITICAL: AI services completely unavailable - this should not happen in production');
+      // Only use fallback as absolute last resort
       const fallbackCategory = inferBasicCategory(itemName);
-      return { suggestedCategory: fallbackCategory, confidence: 0.5 };
+      logger.warn({ itemName, userId, fallbackCategory }, 'Using emergency fallback categorization - OpenAI analysis failed');
+      return { suggestedCategory: fallbackCategory, confidence: 0.3 };
     }
 
-    try {
-      // Add timeout to prevent long-running AI calls from blocking the request
-      const timeoutPromise = new Promise<null>((resolve) => {
-        setTimeout(() => {
-          logger.warn({ itemName, userId }, 'AI category suggestion timed out after 12 seconds');
-          resolve(null);
-        }, 12000); // 12 second timeout for better AI processing
-      });
+    logger.info({ itemName, userId }, 'Using OpenAI for categorization analysis');
 
-      const aiPromise = suggestShoppingListCategoryFn(itemText, existingCategories);
-      
-      categoryResult = await Promise.race([
-        aiPromise,
-        timeoutPromise,
-      ]);
+    // Attempt AI categorization with retry logic
+    let retryCount = 0;
+    const maxRetries = 2;
 
-      logger.info({ 
-        itemName, 
-        userId, 
-        hasResult: !!categoryResult,
-        suggestedCategory: categoryResult?.suggestedCategory,
-        confidence: categoryResult?.confidence 
-      }, 'AI category suggestion result');
-    } catch (error) {
-      logger.error(
-        {
-          error: error instanceof Error ? error.message : String(error),
-          errorStack: error instanceof Error ? error.stack : undefined,
+    while (retryCount <= maxRetries && !categoryResult) {
+      try {
+        logger.info({
           itemName,
           userId,
-          itemText,
-        },
-        'AI category suggestion failed with exception'
-      );
-      categoryResult = null;
+          attempt: retryCount + 1,
+          maxRetries: maxRetries + 1
+        }, 'Attempting OpenAI categorization');
+
+        // Add timeout to prevent long-running AI calls from blocking the request
+        const timeoutPromise = new Promise<null>((resolve) => {
+          const timeoutMs = 15000; // 15 second timeout for AI processing
+          setTimeout(() => {
+            logger.warn({ itemName, userId, attempt: retryCount + 1 }, `AI categorization timed out after ${timeoutMs}ms`);
+            resolve(null);
+          }, timeoutMs);
+        });
+
+        const aiPromise = suggestShoppingListCategoryFn(itemText, existingCategories);
+
+        categoryResult = await Promise.race([
+          aiPromise,
+          timeoutPromise,
+        ]);
+
+        if (categoryResult) {
+          logger.info({
+            itemName,
+            userId,
+            suggestedCategory: categoryResult.suggestedCategory,
+            confidence: categoryResult.confidence,
+            attempt: retryCount + 1
+          }, 'OpenAI categorization successful');
+          break; // Success, exit retry loop
+        } else if (retryCount < maxRetries) {
+          logger.warn({
+            itemName,
+            userId,
+            attempt: retryCount + 1
+          }, 'AI categorization returned null, will retry');
+          retryCount++;
+          // Small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+      } catch (error) {
+        logger.error(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            itemName,
+            userId,
+            attempt: retryCount + 1,
+          },
+          'AI categorization failed with exception, will retry if attempts remaining'
+        );
+
+        if (retryCount < maxRetries) {
+          retryCount++;
+          // Small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          logger.error({
+            itemName,
+            userId,
+            totalAttempts: maxRetries + 1
+          }, 'All AI categorization attempts failed');
+          break;
+        }
+      }
     }
 
     if (!categoryResult) {
-      logger.warn({ itemName, userId }, 'AI returned null result, using fallback');
+      logger.error({
+        itemName,
+        userId,
+        totalAttempts: maxRetries + 1
+      }, 'CRITICAL: All OpenAI categorization attempts failed - using emergency fallback');
+      // Emergency fallback - this should be extremely rare
       const fallbackCategory = inferBasicCategory(itemName);
-      return { suggestedCategory: fallbackCategory, confidence: 0.5 };
+      return {
+        suggestedCategory: fallbackCategory,
+        confidence: 0.1,
+        emergencyFallback: true
+      };
     }
 
     if (!categoryResult.suggestedCategory) {
-      logger.warn({ 
-        itemName, 
-        userId, 
+      logger.error({
+        itemName,
+        userId,
         confidence: categoryResult.confidence,
-        hasSuggestedCategory: !!categoryResult.suggestedCategory 
-      }, 'AI result has no suggestedCategory, using fallback');
+        hasSuggestedCategory: !!categoryResult.suggestedCategory
+      }, 'CRITICAL: OpenAI returned result but no category - using emergency fallback');
+      // Emergency fallback - AI succeeded but returned invalid data
       const fallbackCategory = inferBasicCategory(itemName);
-      return { suggestedCategory: fallbackCategory, confidence: 0.5 };
+      return {
+        suggestedCategory: fallbackCategory,
+        confidence: 0.1,
+        emergencyFallback: true
+      };
     }
 
     logger.info({ 
@@ -303,15 +379,86 @@ export async function findOrCreateCategoryForItem(
       existingCategories = extractCategories(allFolders);
     }
 
-    // Use AI to suggest a category
+    // Use AI to suggest a category with retry logic
     const suggestShoppingListCategoryFn = await getAISuggestionFunction();
 
     if (!suggestShoppingListCategoryFn) {
-      logger.warn({ itemName, userId }, 'AI services not available, skipping category suggestion');
+      logger.error({ itemName, userId }, 'CRITICAL: AI services unavailable for folder creation');
       return undefined;
     }
 
-    const categoryResult = await suggestShoppingListCategoryFn(itemName, existingCategories);
+    // Attempt AI categorization with retry logic for folder creation
+    let categoryResult = null;
+    let retryCount = 0;
+    const maxRetries = 2;
+
+    while (retryCount <= maxRetries && !categoryResult) {
+      try {
+        logger.info({
+          itemName,
+          userId,
+          attempt: retryCount + 1,
+          maxRetries: maxRetries + 1
+        }, 'Attempting OpenAI categorization for folder creation');
+
+        const timeoutPromise = new Promise<null>((resolve) => {
+          const timeoutMs = 15000;
+          setTimeout(() => {
+            logger.warn({ itemName, userId, attempt: retryCount + 1 }, `AI categorization for folder creation timed out after ${timeoutMs}ms`);
+            resolve(null);
+          }, timeoutMs);
+        });
+
+        const aiPromise = suggestShoppingListCategoryFn(itemName, existingCategories);
+
+        categoryResult = await Promise.race([
+          aiPromise,
+          timeoutPromise,
+        ]);
+
+        if (categoryResult) {
+          logger.info({
+            itemName,
+            userId,
+            suggestedCategory: categoryResult.suggestedCategory,
+            confidence: categoryResult.confidence,
+            attempt: retryCount + 1
+          }, 'OpenAI categorization successful for folder creation');
+          break;
+        } else if (retryCount < maxRetries) {
+          logger.warn({
+            itemName,
+            userId,
+            attempt: retryCount + 1
+          }, 'AI categorization for folder creation returned null, will retry');
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+      } catch (error) {
+        logger.error(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            itemName,
+            userId,
+            attempt: retryCount + 1,
+          },
+          'AI categorization for folder creation failed with exception, will retry if attempts remaining'
+        );
+
+        if (retryCount < maxRetries) {
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          logger.error({
+            itemName,
+            userId,
+            totalAttempts: maxRetries + 1
+          }, 'All AI categorization attempts failed for folder creation');
+          break;
+        }
+      }
+    }
 
     if (!categoryResult || !categoryResult.suggestedCategory) {
       logger.info({ itemName, userId }, 'No category suggested for shopping list item');
