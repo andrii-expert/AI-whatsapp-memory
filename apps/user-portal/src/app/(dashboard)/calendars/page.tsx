@@ -1841,7 +1841,7 @@ export default function CalendarsPage() {
           return (
             <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
               <div className="p-4 sm:p-6">
-                <div className="flex flex-col items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
                     {format(displayDate, "MMMM d, yyyy")}
                     {!selectedMobileDay.date && (
