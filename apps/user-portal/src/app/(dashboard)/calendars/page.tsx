@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ import { useToast } from "@imaginecalendar/ui/use-toast";
 import { Calendar as CalendarComponent } from "@imaginecalendar/ui/calendar";
 import { Input } from "@imaginecalendar/ui/input";
 import { Textarea } from "@imaginecalendar/ui/textarea";
+import { Label } from "@imaginecalendar/ui/label";
 import {
   Select,
   SelectContent,
@@ -39,7 +40,16 @@ import {
   Save,
   MapPin,
   X,
+  Loader2,
 } from "lucide-react";
+
+// Google Maps component
+declare global {
+  interface Window {
+    google: any;
+    initMap: () => void;
+  }
+}
 
 // Google Icon Component
 const GoogleIcon = ({ className }: { className?: string }) => (
@@ -82,6 +92,380 @@ const MicrosoftIcon = ({ className }: { className?: string }) => (
     <path d="M11.5 11.5H23V23H11.5V11.5z" fill="#FFB900" />
   </svg>
 );
+
+// Google Maps component
+function GoogleMap({
+  lat,
+  lng,
+  address,
+  onPinDrop,
+  enableClickToDrop = false
+}: {
+  lat?: number | null;
+  lng?: number | null;
+  address?: string;
+  onPinDrop?: (lat: number, lng: number) => void;
+  enableClickToDrop?: boolean;
+}) {
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const clickListenerRef = useRef<any>(null);
+  const initAttemptsRef = useRef(0);
+  const maxInitAttempts = 20; // 2 seconds max (20 * 100ms)
+
+  // Load Google Maps script
+  useEffect(() => {
+    // Check if already loaded
+    if (window.google?.maps) {
+      setScriptLoaded(true);
+      return;
+    }
+
+    // Check if script is already being loaded
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      // Wait for script to load
+      const checkLoaded = setInterval(() => {
+        if (window.google?.maps) {
+          setScriptLoaded(true);
+          clearInterval(checkLoaded);
+        }
+      }, 100);
+
+      // Timeout after 10 seconds
+      const timeoutId = setTimeout(() => {
+        clearInterval(checkLoaded);
+        if (!window.google?.maps) {
+          setMapError("Failed to load Google Maps. Please refresh the page.");
+        }
+      }, 10000);
+
+      return () => {
+        clearInterval(checkLoaded);
+        clearTimeout(timeoutId);
+      };
+    }
+
+    // Load the script
+    const script = document.createElement("script");
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyB_W7D5kzZDahDM5NpS4u8_k8_ZbD55-pc";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+
+    script.onload = () => {
+      // Give it a moment for the API to fully initialize
+      setTimeout(() => {
+        if (window.google?.maps) {
+          setScriptLoaded(true);
+          setMapError(null);
+        } else {
+          setMapError("Google Maps API loaded but not available. Please check your API key.");
+        }
+      }, 100);
+    };
+
+    script.onerror = () => {
+      setMapError("Failed to load Google Maps script. Please check your internet connection and API key.");
+      console.error("Failed to load Google Maps script.");
+    };
+
+    document.head.appendChild(script);
+
+    return () => {
+      // Cleanup if component unmounts
+    };
+  }, []);
+
+  // Initialize map when script is loaded
+  useEffect(() => {
+    if (!scriptLoaded || !window.google?.maps) {
+      setMapInitialized(false);
+      return;
+    }
+
+    // If no coordinates but click-to-drop is enabled, show map centered on a default location
+    const hasValidCoords = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+
+    // If no valid coordinates and click-to-drop is not enabled, don't initialize
+    if (!hasValidCoords && !enableClickToDrop) {
+      setMapInitialized(false);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+      }
+      return;
+    }
+
+    // Reset attempts when coordinates change
+    initAttemptsRef.current = 0;
+    setMapInitialized(false);
+
+    // Wait for DOM element to be available
+    const initMap = () => {
+      if (!mapContainerRef.current) {
+        initAttemptsRef.current++;
+        if (initAttemptsRef.current < maxInitAttempts) {
+          setTimeout(initMap, 100);
+        } else {
+          setMapError("Map container not found. Please refresh the page.");
+        }
+        return;
+      }
+
+      try {
+        // Determine center and zoom
+        // Use a reasonable default center (center of world map) if no coordinates
+        const centerLat = hasValidCoords ? lat : 20;
+        const centerLng = hasValidCoords ? lng : 0;
+        const zoom = hasValidCoords ? 15 : 3; // Zoom out if no coordinates, but not too much
+
+        // Create or update map
+        if (!mapInstanceRef.current) {
+          mapInstanceRef.current = new window.google.maps.Map(mapContainerRef.current, {
+            center: { lat: centerLat, lng: centerLng },
+            zoom: zoom,
+            mapTypeControl: true,
+            streetViewControl: true,
+            fullscreenControl: true,
+            zoomControl: true,
+            mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+          });
+
+          // Wait for map to be ready - use both idle and tilesloaded events
+          let mapReady = false;
+          const onMapReady = () => {
+            if (!mapReady) {
+              mapReady = true;
+              setMapInitialized(true);
+              setMapError(null);
+
+              // Add click listener AFTER map is ready
+              if (enableClickToDrop && onPinDrop) {
+                // Remove existing listener if any
+                if (clickListenerRef.current) {
+                  window.google.maps.event.removeListener(clickListenerRef.current);
+                }
+                // Add click listener
+                try {
+                  clickListenerRef.current = mapInstanceRef.current.addListener('click', (e: any) => {
+                    if (e && e.latLng && onPinDrop) {
+                      try {
+                        const clickedLat = e.latLng.lat();
+                        const clickedLng = e.latLng.lng();
+                        console.log('Map clicked at:', clickedLat, clickedLng);
+                        if (typeof clickedLat === 'number' && typeof clickedLng === 'number' && !isNaN(clickedLat) && !isNaN(clickedLng)) {
+                          onPinDrop(clickedLat, clickedLng);
+                        } else {
+                          console.error('Invalid coordinates from click:', clickedLat, clickedLng);
+                        }
+                      } catch (error) {
+                        console.error('Error handling map click:', error);
+                      }
+                    } else {
+                      console.warn('Map click event missing latLng:', e);
+                    }
+                  });
+                  console.log('Click listener added for drop pin, enableClickToDrop:', enableClickToDrop, 'onPinDrop:', !!onPinDrop);
+                } catch (error) {
+                  console.error('Error adding click listener:', error);
+                }
+              }
+            }
+          };
+
+          mapInstanceRef.current.addListener('idle', onMapReady);
+          mapInstanceRef.current.addListener('tilesloaded', onMapReady);
+
+          // Fallback: set initialized after a short delay if events don't fire
+          setTimeout(() => {
+            if (!mapReady && mapInstanceRef.current) {
+              onMapReady();
+            }
+          }, 1000);
+        } else {
+          if (hasValidCoords) {
+            mapInstanceRef.current.setCenter({ lat, lng });
+            mapInstanceRef.current.setZoom(15);
+          }
+          setMapInitialized(true);
+        }
+
+        // Create or update marker only if we have valid coordinates
+        if (hasValidCoords) {
+          if (markerRef.current) {
+            markerRef.current.setPosition({ lat, lng });
+            markerRef.current.setTitle(address || "Location");
+            markerRef.current.setMap(mapInstanceRef.current);
+          } else {
+            markerRef.current = new window.google.maps.Marker({
+              position: { lat, lng },
+              map: mapInstanceRef.current,
+              title: address || "Location",
+              animation: window.google.maps.Animation.DROP,
+            });
+          }
+        } else if (markerRef.current) {
+          // Remove marker if no valid coordinates
+          markerRef.current.setMap(null);
+        }
+
+        setMapError(null);
+      } catch (error) {
+        console.error("GoogleMap: Error initializing map:", error);
+        setMapError(`Failed to initialize map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setMapInitialized(false);
+      }
+    };
+
+    // Small delay to ensure DOM is ready
+    const timeoutId = setTimeout(initMap, 100);
+    return () => {
+      clearTimeout(timeoutId);
+      // Clean up click listener
+      if (clickListenerRef.current) {
+        window.google?.maps?.event?.removeListener(clickListenerRef.current);
+        clickListenerRef.current = null;
+      }
+    };
+  }, [scriptLoaded, lat, lng, address, enableClickToDrop, onPinDrop]);
+
+  // Update click listener when enableClickToDrop changes (for existing maps)
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.google?.maps || !mapInitialized) return;
+
+    // Remove existing listener
+    if (clickListenerRef.current) {
+      window.google.maps.event.removeListener(clickListenerRef.current);
+      clickListenerRef.current = null;
+    }
+
+    // Add new listener if enabled
+    if (enableClickToDrop && onPinDrop) {
+      try {
+        clickListenerRef.current = mapInstanceRef.current.addListener('click', (e: any) => {
+          if (e && e.latLng && onPinDrop) {
+            try {
+              const clickedLat = e.latLng.lat();
+              const clickedLng = e.latLng.lng();
+              console.log('Map clicked at:', clickedLat, clickedLng);
+              if (typeof clickedLat === 'number' && typeof clickedLng === 'number' && !isNaN(clickedLat) && !isNaN(clickedLng)) {
+                onPinDrop(clickedLat, clickedLng);
+              } else {
+                console.error('Invalid coordinates from click:', clickedLat, clickedLng);
+              }
+            } catch (error) {
+              console.error('Error handling map click:', error);
+            }
+          } else {
+            console.warn('Map click event missing latLng:', e);
+          }
+        });
+        console.log('Click listener updated for drop pin, enableClickToDrop:', enableClickToDrop, 'onPinDrop:', !!onPinDrop);
+      } catch (error) {
+        console.error('Error adding click listener:', error);
+      }
+    } else {
+      console.log('Click listener removed (drop pin disabled)');
+    }
+
+    return () => {
+      if (clickListenerRef.current) {
+        window.google?.maps?.event?.removeListener(clickListenerRef.current);
+        clickListenerRef.current = null;
+      }
+    };
+  }, [enableClickToDrop, onPinDrop, mapInitialized]);
+
+  // Show placeholder if no coordinates and click-to-drop is not enabled
+  if ((lat == null || lng == null || isNaN(lat) || isNaN(lng)) && !enableClickToDrop) {
+    return (
+      <div className="w-full h-[300px] sm:h-[400px] bg-green-50 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <p className="text-xs sm:text-sm text-green-700 font-medium text-center">Map placeholder - Enter coordinates or address to view map</p>
+        </div>
+        {address && (
+          <p className="text-xs text-green-600 text-center mt-2">
+            Showing preview for {address}.
+          </p>
+        )}
+        <p className="text-xs text-green-600 text-center mt-1">
+          Please enter an address or coordinates to display the map.
+        </p>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (!scriptLoaded) {
+    return (
+      <div className="w-full h-[300px] sm:h-[400px] bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
+        <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mb-4" />
+        <p className="text-xs sm:text-sm text-gray-700 font-medium">Loading Google Maps...</p>
+        <p className="text-xs text-gray-500 text-center mt-2">
+          Please wait while we load the map.
+        </p>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (mapError) {
+    return (
+      <div className="w-full h-[300px] sm:h-[400px] bg-red-50 border-2 border-dashed border-red-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
+        <p className="text-xs sm:text-sm text-red-700 font-medium mb-2">Error loading map</p>
+        <p className="text-xs text-red-600 text-center mb-4">{mapError}</p>
+        <Button
+          onClick={() => {
+            setMapError(null);
+            setScriptLoaded(false);
+            setMapInitialized(false);
+            mapInstanceRef.current = null;
+            markerRef.current = null;
+            // Force reload by removing script and re-adding
+            const script = document.querySelector('script[src*="maps.googleapis.com"]');
+            if (script) {
+              script.remove();
+            }
+          }}
+          variant="outline"
+          size="sm"
+          className="touch-manipulation"
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  // Show map
+  return (
+    <div className="w-full h-[300px] sm:h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100 relative">
+      <div
+        ref={mapContainerRef}
+        className={cn(
+          "w-full h-full",
+          enableClickToDrop && mapInitialized && "cursor-crosshair"
+        )}
+      />
+      {!mapInitialized && (
+        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        </div>
+      )}
+      {enableClickToDrop && mapInitialized && (
+        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-lg z-10 pointer-events-none max-w-[90%]">
+          <p className="text-xs sm:text-sm font-medium text-center">Click anywhere on the map to drop a pin</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Time Picker Component
 const TimePicker = ({
@@ -227,6 +611,18 @@ export default function CalendarsPage() {
   const [eventDate, setEventDate] = useState("");
   const [eventTime, setEventTime] = useState("");
   const [eventLocation, setEventLocation] = useState("");
+  const [eventAddressId, setEventAddressId] = useState<string>("");
+  const [eventAddress, setEventAddress] = useState("");
+  const [eventCoordinates, setEventCoordinates] = useState("");
+  const [enableDropPin, setEnableDropPin] = useState(false);
+  const [addressComponents, setAddressComponents] = useState<{
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+  }>({});
+  const [isGeocoding, setIsGeocoding] = useState(false);
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month" | "year">("month");
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
@@ -285,11 +681,311 @@ export default function CalendarsPage() {
   const [editEventDate, setEditEventDate] = useState("");
   const [editEventTime, setEditEventTime] = useState("");
   const [editEventLocation, setEditEventLocation] = useState("");
+  const [editEventAddressId, setEditEventAddressId] = useState<string>("");
+  const [editEventAddress, setEditEventAddress] = useState("");
+  const [editEventCoordinates, setEditEventCoordinates] = useState("");
+  const [editEnableDropPin, setEditEnableDropPin] = useState(false);
+  const [editAddressComponents, setEditAddressComponents] = useState<{
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+  }>({});
+  const [editIsGeocoding, setEditIsGeocoding] = useState(false);
 
   // Fetch user's calendars
   const { data: calendars = [], isLoading, refetch } = useQuery(
     trpc.calendar.list.queryOptions()
   );
+
+  // Fetch addresses
+  const { data: addresses = [] } = useQuery(trpc.addresses.list.queryOptions());
+
+  // Parse coordinates from string
+  const parseCoordinates = (coordString: string | undefined): { lat: number | null; lng: number | null } => {
+    if (!coordString || !coordString.trim()) return { lat: null, lng: null };
+
+    // Try to parse "lat, lng" format
+    const parts = coordString.split(",").map(p => p.trim());
+    if (parts.length === 2) {
+      const lat = parseFloat(parts[0] || "");
+      const lng = parseFloat(parts[1] || "");
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng };
+      }
+    }
+
+    return { lat: null, lng: null };
+  };
+
+  // Handle pin drop from map click for create event
+  const handlePinDrop = (lat: number, lng: number) => {
+    setEventCoordinates(`${lat}, ${lng}`);
+    setEnableDropPin(false);
+
+    // Perform reverse geocoding
+    if (window.google?.maps) {
+      setIsGeocoding(true);
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+        setIsGeocoding(false);
+        if (status === "OK" && results?.[0]) {
+          const result = results[0];
+          setEventAddress(result.formatted_address);
+
+          // Extract address components
+          const components: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zip?: string;
+            country?: string;
+          } = {};
+
+          if (result.address_components) {
+            result.address_components.forEach((component: any) => {
+              const types = component.types;
+
+              if (types.includes("street_number") || types.includes("route")) {
+                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+              }
+
+              if (types.includes("locality")) {
+                components.city = component.long_name;
+              } else if (types.includes("administrative_area_level_1")) {
+                components.state = component.long_name;
+              } else if (types.includes("postal_code")) {
+                components.zip = component.long_name;
+              } else if (types.includes("country")) {
+                components.country = component.long_name;
+              }
+            });
+          }
+
+          setAddressComponents(components);
+
+          toast({
+            title: "Pin dropped",
+            description: "Location captured. You can now save it.",
+          });
+        } else {
+          toast({
+            title: "Address lookup failed",
+            description: "Coordinates captured, but couldn't find the address. You can still save the location.",
+            variant: "default",
+          });
+        }
+      });
+    } else {
+      toast({
+        title: "Pin dropped",
+        description: "Coordinates captured. You can now save it.",
+      });
+    }
+  };
+
+  // Handle pin drop from map click for edit event
+  const handleEditPinDrop = (lat: number, lng: number) => {
+    setEditEventCoordinates(`${lat}, ${lng}`);
+    setEditEnableDropPin(false);
+
+    // Perform reverse geocoding
+    if (window.google?.maps) {
+      setEditIsGeocoding(true);
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+        setEditIsGeocoding(false);
+        if (status === "OK" && results?.[0]) {
+          const result = results[0];
+          setEditEventAddress(result.formatted_address);
+
+          // Extract address components
+          const components: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zip?: string;
+            country?: string;
+          } = {};
+
+          if (result.address_components) {
+            result.address_components.forEach((component: any) => {
+              const types = component.types;
+
+              if (types.includes("street_number") || types.includes("route")) {
+                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+              }
+
+              if (types.includes("locality")) {
+                components.city = component.long_name;
+              } else if (types.includes("administrative_area_level_1")) {
+                components.state = component.long_name;
+              } else if (types.includes("postal_code")) {
+                components.zip = component.long_name;
+              } else if (types.includes("country")) {
+                components.country = component.long_name;
+              }
+            });
+          }
+
+          setEditAddressComponents(components);
+
+          toast({
+            title: "Pin dropped",
+            description: "Location captured. You can now save it.",
+          });
+        } else {
+          toast({
+            title: "Address lookup failed",
+            description: "Coordinates captured, but couldn't find the address. You can still save the location.",
+            variant: "default",
+          });
+        }
+      });
+    } else {
+      toast({
+        title: "Pin dropped",
+        description: "Coordinates captured. You can now save it.",
+      });
+    }
+  };
+
+  // Handle address paste/input
+  const handleAddressPaste = (value: string) => {
+    setEventAddress(value);
+
+    // Try to extract coordinates from Google Maps link
+    const googleMapsRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
+    const match = value.match(googleMapsRegex);
+    if (match && match[1] && match[2]) {
+      const lat = parseFloat(match[1]);
+      const lng = parseFloat(match[2]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setEventCoordinates(`${lat}, ${lng}`);
+      }
+    } else if (value.trim() && window.google?.maps) {
+      // Try to geocode the address and extract components
+      setIsGeocoding(true);
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: value }, (results: any, status: string) => {
+        setIsGeocoding(false);
+        if (status === "OK" && results?.[0]) {
+          const result = results[0];
+
+          // Extract coordinates
+          if (result.geometry?.location) {
+            const lat = result.geometry.location.lat();
+            const lng = result.geometry.location.lng();
+            setEventCoordinates(`${lat}, ${lng}`);
+          }
+
+          // Extract address components
+          const components: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zip?: string;
+            country?: string;
+          } = {};
+
+          if (result.address_components) {
+            result.address_components.forEach((component: any) => {
+              const types = component.types;
+
+              if (types.includes("street_number") || types.includes("route")) {
+                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+              }
+
+              if (types.includes("locality")) {
+                components.city = component.long_name;
+              } else if (types.includes("administrative_area_level_1")) {
+                components.state = component.long_name;
+              } else if (types.includes("postal_code")) {
+                components.zip = component.long_name;
+              } else if (types.includes("country")) {
+                components.country = component.long_name;
+              }
+            });
+          }
+
+          setAddressComponents(components);
+        }
+      });
+    }
+  };
+
+  // Handle edit address paste/input
+  const handleEditAddressPaste = (value: string) => {
+    setEditEventAddress(value);
+
+    // Try to extract coordinates from Google Maps link
+    const googleMapsRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
+    const match = value.match(googleMapsRegex);
+    if (match && match[1] && match[2]) {
+      const lat = parseFloat(match[1]);
+      const lng = parseFloat(match[2]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setEditEventCoordinates(`${lat}, ${lng}`);
+      }
+    } else if (value.trim() && window.google?.maps) {
+      // Try to geocode the address and extract components
+      setEditIsGeocoding(true);
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: value }, (results: any, status: string) => {
+        setEditIsGeocoding(false);
+        if (status === "OK" && results?.[0]) {
+          const result = results[0];
+
+          // Extract coordinates
+          if (result.geometry?.location) {
+            const lat = result.geometry.location.lat();
+            const lng = result.geometry.location.lng();
+            setEditEventCoordinates(`${lat}, ${lng}`);
+          }
+
+          // Extract address components
+          const components: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zip?: string;
+            country?: string;
+          } = {};
+
+          if (result.address_components) {
+            result.address_components.forEach((component: any) => {
+              const types = component.types;
+
+              if (types.includes("street_number") || types.includes("route")) {
+                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+              }
+
+              if (types.includes("locality")) {
+                components.city = component.long_name;
+              } else if (types.includes("administrative_area_level_1")) {
+                components.state = component.long_name;
+              } else if (types.includes("postal_code")) {
+                components.zip = component.long_name;
+              } else if (types.includes("country")) {
+                components.country = component.long_name;
+              }
+            });
+          }
+
+          setEditAddressComponents(components);
+        }
+      });
+    }
+  };
 
   // Auto-select first active calendar when calendars load
   useEffect(() => {
@@ -568,6 +1264,12 @@ export default function CalendarsPage() {
         setEventDate("");
         setEventTime("");
         setEventLocation("");
+        setEventAddressId("");
+        setEventAddress("");
+        setEventCoordinates("");
+        setEnableDropPin(false);
+        setAddressComponents({});
+        setIsGeocoding(false);
         setSelectedCalendarId("");
         // Close modal
         setCreateEventDialogOpen(false);
@@ -746,7 +1448,7 @@ export default function CalendarsPage() {
       title: eventTitle.trim(),
       start: startDate.toISOString(),
       end: endDate.toISOString(),
-      location: eventLocation.trim() || undefined,
+      location: eventAddress.trim() || eventLocation.trim() || undefined,
       allDay: !eventTime, // If no time, treat as all-day
     });
   };
@@ -755,6 +1457,13 @@ export default function CalendarsPage() {
     // Populate edit form fields with current event data
     setEditEventTitle(event.title || "");
     setEditEventLocation(event.location || "");
+    // Reset address fields since event.location contains the full address string
+    setEditEventAddressId("");
+    setEditEventAddress(event.location || "");
+    setEditEventCoordinates("");
+    setEditEnableDropPin(false);
+    setEditAddressComponents({});
+    setEditIsGeocoding(false);
 
     // Format date and time for form inputs
     if (event.start) {
@@ -836,6 +1545,12 @@ export default function CalendarsPage() {
     setEditEventDate("");
     setEditEventTime("");
     setEditEventLocation("");
+    setEditEventAddressId("");
+    setEditEventAddress("");
+    setEditEventCoordinates("");
+    setEditEnableDropPin(false);
+    setEditAddressComponents({});
+    setEditIsGeocoding(false);
   };
 
   const handleCancelEdit = () => {
@@ -883,7 +1598,7 @@ export default function CalendarsPage() {
       title: editEventTitle.trim() || undefined,
       start: startDate?.toISOString(),
       end: endDate?.toISOString(),
-      location: editEventLocation.trim() || undefined,
+      location: editEventAddress.trim() || editEventLocation.trim() || undefined,
       allDay: !editEventTime,
     });
   };
@@ -1724,6 +2439,12 @@ export default function CalendarsPage() {
                         setEventDate(format(displayDate, "yyyy-MM-dd"));
                         setEventTime("");
                         setEventLocation("");
+                        setEventAddressId("");
+                        setEventAddress("");
+                        setEventCoordinates("");
+                        setEnableDropPin(false);
+                        setAddressComponents({});
+                        setIsGeocoding(false);
                         setSelectedCalendarId("");
                         setCreateEventDialogOpen(true);
                       }}
@@ -1891,19 +2612,207 @@ export default function CalendarsPage() {
                 />
               </div>
             </div>
+            {/* Address Selection */}
             <div className="space-y-2">
-              <label htmlFor="event-location" className="text-sm font-medium">
-                Location (optional)
+              <label htmlFor="event-address" className="text-sm font-medium">
+                Address (optional)
               </label>
-              <Input
-                id="event-location"
-                placeholder="Enter event location or address"
-                value={eventLocation}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setEventLocation(e.target.value)
-                }
-                className="text-sm sm:text-base"
-              />
+
+              {/* Saved Addresses Dropdown */}
+              {addresses.length > 0 && (
+                <div className="space-y-2">
+                  <Select
+                    value={eventAddressId}
+                    onValueChange={(value) => {
+                      setEventAddressId(value);
+                      if (value) {
+                        const selectedAddr = addresses.find((addr: any) => addr.id === value);
+                        if (selectedAddr) {
+                          setEventAddress(selectedAddr.name || "");
+                          if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                            setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                          }
+                          setAddressComponents({
+                            street: selectedAddr.street || undefined,
+                            city: selectedAddr.city || undefined,
+                            state: selectedAddr.state || undefined,
+                            zip: selectedAddr.zip || undefined,
+                            country: selectedAddr.country || undefined,
+                          });
+                        }
+                      } else {
+                        setEventAddress("");
+                        setEventCoordinates("");
+                        setAddressComponents({});
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full text-sm sm:text-base">
+                      <SelectValue placeholder="Select from saved addresses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Select from saved addresses</SelectItem>
+                      {addresses.map((address: any) => (
+                        <SelectItem key={address.id} value={address.id}>
+                          {address.name} - {[
+                            address.street,
+                            address.city,
+                            address.state,
+                            address.country,
+                          ].filter(Boolean).join(", ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-2">
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                    <span className="text-xs text-gray-500 bg-white px-2">or</span>
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Address Input */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Input
+                    id="event-address"
+                    placeholder="Enter address or paste Google Maps link"
+                    value={eventAddress}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      handleAddressPaste(e.target.value)
+                    }
+                    className="text-sm sm:text-base pr-10"
+                  />
+                  {isGeocoding && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  You can paste a Google Maps link or enter an address manually.
+                </p>
+              </div>
+
+              {/* Coordinates Input */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="event-coordinates" className="text-sm font-medium">
+                    Coordinates (optional)
+                  </Label>
+                  <button
+                    type="button"
+                    className={cn(
+                      "text-sm font-medium transition-colors",
+                      enableDropPin
+                        ? "text-red-600 hover:text-red-700"
+                        : "text-blue-600 hover:text-blue-700"
+                    )}
+                    onClick={() => {
+                      if (enableDropPin) {
+                        setEnableDropPin(false);
+                        toast({
+                          title: "Drop pin cancelled",
+                          description: "Click 'Drop pin on map' again to enable.",
+                        });
+                      } else {
+                        if (window.google?.maps) {
+                          setEnableDropPin(true);
+                          toast({
+                            title: "Drop pin enabled",
+                            description: "Click anywhere on the map to drop a pin.",
+                          });
+                        } else {
+                          toast({
+                            title: "Google Maps not loaded",
+                            description: "Please wait for Google Maps to load, or enter coordinates manually.",
+                            variant: "destructive",
+                          });
+                        }
+                      }
+                    }}
+                  >
+                    {enableDropPin ? "Cancel drop pin" : "Drop pin on map"}
+                  </button>
+                </div>
+                <Input
+                  id="event-coordinates"
+                  placeholder="e.g. -34.0822, 18.8501"
+                  value={eventCoordinates}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    setEventCoordinates(e.target.value);
+                    // If coordinates are entered, try reverse geocoding
+                    if (e.target.value.trim() && window.google?.maps) {
+                      const { lat, lng } = parseCoordinates(e.target.value);
+                      if (lat && lng) {
+                        setIsGeocoding(true);
+                        const geocoder = new window.google.maps.Geocoder();
+                        geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                          setIsGeocoding(false);
+                          if (status === "OK" && results?.[0]) {
+                            const result = results[0];
+                            setEventAddress(result.formatted_address);
+
+                            // Extract address components
+                            const components: {
+                              street?: string;
+                              city?: string;
+                              state?: string;
+                              zip?: string;
+                              country?: string;
+                            } = {};
+
+                            if (result.address_components) {
+                              result.address_components.forEach((component: any) => {
+                                const types = component.types;
+
+                                if (types.includes("street_number") || types.includes("route")) {
+                                  const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                                  const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                                  components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                                }
+
+                                if (types.includes("locality")) {
+                                  components.city = component.long_name;
+                                } else if (types.includes("administrative_area_level_1")) {
+                                  components.state = component.long_name;
+                                } else if (types.includes("postal_code")) {
+                                  components.zip = component.long_name;
+                                } else if (types.includes("country")) {
+                                  components.country = component.long_name;
+                                }
+                              });
+                            }
+
+                            setAddressComponents(components);
+                          }
+                        });
+                      }
+                    }
+                  }}
+                  className="text-sm sm:text-base"
+                />
+                {enableDropPin && (
+                  <div className="mt-4">
+                    <div className="mb-2">
+                      <p className="text-sm text-blue-600 font-medium mb-1">
+                        Click on the map below to drop a pin
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        The coordinates and address will be automatically filled in.
+                      </p>
+                    </div>
+                    <GoogleMap
+                      lat={null}
+                      lng={null}
+                      address=""
+                      enableClickToDrop={true}
+                      onPinDrop={handlePinDrop}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <label htmlFor="event-calendar" className="text-sm font-medium">
@@ -2246,17 +3155,207 @@ export default function CalendarsPage() {
                     </div>
                   </div>
 
+                  {/* Address Selection */}
                   <div className="space-y-2">
-                    <label htmlFor="edit-event-location" className="text-sm font-medium">
-                      Location
+                    <label htmlFor="edit-event-address" className="text-sm font-medium">
+                      Address
                     </label>
-                    <Input
-                      id="edit-event-location"
-                      value={editEventLocation}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventLocation(e.target.value)}
-                      placeholder="Enter location (optional)"
-                      className="text-sm"
-                    />
+
+                    {/* Saved Addresses Dropdown */}
+                    {addresses.length > 0 && (
+                      <div className="space-y-2">
+                        <Select
+                          value={editEventAddressId}
+                          onValueChange={(value) => {
+                            setEditEventAddressId(value);
+                            if (value) {
+                              const selectedAddr = addresses.find((addr: any) => addr.id === value);
+                              if (selectedAddr) {
+                                setEditEventAddress(selectedAddr.name || "");
+                                if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                                }
+                                setEditAddressComponents({
+                                  street: selectedAddr.street || undefined,
+                                  city: selectedAddr.city || undefined,
+                                  state: selectedAddr.state || undefined,
+                                  zip: selectedAddr.zip || undefined,
+                                  country: selectedAddr.country || undefined,
+                                });
+                              }
+                            } else {
+                              setEditEventAddress("");
+                              setEditEventCoordinates("");
+                              setEditAddressComponents({});
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full text-sm">
+                            <SelectValue placeholder="Select from saved addresses" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Select from saved addresses</SelectItem>
+                            {addresses.map((address: any) => (
+                              <SelectItem key={address.id} value={address.id}>
+                                {address.name} - {[
+                                  address.street,
+                                  address.city,
+                                  address.state,
+                                  address.country,
+                                ].filter(Boolean).join(", ")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2">
+                          <div className="h-px bg-gray-200 flex-1"></div>
+                          <span className="text-xs text-gray-500 bg-white px-2">or</span>
+                          <div className="h-px bg-gray-200 flex-1"></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Address Input */}
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          id="edit-event-address"
+                          placeholder="Enter address or paste Google Maps link"
+                          value={editEventAddress}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            handleEditAddressPaste(e.target.value)
+                          }
+                          className="text-sm pr-10"
+                        />
+                        {editIsGeocoding && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        You can paste a Google Maps link or enter an address manually.
+                      </p>
+                    </div>
+
+                    {/* Coordinates Input */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="edit-event-coordinates" className="text-sm font-medium">
+                          Coordinates (optional)
+                        </Label>
+                        <button
+                          type="button"
+                          className={cn(
+                            "text-sm font-medium transition-colors",
+                            editEnableDropPin
+                              ? "text-red-600 hover:text-red-700"
+                              : "text-blue-600 hover:text-blue-700"
+                          )}
+                          onClick={() => {
+                            if (editEnableDropPin) {
+                              setEditEnableDropPin(false);
+                              toast({
+                                title: "Drop pin cancelled",
+                                description: "Click 'Drop pin on map' again to enable.",
+                              });
+                            } else {
+                              if (window.google?.maps) {
+                                setEditEnableDropPin(true);
+                                toast({
+                                  title: "Drop pin enabled",
+                                  description: "Click anywhere on the map to drop a pin.",
+                                });
+                              } else {
+                                toast({
+                                  title: "Google Maps not loaded",
+                                  description: "Please wait for Google Maps to load, or enter coordinates manually.",
+                                  variant: "destructive",
+                                });
+                              }
+                            }
+                          }}
+                        >
+                          {editEnableDropPin ? "Cancel drop pin" : "Drop pin on map"}
+                        </button>
+                      </div>
+                      <Input
+                        id="edit-event-coordinates"
+                        placeholder="e.g. -34.0822, 18.8501"
+                        value={editEventCoordinates}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          setEditEventCoordinates(e.target.value);
+                          // If coordinates are entered, try reverse geocoding
+                          if (e.target.value.trim() && window.google?.maps) {
+                            const { lat, lng } = parseCoordinates(e.target.value);
+                            if (lat && lng) {
+                              setEditIsGeocoding(true);
+                              const geocoder = new window.google.maps.Geocoder();
+                              geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                                setEditIsGeocoding(false);
+                                if (status === "OK" && results?.[0]) {
+                                  const result = results[0];
+                                  setEditEventAddress(result.formatted_address);
+
+                                  // Extract address components
+                                  const components: {
+                                    street?: string;
+                                    city?: string;
+                                    state?: string;
+                                    zip?: string;
+                                    country?: string;
+                                  } = {};
+
+                                  if (result.address_components) {
+                                    result.address_components.forEach((component: any) => {
+                                      const types = component.types;
+
+                                      if (types.includes("street_number") || types.includes("route")) {
+                                        const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                                        const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                                        components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                                      }
+
+                                      if (types.includes("locality")) {
+                                        components.city = component.long_name;
+                                      } else if (types.includes("administrative_area_level_1")) {
+                                        components.state = component.long_name;
+                                      } else if (types.includes("postal_code")) {
+                                        components.zip = component.long_name;
+                                      } else if (types.includes("country")) {
+                                        components.country = component.long_name;
+                                      }
+                                    });
+                                  }
+
+                                  setEditAddressComponents(components);
+                                }
+                              });
+                            }
+                          }
+                        }}
+                        className="text-sm"
+                      />
+                      {editEnableDropPin && (
+                        <div className="mt-4">
+                          <div className="mb-2">
+                            <p className="text-sm text-blue-600 font-medium mb-1">
+                              Click on the map below to drop a pin
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              The coordinates and address will be automatically filled in.
+                            </p>
+                          </div>
+                          <GoogleMap
+                            lat={null}
+                            lng={null}
+                            address=""
+                            enableClickToDrop={true}
+                            onPinDrop={handleEditPinDrop}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                 </div>
