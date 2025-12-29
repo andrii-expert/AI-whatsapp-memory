@@ -1290,6 +1290,7 @@ export default function CalendarsPage() {
           let colorHex = "#3b82f6"; // default hex color
 
           if (event.color) {
+            // Use the assigned color
             const colorMap: { [key: string]: string } = {
               'blue': 'bg-blue-500',
               'green': 'bg-green-500',
@@ -1306,16 +1307,9 @@ export default function CalendarsPage() {
             colorClass = colorMap[event.color] || "bg-blue-500";
             colorHex = tailwindToHexMap[colorClass] || "#3b82f6";
           } else {
-            // Assign a default color based on event ID for consistency
-            const eventId = event.id || '';
-            const colorIndex = (eventId.charCodeAt(0) || 0) % 11;
-            const defaultColors = [
-              'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-red-500',
-              'bg-yellow-500', 'bg-orange-500', 'bg-cyan-500', 'bg-gray-500',
-              'bg-blue-700', 'bg-green-700', 'bg-red-700'
-            ];
-            colorClass = defaultColors[colorIndex] || "bg-blue-500";
-            colorHex = tailwindToHexMap[colorClass] || "#3b82f6";
+            // Use consistent default color for events without assigned colors
+            colorClass = "bg-blue-500"; // Default blue for all events without colors
+            colorHex = "#3b82f6";
           }
 
           return {
@@ -3935,13 +3929,6 @@ export default function CalendarsPage() {
                           (individualEventQuery.data || eventDetailsModal.event).start,
                           (individualEventQuery.data || eventDetailsModal.event).userTimezone || 'Africa/Johannesburg',
                           'datetime'
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {formatInTimezone(
-                          (individualEventQuery.data || eventDetailsModal.event).start,
-                          (individualEventQuery.data || eventDetailsModal.event).userTimezone || 'Africa/Johannesburg',
-                          'date'
                         )}
                       </div>
                     </div>
