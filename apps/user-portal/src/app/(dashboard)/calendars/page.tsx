@@ -2651,7 +2651,6 @@ export default function CalendarsPage() {
                       <SelectValue placeholder="Select from saved addresses" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Select from saved addresses</SelectItem>
                       {addresses.map((address: any) => (
                         <SelectItem key={address.id} value={address.id}>
                           {address.name} - {[
@@ -3194,7 +3193,6 @@ export default function CalendarsPage() {
                             <SelectValue placeholder="Select from saved addresses" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Select from saved addresses</SelectItem>
                             {addresses.map((address: any) => (
                               <SelectItem key={address.id} value={address.id}>
                                 {address.name} - {[
