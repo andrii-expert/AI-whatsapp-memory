@@ -123,11 +123,10 @@ export const calendarRouter = createTRPCRouter({
           calendarUserName: userInfo.name
         }, "Calendar user info retrieved");
 
-        // Get primary calendar info from provider
-        const calendars = await provider.getCalendars(tokens.accessToken);
-        const primaryCalendar = calendars.find((cal) => cal.primary) || calendars[0];
+        // Get all calendars from provider
+        const providerCalendars = await provider.getCalendars(tokens.accessToken);
 
-        if (!primaryCalendar) {
+        if (!providerCalendars || providerCalendars.length === 0) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "No calendars found for this account",
@@ -137,36 +136,119 @@ export const calendarRouter = createTRPCRouter({
         logger.info({ 
           userId: session.user.id, 
           provider: input.provider,
-          calendarId: primaryCalendar.id,
-          calendarName: primaryCalendar.name
-        }, "Primary calendar identified");
+          calendarCount: providerCalendars.length
+        }, "Calendars retrieved from provider");
 
-        // Create calendar connection in database
-        const connection = await createCalendarConnection(db, {
-          userId: session.user.id,
-          provider: input.provider,
-          email: userInfo.email,
-          calendarId: primaryCalendar.id,
-          calendarName: primaryCalendar.name,
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          expiresAt: tokens.expiresAt,
-        });
+        // Get existing calendars for this user to check for duplicates and update tokens
+        const existingCalendars = await getUserCalendars(db, session.user.id);
+        const existingCalendarsByProviderId = new Map(
+          existingCalendars
+            .filter(cal => cal.provider === input.provider && cal.email === userInfo.email)
+            .map(cal => [cal.calendarId, cal])
+            .filter(([id]) => Boolean(id))
+        );
 
-        if (!connection) {
+        // Check if user has any calendars (to determine if this is the first connection)
+        const isFirstConnection = existingCalendars.length === 0;
+
+        // Create connections for all calendars
+        const createdConnections = [];
+        const updatedConnections = [];
+        const primaryCalendar = providerCalendars.find((cal) => cal.primary) || providerCalendars[0];
+
+        for (const calendar of providerCalendars) {
+          const existingCalendar = existingCalendarsByProviderId.get(calendar.id);
+          
+          // If calendar already exists, update tokens and reactivate if needed
+          if (existingCalendar) {
+            try {
+              const updated = await updateCalendarConnection(db, existingCalendar.id, {
+                accessToken: tokens.accessToken,
+                refreshToken: tokens.refreshToken,
+                expiresAt: tokens.expiresAt,
+                isActive: true, // Reactivate if it was deactivated
+              });
+              
+              if (updated) {
+                updatedConnections.push(updated);
+                logger.info({
+                  userId: session.user.id,
+                  provider: input.provider,
+                  calendarId: calendar.id,
+                  calendarName: calendar.name,
+                  connectionId: existingCalendar.id
+                }, "Calendar connection updated with new tokens");
+              }
+            } catch (error: any) {
+              logger.error({
+                userId: session.user.id,
+                provider: input.provider,
+                calendarId: calendar.id,
+                error: error.message
+              }, "Failed to update existing calendar connection");
+            }
+            continue;
+          }
+
+          // Determine if this should be the primary calendar
+          const isPrimary = isFirstConnection && calendar.id === primaryCalendar.id;
+
+          try {
+            const connection = await createCalendarConnection(db, {
+              userId: session.user.id,
+              provider: input.provider,
+              email: userInfo.email,
+              calendarId: calendar.id,
+              calendarName: calendar.name,
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken,
+              expiresAt: tokens.expiresAt,
+            });
+
+            if (connection) {
+              createdConnections.push(connection);
+              logger.info({ 
+                userId: session.user.id, 
+                provider: input.provider,
+                calendarId: calendar.id,
+                calendarName: calendar.name,
+                connectionId: connection.id,
+                isPrimary
+              }, "Calendar connection created");
+            }
+          } catch (error: any) {
+            logger.error({
+              userId: session.user.id,
+              provider: input.provider,
+              calendarId: calendar.id,
+              calendarName: calendar.name,
+              error: error.message
+            }, "Failed to create calendar connection");
+            // Continue with other calendars even if one fails
+          }
+        }
+
+        // Combine created and updated connections
+        const allConnections = [...createdConnections, ...updatedConnections];
+
+        if (allConnections.length === 0) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to create calendar connection",
+            message: "Failed to create or update any calendar connections.",
           });
         }
 
         logger.info({ 
           userId: session.user.id, 
           provider: input.provider,
-          connectionId: connection.id
-        }, "Calendar connection created successfully");
+          createdCount: createdConnections.length,
+          updatedCount: updatedConnections.length,
+          totalCalendars: providerCalendars.length
+        }, "Calendar connections processed successfully");
 
-        return connection;
+        // Return the primary calendar connection (or first one if no primary)
+        const primaryConnection = allConnections.find(conn => conn.calendarId === primaryCalendar.id);
+        return primaryConnection || allConnections[0];
       } catch (error: any) {
         logger.error({ 
           userId: session.user.id, 
