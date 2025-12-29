@@ -918,7 +918,7 @@ export const calendarRouter = createTRPCRouter({
       calendarId: z.string(),
       timeMin: z.string().optional(), // ISO date string
       timeMax: z.string().optional(), // ISO date string
-      maxResults: z.number().optional().default(100),
+      maxResults: z.number().optional().default(10000),
     }))
     .query(async ({ ctx: { db, session }, input }) => {
       const calendar = await getCalendarById(db, input.calendarId);
@@ -945,6 +945,12 @@ export const calendarRouter = createTRPCRouter({
       }
 
       try {
+        logger.info({
+          userId: session.user.id,
+          calendarId: input.calendarId,
+          provider: calendar.provider
+        }, "Fetching calendar events");
+
         const provider = createCalendarProvider(calendar.provider);
         let accessToken = calendar.accessToken;
 
@@ -960,6 +966,12 @@ export const calendarRouter = createTRPCRouter({
             timeMax,
             maxResults: input.maxResults,
           });
+
+          logger.info({
+            userId: session.user.id,
+            calendarId: input.calendarId,
+            eventCount: events.length
+          }, "Calendar events fetched successfully");
 
           return events.map(event => ({
             id: event.id,

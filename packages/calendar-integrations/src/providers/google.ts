@@ -764,6 +764,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       const calendar = google.calendar({ version: "v3", auth: this.oauth2Client });
 
+      // Fetch all events using pagination
       let allEvents: any[] = [];
       let pageToken: string | undefined;
 
@@ -773,18 +774,25 @@ export class GoogleCalendarProvider implements CalendarProvider {
           q: params.query, // Free text search
           timeMin: params.timeMin?.toISOString(),
           timeMax: params.timeMax?.toISOString(),
-          maxResults: params.maxResults || 250, // Increase default to get more events per page
+          maxResults: 2500, // Maximum allowed by Google Calendar API per page
           singleEvents: true, // Expand recurring events
           orderBy: 'startTime',
           conferenceDataVersion: 1, // Include conference data
           fields: 'items/id,items/summary,items/description,items/start,items/end,items/location,items/attendees,items/htmlLink,items/conferenceData,items/colorId,nextPageToken', // Explicitly request conference and color data
-          pageToken: pageToken,
+          pageToken: pageToken, // For pagination
         });
 
-        const events = response.data.items || [];
-        allEvents = allEvents.concat(events);
+        if (response.data.items) {
+          allEvents = allEvents.concat(response.data.items);
+        }
+
         pageToken = response.data.nextPageToken;
       } while (pageToken);
+
+      // Apply maxResults limit if specified
+      if (params.maxResults && allEvents.length > params.maxResults) {
+        allEvents = allEvents.slice(0, params.maxResults);
+      }
 
       return allEvents.map(event => {
         // Extract Google Meet URL from conference data
