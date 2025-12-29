@@ -43,7 +43,6 @@ import {
   X,
   Loader2,
   Video,
-  RefreshCw,
 } from "lucide-react";
 
 // Google Maps component
@@ -558,6 +557,7 @@ export default function CalendarsPage() {
   const [autocomplete, setAutocomplete] = useState<any>(null);
   const autocompleteRef = useRef<any>(null);
   const [createGoogleMeet, setCreateGoogleMeet] = useState(false);
+  const [eventColor, setEventColor] = useState("blue");
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month" | "year">("month");
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
@@ -626,6 +626,9 @@ export default function CalendarsPage() {
       // Set Google Meet status based on fresh data
       setEditCreateGoogleMeet(!!freshEvent.conferenceUrl);
 
+      // Set color based on fresh data
+      setEditEventColor(freshEvent.color || "blue");
+
       // Format date and time for form inputs
       if (freshEvent.start) {
         const eventDate = new Date(freshEvent.start);
@@ -683,6 +686,7 @@ export default function CalendarsPage() {
   const [editAutocomplete, setEditAutocomplete] = useState<any>(null);
   const editAutocompleteRef = useRef<any>(null);
   const [editCreateGoogleMeet, setEditCreateGoogleMeet] = useState(false);
+  const [editEventColor, setEditEventColor] = useState("blue");
 
   // Fetch user's calendars
   const { data: calendars = [], isLoading, refetch } = useQuery(
@@ -1464,6 +1468,7 @@ export default function CalendarsPage() {
         setAddressComponents({});
         setIsGeocoding(false);
         setCreateGoogleMeet(false);
+        setEventColor("blue");
         setSelectedCalendarId("");
         // Close modal
         setCreateEventDialogOpen(false);
@@ -1653,6 +1658,7 @@ export default function CalendarsPage() {
       location: eventAddress.trim() || eventLocation.trim() || undefined,
       allDay: !eventTime, // If no time, treat as all-day
       createGoogleMeet,
+      color: eventColor,
     });
   };
 
@@ -1668,6 +1674,7 @@ export default function CalendarsPage() {
     setEditAddressComponents({});
     setEditIsGeocoding(false);
     setEditCreateGoogleMeet(!!event.conferenceUrl);
+    setEditEventColor(event.color || "blue");
 
     // Format date and time for form inputs
     if (event.start) {
@@ -1762,6 +1769,7 @@ export default function CalendarsPage() {
     setEditAddressComponents({});
     setEditIsGeocoding(false);
     setEditCreateGoogleMeet(false);
+    setEditEventColor("blue");
   };
 
   const handleCancelEdit = () => {
@@ -1829,6 +1837,11 @@ export default function CalendarsPage() {
       updateData.location = location;
     }
 
+    // Add color to update data
+    if (editEventColor && editEventColor !== "blue") {
+      updateData.color = editEventColor;
+    }
+
     updateEventMutation.mutate(updateData);
   };
 
@@ -1872,7 +1885,28 @@ export default function CalendarsPage() {
   const processedEvents = allEvents.map((event: any) => {
     const calendar = calendars.find((cal: any) => cal.id === event.calendarId) as any;
     const provider = calendar?.provider || "google";
-    const color = provider === "google" ? "bg-blue-500" : "bg-purple-500";
+
+    // Use event color if available, otherwise fall back to provider color
+    let color = "bg-blue-500"; // default
+    if (event.color) {
+      const colorMap: { [key: string]: string } = {
+        'blue': 'bg-blue-500',
+        'green': 'bg-green-500',
+        'purple': 'bg-purple-500',
+        'red': 'bg-red-500',
+        'yellow': 'bg-yellow-500',
+        'orange': 'bg-orange-500',
+        'turquoise': 'bg-cyan-500',
+        'gray': 'bg-gray-500',
+        'bold-blue': 'bg-blue-700',
+        'bold-green': 'bg-green-700',
+        'bold-red': 'bg-red-700'
+      };
+      color = colorMap[event.color] || "bg-blue-500";
+    } else {
+      // Fall back to provider-based color
+      color = provider === "google" ? "bg-blue-500" : "bg-purple-500";
+    }
 
     // Use user's timezone instead of calendar timezone
     const userTimezone = userPreferences?.timezone || 'Africa/Johannesburg';
@@ -3054,6 +3088,89 @@ export default function CalendarsPage() {
               <Video className="h-4 w-4 mr-2" />
               {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
             </Button>
+
+            <div className="space-y-2">
+              <label htmlFor="event-color" className="text-sm font-medium">
+                Color
+              </label>
+              <Select
+                value={eventColor}
+                onValueChange={setEventColor}
+              >
+                <SelectTrigger className="w-full text-sm sm:text-base">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="blue">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      Blue
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="green">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      Green
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="purple">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                      Purple
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="red">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      Red
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="yellow">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                      Yellow
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="orange">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                      Orange
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="turquoise">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
+                      Turquoise
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="gray">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                      Gray
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="bold-blue">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-700"></div>
+                      Bold Blue
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="bold-green">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-700"></div>
+                      Bold Green
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="bold-red">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-700"></div>
+                      Bold Red
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="event-calendar" className="text-sm font-medium">
                 Calendar
@@ -3346,19 +3463,6 @@ export default function CalendarsPage() {
               <span className="truncate">
                 {individualEventQuery.data?.title || eventDetailsModal.event?.title || "Edit Event"}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  // Refetch individual event data
-                  individualEventQuery.refetch();
-                }}
-                disabled={individualEventQuery.isFetching}
-                className="h-6 w-6 p-0 ml-auto"
-                title="Refresh event data"
-              >
-                <RefreshCw className={`h-3 w-3 ${individualEventQuery.isFetching ? 'animate-spin' : ''}`} />
-              </Button>
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
               Edit event details. Make changes below.
@@ -3593,6 +3697,88 @@ export default function CalendarsPage() {
                     <Video className="h-4 w-4 mr-2" />
                     {editCreateGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
                   </Button>
+
+                  <div className="space-y-2">
+                    <label htmlFor="edit-event-color" className="text-sm font-medium">
+                      Color
+                    </label>
+                    <Select
+                      value={editEventColor}
+                      onValueChange={setEditEventColor}
+                    >
+                      <SelectTrigger className="w-full text-sm sm:text-base">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="blue">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                            Blue
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="green">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                            Green
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="purple">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                            Purple
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="red">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                            Red
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="yellow">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            Yellow
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="orange">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                            Orange
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="turquoise">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
+                            Turquoise
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="gray">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                            Gray
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="bold-blue">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-blue-700"></div>
+                            Bold Blue
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="bold-green">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-green-700"></div>
+                            Bold Green
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="bold-red">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-red-700"></div>
+                            Bold Red
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
                   {/* Address Selection */}
                   <div className="space-y-2">

@@ -476,6 +476,13 @@ export const calendarRouter = createTRPCRouter({
         });
       }
 
+      if (!calendar.calendarId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Calendar configuration error",
+        });
+      }
+
       try {
         logger.info({
           userId: session.user.id,
@@ -575,6 +582,7 @@ export const calendarRouter = createTRPCRouter({
       location: z.string().optional(),
       allDay: z.boolean().optional().default(false),
       createGoogleMeet: z.boolean().optional().default(false),
+      color: z.string().optional(),
     }))
     .mutation(async ({ ctx: { db, session }, input }) => {
       const calendar = await getCalendarById(db, input.calendarId);
@@ -590,6 +598,13 @@ export const calendarRouter = createTRPCRouter({
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Calendar is not connected or active",
+        });
+      }
+
+      if (!calendar.calendarId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Calendar configuration error",
         });
       }
 
@@ -620,6 +635,7 @@ export const calendarRouter = createTRPCRouter({
             allDay: input.allDay || false,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             createGoogleMeet: input.createGoogleMeet || false,
+            color: input.color || undefined,
           });
 
           logger.info({
@@ -704,6 +720,7 @@ export const calendarRouter = createTRPCRouter({
       location: z.string().optional(),
       allDay: z.boolean().optional().default(false),
       createGoogleMeet: z.boolean().optional(),
+      color: z.string().optional(),
     }))
     .mutation(async ({ ctx: { db, session }, input }) => {
       const calendar = await getCalendarById(db, input.calendarId);
@@ -719,6 +736,13 @@ export const calendarRouter = createTRPCRouter({
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Calendar is not connected or active",
+        });
+      }
+
+      if (!calendar.calendarId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Calendar configuration error",
         });
       }
 
@@ -802,6 +826,9 @@ export const calendarRouter = createTRPCRouter({
           }
           if (input.createGoogleMeet !== undefined) {
             updateParams.createGoogleMeet = input.createGoogleMeet;
+          }
+          if (input.color !== undefined && input.color !== null) {
+            updateParams.color = input.color;
           }
 
           logger.info({
@@ -907,6 +934,13 @@ export const calendarRouter = createTRPCRouter({
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Calendar is not connected or active",
+        });
+      }
+
+      if (!calendar.calendarId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Calendar configuration error",
         });
       }
 
@@ -1039,7 +1073,7 @@ export const calendarRouter = createTRPCRouter({
           // Try to get the event
           try {
             const event = await provider.getEvent(accessToken, {
-              calendarId: calendar.calendarId,
+              calendarId: calendar.calendarId!,
               eventId: input.eventId,
             });
 
@@ -1059,7 +1093,7 @@ export const calendarRouter = createTRPCRouter({
 
               // Retry with the new access token
               const event = await provider.getEvent(accessToken, {
-                calendarId: calendar.calendarId,
+                calendarId: calendar.calendarId!,
                 eventId: input.eventId,
               });
 

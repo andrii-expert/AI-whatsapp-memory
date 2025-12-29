@@ -29,6 +29,7 @@ export const calendarEventSchema = z.object({
   attendees: z.array(z.string()).optional().default([]),
   calendarId: z.string(),
   conferenceUrl: z.string().optional(),
+  color: z.string().optional(),
 });
 
 export const connectionTestResultSchema = z.object({
@@ -114,6 +115,7 @@ export interface CreateEventParams {
   attendees?: string[]; // Array of email addresses
   timeZone?: string;
   createGoogleMeet?: boolean;
+  color?: string;
 }
 
 export interface UpdateEventParams {
@@ -128,6 +130,7 @@ export interface UpdateEventParams {
   attendees?: string[];
   timeZone?: string;
   createGoogleMeet?: boolean;
+  color?: string;
 }
 
 export interface DeleteEventParams {
@@ -154,6 +157,7 @@ export interface CreatedEvent {
   htmlLink?: string;
   webLink?: string;
   conferenceUrl?: string;
+  color?: string;
 }
 
 export interface CalendarProvider {

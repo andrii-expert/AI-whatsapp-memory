@@ -255,6 +255,25 @@ export class GoogleCalendarProvider implements CalendarProvider {
         attendees,
       };
 
+      // Add color if specified
+      if (params.color) {
+        // Convert our color names to Google Calendar color IDs
+        const colorMap: { [key: string]: string } = {
+          'blue': '1',
+          'green': '2',
+          'purple': '3',
+          'red': '4',
+          'yellow': '5',
+          'orange': '6',
+          'turquoise': '7',
+          'gray': '8',
+          'bold-blue': '9',
+          'bold-green': '10',
+          'bold-red': '11'
+        };
+        event.colorId = colorMap[params.color] || '1'; // Default to blue
+      }
+
       // Handle all-day vs timed events
       if (params.allDay) {
         event.start = {
@@ -371,6 +390,25 @@ export class GoogleCalendarProvider implements CalendarProvider {
         }
       }
 
+      // Convert Google color ID back to our color names
+      let color: string | undefined;
+      if (response.data.colorId) {
+        const reverseColorMap: { [key: string]: string } = {
+          '1': 'blue',
+          '2': 'green',
+          '3': 'purple',
+          '4': 'red',
+          '5': 'yellow',
+          '6': 'orange',
+          '7': 'turquoise',
+          '8': 'gray',
+          '9': 'bold-blue',
+          '10': 'bold-green',
+          '11': 'bold-red'
+        };
+        color = reverseColorMap[response.data.colorId];
+      }
+
       return {
         id: response.data.id,
         title: response.data.summary,
@@ -381,6 +419,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         attendees: response.data.attendees?.map(a => a.email || '') || undefined,
         htmlLink: response.data.htmlLink || undefined,
         conferenceUrl,
+        color,
       };
     } catch (error: any) {
       // Preserve error code/status for auth error detection
@@ -431,6 +470,25 @@ export class GoogleCalendarProvider implements CalendarProvider {
         }
       }
 
+      // Convert Google color ID back to our color names
+      let color: string | undefined;
+      if (response.data.colorId) {
+        const reverseColorMap: { [key: string]: string } = {
+          '1': 'blue',
+          '2': 'green',
+          '3': 'purple',
+          '4': 'red',
+          '5': 'yellow',
+          '6': 'orange',
+          '7': 'turquoise',
+          '8': 'gray',
+          '9': 'bold-blue',
+          '10': 'bold-green',
+          '11': 'bold-red'
+        };
+        color = reverseColorMap[response.data.colorId];
+      }
+
       return {
         id: response.data.id,
         title: response.data.summary,
@@ -441,6 +499,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         attendees: response.data.attendees?.map(a => a.email || '') || undefined,
         htmlLink: response.data.htmlLink || undefined,
         conferenceUrl,
+        color,
       };
     } catch (error: any) {
       throw new Error(`Failed to get Google Calendar event: ${error.message}`);
@@ -481,6 +540,30 @@ export class GoogleCalendarProvider implements CalendarProvider {
       if (params.title !== undefined) updates.summary = params.title;
       if (params.description !== undefined) updates.description = params.description;
       if (params.location !== undefined) updates.location = params.location;
+
+      // Handle color updates
+      if (params.color !== undefined) {
+        if (params.color) {
+          // Convert our color names to Google Calendar color IDs
+          const colorMap: { [key: string]: string } = {
+            'blue': '1',
+            'green': '2',
+            'purple': '3',
+            'red': '4',
+            'yellow': '5',
+            'orange': '6',
+            'turquoise': '7',
+            'gray': '8',
+            'bold-blue': '9',
+            'bold-green': '10',
+            'bold-red': '11'
+          };
+          updates.colorId = colorMap[params.color] || '1';
+        } else {
+          // Remove color (set to default)
+          updates.colorId = '1';
+        }
+      }
 
       // Handle Google Meet creation/removal
       if (params.createGoogleMeet === true) {
@@ -631,6 +714,25 @@ export class GoogleCalendarProvider implements CalendarProvider {
         }
       }
 
+      // Convert Google color ID back to our color names
+      let color: string | undefined;
+      if (response.data.colorId) {
+        const reverseColorMap: { [key: string]: string } = {
+          '1': 'blue',
+          '2': 'green',
+          '3': 'purple',
+          '4': 'red',
+          '5': 'yellow',
+          '6': 'orange',
+          '7': 'turquoise',
+          '8': 'gray',
+          '9': 'bold-blue',
+          '10': 'bold-green',
+          '11': 'bold-red'
+        };
+        color = reverseColorMap[response.data.colorId];
+      }
+
       return {
         id: response.data.id,
         title: response.data.summary,
@@ -641,6 +743,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         attendees: response.data.attendees?.map(a => a.email || '') || undefined,
         htmlLink: response.data.htmlLink || undefined,
         conferenceUrl,
+        color,
       };
     } catch (error: any) {
       throw new Error(`Failed to update Google Calendar event: ${error.message}`);
@@ -708,6 +811,25 @@ export class GoogleCalendarProvider implements CalendarProvider {
           }
         }
 
+        // Extract color from Google Calendar
+        let color: string | undefined;
+        if (event.colorId) {
+          const reverseColorMap: { [key: string]: string } = {
+            '1': 'blue',
+            '2': 'green',
+            '3': 'purple',
+            '4': 'red',
+            '5': 'yellow',
+            '6': 'orange',
+            '7': 'turquoise',
+            '8': 'gray',
+            '9': 'bold-blue',
+            '10': 'bold-green',
+            '11': 'bold-red'
+          };
+          color = reverseColorMap[event.colorId];
+        }
+
         return {
           id: event.id || '',
           title: event.summary || 'Untitled Event',
@@ -718,6 +840,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           attendees: event.attendees?.map(a => a.email || '') || undefined,
           htmlLink: event.htmlLink || undefined,
           conferenceUrl,
+          color,
         };
       });
     } catch (error: any) {
