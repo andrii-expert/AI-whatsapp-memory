@@ -1256,9 +1256,11 @@ export default function CalendarsPage() {
         calendarId: cal.id,
         timeMin: timeRange.timeMin,
         timeMax: timeRange.timeMax,
-        maxResults: 100,
+        maxResults: 1000, // Increase max results
       }),
       enabled: cal.isActive && !!cal.id,
+      // Add query key to ensure refetch when time range changes
+      queryKey: ['calendar.getEvents', cal.id, timeRange.timeMin, timeRange.timeMax],
     })),
   });
 

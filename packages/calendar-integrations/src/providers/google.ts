@@ -764,21 +764,29 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       const calendar = google.calendar({ version: "v3", auth: this.oauth2Client });
 
-      const response = await calendar.events.list({
-        calendarId: params.calendarId,
-        q: params.query, // Free text search
-        timeMin: params.timeMin?.toISOString(),
-        timeMax: params.timeMax?.toISOString(),
-        maxResults: params.maxResults || 10,
-        singleEvents: true, // Expand recurring events
-        orderBy: 'startTime',
-        conferenceDataVersion: 1, // Include conference data
-        fields: 'items/id,items/summary,items/description,items/start,items/end,items/location,items/attendees,items/htmlLink,items/conferenceData,items/colorId,nextPageToken', // Explicitly request conference and color data
-      });
+      let allEvents: any[] = [];
+      let pageToken: string | undefined;
 
-      const events = response.data.items || [];
+      do {
+        const response = await calendar.events.list({
+          calendarId: params.calendarId,
+          q: params.query, // Free text search
+          timeMin: params.timeMin?.toISOString(),
+          timeMax: params.timeMax?.toISOString(),
+          maxResults: params.maxResults || 250, // Increase default to get more events per page
+          singleEvents: true, // Expand recurring events
+          orderBy: 'startTime',
+          conferenceDataVersion: 1, // Include conference data
+          fields: 'items/id,items/summary,items/description,items/start,items/end,items/location,items/attendees,items/htmlLink,items/conferenceData,items/colorId,nextPageToken', // Explicitly request conference and color data
+          pageToken: pageToken,
+        });
 
-      return events.map(event => {
+        const events = response.data.items || [];
+        allEvents = allEvents.concat(events);
+        pageToken = response.data.nextPageToken;
+      } while (pageToken);
+
+      return allEvents.map(event => {
         // Extract Google Meet URL from conference data
         let conferenceUrl: string | undefined;
         if (event.conferenceData?.entryPoints && Array.isArray(event.conferenceData.entryPoints)) {
