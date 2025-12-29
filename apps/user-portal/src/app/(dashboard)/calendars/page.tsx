@@ -3595,7 +3595,7 @@ export default function CalendarsPage() {
                     </div>
                   )}
 
-                  {eventDetailsModal.event.conferenceUrl ? (
+                  {eventDetailsModal.event.conferenceUrl && (
                     <div className="flex items-start gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
                       <div className="flex-1 min-w-0">
@@ -3608,17 +3608,6 @@ export default function CalendarsPage() {
                           <Video className="h-3 w-3" />
                           Join Google Meet
                         </button>
-                      </div>
-                    </div>
-                  ) : (
-                    // Show a message if Google Meet might be in progress
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm text-gray-500 flex items-center gap-2">
-                          <Video className="h-3 w-3" />
-                          Google Meet link loading...
-                        </span>
                       </div>
                     </div>
                   )}
