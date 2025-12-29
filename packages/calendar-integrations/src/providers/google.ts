@@ -443,7 +443,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         calendarId: params.calendarId,
         eventId: params.eventId,
         conferenceDataVersion: 1,
-        fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData',
+        fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData,colorId',
       });
 
       if (!response.data.id || !response.data.summary) {
@@ -525,6 +525,8 @@ export class GoogleCalendarProvider implements CalendarProvider {
         existing = await calendar.events.get({
           calendarId: params.calendarId,
           eventId: params.eventId,
+          conferenceDataVersion: 1,
+          fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData,colorId',
         });
       } catch (fetchError: any) {
         throw new Error(`Failed to fetch existing event: ${fetchError.message}`);
@@ -785,7 +787,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         singleEvents: true, // Expand recurring events
         orderBy: 'startTime',
         conferenceDataVersion: 1, // Include conference data
-        fields: 'items(id,summary,description,start,end,location,attendees,htmlLink,conferenceData),nextPageToken', // Explicitly request conference data
+        fields: 'items(id,summary,description,start,end,location,attendees,htmlLink,conferenceData,colorId),nextPageToken', // Explicitly request conference and color data
       });
 
       const events = response.data.items || [];
