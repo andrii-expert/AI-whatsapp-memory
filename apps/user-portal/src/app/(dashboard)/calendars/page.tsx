@@ -43,6 +43,7 @@ import {
   X,
   Loader2,
   Video,
+  RefreshCw,
 } from "lucide-react";
 
 // Google Maps component
@@ -1416,7 +1417,15 @@ export default function CalendarsPage() {
         setCreateEventDialogOpen(false);
         // Refresh calendars and events
         refetch();
-        eventQueries.forEach((query) => query.refetch());
+
+        // If Google Meet was requested, wait for conference creation before refetching events
+        if (createGoogleMeet) {
+          setTimeout(() => {
+            eventQueries.forEach((query) => query.refetch());
+          }, 8000); // Wait 8 seconds for conference creation
+        } else {
+          eventQueries.forEach((query) => query.refetch());
+        }
       },
       onError: (error) => {
         toast({
@@ -3258,6 +3267,18 @@ export default function CalendarsPage() {
             <AlertDialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
               <span className="truncate">{eventDetailsModal.event?.title || "Event Details"}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  // Refetch calendar events to get latest conference data
+                  eventQueries.forEach((query) => query.refetch());
+                }}
+                className="h-6 w-6 p-0 ml-auto"
+                title="Refresh event data"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
               Event details and actions
@@ -3590,9 +3611,16 @@ export default function CalendarsPage() {
                       </div>
                     </div>
                   ) : (
-                    // Check if this event should have Google Meet (by checking if it was recently created with Meet)
-                    // For now, show nothing - the Meet link will appear when the event data is refreshed
-                    null
+                    // Show a message if Google Meet might be in progress
+                    <div className="flex items-start gap-3">
+                      <div className="w-2 h-2 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-gray-500 flex items-center gap-2">
+                          <Video className="h-3 w-3" />
+                          Google Meet link loading...
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

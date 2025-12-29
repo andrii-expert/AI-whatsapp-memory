@@ -321,18 +321,18 @@ export class GoogleCalendarProvider implements CalendarProvider {
             fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData',
           });
 
-          if (eventDetails.data.conferenceData?.entryPoints) {
+          if (eventDetails.data.conferenceData?.entryPoints && Array.isArray(eventDetails.data.conferenceData.entryPoints)) {
             // Look for video conference entry point (Google Meet)
             const meetEntryPoint = eventDetails.data.conferenceData.entryPoints.find(
               (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
             );
-            if (meetEntryPoint?.uri) {
-              conferenceUrl = meetEntryPoint.uri;
+            if (meetEntryPoint?.uri && typeof meetEntryPoint.uri === 'string' && meetEntryPoint.uri.trim()) {
+              conferenceUrl = meetEntryPoint.uri.trim();
             } else {
               // Fallback: check all entry points for any URI that looks like a Meet link
               for (const entryPoint of eventDetails.data.conferenceData.entryPoints) {
-                if (entryPoint.uri && entryPoint.uri.includes('meet.google.com')) {
-                  conferenceUrl = entryPoint.uri;
+                if (entryPoint.uri && typeof entryPoint.uri === 'string' && entryPoint.uri.includes('meet.google.com') && entryPoint.uri.trim()) {
+                  conferenceUrl = entryPoint.uri.trim();
                   break;
                 }
               }
@@ -348,18 +348,18 @@ export class GoogleCalendarProvider implements CalendarProvider {
               conferenceDataVersion: 1,
             });
 
-            if (eventDetails.data.conferenceData?.entryPoints) {
+            if (eventDetails.data.conferenceData?.entryPoints && Array.isArray(eventDetails.data.conferenceData.entryPoints)) {
               // Look for video conference entry point (Google Meet)
               const meetEntryPoint = eventDetails.data.conferenceData.entryPoints.find(
                 (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
               );
-              if (meetEntryPoint?.uri) {
-                conferenceUrl = meetEntryPoint.uri;
+              if (meetEntryPoint?.uri && typeof meetEntryPoint.uri === 'string' && meetEntryPoint.uri.trim()) {
+                conferenceUrl = meetEntryPoint.uri.trim();
               } else {
                 // Fallback: check all entry points for any URI that looks like a Meet link
                 for (const entryPoint of eventDetails.data.conferenceData.entryPoints) {
-                  if (entryPoint.uri && entryPoint.uri.includes('meet.google.com')) {
-                    conferenceUrl = entryPoint.uri;
+                  if (entryPoint.uri && typeof entryPoint.uri === 'string' && entryPoint.uri.includes('meet.google.com') && entryPoint.uri.trim()) {
+                    conferenceUrl = entryPoint.uri.trim();
                     break;
                   }
                 }
@@ -480,18 +480,18 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       // Extract Google Meet URL from conference data
       let conferenceUrl: string | undefined;
-      if (response.data.conferenceData?.entryPoints) {
+      if (response.data.conferenceData?.entryPoints && Array.isArray(response.data.conferenceData.entryPoints)) {
         // Look for video conference entry point (Google Meet)
         const meetEntryPoint = response.data.conferenceData.entryPoints.find(
           (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
         );
-        if (meetEntryPoint?.uri) {
-          conferenceUrl = meetEntryPoint.uri;
+        if (meetEntryPoint?.uri && typeof meetEntryPoint.uri === 'string' && meetEntryPoint.uri.trim()) {
+          conferenceUrl = meetEntryPoint.uri.trim();
         } else {
           // Fallback: check all entry points for any URI that looks like a Meet link
           for (const entryPoint of response.data.conferenceData.entryPoints) {
-            if (entryPoint.uri && entryPoint.uri.includes('meet.google.com')) {
-              conferenceUrl = entryPoint.uri;
+            if (entryPoint.uri && typeof entryPoint.uri === 'string' && entryPoint.uri.includes('meet.google.com') && entryPoint.uri.trim()) {
+              conferenceUrl = entryPoint.uri.trim();
               break;
             }
           }
@@ -549,7 +549,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         singleEvents: true, // Expand recurring events
         orderBy: 'startTime',
         conferenceDataVersion: 1, // Include conference data
-        fields: 'items(id,summary,description,start,end,location,attendees,htmlLink,conferenceData)', // Explicitly request conference data
+        fields: 'items(id,summary,description,start,end,location,attendees,htmlLink,conferenceData),nextPageToken', // Explicitly request conference data
       });
 
       const events = response.data.items || [];
@@ -557,18 +557,18 @@ export class GoogleCalendarProvider implements CalendarProvider {
       return events.map(event => {
         // Extract Google Meet URL from conference data
         let conferenceUrl: string | undefined;
-        if (event.conferenceData?.entryPoints) {
+        if (event.conferenceData?.entryPoints && Array.isArray(event.conferenceData.entryPoints)) {
           // Look for video conference entry point (Google Meet)
           const meetEntryPoint = event.conferenceData.entryPoints.find(
             (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
           );
-          if (meetEntryPoint?.uri) {
-            conferenceUrl = meetEntryPoint.uri;
+          if (meetEntryPoint?.uri && typeof meetEntryPoint.uri === 'string' && meetEntryPoint.uri.trim()) {
+            conferenceUrl = meetEntryPoint.uri.trim();
           } else {
             // Fallback: check all entry points for any URI that looks like a Meet link
             for (const entryPoint of event.conferenceData.entryPoints) {
-              if (entryPoint.uri && entryPoint.uri.includes('meet.google.com')) {
-                conferenceUrl = entryPoint.uri;
+              if (entryPoint.uri && typeof entryPoint.uri === 'string' && entryPoint.uri.includes('meet.google.com') && entryPoint.uri.trim()) {
+                conferenceUrl = entryPoint.uri.trim();
                 break;
               }
             }
