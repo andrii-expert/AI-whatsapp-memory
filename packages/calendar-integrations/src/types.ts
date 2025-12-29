@@ -112,6 +112,7 @@ export interface CreateEventParams {
   location?: string;
   attendees?: string[]; // Array of email addresses
   timeZone?: string;
+  createGoogleMeet?: boolean;
 }
 
 export interface UpdateEventParams {

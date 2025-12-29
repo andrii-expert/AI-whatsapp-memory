@@ -255,6 +255,20 @@ export class GoogleCalendarProvider implements CalendarProvider {
         attendees,
       };
 
+      // Add Google Meet conference if requested
+      if (params.createGoogleMeet) {
+        event.conferenceData = {
+          createRequest: {
+            conferenceSolutionKey: {
+              type: "hangoutsMeet"
+            },
+            status: {
+              statusCode: "pending"
+            }
+          }
+        };
+      }
+
       // Handle all-day vs timed events
       if (params.allDay) {
         event.start = {
@@ -280,6 +294,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         calendarId: params.calendarId,
         requestBody: event,
         sendUpdates: 'all', // Send email notifications to attendees
+        conferenceDataVersion: params.createGoogleMeet ? 1 : undefined,
       });
 
       if (!response.data.id || !response.data.summary) {

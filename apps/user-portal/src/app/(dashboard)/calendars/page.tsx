@@ -13,6 +13,7 @@ import { Calendar as CalendarComponent } from "@imaginecalendar/ui/calendar";
 import { Input } from "@imaginecalendar/ui/input";
 import { Textarea } from "@imaginecalendar/ui/textarea";
 import { Label } from "@imaginecalendar/ui/label";
+import { Checkbox } from "@imaginecalendar/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -554,6 +555,7 @@ export default function CalendarsPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [autocomplete, setAutocomplete] = useState<any>(null);
   const autocompleteRef = useRef<any>(null);
+  const [createGoogleMeet, setCreateGoogleMeet] = useState(false);
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>("");
   const [viewMode, setViewMode] = useState<"week" | "month" | "year">("month");
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
@@ -1406,6 +1408,7 @@ export default function CalendarsPage() {
         setEnableDropPin(false);
         setAddressComponents({});
         setIsGeocoding(false);
+        setCreateGoogleMeet(false);
         setSelectedCalendarId("");
         // Close modal
         setCreateEventDialogOpen(false);
@@ -1586,6 +1589,7 @@ export default function CalendarsPage() {
       end: endDate.toISOString(),
       location: eventAddress.trim() || eventLocation.trim() || undefined,
       allDay: !eventTime, // If no time, treat as all-day
+      createGoogleMeet,
     });
   };
 
@@ -2581,6 +2585,7 @@ export default function CalendarsPage() {
                         setEnableDropPin(false);
                         setAddressComponents({});
                         setIsGeocoding(false);
+                        setCreateGoogleMeet(false);
                         setSelectedCalendarId("");
                         setCreateEventDialogOpen(true);
                       }}
@@ -2948,6 +2953,19 @@ export default function CalendarsPage() {
                   </div>
                 )}
               </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="create-google-meet"
+                checked={createGoogleMeet}
+                onCheckedChange={setCreateGoogleMeet}
+              />
+              <label
+                htmlFor="create-google-meet"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Create Google Meet for this event
+              </label>
             </div>
             <div className="space-y-2">
               <label htmlFor="event-calendar" className="text-sm font-medium">
@@ -3520,9 +3538,27 @@ export default function CalendarsPage() {
                     <div className="flex items-start gap-3">
                       <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-700">
+                        <button
+                          onClick={() => {
+                            const location = eventDetailsModal.event.location;
+                            if (location) {
+                              // Try to extract coordinates from the location string
+                              const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+                              if (coordMatch) {
+                                // If coordinates are found, use them for Google Maps
+                                const lat = coordMatch[1];
+                                const lng = coordMatch[2];
+                                window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+                              } else {
+                                // Otherwise, search for the location text
+                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
+                              }
+                            }
+                          }}
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left"
+                        >
                           {eventDetailsModal.event.location}
-                        </div>
+                        </button>
                       </div>
                     </div>
                   )}
