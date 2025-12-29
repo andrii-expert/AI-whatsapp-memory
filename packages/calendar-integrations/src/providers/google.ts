@@ -502,38 +502,30 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       // Update date/time if provided
       if (params.start || params.end) {
-        // Safely parse existing dates
-        const existingStart = existing.data.start?.dateTime || existing.data.start?.date;
-        const existingEnd = existing.data.end?.dateTime || existing.data.end?.date;
-
-        let startDate: Date;
-        let endDate: Date;
-
-        if (params.start) {
-          startDate = new Date(params.start);
-        } else if (existingStart) {
-          startDate = new Date(existingStart);
-        } else {
-          throw new Error('No start date provided and none found in existing event');
+        // Validate and parse dates from params (required for updates)
+        if (!params.start) {
+          throw new Error('Start date is required for event updates');
         }
 
+        let startDate = new Date(params.start);
+        if (isNaN(startDate.getTime())) {
+          throw new Error(`Invalid start date: ${params.start}`);
+        }
+
+        let endDate: Date;
         if (params.end) {
           endDate = new Date(params.end);
-        } else if (existingEnd) {
-          endDate = new Date(existingEnd);
+          if (isNaN(endDate.getTime())) {
+            throw new Error(`Invalid end date: ${params.end}`);
+          }
         } else {
-          // Default to 1 hour after start
+          // Default to 1 hour after start if no end provided
           endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
-        }
-
-        // Validate dates
-        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-          throw new Error(`Invalid date values: start=${startDate.toString()}, end=${endDate.toString()}`);
         }
 
         // Ensure end is after start
         if (endDate.getTime() <= startDate.getTime()) {
-          endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour default
+          endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
         }
 
         if (params.allDay) {
@@ -545,14 +537,12 @@ export class GoogleCalendarProvider implements CalendarProvider {
             date: endDate.toISOString().split('T')[0],
           };
         } else {
-          // For timed events, use dateTime in UTC (Google Calendar standard)
+          // For timed events, use dateTime in UTC (Google Calendar interprets as UTC)
           updates.start = {
             dateTime: startDate.toISOString(),
-            timeZone: 'UTC',
           };
           updates.end = {
             dateTime: endDate.toISOString(),
-            timeZone: 'UTC',
           };
         }
       }
