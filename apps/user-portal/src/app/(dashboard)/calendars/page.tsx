@@ -2516,10 +2516,9 @@ export default function CalendarsPage() {
                             <div
                               key={eventIdx}
                               className={cn(
-                                "text-xs px-2 py-1 rounded truncate cursor-pointer hover:opacity-90",
-                                event.color,
-                                "text-white font-medium shadow-sm"
+                                "text-xs px-2 py-1 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
                               )}
+                              style={{ backgroundColor: event.colorHex || '#3b82f6' }}
                               title={event.title}
                               onClick={() => handleEventClick(event)}
                             >
@@ -2693,10 +2692,9 @@ export default function CalendarsPage() {
                             <div
                               key={eventIdx}
                               className={cn(
-                                "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90",
-                                event.color,
-                                "text-white font-medium shadow-sm"
+                                "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
                               )}
+                              style={{ backgroundColor: event.colorHex || '#3b82f6' }}
                               title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
                               onClick={() => handleEventClick(event)}
                             >
