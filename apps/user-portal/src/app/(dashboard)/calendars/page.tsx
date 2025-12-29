@@ -526,7 +526,7 @@ export default function CalendarsPage() {
   const autocompleteRef = useRef<any>(null);
   const [createGoogleMeet, setCreateGoogleMeet] = useState(false);
   const [eventColor, setEventColor] = useState("blue");
-  const [selectedCalendarId, setSelectedCalendarId] = useState<string>("");
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"week" | "month" | "year">("month");
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
     open: boolean;
@@ -949,15 +949,15 @@ export default function CalendarsPage() {
     }
   };
 
-  // Auto-select first active calendar when calendars load
+  // Auto-select all active calendars when calendars load
   useEffect(() => {
-    if (calendars.length > 0 && !selectedCalendarId) {
-      const firstActiveCalendar = calendars.find((cal: any) => cal.isActive);
-      if (firstActiveCalendar) {
-        setSelectedCalendarId(firstActiveCalendar.id);
+    if (calendars.length > 0 && selectedCalendarIds.length === 0) {
+      const activeCalendars = calendars.filter((cal: any) => cal.isActive);
+      if (activeCalendars.length > 0) {
+        setSelectedCalendarIds(activeCalendars.map(cal => cal.id));
       }
     }
-  }, [calendars, selectedCalendarId]);
+  }, [calendars, selectedCalendarIds.length]);
 
   // Close mobile sidebar on Escape key
   useEffect(() => {
@@ -1523,7 +1523,7 @@ export default function CalendarsPage() {
         setIsGeocoding(false);
         setCreateGoogleMeet(false);
         setEventColor("blue");
-        setSelectedCalendarId("");
+        setSelectedCalendarIds([]);
         // Close modal
         setCreateEventDialogOpen(false);
         // Refresh calendars and events
@@ -1665,10 +1665,10 @@ export default function CalendarsPage() {
       return;
     }
 
-    if (!selectedCalendarId || selectedCalendarId.trim() === "") {
+    if (selectedCalendarIds.length === 0) {
       toast({
         title: "Calendar required",
-        description: "Please select a calendar for the event.",
+        description: "Please select at least one calendar for the event.",
         variant: "error",
       });
       return;
@@ -1705,7 +1705,7 @@ export default function CalendarsPage() {
     endDate.setHours(startDate.getHours() + 1);
 
     createEventMutation.mutate({
-      calendarId: selectedCalendarId,
+      calendarId: selectedCalendarIds[0], // Use the first selected calendar
       title: eventTitle.trim(),
       start: startDate.toISOString(),
       end: endDate.toISOString(),
@@ -1746,7 +1746,7 @@ export default function CalendarsPage() {
     // Ensure event has calendarId
     const eventWithCalendarId = {
       ...event,
-      calendarId: event.calendarId || selectedCalendarId,
+      calendarId: event.calendarId || selectedCalendarIds[0],
     };
 
     setEventDetailsModal({
@@ -1935,11 +1935,16 @@ export default function CalendarsPage() {
     return new Intl.DateTimeFormat('en-US', options).format(date);
   };
 
-  // Process events for display
-  const processedEvents = allEvents.map((event: any) => {
+  // Process events for display (filter by selected calendars)
+  const processedEvents = allEvents
+    .filter((event: any) => selectedCalendarIds.includes(event.calendarId))
+    .map((event: any) => {
     // Event already has color and colorHex from allEvents processing
     const color = event.color || "bg-blue-500";
     const colorHex = event.colorHex || "#3b82f6";
+
+    // Find calendar information for this event
+    const eventCalendar = calendars.find((cal: any) => cal.id === event.calendarId);
 
     // Use user's timezone instead of calendar timezone
     const userTimezone = userPreferences?.timezone || 'Africa/Johannesburg';
@@ -1959,6 +1964,8 @@ export default function CalendarsPage() {
       webLink: event.webLink,
       userTimezone, // Use user's timezone for all formatting
       calendarId: event.calendarId, // Keep calendarId for API calls
+      calendarName: eventCalendar?.calendarName || eventCalendar?.email || 'Unknown Calendar',
+      calendarProvider: eventCalendar?.provider || 'unknown',
       conferenceUrl: event.conferenceUrl, // Include conference URL
     };
   });
@@ -2171,23 +2178,48 @@ export default function CalendarsPage() {
                     ([provider, providerCalendars]: [string, any]) => (
                       <Card key={provider} className="border-gray-200 shadow-sm">
                         <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-3 mb-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div
-                                  className={cn(
-                                    "h-3 w-3 rounded-full flex-shrink-0",
-                                    providerCalendars[0]?.isActive
-                                      ? provider === "google"
-                                        ? "bg-blue-500"
-                                        : "bg-purple-500"
-                                      : "bg-gray-300"
-                                  )}
-                                ></div>
-                                <span className="text-sm font-semibold text-gray-900 capitalize">
-                                  {provider === "google" ? "Google" : "Microsoft"}
-                                </span>
-                                {providerCalendars[0]?.isActive && (
+                          <div className="flex items-center gap-2 mb-3">
+                            <div
+                              className={cn(
+                                "h-3 w-3 rounded-full flex-shrink-0",
+                                providerCalendars.some((cal: any) => cal.isActive)
+                                  ? provider === "google"
+                                    ? "bg-blue-500"
+                                    : "bg-purple-500"
+                                  : "bg-gray-300"
+                              )}
+                            ></div>
+                            <span className="text-sm font-semibold text-gray-900 capitalize">
+                              {provider === "google" ? "Google" : "Microsoft"}
+                            </span>
+                          </div>
+
+                          <div className="space-y-2">
+                            {providerCalendars.map((calendar: any) => (
+                              <div key={calendar.id} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`calendar-${calendar.id}`}
+                                  checked={selectedCalendarIds.includes(calendar.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedCalendarIds(prev => [...prev, calendar.id]);
+                                    } else {
+                                      setSelectedCalendarIds(prev => prev.filter(id => id !== calendar.id));
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`calendar-${calendar.id}`}
+                                  className="flex-1 text-sm cursor-pointer"
+                                >
+                                  <div className="font-medium text-gray-900">
+                                    {calendar.calendarName || calendar.email}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {calendar.email}
+                                  </div>
+                                </label>
+                                {calendar.isActive ? (
                                   <Badge
                                     variant="outline"
                                     className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
@@ -2195,59 +2227,26 @@ export default function CalendarsPage() {
                                     <CheckCircle className="h-3 w-3 mr-1" />
                                     Active
                                   </Badge>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleConnectCalendar(
+                                        provider as "google" | "microsoft"
+                                      )
+                                    }
+                                    disabled={
+                                      connectingProvider === provider || !canAddMore
+                                    }
+                                    className="text-xs h-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Connect
+                                  </Button>
                                 )}
                               </div>
-                              <p className="text-xs text-gray-600 truncate ml-5">
-                                {providerCalendars[0]?.email || "N/A"}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 mb-3">
-                            {providerCalendars[0]?.isActive ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  handleDisconnectCalendar(
-                                    providerCalendars[0].id,
-                                    providerCalendars[0].calendarName ||
-                                      providerCalendars[0].email
-                                  )
-                                }
-                                disabled={disconnectCalendarMutation.isPending}
-                                className="text-xs h-7 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                              >
-                                {disconnectCalendarMutation.isPending ? (
-                                  <>
-                                    <Clock className="h-3 w-3 mr-1 animate-spin" />
-                                    Disconnecting...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Link2 className="h-3 w-3 mr-1" />
-                                    Disconnect
-                                  </>
-                                )}
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  handleConnectCalendar(
-                                    provider as "google" | "microsoft"
-                                  )
-                                }
-                                disabled={
-                                  connectingProvider === provider || !canAddMore
-                                }
-                                className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              >
-                                <Plus className="h-3 w-3 mr-1" />
-                                Connect
-                              </Button>
-                            )}
+                            ))}
                           </div>
 
                           {/* Sub-calendars */}
@@ -2487,7 +2486,7 @@ export default function CalendarsPage() {
                                 "text-xs px-2 py-1 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
                               )}
                               style={{ backgroundColor: event.colorHex || '#3b82f6' }}
-                              title={event.title}
+                              title={`${event.title} (${event.calendarName})`}
                               onClick={() => handleEventClick(event)}
                             >
                               <div className="font-semibold truncate">
@@ -2663,7 +2662,7 @@ export default function CalendarsPage() {
                                 "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
                               )}
                               style={{ backgroundColor: event.colorHex || '#3b82f6' }}
-                              title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
+                              title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')} (${event.calendarName})`}
                               onClick={() => handleEventClick(event)}
                             >
                               <span className="hidden md:inline">• </span>
@@ -2743,7 +2742,7 @@ export default function CalendarsPage() {
                         setAddressComponents({});
                         setIsGeocoding(false);
                         setCreateGoogleMeet(false);
-                        setSelectedCalendarId("");
+                        setSelectedCalendarIds([]);
                         setCreateEventDialogOpen(true);
                       }}
                       className="text-sm"
@@ -2876,7 +2875,7 @@ export default function CalendarsPage() {
                     e.key === "Enter" &&
                     eventTitle.trim() &&
                     eventDate &&
-                    selectedCalendarId
+                    selectedCalendarIds.length > 0
                   ) {
                     handleCreateEvent();
                   }
@@ -3159,8 +3158,8 @@ export default function CalendarsPage() {
                 Calendar
               </label>
               <Select
-                value={selectedCalendarId}
-                onValueChange={setSelectedCalendarId}
+                value={selectedCalendarIds[0] || ""}
+                onValueChange={(value) => setSelectedCalendarIds([value])}
               >
                 <SelectTrigger id="event-calendar" className="w-full text-sm sm:text-base">
                   <SelectValue placeholder="Select calendar" />
@@ -3195,7 +3194,7 @@ export default function CalendarsPage() {
               disabled={
                 !eventTitle.trim() ||
                 !eventDate ||
-                !selectedCalendarId ||
+                selectedCalendarIds.length === 0 ||
                 createEventMutation.isPending
               }
               className="bg-primary text-primary-foreground hover:font-bold hover:bg-primary w-full sm:w-auto order-1 sm:order-2"
@@ -3936,6 +3935,18 @@ export default function CalendarsPage() {
                     </div>
                   </div>
 
+                  <div className="flex items-start gap-3">
+                    <Calendar
+                      className="w-4 h-4 mt-1 flex-shrink-0"
+                      style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-600">
+                        {(processedIndividualEvent || eventDetailsModal.event).calendarName || 'Unknown Calendar'}
+                      </div>
+                    </div>
+                  </div>
+
                   {(processedIndividualEvent || eventDetailsModal.event).location && (
                     <div className="flex items-start gap-3">
                       <MapPin
@@ -4156,84 +4167,76 @@ export default function CalendarsPage() {
                   ([provider, providerCalendars]: [string, any]) => (
                     <Card key={provider} className="border-gray-200 shadow-sm">
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div
-                                className={cn(
-                                  "h-3 w-3 rounded-full flex-shrink-0",
-                                  providerCalendars[0]?.isActive
-                                    ? provider === "google"
-                                      ? "bg-blue-500"
-                                      : "bg-purple-500"
-                                    : "bg-gray-300"
-                                )}
-                              ></div>
-                              <span className="text-sm font-semibold text-gray-900 capitalize">
-                                {provider === "google" ? "Google" : "Microsoft"}
-                              </span>
-                              {providerCalendars[0]?.isActive && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
-                                >
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  Active
-                                </Badge>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div
+                              className={cn(
+                                "h-3 w-3 rounded-full flex-shrink-0",
+                                providerCalendars.some((cal: any) => cal.isActive)
+                                  ? provider === "google"
+                                    ? "bg-blue-500"
+                                    : "bg-purple-500"
+                                  : "bg-gray-300"
                               )}
-                            </div>
-                            <p className="text-xs text-gray-600 truncate ml-5">
-                              {providerCalendars[0]?.email || "N/A"}
-                            </p>
+                            ></div>
+                            <span className="text-sm font-semibold text-gray-900 capitalize">
+                              {provider === "google" ? "Google" : "Microsoft"}
+                            </span>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 mb-3">
-                          {providerCalendars[0]?.isActive ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleDisconnectCalendar(
-                                  providerCalendars[0].id,
-                                  providerCalendars[0].calendarName ||
-                                    providerCalendars[0].email
-                                )
-                              }
-                              disabled={disconnectCalendarMutation.isPending}
-                              className="text-xs h-7 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                            >
-                              {disconnectCalendarMutation.isPending ? (
-                                <>
-                                  <Clock className="h-3 w-3 mr-1 animate-spin" />
-                                  Disconnecting...
-                                </>
-                              ) : (
-                                <>
-                                  <Link2 className="h-3 w-3 mr-1" />
-                                  Disconnect
-                                </>
-                              )}
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                handleConnectCalendar(
-                                  provider as "google" | "microsoft"
-                                )
-                              }
-                              disabled={
-                                connectingProvider === provider || !canAddMore
-                              }
-                              className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Connect
-                            </Button>
-                          )}
-                        </div>
+                          <div className="space-y-2">
+                            {providerCalendars.map((calendar: any) => (
+                              <div key={calendar.id} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`mobile-calendar-${calendar.id}`}
+                                  checked={selectedCalendarIds.includes(calendar.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedCalendarIds(prev => [...prev, calendar.id]);
+                                    } else {
+                                      setSelectedCalendarIds(prev => prev.filter(id => id !== calendar.id));
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`mobile-calendar-${calendar.id}`}
+                                  className="flex-1 text-sm cursor-pointer"
+                                >
+                                  <div className="font-medium text-gray-900">
+                                    {calendar.calendarName || calendar.email}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {calendar.email}
+                                  </div>
+                                </label>
+                                {calendar.isActive ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
+                                  >
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Active
+                                  </Badge>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleConnectCalendar(
+                                        provider as "google" | "microsoft"
+                                      )
+                                    }
+                                    disabled={
+                                      connectingProvider === provider || !canAddMore
+                                    }
+                                    className="text-xs h-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Connect
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
 
                         {/* Sub-calendars */}
                         {providerCalendars.length > 1 && (
