@@ -107,7 +107,6 @@ function GoogleMap({
   onPinDrop?: (lat: number, lng: number) => void;
   enableClickToDrop?: boolean;
 }) {
-  const [scriptLoaded, setScriptLoaded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -117,73 +116,9 @@ function GoogleMap({
   const initAttemptsRef = useRef(0);
   const maxInitAttempts = 20; // 2 seconds max (20 * 100ms)
 
-  // Load Google Maps script
+  // Initialize map when Google Maps is available
   useEffect(() => {
-    // Check if already loaded
-    if (window.google?.maps) {
-      setScriptLoaded(true);
-      return;
-    }
-
-    // Check if script is already being loaded
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existingScript) {
-      // Wait for script to load
-      const checkLoaded = setInterval(() => {
-        if (window.google?.maps) {
-          setScriptLoaded(true);
-          clearInterval(checkLoaded);
-        }
-      }, 100);
-
-      // Timeout after 10 seconds
-      const timeoutId = setTimeout(() => {
-        clearInterval(checkLoaded);
-        if (!window.google?.maps) {
-          setMapError("Failed to load Google Maps. Please refresh the page.");
-        }
-      }, 10000);
-
-      return () => {
-        clearInterval(checkLoaded);
-        clearTimeout(timeoutId);
-      };
-    }
-
-    // Load the script
-    const script = document.createElement("script");
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyB_W7D5kzZDahDM5NpS4u8_k8_ZbD55-pc";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-
-    script.onload = () => {
-      // Give it a moment for the API to fully initialize
-      setTimeout(() => {
-        if (window.google?.maps) {
-          setScriptLoaded(true);
-          setMapError(null);
-        } else {
-          setMapError("Google Maps API loaded but not available. Please check your API key.");
-        }
-      }, 100);
-    };
-
-    script.onerror = () => {
-      setMapError("Failed to load Google Maps script. Please check your internet connection and API key.");
-      console.error("Failed to load Google Maps script.");
-    };
-
-    document.head.appendChild(script);
-
-    return () => {
-      // Cleanup if component unmounts
-    };
-  }, []);
-
-  // Initialize map when script is loaded
-  useEffect(() => {
-    if (!scriptLoaded || !window.google?.maps) {
+    if (!window.google?.maps) {
       setMapInitialized(false);
       return;
     }
@@ -332,7 +267,7 @@ function GoogleMap({
         clickListenerRef.current = null;
       }
     };
-  }, [scriptLoaded, lat, lng, address, enableClickToDrop, onPinDrop]);
+  }, [lat, lng, address, enableClickToDrop, onPinDrop]);
 
   // Update click listener when enableClickToDrop changes (for existing maps)
   useEffect(() => {
@@ -402,7 +337,7 @@ function GoogleMap({
   }
 
   // Show loading state
-  if (!scriptLoaded) {
+  if (!window.google?.maps) {
     return (
       <div className="w-full h-[300px] sm:h-[400px] bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
         <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mb-4" />
@@ -423,15 +358,9 @@ function GoogleMap({
         <Button
           onClick={() => {
             setMapError(null);
-            setScriptLoaded(false);
             setMapInitialized(false);
             mapInstanceRef.current = null;
             markerRef.current = null;
-            // Force reload by removing script and re-adding
-            const script = document.querySelector('script[src*="maps.googleapis.com"]');
-            if (script) {
-              script.remove();
-            }
           }}
           variant="outline"
           size="sm"
@@ -1026,10 +955,15 @@ export default function CalendarsPage() {
     };
   }, [isMobileSidebarOpen]);
 
-  // Initialize Google Maps Autocomplete for create event dialog
+  // Initialize Google Maps Autocomplete when dialogs open
   useEffect(() => {
-    if (!createEventDialogOpen) {
-      // Clean up autocomplete when dialog closes
+    if (typeof window === "undefined") return;
+
+    // Check if either dialog is open
+    const isAnyDialogOpen = createEventDialogOpen || (eventDetailsModal.open && eventDetailsModal.isEditing);
+
+    if (!isAnyDialogOpen) {
+      // Clean up autocomplete when dialogs close
       if (autocompleteRef.current) {
         if (window.google?.maps?.event) {
           window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
@@ -1037,113 +971,6 @@ export default function CalendarsPage() {
         autocompleteRef.current = null;
         setAutocomplete(null);
       }
-      return;
-    }
-
-    let timeoutId: NodeJS.Timeout;
-    let retryCount = 0;
-    const maxRetries = 50;
-
-    const initAutocomplete = () => {
-      if (!window.google?.maps?.places) {
-        // Wait for Google Maps Places library to load
-        retryCount++;
-        if (retryCount < maxRetries) {
-          timeoutId = setTimeout(initAutocomplete, 100);
-        }
-        return;
-      }
-
-      const input = document.getElementById("event-address") as HTMLInputElement;
-      if (!input) {
-        // Wait for input to be available in DOM (dialog might still be animating)
-        retryCount++;
-        if (retryCount < maxRetries) {
-          timeoutId = setTimeout(initAutocomplete, 100);
-        }
-        return;
-      }
-
-      // If autocomplete already exists for this input, don't recreate
-      if (autocompleteRef.current) {
-        return;
-      }
-
-      try {
-        const autocompleteInstance = new window.google.maps.places.Autocomplete(input, {
-          types: ["address"],
-          componentRestrictions: { country: [] },
-        });
-
-        autocompleteInstance.addListener("place_changed", () => {
-          const place = autocompleteInstance.getPlace();
-          if (place.geometry?.location) {
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-            setEventCoordinates(`${lat}, ${lng}`);
-
-            // Format address
-            const formattedAddress = place.formatted_address || place.name || "";
-            setEventAddress(formattedAddress);
-
-            // Extract address components from Google Places API
-            const components: {
-              street?: string;
-              city?: string;
-              state?: string;
-              zip?: string;
-              country?: string;
-            } = {};
-
-            if (place.address_components) {
-              place.address_components.forEach((component: any) => {
-                const types = component.types;
-
-                if (types.includes("street_number") || types.includes("route")) {
-                  const streetNumber = place.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
-                  const route = place.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
-                  components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
-                }
-
-                if (types.includes("locality")) {
-                  components.city = component.long_name;
-                } else if (types.includes("administrative_area_level_1")) {
-                  components.state = component.long_name;
-                } else if (types.includes("postal_code")) {
-                  components.zip = component.long_name;
-                } else if (types.includes("country")) {
-                  components.country = component.long_name;
-                }
-              });
-            }
-
-            setAddressComponents(components);
-          }
-        });
-
-        autocompleteRef.current = autocompleteInstance;
-        setAutocomplete(autocompleteInstance);
-      } catch (error) {
-        console.error("Error initializing autocomplete:", error);
-      }
-    };
-
-    // Small delay to ensure dialog is fully rendered
-    timeoutId = setTimeout(() => {
-      initAutocomplete();
-    }, 300);
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [createEventDialogOpen]);
-
-  // Initialize Google Maps Autocomplete for edit event dialog
-  useEffect(() => {
-    if (!eventDetailsModal.open || !eventDetailsModal.isEditing) {
-      // Clean up autocomplete when dialog closes or switches to view mode
       if (editAutocompleteRef.current) {
         if (window.google?.maps?.event) {
           window.google.maps.event.clearInstanceListeners(editAutocompleteRef.current);
@@ -1156,11 +983,11 @@ export default function CalendarsPage() {
 
     let timeoutId: NodeJS.Timeout;
     let retryCount = 0;
-    const maxRetries = 50;
+    const maxRetries = 100;
 
     const initAutocomplete = () => {
       if (!window.google?.maps?.places) {
-        // Wait for Google Maps Places library to load
+        // Wait for Google Maps to load
         retryCount++;
         if (retryCount < maxRetries) {
           timeoutId = setTimeout(initAutocomplete, 100);
@@ -1168,81 +995,136 @@ export default function CalendarsPage() {
         return;
       }
 
-      const input = document.getElementById("edit-event-address") as HTMLInputElement;
-      if (!input) {
-        // Wait for input to be available in DOM (dialog might still be animating)
-        retryCount++;
-        if (retryCount < maxRetries) {
-          timeoutId = setTimeout(initAutocomplete, 100);
-        }
-        return;
-      }
+      // Initialize autocomplete for create event dialog
+      if (createEventDialogOpen) {
+        const input = document.getElementById("event-address") as HTMLInputElement;
+        if (input && !autocompleteRef.current) {
+          try {
+            const autocompleteInstance = new window.google.maps.places.Autocomplete(input, {
+              types: ["address"],
+              componentRestrictions: { country: [] },
+            });
 
-      // If autocomplete already exists for this input, don't recreate
-      if (editAutocompleteRef.current) {
-        return;
-      }
+            autocompleteInstance.addListener("place_changed", () => {
+              const place = autocompleteInstance.getPlace();
+              if (place.geometry?.location) {
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                setEventCoordinates(`${lat}, ${lng}`);
 
-      try {
-        const autocompleteInstance = new window.google.maps.places.Autocomplete(input, {
-          types: ["address"],
-          componentRestrictions: { country: [] },
-        });
+                // Format address
+                const formattedAddress = place.formatted_address || place.name || "";
+                setEventAddress(formattedAddress);
 
-        autocompleteInstance.addListener("place_changed", () => {
-          const place = autocompleteInstance.getPlace();
-          if (place.geometry?.location) {
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-            setEditEventCoordinates(`${lat}, ${lng}`);
+                // Extract address components from Google Places API
+                const components: {
+                  street?: string;
+                  city?: string;
+                  state?: string;
+                  zip?: string;
+                  country?: string;
+                } = {};
 
-            // Format address
-            const formattedAddress = place.formatted_address || place.name || "";
-            setEditEventAddress(formattedAddress);
+                if (place.address_components) {
+                  place.address_components.forEach((component: any) => {
+                    const types = component.types;
 
-            // Extract address components from Google Places API
-            const components: {
-              street?: string;
-              city?: string;
-              state?: string;
-              zip?: string;
-              country?: string;
-            } = {};
+                    if (types.includes("street_number") || types.includes("route")) {
+                      const streetNumber = place.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                      const route = place.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                      components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                    }
 
-            if (place.address_components) {
-              place.address_components.forEach((component: any) => {
-                const types = component.types;
-
-                if (types.includes("street_number") || types.includes("route")) {
-                  const streetNumber = place.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
-                  const route = place.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
-                  components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                    if (types.includes("locality")) {
+                      components.city = component.long_name;
+                    } else if (types.includes("administrative_area_level_1")) {
+                      components.state = component.long_name;
+                    } else if (types.includes("postal_code")) {
+                      components.zip = component.long_name;
+                    } else if (types.includes("country")) {
+                      components.country = component.long_name;
+                    }
+                  });
                 }
 
-                if (types.includes("locality")) {
-                  components.city = component.long_name;
-                } else if (types.includes("administrative_area_level_1")) {
-                  components.state = component.long_name;
-                } else if (types.includes("postal_code")) {
-                  components.zip = component.long_name;
-                } else if (types.includes("country")) {
-                  components.country = component.long_name;
-                }
-              });
-            }
+                setAddressComponents(components);
+              }
+            });
 
-            setEditAddressComponents(components);
+            autocompleteRef.current = autocompleteInstance;
+            setAutocomplete(autocompleteInstance);
+          } catch (error) {
+            console.error("Error initializing create event autocomplete:", error);
           }
-        });
+        }
+      }
 
-        editAutocompleteRef.current = autocompleteInstance;
-        setEditAutocomplete(autocompleteInstance);
-      } catch (error) {
-        console.error("Error initializing autocomplete:", error);
+      // Initialize autocomplete for edit event dialog
+      if (eventDetailsModal.open && eventDetailsModal.isEditing) {
+        const input = document.getElementById("edit-event-address") as HTMLInputElement;
+        if (input && !editAutocompleteRef.current) {
+          try {
+            const autocompleteInstance = new window.google.maps.places.Autocomplete(input, {
+              types: ["address"],
+              componentRestrictions: { country: [] },
+            });
+
+            autocompleteInstance.addListener("place_changed", () => {
+              const place = autocompleteInstance.getPlace();
+              if (place.geometry?.location) {
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                setEditEventCoordinates(`${lat}, ${lng}`);
+
+                // Format address
+                const formattedAddress = place.formatted_address || place.name || "";
+                setEditEventAddress(formattedAddress);
+
+                // Extract address components from Google Places API
+                const components: {
+                  street?: string;
+                  city?: string;
+                  state?: string;
+                  zip?: string;
+                  country?: string;
+                } = {};
+
+                if (place.address_components) {
+                  place.address_components.forEach((component: any) => {
+                    const types = component.types;
+
+                    if (types.includes("street_number") || types.includes("route")) {
+                      const streetNumber = place.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                      const route = place.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                      components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                    }
+
+                    if (types.includes("locality")) {
+                      components.city = component.long_name;
+                    } else if (types.includes("administrative_area_level_1")) {
+                      components.state = component.long_name;
+                    } else if (types.includes("postal_code")) {
+                      components.zip = component.long_name;
+                    } else if (types.includes("country")) {
+                      components.country = component.long_name;
+                    }
+                  });
+                }
+
+                setEditAddressComponents(components);
+              }
+            });
+
+            editAutocompleteRef.current = autocompleteInstance;
+            setEditAutocomplete(autocompleteInstance);
+          } catch (error) {
+            console.error("Error initializing edit event autocomplete:", error);
+          }
+        }
       }
     };
 
-    // Small delay to ensure dialog is fully rendered
+    // Small delay to ensure modal is fully rendered
     timeoutId = setTimeout(() => {
       initAutocomplete();
     }, 300);
@@ -1252,13 +1134,35 @@ export default function CalendarsPage() {
         clearTimeout(timeoutId);
       }
     };
-  }, [eventDetailsModal.open, eventDetailsModal.isEditing]);
+  }, [createEventDialogOpen, eventDetailsModal.open, eventDetailsModal.isEditing]);
+
+  // Load Google Maps script on page load
+  useEffect(() => {
+    // Check if already loaded
+    if (window.google?.maps) {
+      return;
+    }
+
+    // Check if script is already being loaded
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      return;
+    }
+
+    // Load the script
+    const script = document.createElement("script");
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyB_W7D5kzZDahDM5NpS4u8_k8_ZbD55-pc";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  }, []);
 
   // Fetch user preferences for timezone
   const { data: userPreferences } = useQuery(
     trpc.preferences.get.queryOptions()
   );
-  
+
   // Get plan limits
   const { limits, canAddCalendar, getCalendarsRemaining, tier } = usePlanLimits();
 
@@ -2948,7 +2852,7 @@ export default function CalendarsPage() {
                           description: "Click 'Drop pin on map' again to enable.",
                         });
                       } else {
-                        if (window.google?.maps) {
+                        if (window.google?.maps?.places) {
                           setEnableDropPin(true);
                           toast({
                             title: "Drop pin enabled",
