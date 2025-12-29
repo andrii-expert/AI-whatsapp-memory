@@ -449,6 +449,11 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
   async updateEvent(accessToken: string, params: UpdateEventParams): Promise<CreatedEvent> {
     try {
+      // Validate required parameters
+      if (!params.calendarId || !params.eventId) {
+        throw new Error('Missing required parameters: calendarId and eventId');
+      }
+
       this.oauth2Client.setCredentials({
         access_token: accessToken,
       });
@@ -456,10 +461,15 @@ export class GoogleCalendarProvider implements CalendarProvider {
       const calendar = google.calendar({ version: "v3", auth: this.oauth2Client });
 
       // Fetch existing event first
-      const existing = await calendar.events.get({
-        calendarId: params.calendarId,
-        eventId: params.eventId,
-      });
+      let existing;
+      try {
+        existing = await calendar.events.get({
+          calendarId: params.calendarId,
+          eventId: params.eventId,
+        });
+      } catch (fetchError: any) {
+        throw new Error(`Failed to fetch existing event: ${fetchError.message}`);
+      }
 
       if (!existing.data) {
         throw new Error(`Event ${params.eventId} not found`);
@@ -545,13 +555,36 @@ export class GoogleCalendarProvider implements CalendarProvider {
         };
       }
 
-      const response = await calendar.events.patch({
+      // Validate that we have some updates to make
+      if (Object.keys(updates).length === 0) {
+        // No updates needed, return existing event data
+        return {
+          id: existing.data.id,
+          title: existing.data.summary || '',
+          description: existing.data.description || undefined,
+          start: new Date(existing.data.start?.dateTime || existing.data.start?.date || ''),
+          end: new Date(existing.data.end?.dateTime || existing.data.end?.date || ''),
+          location: existing.data.location || undefined,
+          attendees: existing.data.attendees?.map(a => a.email || '') || undefined,
+          htmlLink: existing.data.htmlLink || undefined,
+          conferenceUrl: existing.data.conferenceData?.entryPoints?.find(
+            (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
+          )?.uri || undefined,
+        };
+      }
+
+      let patchOptions: any = {
         calendarId: params.calendarId,
         eventId: params.eventId,
         requestBody: updates,
         sendUpdates: 'all', // Notify attendees of changes
-        ...(updates.conferenceData ? { conferenceDataVersion: 1 } : {}),
-      });
+      };
+
+      if (updates.conferenceData) {
+        patchOptions.conferenceDataVersion = 1;
+      }
+
+      const response = await calendar.events.patch(patchOptions);
 
       if (!response.data.id || !response.data.summary) {
         throw new Error('Invalid response from Google Calendar API');

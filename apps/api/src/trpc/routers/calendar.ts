@@ -727,35 +727,95 @@ export const calendarRouter = createTRPCRouter({
           userId: session.user.id,
           calendarId: input.calendarId,
           eventId: input.eventId,
-          eventTitle: input.title
+          hasTitle: !!input.title,
+          hasStart: !!input.start,
+          hasEnd: !!input.end,
+          createGoogleMeet: input.createGoogleMeet
         }, "Updating calendar event");
 
         const provider = createCalendarProvider(calendar.provider);
         let accessToken = calendar.accessToken;
 
-        // Parse dates if provided
-        const startDate = input.start ? new Date(input.start) : undefined;
-        const endDate = input.end ? new Date(input.end) : undefined;
+        // Parse and validate dates if provided
+        let startDate: Date | undefined;
+        let endDate: Date | undefined;
+
+        if (input.start) {
+          startDate = new Date(input.start);
+          if (isNaN(startDate.getTime())) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Invalid start date format",
+            });
+          }
+        }
+
+        if (input.end) {
+          endDate = new Date(input.end);
+          if (isNaN(endDate.getTime())) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Invalid end date format",
+            });
+          }
+        }
+
+        // Validate required parameters
+        if (!calendar.calendarId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Calendar configuration error",
+          });
+        }
+
+        if (!input.eventId || typeof input.eventId !== 'string') {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid event ID",
+          });
+        }
 
         // Try to update event
         try {
-          const updatedEvent = await provider.updateEvent(accessToken, {
+          const updateParams: any = {
             calendarId: calendar.calendarId,
             eventId: input.eventId,
-            title: input.title,
-            description: input.description,
-            start: startDate,
-            end: endDate,
             allDay: input.allDay || false,
-            location: input.location,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            createGoogleMeet: input.createGoogleMeet,
-          });
+          };
+
+          // Only include optional fields if they have values
+          if (input.title !== undefined && input.title !== null && input.title.trim()) {
+            updateParams.title = input.title.trim();
+          }
+          if (input.description !== undefined && input.description !== null) {
+            updateParams.description = input.description;
+          }
+          if (startDate) {
+            updateParams.start = startDate;
+          }
+          if (endDate) {
+            updateParams.end = endDate;
+          }
+          if (input.location !== undefined && input.location !== null && input.location.trim()) {
+            updateParams.location = input.location.trim();
+          }
+          if (input.createGoogleMeet !== undefined) {
+            updateParams.createGoogleMeet = input.createGoogleMeet;
+          }
+
+          logger.info({
+            userId: session.user.id,
+            updateParams: { ...updateParams, calendarId: '[REDACTED]' },
+          }, "Calling provider.updateEvent");
+
+          const updatedEvent = await provider.updateEvent(accessToken, updateParams);
 
           logger.info({
             userId: session.user.id,
             calendarId: input.calendarId,
-            eventId: input.eventId
+            eventId: input.eventId,
+            hasConferenceUrl: !!updatedEvent.conferenceUrl
           }, "Calendar event updated successfully");
 
           return {
