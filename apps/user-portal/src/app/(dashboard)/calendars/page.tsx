@@ -2908,12 +2908,12 @@ export default function CalendarsPage() {
                 <div className="relative">
                   <Input
                     id="event-address"
-                    placeholder="Enter address or paste Google Maps link"
+                    placeholder="Type or paste the full address"
                     value={eventAddress}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       handleAddressPaste(e.target.value)
                     }
-                    className="text-sm sm:text-base pr-10"
+                    className="h-20 pr-10"
                   />
                   {isGeocoding && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -2922,7 +2922,7 @@ export default function CalendarsPage() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500">
-                  You can paste a Google Maps link or enter an address manually.
+                  You can also paste a Google Maps link here. Your backend can normalise it and store the coordinates.
                 </p>
               </div>
 
@@ -2930,7 +2930,7 @@ export default function CalendarsPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="event-coordinates" className="text-sm font-medium">
-                    Coordinates (optional)
+                    Pin / coordinates (optional)
                   </Label>
                   <button
                     type="button"
@@ -2948,7 +2948,7 @@ export default function CalendarsPage() {
                           description: "Click 'Drop pin on map' again to enable.",
                         });
                       } else {
-                        if (window.google?.maps?.places) {
+                        if (window.google?.maps) {
                           setEnableDropPin(true);
                           toast({
                             title: "Drop pin enabled",
@@ -3450,12 +3450,12 @@ export default function CalendarsPage() {
                       <div className="relative">
                         <Input
                           id="edit-event-address"
-                          placeholder="Enter address or paste Google Maps link"
+                          placeholder="Type or paste the full address"
                           value={editEventAddress}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                             handleEditAddressPaste(e.target.value)
                           }
-                          className="text-sm pr-10"
+                          className="h-20 pr-10"
                         />
                         {editIsGeocoding && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -3464,7 +3464,7 @@ export default function CalendarsPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
-                        You can paste a Google Maps link or enter an address manually.
+                        You can also paste a Google Maps link here. Your backend can normalise it and store the coordinates.
                       </p>
                     </div>
 
@@ -3472,7 +3472,7 @@ export default function CalendarsPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="edit-event-coordinates" className="text-sm font-medium">
-                          Coordinates (optional)
+                          Pin / coordinates (optional)
                         </Label>
                         <button
                           type="button"
@@ -3490,19 +3490,19 @@ export default function CalendarsPage() {
                                 description: "Click 'Drop pin on map' again to enable.",
                               });
                             } else {
-                        if (window.google?.maps?.places) {
-                          setEditEnableDropPin(true);
-                          toast({
-                            title: "Drop pin enabled",
-                            description: "Click anywhere on the map to drop a pin.",
-                          });
-                        } else {
-                          toast({
-                            title: "Google Maps not loaded",
-                            description: "Please wait for Google Maps to load, or enter coordinates manually.",
-                            variant: "destructive",
-                          });
-                        }
+                              if (window.google?.maps) {
+                                setEditEnableDropPin(true);
+                                toast({
+                                  title: "Drop pin enabled",
+                                  description: "Click anywhere on the map to drop a pin.",
+                                });
+                              } else {
+                                toast({
+                                  title: "Google Maps not loaded",
+                                  description: "Please wait for Google Maps to load, or enter coordinates manually.",
+                                  variant: "destructive",
+                                });
+                              }
                             }
                           }}
                         >
