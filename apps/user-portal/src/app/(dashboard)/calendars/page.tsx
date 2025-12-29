@@ -3339,12 +3339,12 @@ export default function CalendarsPage() {
           }
         }}
       >
-        <AlertDialogContent className="w-[95vw] max-w-[500px]">
+        <AlertDialogContent className="w-[95vw] max-w-[640px] max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
               <span className="truncate">
-                {individualEventQuery.data?.title || eventDetailsModal.event?.title || "Event Details"}
+                {individualEventQuery.data?.title || eventDetailsModal.event?.title || "Edit Event"}
               </span>
               <Button
                 variant="ghost"
@@ -3361,7 +3361,7 @@ export default function CalendarsPage() {
               </Button>
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              Event details and actions
+              Edit event details. Make changes below.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -3384,10 +3384,20 @@ export default function CalendarsPage() {
                     </label>
                     <Input
                       id="edit-event-title"
+                      placeholder="Enter event title"
                       value={editEventTitle}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventTitle(e.target.value)}
-                      placeholder="Enter event title"
-                      className="text-sm"
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                        if (
+                          e.key === "Enter" &&
+                          editEventTitle.trim() &&
+                          editEventDate &&
+                          eventDetailsModal.event?.calendarId
+                        ) {
+                          handleSaveEdit();
+                        }
+                      }}
+                      className="text-sm sm:text-base"
                     />
                   </div>
 
@@ -3401,20 +3411,176 @@ export default function CalendarsPage() {
                         type="date"
                         value={editEventDate}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventDate(e.target.value)}
-                        className="text-sm"
+                        className="text-sm sm:text-base"
                       />
                     </div>
                     <div className="space-y-2">
                       <label htmlFor="edit-event-time" className="text-sm font-medium">
                         Time
                       </label>
-                      <Input
+                      <TimePicker
                         id="edit-event-time"
-                        type="time"
                         value={editEventTime}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventTime(e.target.value)}
-                        className="text-sm"
+                        onChange={setEditEventTime}
                       />
+                    </div>
+                  </div>
+
+                  {/* Address Selection */}
+                  <div className="space-y-2">
+                    <label htmlFor="edit-event-address" className="text-sm font-medium">
+                      Address (optional)
+                    </label>
+
+                    {/* Saved Addresses Dropdown */}
+                    {addresses.length > 0 && (
+                      <div className="space-y-2">
+                        <Select
+                          value={editEventAddressId}
+                          onValueChange={(value) => {
+                            setEditEventAddressId(value);
+                            if (value) {
+                              const selectedAddr = addresses.find((addr: any) => addr.id === value);
+                              if (selectedAddr) {
+                                setEditEventAddress(selectedAddr.name || "");
+                                if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                                }
+                                setEditAddressComponents({
+                                  street: selectedAddr.street || undefined,
+                                  city: selectedAddr.city || undefined,
+                                  state: selectedAddr.state || undefined,
+                                  zip: selectedAddr.zip || undefined,
+                                  country: selectedAddr.country || undefined,
+                                });
+                              }
+                            } else {
+                              setEditEventAddress("");
+                              setEditEventCoordinates("");
+                              setEditAddressComponents({});
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full text-sm sm:text-base">
+                            <SelectValue placeholder="Select from saved addresses" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {addresses.map((address: any) => (
+                              <SelectItem key={address.id} value={address.id}>
+                                {address.name} - {[
+                                  address.street,
+                                  address.city,
+                                  address.state,
+                                  address.country,
+                                ].filter(Boolean).join(", ")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2">
+                          <div className="h-px bg-gray-200 flex-1"></div>
+                          <span className="text-xs text-gray-500 bg-white px-2">or</span>
+                          <div className="h-px bg-gray-200 flex-1"></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Address Input */}
+                    <div className="relative">
+                      <Textarea
+                        id="edit-event-address"
+                        placeholder="Enter address or drop pin on map"
+                        value={editEventAddress}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                          setEditEventAddress(e.target.value);
+                          if (e.target.value.trim() && window.google?.maps) {
+                            setEditIsGeocoding(true);
+                            const geocoder = new window.google.maps.Geocoder();
+                            geocoder.geocode({ address: e.target.value.trim() }, (results: any, status: string) => {
+                              setEditIsGeocoding(false);
+                              if (status === "OK" && results?.[0]) {
+                                const result = results[0];
+                                const location = result.geometry.location;
+                                setEditEventCoordinates(`${location.lat()}, ${location.lng()}`);
+
+                                // Extract address components
+                                const components: {
+                                  street?: string;
+                                  city?: string;
+                                  state?: string;
+                                  zip?: string;
+                                  country?: string;
+                                } = {};
+
+                                if (result.address_components) {
+                                  result.address_components.forEach((component: any) => {
+                                    const types = component.types;
+
+                                    if (types.includes("street_number") || types.includes("route")) {
+                                      const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                                      const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                                      components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                                    }
+                                    if (types.includes("locality")) {
+                                      components.city = component.long_name;
+                                    } else if (types.includes("administrative_area_level_1")) {
+                                      components.state = component.long_name;
+                                    } else if (types.includes("postal_code")) {
+                                      components.zip = component.long_name;
+                                    } else if (types.includes("country")) {
+                                      components.country = component.long_name;
+                                    }
+                                  });
+                                }
+                                setEditAddressComponents(components);
+                              }
+                            });
+                          }
+                        }}
+                        className="min-h-[80px] text-sm sm:text-base pr-10"
+                        disabled={editIsGeocoding}
+                      />
+                      {editIsGeocoding && (
+                        <div className="absolute right-2 top-2">
+                          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Coordinates Input */}
+                    <div className="space-y-2">
+                      <label htmlFor="edit-event-coordinates" className="text-sm font-medium">
+                        Pin / coordinates (optional)
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="edit-event-coordinates"
+                          placeholder="Latitude, Longitude"
+                          value={editEventCoordinates}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventCoordinates(e.target.value)}
+                          className="text-sm sm:text-base"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (window.google?.maps?.places) {
+                              setEditEnableDropPin(true);
+                            } else {
+                              toast({
+                                title: "Google Maps not loaded",
+                                description: "Please wait for Google Maps to load and try again.",
+                                variant: "error",
+                              });
+                            }
+                          }}
+                          disabled={!window.google?.maps?.places}
+                          className="flex-shrink-0"
+                        >
+                          <MapPin className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
