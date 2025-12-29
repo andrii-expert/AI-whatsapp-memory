@@ -459,8 +459,6 @@ export class GoogleCalendarProvider implements CalendarProvider {
       const existing = await calendar.events.get({
         calendarId: params.calendarId,
         eventId: params.eventId,
-        conferenceDataVersion: 1,
-        fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData',
       });
 
       if (!existing.data) {
@@ -487,7 +485,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           }
         };
       } else if (params.createGoogleMeet === false) {
-        // Remove conference data if it exists
+        // Remove conference data if it exists by setting it to null
         updates.conferenceData = null;
       }
 
@@ -526,7 +524,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         eventId: params.eventId,
         requestBody: updates,
         sendUpdates: 'all', // Notify attendees of changes
-        conferenceDataVersion: params.createGoogleMeet ? 1 : undefined,
+        conferenceDataVersion: 1, // Always include for conference operations
       });
 
       if (!response.data.id || !response.data.summary) {

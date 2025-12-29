@@ -1769,16 +1769,33 @@ export default function CalendarsPage() {
       }
     }
 
-    updateEventMutation.mutate({
+    const updateData: any = {
       calendarId: eventDetailsModal.event.calendarId,
       eventId: eventDetailsModal.event.id,
-      title: editEventTitle.trim() || undefined,
-      start: startDate?.toISOString(),
-      end: endDate?.toISOString(),
-      location: editEventAddress.trim() || editEventLocation.trim() || undefined,
       allDay: !editEventTime,
       createGoogleMeet: editCreateGoogleMeet,
-    });
+    };
+
+    // Only include fields that have values
+    const trimmedTitle = editEventTitle.trim();
+    if (trimmedTitle) {
+      updateData.title = trimmedTitle;
+    }
+
+    if (startDate) {
+      updateData.start = startDate.toISOString();
+    }
+
+    if (endDate) {
+      updateData.end = endDate.toISOString();
+    }
+
+    const location = editEventAddress.trim() || editEventLocation.trim();
+    if (location) {
+      updateData.location = location;
+    }
+
+    updateEventMutation.mutate(updateData);
   };
 
   // Group calendars by provider
