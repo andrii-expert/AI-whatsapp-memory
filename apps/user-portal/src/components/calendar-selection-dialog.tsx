@@ -37,10 +37,11 @@ export function CalendarSelectionDialog({
   onCalendarSelectionChange,
   onSuccess,
 }: CalendarSelectionDialogProps) {
-  // Get existing calendars to filter out already connected ones
-  const { data: existingCalendars = [] } = trpc.calendar.list.useQuery();
   const trpc = useTRPC();
   const { toast } = useToast();
+
+  // Get existing calendars to filter out already connected ones
+  const { data: existingCalendars = [] } = trpc.calendar.list.useQuery();
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(initialSelectedCalendarIds);
 
   // Reset selection when dialog opens with new initial values
