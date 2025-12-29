@@ -1277,6 +1277,39 @@ export default function CalendarsPage() {
     'bg-red-700': '#b91c1c'
   };
 
+  // Process individual event data to add colorHex
+  const processedIndividualEvent = useMemo(() => {
+    if (!individualEventQuery.data) return null;
+
+    const event = individualEventQuery.data;
+    let colorClass = "bg-blue-500"; // default Tailwind class
+    let colorHex = "#3b82f6"; // default hex color
+
+    if (event.color) {
+      const colorMap: { [key: string]: string } = {
+        'blue': 'bg-blue-500',
+        'green': 'bg-green-500',
+        'purple': 'bg-purple-500',
+        'red': 'bg-red-500',
+        'yellow': 'bg-yellow-500',
+        'orange': 'bg-orange-500',
+        'turquoise': 'bg-cyan-500',
+        'gray': 'bg-gray-500',
+        'bold-blue': 'bg-blue-700',
+        'bold-green': 'bg-green-700',
+        'bold-red': 'bg-red-700'
+      };
+      colorClass = colorMap[event.color] || "bg-blue-500";
+      colorHex = tailwindToHexMap[colorClass] || "#3b82f6";
+    }
+
+    return {
+      ...event,
+      colorClass,
+      colorHex,
+    };
+  }, [individualEventQuery.data, tailwindToHexMap]);
+
   const allEvents = useMemo(() => {
     return eventQueries
       .flatMap((query, idx) => {
@@ -3445,7 +3478,7 @@ export default function CalendarsPage() {
             <AlertDialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
               <span className="truncate">
-                {individualEventQuery.data?.title || eventDetailsModal.event?.title || "Edit Event"}
+                {processedIndividualEvent?.title || eventDetailsModal.event?.title || "Edit Event"}
               </span>
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
@@ -3922,25 +3955,31 @@ export default function CalendarsPage() {
                 /* View Mode */
                 <div className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                    <div
+                      className="w-2 h-2 rounded-full mt-2 flex-shrink-0"
+                      style={{ backgroundColor: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
+                    ></div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-gray-900">
                         {formatInTimezone(
-                          (individualEventQuery.data || eventDetailsModal.event).start,
-                          (individualEventQuery.data || eventDetailsModal.event).userTimezone || 'Africa/Johannesburg',
+                          (processedIndividualEvent || eventDetailsModal.event).start,
+                          (processedIndividualEvent || eventDetailsModal.event).userTimezone || 'Africa/Johannesburg',
                           'datetime'
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {eventDetailsModal.event.location && (
+                  {(processedIndividualEvent || eventDetailsModal.event).location && (
                     <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
+                      <MapPin
+                        className="w-4 h-4 mt-1 flex-shrink-0"
+                        style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
+                      />
                       <div className="flex-1 min-w-0">
                         <button
                           onClick={() => {
-                            const event = individualEventQuery.data || eventDetailsModal.event;
+                            const event = processedIndividualEvent || eventDetailsModal.event;
                             const location = event.location;
                             if (location) {
                               // Try to extract coordinates from the location string
@@ -3958,19 +3997,22 @@ export default function CalendarsPage() {
                           }}
                           className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left"
                         >
-                          {(individualEventQuery.data || eventDetailsModal.event).location}
+                          {(processedIndividualEvent || eventDetailsModal.event).location}
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {(individualEventQuery.data || eventDetailsModal.event).conferenceUrl && (
+                  {(processedIndividualEvent || eventDetailsModal.event).conferenceUrl && (
                     <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                      <Video
+                        className="w-4 h-4 mt-1 flex-shrink-0"
+                        style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
+                      />
                       <div className="flex-1 min-w-0">
                         <button
                           onClick={() => {
-                            const event = individualEventQuery.data || eventDetailsModal.event;
+                            const event = processedIndividualEvent || eventDetailsModal.event;
                             window.open(event.conferenceUrl, '_blank');
                           }}
                           className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left flex items-center gap-2"
