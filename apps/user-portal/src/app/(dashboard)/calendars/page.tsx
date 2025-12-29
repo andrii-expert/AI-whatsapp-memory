@@ -1675,12 +1675,12 @@ export default function CalendarsPage() {
         const disconnectedIds: string[] = [];
         const errors: string[] = [];
 
-        for (const cal: any of activeCalendars) {
+        for (const cal of activeCalendars) {
           try {
-            await disconnectCalendarMutation.mutateAsync({ id: cal.id });
-            disconnectedIds.push(cal.id);
+            await disconnectCalendarMutation.mutateAsync({ id: (cal as any).id });
+            disconnectedIds.push((cal as any).id);
           } catch (error: any) {
-            errors.push(error.message || `Failed to disconnect ${cal.calendarName || cal.email}`);
+            errors.push(error.message || `Failed to disconnect ${(cal as any).calendarName || (cal as any).email}`);
           }
         }
 
