@@ -607,6 +607,40 @@ export default function CalendarsPage() {
     )
   );
 
+  // Update edit form fields when fresh event data loads
+  useEffect(() => {
+    if (individualEventQuery.data && eventDetailsModal.isEditing) {
+      const freshEvent = individualEventQuery.data;
+
+      // Update edit form with fresh data
+      setEditEventTitle(freshEvent.title || "");
+      setEditEventLocation(freshEvent.location || "");
+
+      // Reset address fields
+      setEditEventAddressId("");
+      setEditEventAddress(freshEvent.location || "");
+      setEditEventCoordinates("");
+      setEditEnableDropPin(false);
+      setEditAddressComponents({});
+
+      // Set Google Meet status based on fresh data
+      setEditCreateGoogleMeet(!!freshEvent.conferenceUrl);
+
+      // Format date and time for form inputs
+      if (freshEvent.start) {
+        const eventDate = new Date(freshEvent.start);
+        const dateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        const timeStr = eventDate.toTimeString().slice(0, 5); // HH:MM
+
+        setEditEventDate(dateStr || "");
+        setEditEventTime(timeStr || "");
+      } else {
+        setEditEventDate("");
+        setEditEventTime("");
+      }
+    }
+  }, [individualEventQuery.data, eventDetailsModal.isEditing]);
+
   const [dayDetailsModal, setDayDetailsModal] = useState<{
     open: boolean;
     date: Date | null;

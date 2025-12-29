@@ -484,8 +484,8 @@ export class GoogleCalendarProvider implements CalendarProvider {
             }
           }
         };
-      } else if (params.createGoogleMeet === false) {
-        // Remove conference data if it exists by setting it to null
+      } else if (params.createGoogleMeet === false && existing.data.conferenceData) {
+        // Only remove conference data if it exists
         updates.conferenceData = null;
       }
 
@@ -526,6 +526,26 @@ export class GoogleCalendarProvider implements CalendarProvider {
             timeZone: params.timeZone || existing.data.end?.timeZone || 'UTC',
           };
         }
+      }
+
+      // Only proceed if we have updates to make
+      const hasUpdates = Object.keys(updates).length > 0;
+
+      if (!hasUpdates) {
+        // No updates needed, return existing event data
+        return {
+          id: existing.data.id,
+          title: existing.data.summary || '',
+          description: existing.data.description || undefined,
+          start: new Date(existing.data.start?.dateTime || existing.data.start?.date || ''),
+          end: new Date(existing.data.end?.dateTime || existing.data.end?.date || ''),
+          location: existing.data.location || undefined,
+          attendees: existing.data.attendees?.map(a => a.email || '') || undefined,
+          htmlLink: existing.data.htmlLink || undefined,
+          conferenceUrl: existing.data.conferenceData?.entryPoints?.find(
+            (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
+          )?.uri || undefined,
+        };
       }
 
       const response = await calendar.events.patch({
