@@ -398,7 +398,7 @@ function GoogleMap({
   );
 }
 
-// Time Picker Component
+// Time Picker Component (24-hour format)
 const TimePicker = ({
   value,
   onChange,
@@ -408,66 +408,44 @@ const TimePicker = ({
   onChange: (value: string) => void;
   id?: string;
 }) => {
-  // Convert 24-hour format (HH:mm) to 12-hour format
+  // Parse 24-hour format (HH:mm)
   const parseTime = (time24: string) => {
-    if (!time24) return { hour: "12", minute: "00", period: "AM" };
-    
+    if (!time24) return { hour: "00", minute: "00" };
+
     const [hours, minutes] = time24.split(":").map(Number);
     if (isNaN(hours!) || isNaN(minutes!)) {
-      return { hour: "12", minute: "00", period: "AM" };
+      return { hour: "00", minute: "00" };
     }
-    
-    const period = hours! >= 12 ? "PM" : "AM";
-    const hour12 = hours! === 0 ? 12 : hours! > 12 ? hours! - 12 : hours!;
-    
+
     return {
-      hour: hour12.toString(),
+      hour: hours!.toString().padStart(2, "0"),
       minute: minutes!.toString().padStart(2, "0"),
-      period,
     };
   };
 
-  // Convert 12-hour format to 24-hour format (HH:mm)
-  const formatTime = (hour: string, minute: string, period: string) => {
-    let hour24 = parseInt(hour, 10);
-    
-    if (period === "PM" && hour24 !== 12) {
-      hour24 += 12;
-    } else if (period === "AM" && hour24 === 12) {
-      hour24 = 0;
-    }
-    
-    return `${hour24.toString().padStart(2, "0")}:${minute}`;
-  };
-
-  const { hour, minute, period } = parseTime(value);
+  const { hour, minute } = parseTime(value);
   const [selectedHour, setSelectedHour] = useState(hour);
   const [selectedMinute, setSelectedMinute] = useState(minute);
-  const [selectedPeriod, setSelectedPeriod] = useState(period);
 
   useEffect(() => {
-    const { hour: h, minute: m, period: p } = parseTime(value);
+    const { hour: h, minute: m } = parseTime(value);
     setSelectedHour(h);
     setSelectedMinute(m);
-    setSelectedPeriod(p);
   }, [value]);
 
   const handleHourChange = (newHour: string) => {
     setSelectedHour(newHour);
-    onChange(formatTime(newHour, selectedMinute, selectedPeriod));
+    const newTime = `${newHour}:${selectedMinute}`;
+    onChange(newTime);
   };
 
   const handleMinuteChange = (newMinute: string) => {
     setSelectedMinute(newMinute);
-    onChange(formatTime(selectedHour, newMinute, selectedPeriod));
+    const newTime = `${selectedHour}:${newMinute}`;
+    onChange(newTime);
   };
 
-  const handlePeriodChange = (newPeriod: string) => {
-    setSelectedPeriod(newPeriod);
-    onChange(formatTime(selectedHour, selectedMinute, newPeriod));
-  };
-
-  const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString());
+  const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"));
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"));
 
   return (
@@ -497,16 +475,6 @@ const TimePicker = ({
               {m}
             </SelectItem>
           ))}
-        </SelectContent>
-      </Select>
-      
-      <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
-        <SelectTrigger className="w-[70px] sm:w-[85px] text-sm">
-          <SelectValue placeholder="AM/PM" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="AM">AM</SelectItem>
-          <SelectItem value="PM">PM</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -1950,7 +1918,7 @@ export default function CalendarsPage() {
     if (formatStr === 'time') {
       options.hour = 'numeric';
       options.minute = '2-digit';
-      options.hour12 = true;
+      options.hour12 = false;
     } else if (formatStr === 'date') {
       options.weekday = 'short';
       options.month = 'short';
@@ -1958,7 +1926,7 @@ export default function CalendarsPage() {
     } else {
       options.hour = 'numeric';
       options.minute = '2-digit';
-      options.hour12 = true;
+      options.hour12 = false;
       options.weekday = 'short';
       options.month = 'short';
       options.day = 'numeric';
