@@ -358,6 +358,24 @@ export class GoogleCalendarProvider implements CalendarProvider {
       if (params.description !== undefined) updates.description = params.description;
       if (params.location !== undefined) updates.location = params.location;
 
+      // Handle Google Meet creation/removal
+      if (params.createGoogleMeet === true) {
+        // Add Google Meet conference
+        updates.conferenceData = {
+          createRequest: {
+            conferenceSolutionKey: {
+              type: "hangoutsMeet"
+            },
+            status: {
+              statusCode: "pending"
+            }
+          }
+        };
+      } else if (params.createGoogleMeet === false) {
+        // Remove conference data if it exists
+        updates.conferenceData = null;
+      }
+
       if (params.attendees !== undefined) {
         updates.attendees = params.attendees.map((email: string) => ({ email }));
       }
@@ -393,10 +411,22 @@ export class GoogleCalendarProvider implements CalendarProvider {
         eventId: params.eventId,
         requestBody: updates,
         sendUpdates: 'all', // Notify attendees of changes
+        conferenceDataVersion: params.createGoogleMeet ? 1 : undefined,
       });
 
       if (!response.data.id || !response.data.summary) {
         throw new Error('Invalid response from Google Calendar API');
+      }
+
+      // Extract Google Meet URL from conference data
+      let conferenceUrl: string | undefined;
+      if (response.data.conferenceData?.entryPoints) {
+        const meetEntryPoint = response.data.conferenceData.entryPoints.find(
+          (entry: any) => entry.entryPointType === 'video'
+        );
+        if (meetEntryPoint?.uri) {
+          conferenceUrl = meetEntryPoint.uri;
+        }
       }
 
       return {
@@ -408,6 +438,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         location: response.data.location || undefined,
         attendees: response.data.attendees?.map(a => a.email || '') || undefined,
         htmlLink: response.data.htmlLink || undefined,
+        conferenceUrl,
       };
     } catch (error: any) {
       throw new Error(`Failed to update Google Calendar event: ${error.message}`);
@@ -448,6 +479,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         maxResults: params.maxResults || 10,
         singleEvents: true, // Expand recurring events
         orderBy: 'startTime',
+        conferenceDataVersion: 1, // Include conference data
       });
 
       const events = response.data.items || [];

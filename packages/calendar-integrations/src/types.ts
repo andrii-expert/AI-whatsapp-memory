@@ -127,6 +127,7 @@ export interface UpdateEventParams {
   location?: string;
   attendees?: string[];
   timeZone?: string;
+  createGoogleMeet?: boolean;
 }
 
 export interface DeleteEventParams {

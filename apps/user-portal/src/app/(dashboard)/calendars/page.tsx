@@ -629,6 +629,7 @@ export default function CalendarsPage() {
   const [editIsGeocoding, setEditIsGeocoding] = useState(false);
   const [editAutocomplete, setEditAutocomplete] = useState<any>(null);
   const editAutocompleteRef = useRef<any>(null);
+  const [editCreateGoogleMeet, setEditCreateGoogleMeet] = useState(false);
 
   // Fetch user's calendars
   const { data: calendars = [], isLoading, refetch } = useQuery(
@@ -1605,6 +1606,7 @@ export default function CalendarsPage() {
     setEditEnableDropPin(false);
     setEditAddressComponents({});
     setEditIsGeocoding(false);
+    setEditCreateGoogleMeet(!!event.conferenceUrl);
 
     // Format date and time for form inputs
     if (event.start) {
@@ -1692,6 +1694,7 @@ export default function CalendarsPage() {
     setEditEnableDropPin(false);
     setEditAddressComponents({});
     setEditIsGeocoding(false);
+    setEditCreateGoogleMeet(false);
   };
 
   const handleCancelEdit = () => {
@@ -1741,6 +1744,7 @@ export default function CalendarsPage() {
       end: endDate?.toISOString(),
       location: editEventAddress.trim() || editEventLocation.trim() || undefined,
       allDay: !editEventTime,
+      createGoogleMeet: editCreateGoogleMeet,
     });
   };
 
@@ -3304,6 +3308,16 @@ export default function CalendarsPage() {
                       />
                     </div>
                   </div>
+
+                  <Button
+                    type="button"
+                    variant={editCreateGoogleMeet ? "default" : "outline"}
+                    onClick={() => setEditCreateGoogleMeet(!editCreateGoogleMeet)}
+                    className="w-full sm:w-auto"
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    {editCreateGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
+                  </Button>
 
                   {/* Address Selection */}
                   <div className="space-y-2">
