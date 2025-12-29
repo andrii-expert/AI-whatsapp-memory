@@ -390,25 +390,8 @@ export class GoogleCalendarProvider implements CalendarProvider {
         }
       }
 
-      // Convert Google color ID back to our color names
-      let color: string | undefined;
-      if (response.data.colorId) {
-        const colorIdStr = String(response.data.colorId);
-        const reverseColorMap: { [key: string]: string } = {
-          '1': 'blue',
-          '2': 'green',
-          '3': 'purple',
-          '4': 'red',
-          '5': 'yellow',
-          '6': 'orange',
-          '7': 'turquoise',
-          '8': 'gray',
-          '9': 'bold-blue',
-          '10': 'bold-green',
-          '11': 'bold-red'
-        };
-        color = reverseColorMap[colorIdStr];
-      }
+      // Use the color that was requested for creation
+      let color: string | undefined = params.color;
 
       return {
         id: response.data.id,
@@ -471,9 +454,9 @@ export class GoogleCalendarProvider implements CalendarProvider {
         }
       }
 
-      // Convert Google color ID back to our color names
-      let color: string | undefined;
-      if (response.data.colorId) {
+      // Use the color that was requested for update, or extract from response
+      let color: string | undefined = params.color;
+      if (!color && response.data.colorId !== undefined && response.data.colorId !== null) {
         const colorIdStr = String(response.data.colorId);
         const reverseColorMap: { [key: string]: string } = {
           '1': 'blue',
@@ -718,9 +701,9 @@ export class GoogleCalendarProvider implements CalendarProvider {
         }
       }
 
-      // Convert Google color ID back to our color names
-      let color: string | undefined;
-      if (response.data.colorId) {
+      // Use the color that was requested for update, or extract from response
+      let color: string | undefined = params.color;
+      if (!color && response.data.colorId !== undefined && response.data.colorId !== null) {
         const colorIdStr = String(response.data.colorId);
         const reverseColorMap: { [key: string]: string } = {
           '1': 'blue',
@@ -818,7 +801,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
         // Extract color from Google Calendar
         let color: string | undefined;
-        if (event.colorId) {
+        if (event.colorId !== undefined && event.colorId !== null) {
           const colorIdStr = String(event.colorId);
           const reverseColorMap: { [key: string]: string } = {
             '1': 'blue',
