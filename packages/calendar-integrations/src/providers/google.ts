@@ -495,8 +495,17 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       // Update date/time if provided
       if (params.start || params.end) {
-        const startDate = params.start || new Date(existing.data.start?.dateTime || existing.data.start?.date || '');
-        const endDate = params.end || new Date(existing.data.end?.dateTime || existing.data.end?.date || '');
+        // Safely parse existing dates
+        const existingStart = existing.data.start?.dateTime || existing.data.start?.date;
+        const existingEnd = existing.data.end?.dateTime || existing.data.end?.date;
+
+        const startDate = params.start || (existingStart ? new Date(existingStart) : new Date());
+        const endDate = params.end || (existingEnd ? new Date(existingEnd) : new Date());
+
+        // Validate dates
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          throw new Error('Invalid date values provided');
+        }
 
         if (params.allDay) {
           updates.start = {
