@@ -506,16 +506,35 @@ export class GoogleCalendarProvider implements CalendarProvider {
         const existingStart = existing.data.start?.dateTime || existing.data.start?.date;
         const existingEnd = existing.data.end?.dateTime || existing.data.end?.date;
 
-        const startDate = params.start || (existingStart ? new Date(existingStart) : new Date());
-        const endDate = params.end || (existingEnd ? new Date(existingEnd) : new Date());
+        let startDate: Date;
+        let endDate: Date;
+
+        if (params.start) {
+          startDate = new Date(params.start);
+        } else if (existingStart) {
+          startDate = new Date(existingStart);
+        } else {
+          throw new Error('No start date provided and none found in existing event');
+        }
+
+        if (params.end) {
+          endDate = new Date(params.end);
+        } else if (existingEnd) {
+          endDate = new Date(existingEnd);
+        } else {
+          // Default to 1 hour after start
+          endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+        }
 
         // Validate dates
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-          throw new Error('Invalid date values provided');
+          throw new Error(`Invalid date values: start=${startDate.toString()}, end=${endDate.toString()}`);
         }
 
-        // Use the existing event's time zone if available, otherwise use the provided timeZone
-        const eventTimeZone = existing.data.start?.timeZone || existing.data.end?.timeZone || params.timeZone || 'UTC';
+        // Ensure end is after start
+        if (endDate.getTime() <= startDate.getTime()) {
+          endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // 1 hour default
+        }
 
         if (params.allDay) {
           // For all-day events, use date format without time zone
@@ -526,14 +545,14 @@ export class GoogleCalendarProvider implements CalendarProvider {
             date: endDate.toISOString().split('T')[0],
           };
         } else {
-          // For timed events, use dateTime with time zone
+          // For timed events, use dateTime in UTC (Google Calendar standard)
           updates.start = {
             dateTime: startDate.toISOString(),
-            timeZone: eventTimeZone,
+            timeZone: 'UTC',
           };
           updates.end = {
             dateTime: endDate.toISOString(),
-            timeZone: eventTimeZone,
+            timeZone: 'UTC',
           };
         }
       }
