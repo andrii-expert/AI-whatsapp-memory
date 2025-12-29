@@ -529,15 +529,24 @@ export class GoogleCalendarProvider implements CalendarProvider {
         }
 
         if (params.allDay) {
-          // For all-day events, use date format without time zone
+          // For all-day events, use date format (end date should be next day)
+          const startDateStr = startDate.toISOString().split('T')[0];
+          const endDateObj = new Date(endDate);
+
+          // For all-day events, Google Calendar expects end date to be exclusive
+          // If end date is same as start date, make it next day
+          if (endDateObj.toISOString().split('T')[0] === startDateStr) {
+            endDateObj.setDate(endDateObj.getDate() + 1);
+          }
+
           updates.start = {
-            date: startDate.toISOString().split('T')[0],
+            date: startDateStr,
           };
           updates.end = {
-            date: endDate.toISOString().split('T')[0],
+            date: endDateObj.toISOString().split('T')[0],
           };
         } else {
-          // For timed events, use dateTime in UTC (Google Calendar interprets as UTC)
+          // For timed events, use dateTime in UTC
           updates.start = {
             dateTime: startDate.toISOString(),
           };
