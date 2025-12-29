@@ -484,10 +484,9 @@ export class GoogleCalendarProvider implements CalendarProvider {
             }
           }
         };
-      } else if (params.createGoogleMeet === false && existing.data.conferenceData) {
-        // Only remove conference data if it exists
-        updates.conferenceData = null;
-      }
+      // Note: We don't explicitly remove conference data in updates
+      // If createGoogleMeet is false and conference exists, we could add logic here
+      // But for now, we only add conference data, not remove it in updates
 
       if (params.attendees !== undefined) {
         updates.attendees = params.attendees.map((email: string) => ({ email }));
@@ -553,7 +552,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         eventId: params.eventId,
         requestBody: updates,
         sendUpdates: 'all', // Notify attendees of changes
-        conferenceDataVersion: 1, // Always include for conference operations
+        ...(updates.conferenceData ? { conferenceDataVersion: 1 } : {}),
       });
 
       if (!response.data.id || !response.data.summary) {
