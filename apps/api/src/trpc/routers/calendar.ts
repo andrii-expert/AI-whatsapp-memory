@@ -945,12 +945,6 @@ export const calendarRouter = createTRPCRouter({
       }
 
       try {
-        logger.info({
-          userId: session.user.id,
-          calendarId: input.calendarId,
-          provider: calendar.provider
-        }, "Fetching calendar events");
-
         const provider = createCalendarProvider(calendar.provider);
         let accessToken = calendar.accessToken;
 
@@ -966,12 +960,6 @@ export const calendarRouter = createTRPCRouter({
             timeMax,
             maxResults: input.maxResults,
           });
-
-          logger.info({
-            userId: session.user.id,
-            calendarId: input.calendarId,
-            eventCount: events.length
-          }, "Calendar events fetched successfully");
 
           return events.map(event => ({
             id: event.id,

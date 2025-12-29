@@ -1229,7 +1229,7 @@ export default function CalendarsPage() {
 
   // Fetch events from all active calendars
   const activeCalendars = useMemo(() => calendars.filter((cal: any) => cal.isActive), [calendars]);
-  
+
   const timeRange = useMemo(() => {
     if (viewMode === "year") {
       return {
@@ -1259,8 +1259,6 @@ export default function CalendarsPage() {
         maxResults: 1000, // Increase max results
       }),
       enabled: cal.isActive && !!cal.id,
-      // Add query key to ensure refetch when time range changes
-      queryKey: ['calendar.getEvents', cal.id, timeRange.timeMin, timeRange.timeMax],
     })),
   });
 
@@ -2197,7 +2195,36 @@ export default function CalendarsPage() {
             {calendars.length === 0 ? (
               <div className="text-center py-8">
                 <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No calendars connected</p>
+                <p className="text-sm text-gray-500 mb-4">No calendars connected</p>
+                <p className="text-xs text-gray-400 mb-4">Connect your Google Calendar to view and manage your events</p>
+                <Button
+                  onClick={() => {
+                    // Open calendar connection dialog or navigate to settings
+                    window.location.href = '/settings?tab=calendar';
+                  }}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Connect Calendar
+                </Button>
+              </div>
+            ) : activeCalendars.length === 0 ? (
+              <div className="text-center py-8">
+                <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500 mb-4">No active calendars</p>
+                <p className="text-xs text-gray-400 mb-4">You have {calendars.length} calendar{calendars.length === 1 ? '' : 's'} connected but none are active</p>
+                <Button
+                  onClick={() => {
+                    // Open calendar settings to activate calendars
+                    window.location.href = '/settings?tab=calendar';
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Manage Calendars
+                </Button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -4182,7 +4209,36 @@ export default function CalendarsPage() {
             {calendars.length === 0 ? (
               <div className="text-center py-8">
                 <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No calendars connected</p>
+                <p className="text-sm text-gray-500 mb-4">No calendars connected</p>
+                <p className="text-xs text-gray-400 mb-4">Connect your Google Calendar to view and manage your events</p>
+                <Button
+                  onClick={() => {
+                    // Open calendar connection dialog or navigate to settings
+                    window.location.href = '/settings?tab=calendar';
+                  }}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Connect Calendar
+                </Button>
+              </div>
+            ) : activeCalendars.length === 0 ? (
+              <div className="text-center py-8">
+                <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500 mb-4">No active calendars</p>
+                <p className="text-xs text-gray-400 mb-4">You have {calendars.length} calendar{calendars.length === 1 ? '' : 's'} connected but none are active</p>
+                <Button
+                  onClick={() => {
+                    // Open calendar settings to activate calendars
+                    window.location.href = '/settings?tab=calendar';
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Manage Calendars
+                </Button>
               </div>
             ) : (
               <div className="space-y-3">
