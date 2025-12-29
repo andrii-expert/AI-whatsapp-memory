@@ -1535,11 +1535,11 @@ export default function CalendarsPage() {
         setEnableDropPin(false);
         setAddressComponents({});
         setIsGeocoding(false);
-        setCreateGoogleMeet(false);
-        setEventColor("blue");
-        setSelectedCalendarIds([]);
-        // Close modal
-        setCreateEventDialogOpen(false);
+          setCreateGoogleMeet(false);
+          setEventColor("blue");
+          setSelectedCalendarIds([]);
+          // Close modal
+          setCreateEventDialogOpen(false);
         // Refresh calendars and events
         refetch();
 
@@ -1650,7 +1650,6 @@ export default function CalendarsPage() {
       connectionId: null,
       currentCalendarId: null,
     });
-    // Refetch calendars to show newly connected calendars
     refetch();
   };
 
@@ -1720,7 +1719,7 @@ export default function CalendarsPage() {
     endDate.setHours(startDate.getHours() + 1);
 
     createEventMutation.mutate({
-      calendarId: selectedCalendarIds[0], // Use the first selected calendar
+      calendarId: selectedCalendarIds[0] || "", // Use the first selected calendar
       title: eventTitle.trim(),
       start: startDate.toISOString(),
       end: endDate.toISOString(),
@@ -1979,9 +1978,9 @@ export default function CalendarsPage() {
       webLink: event.webLink,
       userTimezone, // Use user's timezone for all formatting
       calendarId: event.calendarId, // Keep calendarId for API calls
+      conferenceUrl: event.conferenceUrl, // Include conference URL
       calendarName: eventCalendar?.calendarName || eventCalendar?.email || 'Unknown Calendar',
       calendarProvider: eventCalendar?.provider || 'unknown',
-      conferenceUrl: event.conferenceUrl, // Include conference URL
     };
   });
 
@@ -2220,7 +2219,7 @@ export default function CalendarsPage() {
                                 <Checkbox
                                   id={`calendar-${calendar.id}`}
                                   checked={selectedCalendarIds.includes(calendar.id)}
-                                  onCheckedChange={(checked) => {
+                                  onCheckedChange={(checked: boolean) => {
                                     if (checked) {
                                       setSelectedCalendarIds(prev => [...prev, calendar.id]);
                                     } else {
@@ -2267,6 +2266,53 @@ export default function CalendarsPage() {
                                 )}
                               </div>
                             ))}
+                          </div>
+
+                          <div className="flex items-center gap-2 mb-3">
+                            {providerCalendars[0]?.isActive ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleDisconnectCalendar(
+                                    providerCalendars[0].id,
+                                    providerCalendars[0].calendarName ||
+                                      providerCalendars[0].email
+                                  )
+                                }
+                                disabled={disconnectCalendarMutation.isPending}
+                                className="text-xs h-7 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                              >
+                                {disconnectCalendarMutation.isPending ? (
+                                  <>
+                                    <Clock className="h-3 w-3 mr-1 animate-spin" />
+                                    Disconnecting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Link2 className="h-3 w-3 mr-1" />
+                                    Disconnect
+                                  </>
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleConnectCalendar(
+                                    provider as "google" | "microsoft"
+                                  )
+                                }
+                                disabled={
+                                  connectingProvider === provider || !canAddMore
+                                }
+                                className="text-xs h-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                Connect
+                              </Button>
+                            )}
                           </div>
 
                           {/* Sub-calendars */}
@@ -2760,10 +2806,10 @@ export default function CalendarsPage() {
                         setEventCoordinates("");
                         setEnableDropPin(false);
                         setAddressComponents({});
-                        setIsGeocoding(false);
-                        setCreateGoogleMeet(false);
-                        setSelectedCalendarIds([]);
-                        setCreateEventDialogOpen(true);
+          setIsGeocoding(false);
+          setCreateGoogleMeet(false);
+          setSelectedCalendarIds([]);
+          setCreateEventDialogOpen(true);
                       }}
                       className="text-sm"
                     >
@@ -2855,8 +2901,6 @@ export default function CalendarsPage() {
           }}
           connectionId={calendarSelectionDialog.connectionId}
           currentCalendarId={calendarSelectionDialog.currentCalendarId}
-          selectedCalendarIds={selectedCalendarIds}
-          onCalendarSelectionChange={setSelectedCalendarIds}
           onSuccess={handleCalendarSelectionClose}
         />
       )}
@@ -4192,8 +4236,8 @@ export default function CalendarsPage() {
               <div className="space-y-3">
                 {Object.entries(groupedCalendars).map(
                   ([provider, providerCalendars]: [string, any]) => (
-                    <Card key={provider} className="border-gray-200 shadow-sm">
-                      <CardContent className="p-4">
+                      <Card key={provider} className="border-gray-200 shadow-sm">
+                        <CardContent className="p-4">
                           <div className="flex items-center gap-2 mb-3">
                             <div
                               className={cn(
@@ -4216,7 +4260,7 @@ export default function CalendarsPage() {
                                 <Checkbox
                                   id={`mobile-calendar-${calendar.id}`}
                                   checked={selectedCalendarIds.includes(calendar.id)}
-                                  onCheckedChange={(checked) => {
+                                  onCheckedChange={(checked: boolean) => {
                                     if (checked) {
                                       setSelectedCalendarIds(prev => [...prev, calendar.id]);
                                     } else {
@@ -4264,8 +4308,6 @@ export default function CalendarsPage() {
                               </div>
                             ))}
                           </div>
-
-                        {/* Sub-calendars */}
                         {providerCalendars.length > 1 && (
                           <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
                             <p className="text-xs font-medium text-gray-500 mb-2">
