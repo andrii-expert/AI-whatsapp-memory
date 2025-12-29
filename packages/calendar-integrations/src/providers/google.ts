@@ -301,15 +301,38 @@ export class GoogleCalendarProvider implements CalendarProvider {
         throw new Error('Invalid response from Google Calendar API');
       }
 
-      // Extract Google Meet URL from conference data
       let conferenceUrl: string | undefined;
-      if (response.data.conferenceData?.entryPoints) {
-        const meetEntryPoint = response.data.conferenceData.entryPoints.find(
-          (entry: any) => entry.entryPointType === 'video'
-        );
-        if (meetEntryPoint?.uri) {
-          conferenceUrl = meetEntryPoint.uri;
+
+      // If Google Meet was requested, try to get the conference URL
+      if (params.createGoogleMeet) {
+        // Google Meet conference creation might be asynchronous
+        // Try multiple times to get the conference data
+        for (let attempt = 0; attempt < 5; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // 1s, 2s, 3s, 4s, 5s
+
+          try {
+            const eventDetails = await calendar.events.get({
+              calendarId: params.calendarId,
+              eventId: response.data.id,
+              conferenceDataVersion: 1,
+            });
+
+            if (eventDetails.data.conferenceData?.entryPoints) {
+              const meetEntryPoint = eventDetails.data.conferenceData.entryPoints.find(
+                (entry: any) => entry.entryPointType === 'video'
+              );
+              if (meetEntryPoint?.uri) {
+                conferenceUrl = meetEntryPoint.uri;
+                break; // Found the conference URL, exit the loop
+              }
+            }
+          } catch (error) {
+            console.warn(`Failed to fetch conference data (attempt ${attempt + 1}):`, error);
+          }
         }
+
+        // If still no conference URL, the Meet might still be created later
+        // The frontend will need to refetch the event later to get the URL
       }
 
       return {

@@ -574,6 +574,7 @@ export const calendarRouter = createTRPCRouter({
       description: z.string().optional(),
       location: z.string().optional(),
       allDay: z.boolean().optional().default(false),
+      createGoogleMeet: z.boolean().optional().default(false),
     }))
     .mutation(async ({ ctx: { db, session }, input }) => {
       const calendar = await getCalendarById(db, input.calendarId);
@@ -618,6 +619,7 @@ export const calendarRouter = createTRPCRouter({
             location: input.location,
             allDay: input.allDay || false,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            createGoogleMeet: input.createGoogleMeet || false,
           });
 
           logger.info({
@@ -701,6 +703,7 @@ export const calendarRouter = createTRPCRouter({
       description: z.string().optional(),
       location: z.string().optional(),
       allDay: z.boolean().optional().default(false),
+      createGoogleMeet: z.boolean().optional(),
     }))
     .mutation(async ({ ctx: { db, session }, input }) => {
       const calendar = await getCalendarById(db, input.calendarId);
@@ -746,6 +749,7 @@ export const calendarRouter = createTRPCRouter({
             allDay: input.allDay || false,
             location: input.location,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            createGoogleMeet: input.createGoogleMeet,
           });
 
           logger.info({
@@ -789,6 +793,7 @@ export const calendarRouter = createTRPCRouter({
               allDay: input.allDay || false,
               location: input.location,
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              createGoogleMeet: input.createGoogleMeet,
             });
 
             logger.info({

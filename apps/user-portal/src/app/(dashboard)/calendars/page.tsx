@@ -3574,7 +3574,7 @@ export default function CalendarsPage() {
                     </div>
                   )}
 
-                  {eventDetailsModal.event.conferenceUrl && (
+                  {eventDetailsModal.event.conferenceUrl ? (
                     <div className="flex items-start gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
                       <div className="flex-1 min-w-0">
@@ -3589,6 +3589,10 @@ export default function CalendarsPage() {
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    // Check if this event should have Google Meet (by checking if it was recently created with Meet)
+                    // For now, show nothing - the Meet link will appear when the event data is refreshed
+                    null
                   )}
                 </div>
               )}
