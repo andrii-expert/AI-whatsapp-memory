@@ -448,7 +448,7 @@ export class MicrosoftCalendarProvider implements CalendarProvider {
 
       let request = graphClient
         .api(`/me/calendars/${params.calendarId}/events`)
-        .select("id,subject,body,start,end,location,attendees,webLink")
+        .select("id,subject,body,start,end,location,attendees,webLink,showAs")
         .orderby("start/dateTime");
 
       // Add search query if provided
@@ -475,16 +475,32 @@ export class MicrosoftCalendarProvider implements CalendarProvider {
       const response = await request.get();
       const events = response.value || [];
 
-      return events.map((event: any) => ({
-        id: event.id || '',
-        title: event.subject || 'Untitled Event',
-        description: event.body?.content || undefined,
-        start: new Date(event.start?.dateTime || ''),
-        end: new Date(event.end?.dateTime || ''),
-        location: event.location?.displayName || undefined,
-        attendees: event.attendees?.map((a: any) => a.emailAddress?.address || '') || undefined,
-        webLink: event.webLink || undefined,
-      }));
+      return events.map((event: any) => {
+        // Map Microsoft showAs to our color system
+        let color: string | undefined;
+        if (event.showAs) {
+          const showAsMap: { [key: string]: string } = {
+            'free': 'gray',
+            'tentative': 'yellow',
+            'busy': 'blue',
+            'oof': 'orange',
+            'workingElsewhere': 'purple',
+          };
+          color = showAsMap[event.showAs.toLowerCase()] || 'blue';
+        }
+
+        return {
+          id: event.id || '',
+          title: event.subject || 'Untitled Event',
+          description: event.body?.content || undefined,
+          start: new Date(event.start?.dateTime || ''),
+          end: new Date(event.end?.dateTime || ''),
+          location: event.location?.displayName || undefined,
+          attendees: event.attendees?.map((a: any) => a.emailAddress?.address || '') || undefined,
+          webLink: event.webLink || undefined,
+          color,
+        };
+      });
     } catch (error: any) {
       throw new Error(`Failed to search Microsoft Calendar events: ${error.message}`);
     }

@@ -982,6 +982,7 @@ export const calendarRouter = createTRPCRouter({
             location: event.location,
             htmlLink: event.htmlLink,
             webLink: event.webLink,
+            color: event.color,
           }));
         } catch (error: any) {
           // If authentication fails and we have a refresh token, try refreshing
@@ -1025,6 +1026,7 @@ export const calendarRouter = createTRPCRouter({
               location: event.location,
               htmlLink: event.htmlLink,
               webLink: event.webLink,
+              color: event.color,
             }));
           } else {
             throw error;
