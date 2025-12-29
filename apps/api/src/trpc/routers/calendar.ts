@@ -949,4 +949,76 @@ export const calendarRouter = createTRPCRouter({
         });
       }
     }),
-});
+
+    getEvent: protectedProcedure
+      .input(z.object({
+        calendarId: z.string(),
+        eventId: z.string(),
+      }))
+      .query(async ({ ctx: { db, session }, input }) => {
+        const calendar = await getCalendarById(db, input.calendarId);
+
+        if (!calendar || calendar.userId !== session.user.id) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Calendar not found",
+          });
+        }
+
+        if (!calendar.accessToken || !calendar.isActive) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Calendar is not connected or active",
+          });
+        }
+
+        try {
+          const provider = createCalendarProvider(calendar.provider);
+          let accessToken = calendar.accessToken;
+
+          // Try to get the event
+          try {
+            const event = await provider.getEvent(accessToken, {
+              calendarId: calendar.calendarId,
+              eventId: input.eventId,
+            });
+
+            return event;
+          } catch (error: any) {
+            // If authentication fails and we have a refresh token, try refreshing
+            if (calendar.refreshToken && error.message?.includes("authentication")) {
+              const refreshedTokens = await provider.refreshTokens(calendar.refreshToken);
+              accessToken = refreshedTokens.accessToken;
+
+              // Update the calendar with the new tokens
+              await updateCalendarConnection(db, calendar.id, {
+                accessToken: refreshedTokens.accessToken,
+                refreshToken: refreshedTokens.refreshToken,
+                expiresAt: refreshedTokens.expiresAt,
+              });
+
+              // Retry with the new access token
+              const event = await provider.getEvent(accessToken, {
+                calendarId: calendar.calendarId,
+                eventId: input.eventId,
+              });
+
+              return event;
+            }
+            throw error;
+          }
+        } catch (error: any) {
+          logger.error({
+            userId: session.user.id,
+            calendarId: input.calendarId,
+            eventId: input.eventId,
+            error: error.message
+          }, "Failed to get calendar event");
+
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Failed to get event: ${error.message}`,
+          });
+        }
+      }),
+  });

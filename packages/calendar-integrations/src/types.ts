@@ -172,6 +172,7 @@ export interface CalendarProvider {
 
   // Event methods
   createEvent(accessToken: string, params: CreateEventParams): Promise<CreatedEvent>;
+  getEvent(accessToken: string, params: { calendarId: string; eventId: string }): Promise<CreatedEvent>;
   updateEvent(accessToken: string, params: UpdateEventParams): Promise<CreatedEvent>;
   deleteEvent(accessToken: string, params: DeleteEventParams): Promise<void>;
   searchEvents(accessToken: string, params: SearchEventsParams): Promise<CreatedEvent[]>;

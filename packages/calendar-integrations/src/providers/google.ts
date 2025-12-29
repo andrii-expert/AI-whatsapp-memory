@@ -392,6 +392,61 @@ export class GoogleCalendarProvider implements CalendarProvider {
     }
   }
 
+  async getEvent(accessToken: string, params: { calendarId: string; eventId: string }): Promise<CreatedEvent> {
+    try {
+      this.oauth2Client.setCredentials({
+        access_token: accessToken,
+      });
+
+      const calendar = google.calendar({ version: "v3", auth: this.oauth2Client });
+
+      const response = await calendar.events.get({
+        calendarId: params.calendarId,
+        eventId: params.eventId,
+        conferenceDataVersion: 1,
+        fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData',
+      });
+
+      if (!response.data.id || !response.data.summary) {
+        throw new Error('Invalid response from Google Calendar API');
+      }
+
+      // Extract Google Meet URL from conference data
+      let conferenceUrl: string | undefined;
+      if (response.data.conferenceData?.entryPoints && Array.isArray(response.data.conferenceData.entryPoints)) {
+        // Look for video conference entry point (Google Meet)
+        const meetEntryPoint = response.data.conferenceData.entryPoints.find(
+          (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
+        );
+        if (meetEntryPoint?.uri && typeof meetEntryPoint.uri === 'string' && meetEntryPoint.uri.trim()) {
+          conferenceUrl = meetEntryPoint.uri.trim();
+        } else {
+          // Fallback: check all entry points for any URI that looks like a Meet link
+          for (const entryPoint of response.data.conferenceData.entryPoints) {
+            if (entryPoint.uri && typeof entryPoint.uri === 'string' && entryPoint.uri.includes('meet.google.com') && entryPoint.uri.trim()) {
+              conferenceUrl = entryPoint.uri.trim();
+              break;
+            }
+          }
+        }
+      }
+
+      return {
+        id: response.data.id,
+        title: response.data.summary,
+        description: response.data.description || undefined,
+        start: new Date(response.data.start?.dateTime || response.data.start?.date || ''),
+        end: new Date(response.data.end?.dateTime || response.data.end?.date || ''),
+        location: response.data.location || undefined,
+        attendees: response.data.attendees?.map(a => a.email || '') || undefined,
+        htmlLink: response.data.htmlLink || undefined,
+        conferenceUrl,
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to get Google Calendar event: ${error.message}`);
+    }
+  }
+
   async updateEvent(accessToken: string, params: UpdateEventParams): Promise<CreatedEvent> {
     try {
       this.oauth2Client.setCredentials({

@@ -589,6 +589,24 @@ export default function CalendarsPage() {
     isEditing: false,
   });
 
+  // Query for fetching individual event data with conference information
+  const individualEventQuery = useQuery(
+    trpc.calendar.getEvent.queryOptions(
+      eventDetailsModal.event ? {
+        calendarId: eventDetailsModal.event.calendarId,
+        eventId: eventDetailsModal.event.id,
+      } : {
+        calendarId: '',
+        eventId: '',
+      },
+      {
+        enabled: eventDetailsModal.open && !!eventDetailsModal.event,
+        staleTime: 0, // Always fetch fresh data
+        refetchOnWindowFocus: false,
+      }
+    )
+  );
+
   const [dayDetailsModal, setDayDetailsModal] = useState<{
     open: boolean;
     date: Date | null;
@@ -3266,18 +3284,21 @@ export default function CalendarsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
-              <span className="truncate">{eventDetailsModal.event?.title || "Event Details"}</span>
+              <span className="truncate">
+                {individualEventQuery.data?.title || eventDetailsModal.event?.title || "Event Details"}
+              </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  // Refetch calendar events to get latest conference data
-                  eventQueries.forEach((query) => query.refetch());
+                  // Refetch individual event data
+                  individualEventQuery.refetch();
                 }}
+                disabled={individualEventQuery.isFetching}
                 className="h-6 w-6 p-0 ml-auto"
                 title="Refresh event data"
               >
-                <RefreshCw className="h-3 w-3" />
+                <RefreshCw className={`h-3 w-3 ${individualEventQuery.isFetching ? 'animate-spin' : ''}`} />
               </Button>
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
@@ -3287,7 +3308,15 @@ export default function CalendarsPage() {
 
           {eventDetailsModal.event && (
             <div className="space-y-4 py-2">
-              {eventDetailsModal.isEditing ? (
+              {individualEventQuery.isLoading ? (
+                // Loading state while fetching fresh event data
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading event details...
+                  </div>
+                </div>
+              ) : eventDetailsModal.isEditing ? (
                 /* Edit Mode */
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -3551,15 +3580,15 @@ export default function CalendarsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-gray-900">
                         {formatInTimezone(
-                          eventDetailsModal.event.start,
-                          eventDetailsModal.event.userTimezone || 'Africa/Johannesburg',
+                          (individualEventQuery.data || eventDetailsModal.event).start,
+                          (individualEventQuery.data || eventDetailsModal.event).userTimezone || 'Africa/Johannesburg',
                           'datetime'
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
                         {formatInTimezone(
-                          eventDetailsModal.event.start,
-                          eventDetailsModal.event.userTimezone || 'Africa/Johannesburg',
+                          (individualEventQuery.data || eventDetailsModal.event).start,
+                          (individualEventQuery.data || eventDetailsModal.event).userTimezone || 'Africa/Johannesburg',
                           'date'
                         )}
                       </div>
@@ -3572,7 +3601,8 @@ export default function CalendarsPage() {
                       <div className="flex-1 min-w-0">
                         <button
                           onClick={() => {
-                            const location = eventDetailsModal.event.location;
+                            const event = individualEventQuery.data || eventDetailsModal.event;
+                            const location = event.location;
                             if (location) {
                               // Try to extract coordinates from the location string
                               const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
@@ -3589,19 +3619,20 @@ export default function CalendarsPage() {
                           }}
                           className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left"
                         >
-                          {eventDetailsModal.event.location}
+                          {(individualEventQuery.data || eventDetailsModal.event).location}
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {eventDetailsModal.event.conferenceUrl && (
+                  {(individualEventQuery.data || eventDetailsModal.event).conferenceUrl && (
                     <div className="flex items-start gap-3">
                       <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
                       <div className="flex-1 min-w-0">
                         <button
                           onClick={() => {
-                            window.open(eventDetailsModal.event.conferenceUrl, '_blank');
+                            const event = individualEventQuery.data || eventDetailsModal.event;
+                            window.open(event.conferenceUrl, '_blank');
                           }}
                           className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left flex items-center gap-2"
                         >
