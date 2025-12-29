@@ -484,9 +484,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
             }
           }
         };
-      // Note: We don't explicitly remove conference data in updates
-      // If createGoogleMeet is false and conference exists, we could add logic here
-      // But for now, we only add conference data, not remove it in updates
+      }
 
       if (params.attendees !== undefined) {
         updates.attendees = params.attendees.map((email: string) => ({ email }));
