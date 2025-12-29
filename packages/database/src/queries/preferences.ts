@@ -126,6 +126,50 @@ export async function updateCalendarSettings(
   );
 }
 
+export async function updateWhatsAppCalendarSettings(
+  db: Database,
+  userId: string,
+  whatsappCalendarIds: string[]
+) {
+  return withMutationLogging(
+    'updateWhatsAppCalendarSettings',
+    { userId, whatsappCalendarIds },
+    async () => {
+      const [updated] = await db
+        .update(userPreferences)
+        .set({
+          whatsappCalendarIds,
+          updatedAt: new Date(),
+        })
+        .where(eq(userPreferences.userId, userId))
+        .returning();
+
+      return updated;
+    }
+  );
+}
+
+export async function getWhatsAppCalendars(
+  db: Database,
+  userId: string
+): Promise<string[]> {
+  return withQueryLogging(
+    'getWhatsAppCalendars',
+    { userId },
+    async () => {
+      const preferences = await db
+        .select({
+          whatsappCalendarIds: userPreferences.whatsappCalendarIds,
+        })
+        .from(userPreferences)
+        .where(eq(userPreferences.userId, userId))
+        .limit(1);
+
+      return preferences[0]?.whatsappCalendarIds || [];
+    }
+  );
+}
+
 export async function setDefaultCalendar(db: Database, userId: string, calendarId: string | null) {
   return withMutationLogging(
     'setDefaultCalendar',

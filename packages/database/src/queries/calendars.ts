@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import type { Database } from "../client";
 import { calendarConnections, userPreferences } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
@@ -33,6 +33,16 @@ export async function getCalendarById(db: Database, id: string) {
     { calendarId: id },
     () => db.query.calendarConnections.findFirst({
       where: eq(calendarConnections.id, id),
+    })
+  );
+}
+
+export async function getCalendarsByIds(db: Database, calendarIds: string[]) {
+  return withQueryLogging(
+    'getCalendarsByIds',
+    { calendarIds },
+    () => db.query.calendarConnections.findMany({
+      where: inArray(calendarConnections.id, calendarIds),
     })
   );
 }

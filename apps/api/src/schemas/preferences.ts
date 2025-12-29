@@ -11,6 +11,7 @@ export const updatePreferencesSchema = z.object({
   reminders: z.object({
     reminderMinutes: z.number().min(0).max(1440).optional(),
     defaultCalendarId: z.string().nullable().optional(),
+    whatsappCalendarIds: z.array(z.string()).optional(),
   }).optional(),
 
   calendar: z.object({
@@ -33,6 +34,7 @@ export const preferencesSchema = z.object({
   reminderMinutes: z.number(),
   calendarNotificationMinutes: z.number(),
   defaultCalendarId: z.string().nullable(),
+  whatsappCalendarIds: z.array(z.string()).nullable(),
   timezone: z.string(),
   dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]),
   timeFormat: z.enum(["12h", "24h"]),

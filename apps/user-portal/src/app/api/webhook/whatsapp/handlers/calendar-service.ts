@@ -2,7 +2,7 @@
 // Copied from voice-worker for use in text message handling
 
 import type { Database } from '@imaginecalendar/database/client';
-import { getPrimaryCalendar, updateCalendarTokens, getUserPreferences } from '@imaginecalendar/database/queries';
+import { getPrimaryCalendar, updateCalendarTokens, getUserPreferences, getWhatsAppCalendars, getCalendarsByIds } from '@imaginecalendar/database/queries';
 import { createCalendarProvider } from '@imaginecalendar/calendar-integrations/factory';
 import type { Contact, CalendarProvider } from '@imaginecalendar/calendar-integrations/types';
 import type { ICalendarService, CalendarIntent } from '@imaginecalendar/ai-services';
@@ -281,15 +281,29 @@ export class CalendarService implements ICalendarService {
     try {
       logger.info({ userId }, 'Creating calendar event');
 
-      // Get user's primary calendar connection
-      const calendarConnection = await getPrimaryCalendar(this.db, userId);
+      // Get user's selected WhatsApp calendars
+      const whatsappCalendarIds = await getWhatsAppCalendars(this.db, userId);
+
+      if (!whatsappCalendarIds || whatsappCalendarIds.length === 0) {
+        throw new Error('No calendars selected for WhatsApp. Please select calendars in your settings.');
+      }
+
+      // Get the selected calendar connections
+      const calendarConnections = await getCalendarsByIds(this.db, whatsappCalendarIds);
+
+      if (calendarConnections.length === 0) {
+        throw new Error('Selected calendars not found. Please check your calendar connections.');
+      }
+
+      // Use the first active calendar for creating events
+      const calendarConnection = calendarConnections.find(cal => cal.isActive) || calendarConnections[0];
 
       if (!calendarConnection) {
-        throw new Error('No calendar connected. Please connect a calendar first.');
+        throw new Error('Selected calendar not found. Please check your calendar connections.');
       }
 
       if (!calendarConnection.isActive) {
-        throw new Error('Calendar connection is inactive. Please reconnect your calendar.');
+        throw new Error('Selected calendar is inactive. Please reconnect your calendar.');
       }
 
       // Get calendar's timezone (from calendar, not user preferences)

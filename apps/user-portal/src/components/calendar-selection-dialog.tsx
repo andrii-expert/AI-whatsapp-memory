@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
 import { Button } from "@imaginecalendar/ui/button";
-import { RadioGroup, RadioGroupItem } from "@imaginecalendar/ui/radio-group";
+import { Checkbox } from "@imaginecalendar/ui/checkbox";
 import { Label } from "@imaginecalendar/ui/label";
 import { Badge } from "@imaginecalendar/ui/badge";
 import { useToast } from "@imaginecalendar/ui/use-toast";
@@ -35,14 +35,14 @@ export function CalendarSelectionDialog({
 }: CalendarSelectionDialogProps) {
   const trpc = useTRPC();
   const { toast } = useToast();
-  const [selectedCalendarId, setSelectedCalendarId] = useState<string | null>(
-    currentCalendarId || null
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(
+    currentCalendarId ? [currentCalendarId] : []
   );
 
   // Reset selection when dialog opens/closes or currentCalendarId changes
   useEffect(() => {
     if (open) {
-      setSelectedCalendarId(currentCalendarId || null);
+      setSelectedCalendarIds(currentCalendarId ? [currentCalendarId] : []);
     }
   }, [open, currentCalendarId]);
 
@@ -52,13 +52,13 @@ export function CalendarSelectionDialog({
     enabled: open,
   });
 
-  // Update selected calendar mutation
-  const updateCalendarMutation = useMutation(
-    trpc.calendar.updateSelectedCalendar.mutationOptions({
+  // Update WhatsApp calendar selection mutation
+  const updateWhatsAppCalendarsMutation = useMutation(
+    trpc.preferences.update.mutationOptions({
       onSuccess: () => {
         toast({
-          title: "Calendar updated",
-          description: "Your calendar selection has been saved.",
+          title: "Calendars updated",
+          description: `Selected ${selectedCalendarIds.length} calendar${selectedCalendarIds.length === 1 ? '' : 's'} for WhatsApp events.`,
           variant: "success",
         });
         onSuccess?.();
@@ -76,23 +76,20 @@ export function CalendarSelectionDialog({
   );
 
   const handleSave = () => {
-    if (!selectedCalendarId) {
+    if (selectedCalendarIds.length === 0) {
       toast({
-        title: "No calendar selected",
-        description: "Please select a calendar to continue.",
+        title: "No calendars selected",
+        description: "Please select at least one calendar to continue.",
         variant: "error",
         duration: 3500,
       });
       return;
     }
 
-    const selectedCalendar = calendars.find((cal) => cal.id === selectedCalendarId);
-    if (!selectedCalendar) return;
-
-    updateCalendarMutation.mutate({
-      id: connectionId,
-      calendarId: selectedCalendar.id,
-      calendarName: selectedCalendar.name,
+    updateWhatsAppCalendarsMutation.mutate({
+      reminders: {
+        whatsappCalendarIds: selectedCalendarIds,
+      },
     });
   };
 
@@ -105,7 +102,7 @@ export function CalendarSelectionDialog({
             Select Calendar
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Choose which calendar you want to use for creating events via WhatsApp.
+            Choose which calendars you want to use for creating events via WhatsApp.
             {calendars.length > 0 && ` Found ${calendars.length} calendar(s).`}
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -120,24 +117,33 @@ export function CalendarSelectionDialog({
               No calendars found. Please reconnect your calendar.
             </div>
           ) : (
-            <RadioGroup
-              value={selectedCalendarId || ""}
-              onValueChange={setSelectedCalendarId}
-              className="space-y-3"
-            >
+            <div className="space-y-3">
               {calendars.map((calendar) => (
                 <div
                   key={calendar.id}
                   className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                    selectedCalendarId === calendar.id
+                    selectedCalendarIds.includes(calendar.id)
                       ? "border-blue-500 bg-blue-50"
                       : "border-gray-200 hover:border-gray-300"
                   }`}
-                  onClick={() => setSelectedCalendarId(calendar.id)}
+                  onClick={() => {
+                    if (selectedCalendarIds.includes(calendar.id)) {
+                      setSelectedCalendarIds(prev => prev.filter(id => id !== calendar.id));
+                    } else {
+                      setSelectedCalendarIds(prev => [...prev, calendar.id]);
+                    }
+                  }}
                 >
-                  <RadioGroupItem
-                    value={calendar.id}
+                  <Checkbox
                     id={calendar.id}
+                    checked={selectedCalendarIds.includes(calendar.id)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedCalendarIds(prev => [...prev, calendar.id]);
+                      } else {
+                        setSelectedCalendarIds(prev => prev.filter(id => id !== calendar.id));
+                      }
+                    }}
                     className="mt-1"
                   />
                   <div className="flex-1">
@@ -153,7 +159,7 @@ export function CalendarSelectionDialog({
                       className="flex items-center gap-2 font-medium cursor-pointer"
                     >
                       {calendar.name}
-                      {selectedCalendarId === calendar.id && (
+                      {selectedCalendarIds.includes(calendar.id) && (
                         <Check className="h-4 w-4 text-blue-600" />
                       )}
                     </Label>
@@ -170,7 +176,7 @@ export function CalendarSelectionDialog({
                   </div>
                 </div>
               ))}
-            </RadioGroup>
+            </div>
           )}
         </div>
 
@@ -178,19 +184,19 @@ export function CalendarSelectionDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={updateCalendarMutation.isPending}
+            disabled={updateWhatsAppCalendarsMutation.isPending}
           >
             Cancel
           </Button>
           <Button
             onClick={handleSave}
             disabled={
-              !selectedCalendarId ||
+              selectedCalendarIds.length === 0 ||
               isLoading ||
-              updateCalendarMutation.isPending
+              updateWhatsAppCalendarsMutation.isPending
             }
           >
-            {updateCalendarMutation.isPending ? (
+            {updateWhatsAppCalendarsMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Saving...

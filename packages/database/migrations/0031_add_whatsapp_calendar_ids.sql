@@ -1,0 +1,1 @@
+ALTER TABLE "user_preferences" ADD COLUMN "whatsapp_calendar_ids" jsonb;

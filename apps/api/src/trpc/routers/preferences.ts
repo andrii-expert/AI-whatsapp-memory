@@ -6,6 +6,7 @@ import {
   updateReminderSettings,
   updateLocaleSettings,
   updateCalendarSettings,
+  updateWhatsAppCalendarSettings,
   resetPreferencesToDefault,
   setDefaultCalendar,
 } from "@imaginecalendar/database/queries";
@@ -51,6 +52,13 @@ export const preferencesRouter = createTRPCRouter({
           if (input.reminders.defaultCalendarId !== undefined) {
             promises.push(
               setDefaultCalendar(db, session.user.id, input.reminders.defaultCalendarId)
+            );
+          }
+
+          // Handle whatsappCalendarIds separately if provided
+          if (input.reminders.whatsappCalendarIds !== undefined) {
+            promises.push(
+              updateWhatsAppCalendarSettings(db, session.user.id, input.reminders.whatsappCalendarIds)
             );
           }
         }

@@ -1,5 +1,5 @@
 import type { Database } from '@imaginecalendar/database/client';
-import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar } from '@imaginecalendar/database/queries';
+import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar, getWhatsAppCalendars } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
 import { WhatsappTextAnalysisService, IntentAnalysisService, type CalendarIntent, calendarIntentSchema } from '@imaginecalendar/ai-services';
