@@ -283,6 +283,7 @@ export class CalendarService implements ICalendarService {
 
       // Get user's selected WhatsApp calendars
       const whatsappCalendarIds = await getWhatsAppCalendars(this.db, userId);
+      logger.info({ userId, whatsappCalendarIds }, 'Retrieved WhatsApp calendar IDs');
 
       if (!whatsappCalendarIds || whatsappCalendarIds.length === 0) {
         throw new Error('No calendars selected for WhatsApp. Please select calendars in your settings.');
@@ -290,13 +291,22 @@ export class CalendarService implements ICalendarService {
 
       // Get the selected calendar connections
       const calendarConnections = await getCalendarsByIds(this.db, whatsappCalendarIds);
+      logger.info({ userId, calendarConnectionsCount: calendarConnections.length, calendarConnections: calendarConnections.map(c => ({ id: c.id, isActive: c.isActive, provider: c.provider })) }, 'Retrieved calendar connections');
 
       if (calendarConnections.length === 0) {
         throw new Error('Selected calendars not found. Please check your calendar connections.');
       }
 
+      // Filter to only active calendars
+      const activeCalendarConnections = calendarConnections.filter(cal => cal.isActive);
+      logger.info({ userId, activeCalendarConnectionsCount: activeCalendarConnections.length }, 'Filtered to active calendars');
+
+      if (activeCalendarConnections.length === 0) {
+        throw new Error('None of the selected calendars are active. Please check your calendar connections and ensure at least one selected calendar is active.');
+      }
+
       // Use the first active calendar for creating events
-      const calendarConnection = calendarConnections.find(cal => cal.isActive) || calendarConnections[0];
+      const calendarConnection = activeCalendarConnections[0];
 
       if (!calendarConnection) {
         throw new Error('Selected calendar not found. Please check your calendar connections.');

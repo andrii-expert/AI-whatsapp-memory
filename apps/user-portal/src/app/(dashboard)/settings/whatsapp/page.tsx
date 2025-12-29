@@ -60,7 +60,7 @@ export default function WhatsAppVerificationPage() {
 
   // Update selected calendars when preferences load
   React.useEffect(() => {
-    if (preferences?.whatsappCalendarIds) {
+    if (preferences && preferences.whatsappCalendarIds && Array.isArray(preferences.whatsappCalendarIds) && preferences.whatsappCalendarIds.length > 0) {
       setSelectedWhatsAppCalendars(preferences.whatsappCalendarIds as string[]);
     } else {
       // Default to all active calendars if none selected
@@ -420,6 +420,7 @@ export default function WhatsAppVerificationPage() {
                 <div className="space-y-3">
                   {calendars
                     .filter((cal: any) => cal.isActive)
+                    .filter((cal: any) => selectedWhatsAppCalendars.includes(cal.id) || true)
                     .map((calendar: any) => (
                       <div
                         key={calendar.id}

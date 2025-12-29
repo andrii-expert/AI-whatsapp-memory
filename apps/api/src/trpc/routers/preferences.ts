@@ -14,13 +14,11 @@ import { TRPCError } from "@trpc/server";
 
 export const preferencesRouter = createTRPCRouter({
   get: protectedProcedure.query(async ({ ctx: { db, session } }) => {
-    const preferences = await getUserPreferences(db, session.user.id);
-    
+    let preferences = await getUserPreferences(db, session.user.id);
+
     if (!preferences) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Preferences not found",
-      });
+      // Create default preferences if they don't exist
+      preferences = await createUserPreferences(db, session.user.id);
     }
 
     return preferences;
