@@ -1,0 +1,2 @@
+ALTER TABLE "user_preferences" ADD COLUMN "calendar_notifications" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD COLUMN "calendar_notification_minutes" integer DEFAULT 10 NOT NULL;
