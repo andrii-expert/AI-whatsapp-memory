@@ -592,7 +592,7 @@ export default function CalendarsPage() {
   // Query for fetching individual event data with conference information
   const individualEventQuery = useQuery(
     trpc.calendar.getEvent.queryOptions(
-      eventDetailsModal.event ? {
+      eventDetailsModal.event?.calendarId && eventDetailsModal.event?.id ? {
         calendarId: eventDetailsModal.event.calendarId,
         eventId: eventDetailsModal.event.id,
       } : {
@@ -600,7 +600,7 @@ export default function CalendarsPage() {
         eventId: '',
       },
       {
-        enabled: eventDetailsModal.open && !!eventDetailsModal.event,
+        enabled: eventDetailsModal.open && !!eventDetailsModal.event?.calendarId && !!eventDetailsModal.event?.id,
         staleTime: 0, // Always fetch fresh data
         refetchOnWindowFocus: false,
       }
@@ -1648,9 +1648,15 @@ export default function CalendarsPage() {
       setEditEventTime("");
     }
 
+    // Ensure event has calendarId
+    const eventWithCalendarId = {
+      ...event,
+      calendarId: event.calendarId || selectedCalendarId,
+    };
+
     setEventDetailsModal({
       open: true,
-      event: event,
+      event: eventWithCalendarId,
       isEditing: false,
     });
   };
@@ -1833,6 +1839,8 @@ export default function CalendarsPage() {
       htmlLink: event.htmlLink,
       webLink: event.webLink,
       userTimezone, // Use user's timezone for all formatting
+      calendarId: event.calendarId, // Keep calendarId for API calls
+      conferenceUrl: event.conferenceUrl, // Include conference URL
     };
   });
 
