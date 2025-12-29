@@ -291,12 +291,16 @@ export class GoogleCalendarProvider implements CalendarProvider {
       // If Google Meet was requested, add conference via patch
       if (params.createGoogleMeet) {
         try {
+          // Generate unique request ID
+          const requestId = `meet-${response.data.id}-${Date.now()}`;
+
           await calendar.events.patch({
             calendarId: params.calendarId,
             eventId: response.data.id,
             requestBody: {
               conferenceData: {
                 createRequest: {
+                  requestId: requestId,
                   conferenceSolutionKey: {
                     type: "hangoutsMeet"
                   }
@@ -308,24 +312,62 @@ export class GoogleCalendarProvider implements CalendarProvider {
           });
 
           // Wait for conference creation and fetch the URL
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise(resolve => setTimeout(resolve, 5000));
 
           const eventDetails = await calendar.events.get({
             calendarId: params.calendarId,
             eventId: response.data.id,
             conferenceDataVersion: 1,
+            fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData',
           });
 
           if (eventDetails.data.conferenceData?.entryPoints) {
+            // Look for video conference entry point (Google Meet)
             const meetEntryPoint = eventDetails.data.conferenceData.entryPoints.find(
-              (entry: any) => entry.entryPointType === 'video'
+              (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
             );
             if (meetEntryPoint?.uri) {
               conferenceUrl = meetEntryPoint.uri;
+            } else {
+              // Fallback: check all entry points for any URI that looks like a Meet link
+              for (const entryPoint of eventDetails.data.conferenceData.entryPoints) {
+                if (entryPoint.uri && entryPoint.uri.includes('meet.google.com')) {
+                  conferenceUrl = entryPoint.uri;
+                  break;
+                }
+              }
             }
           }
         } catch (error) {
           console.warn('Failed to create Google Meet conference:', error);
+          // Try alternative approach - check if conference was created anyway
+          try {
+            const eventDetails = await calendar.events.get({
+              calendarId: params.calendarId,
+              eventId: response.data.id,
+              conferenceDataVersion: 1,
+            });
+
+            if (eventDetails.data.conferenceData?.entryPoints) {
+              // Look for video conference entry point (Google Meet)
+              const meetEntryPoint = eventDetails.data.conferenceData.entryPoints.find(
+                (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
+              );
+              if (meetEntryPoint?.uri) {
+                conferenceUrl = meetEntryPoint.uri;
+              } else {
+                // Fallback: check all entry points for any URI that looks like a Meet link
+                for (const entryPoint of eventDetails.data.conferenceData.entryPoints) {
+                  if (entryPoint.uri && entryPoint.uri.includes('meet.google.com')) {
+                    conferenceUrl = entryPoint.uri;
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (retryError) {
+            console.warn('Failed to fetch conference data on retry:', retryError);
+          }
         }
       }
 
@@ -362,6 +404,8 @@ export class GoogleCalendarProvider implements CalendarProvider {
       const existing = await calendar.events.get({
         calendarId: params.calendarId,
         eventId: params.eventId,
+        conferenceDataVersion: 1,
+        fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData',
       });
 
       if (!existing.data) {
@@ -378,13 +422,12 @@ export class GoogleCalendarProvider implements CalendarProvider {
       // Handle Google Meet creation/removal
       if (params.createGoogleMeet === true) {
         // Add Google Meet conference
+        const requestId = `meet-${params.eventId}-${Date.now()}`;
         updates.conferenceData = {
           createRequest: {
+            requestId: requestId,
             conferenceSolutionKey: {
               type: "hangoutsMeet"
-            },
-            status: {
-              statusCode: "pending"
             }
           }
         };
@@ -438,11 +481,20 @@ export class GoogleCalendarProvider implements CalendarProvider {
       // Extract Google Meet URL from conference data
       let conferenceUrl: string | undefined;
       if (response.data.conferenceData?.entryPoints) {
+        // Look for video conference entry point (Google Meet)
         const meetEntryPoint = response.data.conferenceData.entryPoints.find(
-          (entry: any) => entry.entryPointType === 'video'
+          (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
         );
         if (meetEntryPoint?.uri) {
           conferenceUrl = meetEntryPoint.uri;
+        } else {
+          // Fallback: check all entry points for any URI that looks like a Meet link
+          for (const entryPoint of response.data.conferenceData.entryPoints) {
+            if (entryPoint.uri && entryPoint.uri.includes('meet.google.com')) {
+              conferenceUrl = entryPoint.uri;
+              break;
+            }
+          }
         }
       }
 
@@ -497,6 +549,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         singleEvents: true, // Expand recurring events
         orderBy: 'startTime',
         conferenceDataVersion: 1, // Include conference data
+        fields: 'items(id,summary,description,start,end,location,attendees,htmlLink,conferenceData)', // Explicitly request conference data
       });
 
       const events = response.data.items || [];
@@ -505,11 +558,20 @@ export class GoogleCalendarProvider implements CalendarProvider {
         // Extract Google Meet URL from conference data
         let conferenceUrl: string | undefined;
         if (event.conferenceData?.entryPoints) {
+          // Look for video conference entry point (Google Meet)
           const meetEntryPoint = event.conferenceData.entryPoints.find(
-            (entry: any) => entry.entryPointType === 'video'
+            (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
           );
           if (meetEntryPoint?.uri) {
             conferenceUrl = meetEntryPoint.uri;
+          } else {
+            // Fallback: check all entry points for any URI that looks like a Meet link
+            for (const entryPoint of event.conferenceData.entryPoints) {
+              if (entryPoint.uri && entryPoint.uri.includes('meet.google.com')) {
+                conferenceUrl = entryPoint.uri;
+                break;
+              }
+            }
           }
         }
 
