@@ -3113,7 +3113,7 @@ export default function CalendarsPage() {
             </div>
             <Button
               type="button"
-              variant={createGoogleMeet ? "default" : "outline"}
+              variant={createGoogleMeet ? "primary" : "outline"}
               onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
               className="w-full sm:w-auto"
             >
