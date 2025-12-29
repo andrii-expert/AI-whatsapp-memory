@@ -1306,8 +1306,15 @@ export default function CalendarsPage() {
             colorClass = colorMap[event.color] || "bg-blue-500";
             colorHex = tailwindToHexMap[colorClass] || "#3b82f6";
           } else {
-            // Fall back to provider-based color
-            colorClass = provider === "google" ? "bg-blue-500" : "bg-purple-500";
+            // Assign a default color based on event ID for consistency
+            const eventId = event.id || '';
+            const colorIndex = (eventId.charCodeAt(0) || 0) % 11;
+            const defaultColors = [
+              'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-red-500',
+              'bg-yellow-500', 'bg-orange-500', 'bg-cyan-500', 'bg-gray-500',
+              'bg-blue-700', 'bg-green-700', 'bg-red-700'
+            ];
+            colorClass = defaultColors[colorIndex] || "bg-blue-500";
             colorHex = tailwindToHexMap[colorClass] || "#3b82f6";
           }
 
@@ -3115,7 +3122,7 @@ export default function CalendarsPage() {
               type="button"
               variant={createGoogleMeet ? "primary" : "outline"}
               onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
-              className="w-full sm:w-auto"
+              className={editCreateGoogleMeet ? "w-full sm:w-auto bg-primary text-primary-foreground hover:font-bold hover:bg-primary" : "w-full sm:w-auto"}
             >
               <Video className="h-4 w-4 mr-2" />
               {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
@@ -3675,7 +3682,7 @@ export default function CalendarsPage() {
                     type="button"
                     variant={editCreateGoogleMeet ? "default" : "outline"}
                     onClick={() => setEditCreateGoogleMeet(!editCreateGoogleMeet)}
-                    className="w-full sm:w-auto"
+                    className={editCreateGoogleMeet ? "w-full sm:w-auto bg-primary text-primary-foreground hover:font-bold hover:bg-primary" : "w-full sm:w-auto"}
                   >
                     <Video className="h-4 w-4 mr-2" />
                     {editCreateGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
