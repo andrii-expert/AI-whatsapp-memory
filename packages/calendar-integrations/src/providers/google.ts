@@ -514,23 +514,26 @@ export class GoogleCalendarProvider implements CalendarProvider {
           throw new Error('Invalid date values provided');
         }
 
+        // Use the existing event's time zone if available, otherwise use the provided timeZone
+        const eventTimeZone = existing.data.start?.timeZone || existing.data.end?.timeZone || params.timeZone || 'UTC';
+
         if (params.allDay) {
+          // For all-day events, use date format without time zone
           updates.start = {
             date: startDate.toISOString().split('T')[0],
-            timeZone: params.timeZone || existing.data.start?.timeZone || 'UTC',
           };
           updates.end = {
             date: endDate.toISOString().split('T')[0],
-            timeZone: params.timeZone || existing.data.end?.timeZone || 'UTC',
           };
         } else {
+          // For timed events, use dateTime with time zone
           updates.start = {
             dateTime: startDate.toISOString(),
-            timeZone: params.timeZone || existing.data.start?.timeZone || 'UTC',
+            timeZone: eventTimeZone,
           };
           updates.end = {
             dateTime: endDate.toISOString(),
-            timeZone: params.timeZone || existing.data.end?.timeZone || 'UTC',
+            timeZone: eventTimeZone,
           };
         }
       }
