@@ -393,6 +393,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       // Convert Google color ID back to our color names
       let color: string | undefined;
       if (response.data.colorId) {
+        const colorIdStr = String(response.data.colorId);
         const reverseColorMap: { [key: string]: string } = {
           '1': 'blue',
           '2': 'green',
@@ -406,7 +407,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           '10': 'bold-green',
           '11': 'bold-red'
         };
-        color = reverseColorMap[response.data.colorId];
+        color = reverseColorMap[colorIdStr];
       }
 
       return {
@@ -473,6 +474,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       // Convert Google color ID back to our color names
       let color: string | undefined;
       if (response.data.colorId) {
+        const colorIdStr = String(response.data.colorId);
         const reverseColorMap: { [key: string]: string } = {
           '1': 'blue',
           '2': 'green',
@@ -486,7 +488,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           '10': 'bold-green',
           '11': 'bold-red'
         };
-        color = reverseColorMap[response.data.colorId];
+        color = reverseColorMap[colorIdStr];
       }
 
       return {
@@ -719,6 +721,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
       // Convert Google color ID back to our color names
       let color: string | undefined;
       if (response.data.colorId) {
+        const colorIdStr = String(response.data.colorId);
         const reverseColorMap: { [key: string]: string } = {
           '1': 'blue',
           '2': 'green',
@@ -732,7 +735,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
           '10': 'bold-green',
           '11': 'bold-red'
         };
-        color = reverseColorMap[response.data.colorId];
+        color = reverseColorMap[colorIdStr];
       }
 
       return {
@@ -787,7 +790,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         singleEvents: true, // Expand recurring events
         orderBy: 'startTime',
         conferenceDataVersion: 1, // Include conference data
-        fields: 'items(id,summary,description,start,end,location,attendees,htmlLink,conferenceData,colorId),nextPageToken', // Explicitly request conference and color data
+        fields: 'items/id,items/summary,items/description,items/start,items/end,items/location,items/attendees,items/htmlLink,items/conferenceData,items/colorId,nextPageToken', // Explicitly request conference and color data
       });
 
       const events = response.data.items || [];
@@ -816,6 +819,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         // Extract color from Google Calendar
         let color: string | undefined;
         if (event.colorId) {
+          const colorIdStr = String(event.colorId);
           const reverseColorMap: { [key: string]: string } = {
             '1': 'blue',
             '2': 'green',
@@ -829,7 +833,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
             '10': 'bold-green',
             '11': 'bold-red'
           };
-          color = reverseColorMap[event.colorId];
+          color = reverseColorMap[colorIdStr];
         }
 
         return {
