@@ -1262,11 +1262,63 @@ export default function CalendarsPage() {
     })),
   });
 
+  // Color mapping for Tailwind classes to hex colors
+  const tailwindToHexMap: { [key: string]: string } = {
+    'bg-blue-500': '#3b82f6',
+    'bg-green-500': '#10b981',
+    'bg-purple-500': '#8b5cf6',
+    'bg-red-500': '#ef4444',
+    'bg-yellow-500': '#eab308',
+    'bg-orange-500': '#f97316',
+    'bg-cyan-500': '#06b6d4',
+    'bg-gray-500': '#6b7280',
+    'bg-blue-700': '#1d4ed8',
+    'bg-green-700': '#047857',
+    'bg-red-700': '#b91c1c'
+  };
+
   const allEvents = useMemo(() => {
     return eventQueries
       .flatMap((query, idx) => {
         const calendarId = activeCalendars[idx]?.id;
-        return (query.data || []).map((event: any) => ({ ...event, calendarId }));
+        const calendar = activeCalendars[idx];
+        const provider = calendar?.provider || "google";
+
+        return (query.data || []).map((event: any) => {
+          // Determine event color
+          let colorClass = "bg-blue-500"; // default Tailwind class
+          let colorHex = "#3b82f6"; // default hex color
+
+          if (event.color) {
+            const colorMap: { [key: string]: string } = {
+              'blue': 'bg-blue-500',
+              'green': 'bg-green-500',
+              'purple': 'bg-purple-500',
+              'red': 'bg-red-500',
+              'yellow': 'bg-yellow-500',
+              'orange': 'bg-orange-500',
+              'turquoise': 'bg-cyan-500',
+              'gray': 'bg-gray-500',
+              'bold-blue': 'bg-blue-700',
+              'bold-green': 'bg-green-700',
+              'bold-red': 'bg-red-700'
+            };
+            colorClass = colorMap[event.color] || "bg-blue-500";
+            colorHex = tailwindToHexMap[colorClass] || "#3b82f6";
+          } else {
+            // Fall back to provider-based color
+            colorClass = provider === "google" ? "bg-blue-500" : "bg-purple-500";
+            colorHex = tailwindToHexMap[colorClass] || "#3b82f6";
+          }
+
+          return {
+            ...event,
+            calendarId,
+            color: colorClass, // Keep Tailwind class for consistency
+            colorHex, // Add hex color for styling
+            provider
+          };
+        });
       });
   }, [eventQueries, activeCalendars]);
   const canAddMore = canAddCalendar(calendars.length);
@@ -1883,30 +1935,9 @@ export default function CalendarsPage() {
 
   // Process events for display
   const processedEvents = allEvents.map((event: any) => {
-    const calendar = calendars.find((cal: any) => cal.id === event.calendarId) as any;
-    const provider = calendar?.provider || "google";
-
-    // Use event color if available, otherwise fall back to provider color
-    let color = "bg-blue-500"; // default
-    if (event.color) {
-      const colorMap: { [key: string]: string } = {
-        'blue': 'bg-blue-500',
-        'green': 'bg-green-500',
-        'purple': 'bg-purple-500',
-        'red': 'bg-red-500',
-        'yellow': 'bg-yellow-500',
-        'orange': 'bg-orange-500',
-        'turquoise': 'bg-cyan-500',
-        'gray': 'bg-gray-500',
-        'bold-blue': 'bg-blue-700',
-        'bold-green': 'bg-green-700',
-        'bold-red': 'bg-red-700'
-      };
-      color = colorMap[event.color] || "bg-blue-500";
-    } else {
-      // Fall back to provider-based color
-      color = provider === "google" ? "bg-blue-500" : "bg-purple-500";
-    }
+    // Event already has color and colorHex from allEvents processing
+    const color = event.color || "bg-blue-500";
+    const colorHex = event.colorHex || "#3b82f6";
 
     // Use user's timezone instead of calendar timezone
     const userTimezone = userPreferences?.timezone || 'Africa/Johannesburg';
@@ -1920,6 +1951,7 @@ export default function CalendarsPage() {
       start: startDate,
       end: endDate,
       color,
+      colorHex,
       location: event.location,
       htmlLink: event.htmlLink,
       webLink: event.webLink,
@@ -2741,7 +2773,7 @@ export default function CalendarsPage() {
                           {/* Event color indicator */}
                           <div
                             className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
-                            style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
+                            style={{ backgroundColor: event.colorHex || '#3b82f6' }}
                           />
 
                           <div className="flex items-start gap-4">
@@ -3090,85 +3122,36 @@ export default function CalendarsPage() {
             </Button>
 
             <div className="space-y-2">
-              <label htmlFor="event-color" className="text-sm font-medium">
+              <label className="text-sm font-medium">
                 Color
               </label>
-              <Select
-                value={eventColor}
-                onValueChange={setEventColor}
-              >
-                <SelectTrigger className="w-full text-sm sm:text-base">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="blue">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                      Blue
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="green">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      Green
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="purple">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                      Purple
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="red">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                      Red
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="yellow">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                      Yellow
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="orange">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                      Orange
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="turquoise">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
-                      Turquoise
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="gray">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-gray-500"></div>
-                      Gray
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="bold-blue">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-700"></div>
-                      Bold Blue
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="bold-green">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-green-700"></div>
-                      Bold Green
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="bold-red">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-700"></div>
-                      Bold Red
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-6 gap-2 p-2">
+                {[
+                  { value: "blue", color: "bg-blue-500" },
+                  { value: "green", color: "bg-green-500" },
+                  { value: "purple", color: "bg-purple-500" },
+                  { value: "red", color: "bg-red-500" },
+                  { value: "yellow", color: "bg-yellow-500" },
+                  { value: "orange", color: "bg-orange-500" },
+                  { value: "turquoise", color: "bg-cyan-500" },
+                  { value: "gray", color: "bg-gray-500" },
+                  { value: "bold-blue", color: "bg-blue-700" },
+                  { value: "bold-green", color: "bg-green-700" },
+                  { value: "bold-red", color: "bg-red-700" },
+                ].map(({ value, color }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setEventColor(value)}
+                    className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
+                      eventColor === value
+                        ? "border-gray-800 scale-110"
+                        : "border-gray-300 hover:border-gray-500"
+                    } ${color}`}
+                    title={value.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -3300,7 +3283,7 @@ export default function CalendarsPage() {
                       {/* Event color indicator */}
                       <div
                         className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
-                        style={{ backgroundColor: event.color?.replace('bg-', '').replace('-500', '') || '#3b82f6' }}
+                        style={{ backgroundColor: event.colorHex || '#3b82f6' }}
                       />
 
                       <div className="flex items-start gap-3">
@@ -3699,85 +3682,36 @@ export default function CalendarsPage() {
                   </Button>
 
                   <div className="space-y-2">
-                    <label htmlFor="edit-event-color" className="text-sm font-medium">
+                    <label className="text-sm font-medium">
                       Color
                     </label>
-                    <Select
-                      value={editEventColor}
-                      onValueChange={setEditEventColor}
-                    >
-                      <SelectTrigger className="w-full text-sm sm:text-base">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="blue">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                            Blue
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="green">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                            Green
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="purple">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                            Purple
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="red">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                            Red
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="yellow">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                            Yellow
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="orange">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                            Orange
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="turquoise">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-cyan-500"></div>
-                            Turquoise
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="gray">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-gray-500"></div>
-                            Gray
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="bold-blue">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-blue-700"></div>
-                            Bold Blue
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="bold-green">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-green-700"></div>
-                            Bold Green
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="bold-red">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-red-700"></div>
-                            Bold Red
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="grid grid-cols-6 gap-2 p-2">
+                      {[
+                        { value: "blue", color: "bg-blue-500" },
+                        { value: "green", color: "bg-green-500" },
+                        { value: "purple", color: "bg-purple-500" },
+                        { value: "red", color: "bg-red-500" },
+                        { value: "yellow", color: "bg-yellow-500" },
+                        { value: "orange", color: "bg-orange-500" },
+                        { value: "turquoise", color: "bg-cyan-500" },
+                        { value: "gray", color: "bg-gray-500" },
+                        { value: "bold-blue", color: "bg-blue-700" },
+                        { value: "bold-green", color: "bg-green-700" },
+                        { value: "bold-red", color: "bg-red-700" },
+                      ].map(({ value, color }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setEditEventColor(value)}
+                          className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
+                            editEventColor === value
+                              ? "border-gray-800 scale-110"
+                              : "border-gray-300 hover:border-gray-500"
+                          } ${color}`}
+                          title={value.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
+                        />
+                      ))}
+                    </div>
                   </div>
 
                   {/* Address Selection */}
