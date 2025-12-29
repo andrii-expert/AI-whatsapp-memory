@@ -301,6 +301,17 @@ export class GoogleCalendarProvider implements CalendarProvider {
         throw new Error('Invalid response from Google Calendar API');
       }
 
+      // Extract Google Meet URL from conference data
+      let conferenceUrl: string | undefined;
+      if (response.data.conferenceData?.entryPoints) {
+        const meetEntryPoint = response.data.conferenceData.entryPoints.find(
+          (entry: any) => entry.entryPointType === 'video'
+        );
+        if (meetEntryPoint?.uri) {
+          conferenceUrl = meetEntryPoint.uri;
+        }
+      }
+
       return {
         id: response.data.id,
         title: response.data.summary,
@@ -310,6 +321,7 @@ export class GoogleCalendarProvider implements CalendarProvider {
         location: response.data.location || undefined,
         attendees: response.data.attendees?.map(a => a.email || '') || undefined,
         htmlLink: response.data.htmlLink || undefined,
+        conferenceUrl,
       };
     } catch (error: any) {
       // Preserve error code/status for auth error detection
@@ -440,16 +452,30 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       const events = response.data.items || [];
 
-      return events.map(event => ({
-        id: event.id || '',
-        title: event.summary || 'Untitled Event',
-        description: event.description || undefined,
-        start: new Date(event.start?.dateTime || event.start?.date || ''),
-        end: new Date(event.end?.dateTime || event.end?.date || ''),
-        location: event.location || undefined,
-        attendees: event.attendees?.map(a => a.email || '') || undefined,
-        htmlLink: event.htmlLink || undefined,
-      }));
+      return events.map(event => {
+        // Extract Google Meet URL from conference data
+        let conferenceUrl: string | undefined;
+        if (event.conferenceData?.entryPoints) {
+          const meetEntryPoint = event.conferenceData.entryPoints.find(
+            (entry: any) => entry.entryPointType === 'video'
+          );
+          if (meetEntryPoint?.uri) {
+            conferenceUrl = meetEntryPoint.uri;
+          }
+        }
+
+        return {
+          id: event.id || '',
+          title: event.summary || 'Untitled Event',
+          description: event.description || undefined,
+          start: new Date(event.start?.dateTime || event.start?.date || ''),
+          end: new Date(event.end?.dateTime || event.end?.date || ''),
+          location: event.location || undefined,
+          attendees: event.attendees?.map(a => a.email || '') || undefined,
+          htmlLink: event.htmlLink || undefined,
+          conferenceUrl,
+        };
+      });
     } catch (error: any) {
       throw new Error(`Failed to search Google Calendar events: ${error.message}`);
     }

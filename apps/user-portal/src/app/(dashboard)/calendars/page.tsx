@@ -42,6 +42,7 @@ import {
   MapPin,
   X,
   Loader2,
+  Video,
 } from "lucide-react";
 
 // Google Maps component
@@ -2954,19 +2955,15 @@ export default function CalendarsPage() {
                 )}
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="create-google-meet"
-                checked={createGoogleMeet}
-                onCheckedChange={setCreateGoogleMeet}
-              />
-              <label
-                htmlFor="create-google-meet"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Create Google Meet for this event
-              </label>
-            </div>
+            <Button
+              type="button"
+              variant={createGoogleMeet ? "default" : "outline"}
+              onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
+              className="w-full sm:w-auto"
+            >
+              <Video className="h-4 w-4 mr-2" />
+              {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
+            </Button>
             <div className="space-y-2">
               <label htmlFor="event-calendar" className="text-sm font-medium">
                 Calendar
@@ -3558,6 +3555,23 @@ export default function CalendarsPage() {
                           className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left"
                         >
                           {eventDetailsModal.event.location}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {eventDetailsModal.event.conferenceUrl && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <button
+                          onClick={() => {
+                            window.open(eventDetailsModal.event.conferenceUrl, '_blank');
+                          }}
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left flex items-center gap-2"
+                        >
+                          <Video className="h-3 w-3" />
+                          Join Google Meet
                         </button>
                       </div>
                     </div>

@@ -28,6 +28,7 @@ export const calendarEventSchema = z.object({
   location: z.string().optional(),
   attendees: z.array(z.string()).optional().default([]),
   calendarId: z.string(),
+  conferenceUrl: z.string().optional(),
 });
 
 export const connectionTestResultSchema = z.object({
@@ -151,6 +152,7 @@ export interface CreatedEvent {
   attendees?: string[];
   htmlLink?: string;
   webLink?: string;
+  conferenceUrl?: string;
 }
 
 export interface CalendarProvider {
