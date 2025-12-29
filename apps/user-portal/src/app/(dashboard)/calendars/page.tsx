@@ -526,7 +526,14 @@ export default function CalendarsPage() {
   const autocompleteRef = useRef<any>(null);
   const [createGoogleMeet, setCreateGoogleMeet] = useState(false);
   const [eventColor, setEventColor] = useState("blue");
-  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
+    // Try to load from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCalendarIds');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
   const [viewMode, setViewMode] = useState<"week" | "month" | "year">("month");
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
     open: boolean;
@@ -949,7 +956,14 @@ export default function CalendarsPage() {
     }
   };
 
-  // Auto-select all active calendars when calendars load
+  // Save selectedCalendarIds to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && selectedCalendarIds.length > 0) {
+      localStorage.setItem('selectedCalendarIds', JSON.stringify(selectedCalendarIds));
+    }
+  }, [selectedCalendarIds]);
+
+  // Auto-select all active calendars when calendars load (only if no saved selection)
   useEffect(() => {
     if (calendars.length > 0 && selectedCalendarIds.length === 0) {
       const activeCalendars = calendars.filter((cal: any) => cal.isActive);
@@ -2162,9 +2176,14 @@ export default function CalendarsPage() {
               <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
                   Connected Calendars
                 </h2>
-                <Badge variant="secondary" className="text-xs">
-                  {activeCalendars.length} active
-                </Badge>
+                <div className="flex gap-2">
+                  <Badge variant="secondary" className="text-xs">
+                    {activeCalendars.length} active
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {selectedCalendarIds.length} selected
+                  </Badge>
+                </div>
               </div>
 
               {calendars.length === 0 ? (
@@ -4151,9 +4170,14 @@ export default function CalendarsPage() {
               <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
                 Connected Calendars
               </h2>
-              <Badge variant="secondary" className="text-xs">
-                {activeCalendars.length} active
-              </Badge>
+              <div className="flex gap-2">
+                <Badge variant="secondary" className="text-xs">
+                  {activeCalendars.length} active
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  {selectedCalendarIds.length} selected
+                </Badge>
+              </div>
             </div>
 
             {calendars.length === 0 ? (
