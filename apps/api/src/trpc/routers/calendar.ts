@@ -404,6 +404,63 @@ export const calendarRouter = createTRPCRouter({
       }
     }),
 
+  createMultipleConnections: protectedProcedure
+    .input(z.object({
+      connectionId: z.string(),
+      calendarIds: z.array(z.string()),
+      calendarNames: z.array(z.string()),
+    }))
+    .mutation(async ({ ctx: { db, session }, input }) => {
+      const baseConnection = await getCalendarById(db, input.connectionId);
+
+      if (!baseConnection || baseConnection.userId !== session.user.id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Calendar connection not found",
+        });
+      }
+
+      const createdCalendars = [];
+
+      for (let i = 0; i < input.calendarIds.length; i++) {
+        const calendarId = input.calendarIds[i];
+        const calendarName = input.calendarNames[i];
+
+        try {
+          logger.info({
+            userId: session.user.id,
+            connectionId: input.connectionId,
+            calendarId,
+            calendarName
+          }, "Creating additional calendar connection");
+
+          const newConnection = await createCalendarConnection(db, {
+            userId: session.user.id,
+            provider: baseConnection.provider,
+            email: baseConnection.email,
+            calendarId,
+            calendarName,
+            accessToken: baseConnection.accessToken,
+            refreshToken: baseConnection.refreshToken,
+            expiresAt: baseConnection.expiresAt,
+          });
+
+          if (newConnection) {
+            createdCalendars.push(newConnection);
+          }
+        } catch (error) {
+          logger.error({
+            userId: session.user.id,
+            calendarId,
+            error: error.message
+          }, "Failed to create calendar connection");
+          // Continue with other calendars
+        }
+      }
+
+      return createdCalendars;
+    }),
+
   updateSelectedCalendar: protectedProcedure
     .input(z.object({
       id: z.string(),

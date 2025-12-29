@@ -1650,6 +1650,7 @@ export default function CalendarsPage() {
       connectionId: null,
       currentCalendarId: null,
     });
+    // Refetch calendars to show newly connected calendars
     refetch();
   };
 
@@ -2854,6 +2855,8 @@ export default function CalendarsPage() {
           }}
           connectionId={calendarSelectionDialog.connectionId}
           currentCalendarId={calendarSelectionDialog.currentCalendarId}
+          selectedCalendarIds={selectedCalendarIds}
+          onCalendarSelectionChange={setSelectedCalendarIds}
           onSuccess={handleCalendarSelectionClose}
         />
       )}

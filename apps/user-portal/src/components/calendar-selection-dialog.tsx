@@ -23,6 +23,8 @@ interface CalendarSelectionDialogProps {
   onOpenChange: (open: boolean) => void;
   connectionId: string;
   currentCalendarId?: string | null;
+  selectedCalendarIds?: string[];
+  onCalendarSelectionChange?: (calendarIds: string[]) => void;
   onSuccess?: () => void;
 }
 
@@ -31,20 +33,22 @@ export function CalendarSelectionDialog({
   onOpenChange,
   connectionId,
   currentCalendarId,
+  selectedCalendarIds: initialSelectedCalendarIds = [],
+  onCalendarSelectionChange,
   onSuccess,
 }: CalendarSelectionDialogProps) {
+  // Get existing calendars to filter out already connected ones
+  const { data: existingCalendars = [] } = trpc.calendar.list.useQuery();
   const trpc = useTRPC();
   const { toast } = useToast();
-  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(
-    currentCalendarId ? [currentCalendarId] : []
-  );
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(initialSelectedCalendarIds);
 
-  // Reset selection when dialog opens/closes or currentCalendarId changes
+  // Reset selection when dialog opens with new initial values
   useEffect(() => {
     if (open) {
-      setSelectedCalendarIds(currentCalendarId ? [currentCalendarId] : []);
+      setSelectedCalendarIds(initialSelectedCalendarIds);
     }
-  }, [open, currentCalendarId]);
+  }, [open, initialSelectedCalendarIds]);
 
   // Fetch available calendars
   const { data: calendars = [], isLoading } = useQuery({
@@ -52,13 +56,13 @@ export function CalendarSelectionDialog({
     enabled: open,
   });
 
-  // Update WhatsApp calendar selection mutation
-  const updateWhatsAppCalendarsMutation = useMutation(
-    trpc.preferences.update.mutationOptions({
-      onSuccess: () => {
+  // Create calendar connections for selected calendars
+  const createCalendarConnectionsMutation = useMutation(
+    trpc.calendar.createMultipleConnections.mutationOptions({
+      onSuccess: (createdCalendars) => {
         toast({
-          title: "Calendars updated",
-          description: `Selected ${selectedCalendarIds.length} calendar${selectedCalendarIds.length === 1 ? '' : 's'} for WhatsApp events.`,
+          title: "Calendars connected",
+          description: `Successfully connected ${createdCalendars.length} calendar${createdCalendars.length === 1 ? '' : 's'}.`,
           variant: "success",
         });
         onSuccess?.();
@@ -66,8 +70,8 @@ export function CalendarSelectionDialog({
       },
       onError: (error) => {
         toast({
-          title: "Update failed",
-          description: error.message || "Failed to update calendar selection.",
+          title: "Connection failed",
+          description: error.message || "Failed to connect calendars.",
           variant: "error",
           duration: 3500,
         });
@@ -79,17 +83,34 @@ export function CalendarSelectionDialog({
     if (selectedCalendarIds.length === 0) {
       toast({
         title: "No calendars selected",
-        description: "Please select at least one calendar to continue.",
+        description: "Please select at least one calendar to connect.",
         variant: "error",
         duration: 3500,
       });
       return;
     }
 
-    updateWhatsAppCalendarsMutation.mutate({
-      reminders: {
-        whatsappCalendarIds: selectedCalendarIds,
-      },
+    // Filter out calendars that are already connected
+    const calendarsToConnect = calendars.filter(cal =>
+      selectedCalendarIds.includes(cal.id) &&
+      !existingCalendars.some(existing => existing.calendarId === cal.id)
+    );
+
+    if (calendarsToConnect.length === 0) {
+      toast({
+        title: "No new calendars to connect",
+        description: "All selected calendars are already connected.",
+        variant: "info",
+      });
+      onSuccess?.();
+      onOpenChange(false);
+      return;
+    }
+
+    createCalendarConnectionsMutation.mutate({
+      connectionId,
+      calendarIds: calendarsToConnect.map(cal => cal.id),
+      calendarNames: calendarsToConnect.map(cal => cal.name),
     });
   };
 
@@ -118,64 +139,77 @@ export function CalendarSelectionDialog({
             </div>
           ) : (
             <div className="space-y-3">
-              {calendars.map((calendar) => (
-                <div
-                  key={calendar.id}
-                  className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                    selectedCalendarIds.includes(calendar.id)
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                  onClick={() => {
-                    if (selectedCalendarIds.includes(calendar.id)) {
-                      setSelectedCalendarIds(prev => prev.filter(id => id !== calendar.id));
-                    } else {
-                      setSelectedCalendarIds(prev => [...prev, calendar.id]);
-                    }
-                  }}
-                >
-                  <Checkbox
-                    id={calendar.id}
-                    checked={selectedCalendarIds.includes(calendar.id)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedCalendarIds(prev => [...prev, calendar.id]);
-                      } else {
+              {calendars.map((calendar) => {
+                const isAlreadyConnected = existingCalendars.some(existing => existing.calendarId === calendar.id);
+
+                return (
+                  <div
+                    key={calendar.id}
+                    className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors ${
+                      isAlreadyConnected
+                        ? "border-green-500 bg-green-50 opacity-60"
+                        : selectedCalendarIds.includes(calendar.id)
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300 cursor-pointer"
+                    }`}
+                    onClick={() => {
+                      if (isAlreadyConnected) return; // Don't allow clicking already connected calendars
+
+                      if (selectedCalendarIds.includes(calendar.id)) {
                         setSelectedCalendarIds(prev => prev.filter(id => id !== calendar.id));
+                      } else {
+                        setSelectedCalendarIds(prev => [...prev, calendar.id]);
                       }
                     }}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                      {calendar.primary && (
-                        <div className="flex justify-start w-full">
-                          <Badge variant="secondary" className="text-xs text-green-600">
-                            Primary
-                          </Badge>
-                        </div>
-                      )}
-                    <Label
-                      htmlFor={calendar.id}
-                      className="flex items-center gap-2 font-medium cursor-pointer"
-                    >
-                      {calendar.name}
-                      {selectedCalendarIds.includes(calendar.id) && (
-                        <Check className="h-4 w-4 text-blue-600" />
-                      )}
-                    </Label>
-                    {calendar.description && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {calendar.description}
-                      </p>
+                  >
+                    {isAlreadyConnected ? (
+                      <Check className="h-5 w-5 text-green-600 mt-1" />
+                    ) : (
+                      <Checkbox
+                        id={calendar.id}
+                        checked={selectedCalendarIds.includes(calendar.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedCalendarIds(prev => [...prev, calendar.id]);
+                          } else {
+                            setSelectedCalendarIds(prev => prev.filter(id => id !== calendar.id));
+                          }
+                        }}
+                        className="mt-1"
+                        disabled={isAlreadyConnected}
+                      />
                     )}
-                    {!calendar.canEdit && (
-                      <p className="text-xs text-amber-600 mt-1">
-                        Read-only calendar - you may not be able to create events
-                      </p>
-                    )}
+                    <div className="flex-1">
+                        {(calendar.primary || isAlreadyConnected) && (
+                          <div className="flex justify-start w-full">
+                            <Badge variant="secondary" className={`text-xs ${isAlreadyConnected ? 'text-green-600' : 'text-green-600'}`}>
+                              {isAlreadyConnected ? 'Connected' : 'Primary'}
+                            </Badge>
+                          </div>
+                        )}
+                      <Label
+                        htmlFor={calendar.id}
+                        className={`flex items-center gap-2 font-medium ${isAlreadyConnected ? 'cursor-default' : 'cursor-pointer'}`}
+                      >
+                        {calendar.name}
+                        {selectedCalendarIds.includes(calendar.id) && !isAlreadyConnected && (
+                          <Check className="h-4 w-4 text-blue-600" />
+                        )}
+                      </Label>
+                      {calendar.description && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {calendar.description}
+                        </p>
+                      )}
+                      {!calendar.canEdit && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Read-only calendar - you may not be able to create events
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
