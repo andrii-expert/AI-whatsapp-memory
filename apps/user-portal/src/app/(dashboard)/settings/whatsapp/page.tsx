@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Home, ChevronLeft, CheckCircle2, Edit2, X, Check } from "lucide-react";
+import { Home, ChevronLeft, CheckCircle2, Edit2, X, Check, Calendar } from "lucide-react";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
@@ -13,6 +13,7 @@ import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
 import { Badge } from "@imaginecalendar/ui/badge";
 import { PhoneInput } from "@imaginecalendar/ui/phone-input";
+import { Checkbox } from "@imaginecalendar/ui/checkbox";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 
@@ -42,6 +43,74 @@ export default function WhatsAppVerificationPage() {
   // Find verified WhatsApp number
   const verifiedNumber = whatsappNumbers?.find((num: any) => num.isVerified) || whatsappNumbers?.[0];
   const displayPhone = isEditing ? editedPhone : (verifiedNumber?.phoneNumber || user?.phone || "");
+
+  // Fetch connected calendars
+  const { data: calendars = [], isLoading: calendarsLoading } = useQuery(
+    trpc.calendar.list.queryOptions()
+  );
+
+  // Fetch user preferences for WhatsApp calendar selection
+  const { data: preferences, isLoading: preferencesLoading } = useQuery(
+    trpc.preferences.get.queryOptions()
+  );
+
+  // WhatsApp calendar selection state
+  const [selectedWhatsAppCalendars, setSelectedWhatsAppCalendars] = useState<string[]>([]);
+  const [isUpdatingCalendars, setIsUpdatingCalendars] = useState(false);
+
+  // Update selected calendars when preferences load
+  React.useEffect(() => {
+    if (preferences?.whatsappCalendarIds) {
+      setSelectedWhatsAppCalendars(preferences.whatsappCalendarIds as string[]);
+    } else {
+      // Default to all active calendars if none selected
+      const activeCalendars = calendars.filter((cal: any) => cal.isActive);
+      setSelectedWhatsAppCalendars(activeCalendars.map(cal => cal.id));
+    }
+  }, [preferences, calendars]);
+
+  // Update WhatsApp calendar selection
+  const updateWhatsAppCalendarsMutation = useMutation(
+    trpc.preferences.update.mutationOptions({
+      onSuccess: () => {
+        toast({
+          title: "Calendars updated",
+          description: `Selected ${selectedWhatsAppCalendars.length} calendar${selectedWhatsAppCalendars.length === 1 ? '' : 's'} for WhatsApp events.`,
+          variant: "success",
+        });
+        setIsUpdatingCalendars(false);
+        queryClient.invalidateQueries({ queryKey: trpc.preferences.get.queryKey() });
+      },
+      onError: (error) => {
+        toast({
+          title: "Update failed",
+          description: error.message || "Failed to update calendar selection.",
+          variant: "error",
+          duration: 3500,
+        });
+        setIsUpdatingCalendars(false);
+      },
+    })
+  );
+
+  const handleUpdateWhatsAppCalendars = () => {
+    if (selectedWhatsAppCalendars.length === 0) {
+      toast({
+        title: "No calendars selected",
+        description: "Please select at least one calendar for WhatsApp events.",
+        variant: "error",
+        duration: 3500,
+      });
+      return;
+    }
+
+    setIsUpdatingCalendars(true);
+    updateWhatsAppCalendarsMutation.mutate({
+      reminders: {
+        whatsappCalendarIds: selectedWhatsAppCalendars,
+      },
+    });
+  };
 
   // Update user profile mutation
   const updateUserMutation = useMutation(
@@ -309,6 +378,117 @@ export default function WhatsAppVerificationPage() {
                   <Badge variant={(verifiedNumber || whatsappNumbers?.[0])?.isVerified ? "default" : "secondary"}>
                     {(verifiedNumber || whatsappNumbers?.[0])?.isVerified ? "Verified" : "Pending Verification"}
                   </Badge>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* WhatsApp Calendar Selection - Only show if verified */}
+      {verifiedNumber?.isVerified && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              WhatsApp Calendar Selection
+            </CardTitle>
+            <CardDescription>
+              Choose which calendars you want to use for creating events via WhatsApp.
+              {calendars.filter((cal: any) => cal.isActive).length > 0 && ` Found ${calendars.filter((cal: any) => cal.isActive).length} active calendar(s).`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {calendarsLoading || preferencesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-pulse">Loading calendars...</div>
+              </div>
+            ) : calendars.filter((cal: any) => cal.isActive).length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>No active calendars found.</p>
+                <p className="text-sm mt-1">Please connect a calendar first.</p>
+                <Link
+                  href="/calendars"
+                  className="text-blue-600 hover:text-blue-700 font-medium mt-2 inline-block"
+                >
+                  Go to Calendar Settings
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {calendars
+                    .filter((cal: any) => cal.isActive)
+                    .map((calendar: any) => (
+                      <div
+                        key={calendar.id}
+                        className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
+                          selectedWhatsAppCalendars.includes(calendar.id)
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                        onClick={() => {
+                          if (selectedWhatsAppCalendars.includes(calendar.id)) {
+                            setSelectedWhatsAppCalendars(prev => prev.filter(id => id !== calendar.id));
+                          } else {
+                            setSelectedWhatsAppCalendars(prev => [...prev, calendar.id]);
+                          }
+                        }}
+                      >
+                        <Checkbox
+                          id={`whatsapp-calendar-${calendar.id}`}
+                          checked={selectedWhatsAppCalendars.includes(calendar.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedWhatsAppCalendars(prev => [...prev, calendar.id]);
+                            } else {
+                              setSelectedWhatsAppCalendars(prev => prev.filter(id => id !== calendar.id));
+                            }
+                          }}
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <Label
+                            htmlFor={`whatsapp-calendar-${calendar.id}`}
+                            className="flex items-center gap-2 font-medium cursor-pointer"
+                          >
+                            {calendar.calendarName || calendar.email}
+                            {selectedWhatsAppCalendars.includes(calendar.id) && (
+                              <Check className="h-4 w-4 text-blue-600" />
+                            )}
+                          </Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {calendar.email}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {calendar.provider === "google" ? "Google" : "Microsoft"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                <div className="flex justify-end pt-4 border-t">
+                  <Button
+                    onClick={handleUpdateWhatsAppCalendars}
+                    disabled={
+                      selectedWhatsAppCalendars.length === 0 ||
+                      isUpdatingCalendars ||
+                      updateWhatsAppCalendarsMutation.isPending
+                    }
+                  >
+                    {isUpdatingCalendars || updateWhatsAppCalendarsMutation.isPending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Calendar Selection"
+                    )}
+                  </Button>
                 </div>
               </div>
             )}
