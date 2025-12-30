@@ -3392,7 +3392,15 @@ export default function CalendarsPage() {
               <label htmlFor="event-address" className="text-sm font-medium">
                 Address (optional)
               </label>
-
+              <Button
+                type="button"
+                variant={createGoogleMeet ? "primary" : "outline"}
+                onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
+                className={editCreateGoogleMeet ? "w-full sm:w-auto bg-primary text-primary-foreground hover:font-bold hover:bg-primary" : "w-full sm:w-auto"}
+              >
+                <Video className="h-4 w-4 mr-2" />
+                {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
+              </Button>
 
               {/* Saved Addresses Dropdown */}
               {addresses.length > 0 && (
@@ -3621,15 +3629,7 @@ export default function CalendarsPage() {
                   />
                 ))}
               </div>
-<Button
-              type="button"
-              variant={createGoogleMeet ? "primary" : "outline"}
-              onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
-              className={editCreateGoogleMeet ? "w-full sm:w-auto bg-primary text-primary-foreground hover:font-bold hover:bg-primary" : "w-full sm:w-auto"}
-            >
-              <Video className="h-4 w-4 mr-2" />
-              {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
-            </Button>            </div>
+            </div>
           </div>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <AlertDialogCancel
