@@ -132,16 +132,16 @@ export async function GET(req: NextRequest) {
         const userPreferencesForAlert = Array.isArray(userPrefsRawForAlert) 
           ? userPrefsRawForAlert[0] 
           : userPrefsRawForAlert;
-        // Priority: userPreferences.timezone > user.timezone > default "Africa/Johannesburg"
-        const userTimezone = userPreferencesForAlert?.timezone || (user as any).timezone || 'Africa/Johannesburg';
+        // Priority: user.timezone > userPreferences.timezone > default "Africa/Johannesburg"
+        const userTimezone = (user as any).timezone || userPreferencesForAlert?.timezone || 'Africa/Johannesburg';
         
         logger.debug(
           {
             userId,
-            timezoneSource: userPreferencesForAlert?.timezone ? 'userPreferences' : (user as any).timezone ? 'user' : 'default',
+            timezoneSource: (user as any).timezone ? 'user' : userPreferencesForAlert?.timezone ? 'userPreferences' : 'default',
             userTimezone,
-            preferencesTimezone: userPreferencesForAlert?.timezone,
             userTableTimezone: (user as any).timezone,
+            preferencesTimezone: userPreferencesForAlert?.timezone,
           },
           'User timezone from database (for alert)'
         );
@@ -392,17 +392,17 @@ export async function GET(req: NextRequest) {
           : userPrefsRaw;
         
         // Get user's timezone from database
-        // Priority: userPreferences.timezone > user.timezone > default "Africa/Johannesburg"
+        // Priority: user.timezone > userPreferences.timezone > default "Africa/Johannesburg"
         // The timezone MUST come from the database, not from server settings
-        const userTimezone = userPreferences?.timezone || (user as any).timezone || 'Africa/Johannesburg';
+        const userTimezone = (user as any).timezone || userPreferences?.timezone || 'Africa/Johannesburg';
         
         logger.info(
           {
             userId,
-            timezoneSource: userPreferences?.timezone ? 'userPreferences' : (user as any).timezone ? 'user' : 'default',
+            timezoneSource: (user as any).timezone ? 'user' : userPreferences?.timezone ? 'userPreferences' : 'default',
             userTimezone,
-            preferencesTimezone: userPreferences?.timezone,
             userTableTimezone: (user as any).timezone,
+            preferencesTimezone: userPreferences?.timezone,
             hasPreferences: !!userPreferences,
             preferencesIsArray: Array.isArray(userPrefsRaw),
           },
@@ -413,8 +413,8 @@ export async function GET(req: NextRequest) {
           logger.warn({ 
             userId, 
             hasPreferences: !!userPreferences,
+            userTableTimezone: (user as any).timezone,
             preferencesTimezone: userPreferences?.timezone,
-            userTimezone: (user as any).timezone,
             preferencesIsArray: Array.isArray(userPrefsRaw),
           }, 'User has no valid timezone set, using default');
         }
@@ -485,7 +485,7 @@ export async function GET(req: NextRequest) {
             userTimezone,
             serverTimeUTC: now.toISOString(),
             userLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}`,
-            timezoneSource: userPreferences?.timezone ? 'userPreferences' : (user as any).timezone ? 'user' : 'default',
+            timezoneSource: (user as any).timezone ? 'user' : userPreferences?.timezone ? 'userPreferences' : 'default',
           },
           'Current time in user timezone (from database)'
         );
