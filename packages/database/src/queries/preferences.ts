@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../client";
 import { userPreferences } from "../schema";
-import { withMutationLogging } from "../utils/query-logger";
+import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
 
 export async function createUserPreferences(db: Database, userId: string) {
   return withMutationLogging(
