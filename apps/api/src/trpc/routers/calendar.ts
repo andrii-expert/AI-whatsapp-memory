@@ -665,6 +665,7 @@ export const calendarRouter = createTRPCRouter({
       allDay: z.boolean().optional().default(false),
       createGoogleMeet: z.boolean().optional().default(false),
       color: z.string().optional(),
+      attendees: z.array(z.string().email()).optional().default([]), // Array of email addresses
     }))
     .mutation(async ({ ctx: { db, session }, input }) => {
       const calendar = await getCalendarById(db, input.calendarId);
@@ -718,6 +719,7 @@ export const calendarRouter = createTRPCRouter({
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             createGoogleMeet: input.createGoogleMeet || false,
             color: input.color || undefined,
+            attendees: input.attendees || [],
           });
 
           logger.info({
@@ -759,6 +761,7 @@ export const calendarRouter = createTRPCRouter({
               description: input.description,
               location: input.location,
               allDay: input.allDay || false,
+              attendees: input.attendees || [],
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             });
 
@@ -803,6 +806,7 @@ export const calendarRouter = createTRPCRouter({
       allDay: z.boolean().optional().default(false),
       createGoogleMeet: z.boolean().optional(),
       color: z.string().optional(),
+      attendees: z.array(z.string().email()).optional(), // Array of email addresses
     }))
     .mutation(async ({ ctx: { db, session }, input }) => {
       const calendar = await getCalendarById(db, input.calendarId);
@@ -912,6 +916,9 @@ export const calendarRouter = createTRPCRouter({
           if (input.color !== undefined && input.color !== null) {
             updateParams.color = input.color;
           }
+          if (input.attendees !== undefined) {
+            updateParams.attendees = input.attendees;
+          }
 
           logger.info({
             userId: session.user.id,
@@ -963,6 +970,7 @@ export const calendarRouter = createTRPCRouter({
               location: input.location,
               timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
               createGoogleMeet: input.createGoogleMeet,
+              attendees: input.attendees,
             });
 
             logger.info({

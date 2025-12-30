@@ -526,6 +526,8 @@ export default function CalendarsPage() {
   const autocompleteRef = useRef<any>(null);
   const [createGoogleMeet, setCreateGoogleMeet] = useState(false);
   const [eventColor, setEventColor] = useState("blue");
+  const [eventAttendees, setEventAttendees] = useState<string[]>([]); // Array of email addresses
+  const [manualAttendeeInput, setManualAttendeeInput] = useState(""); // For manual email/phone entry
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
     // Try to load from localStorage
     if (typeof window !== 'undefined') {
@@ -606,6 +608,10 @@ export default function CalendarsPage() {
       // Set color based on fresh data
       setEditEventColor(freshEvent.color || "blue");
 
+      // Set attendees from fresh data
+      setEditEventAttendees(freshEvent.attendees || []);
+      setEditManualAttendeeInput("");
+
       // Format date and time for form inputs
       if (freshEvent.start) {
         const eventDate = new Date(freshEvent.start);
@@ -664,6 +670,8 @@ export default function CalendarsPage() {
   const editAutocompleteRef = useRef<any>(null);
   const [editCreateGoogleMeet, setEditCreateGoogleMeet] = useState(false);
   const [editEventColor, setEditEventColor] = useState("blue");
+  const [editEventAttendees, setEditEventAttendees] = useState<string[]>([]); // Array of email addresses
+  const [editManualAttendeeInput, setEditManualAttendeeInput] = useState(""); // For manual email/phone entry
 
   // Fetch user's calendars
   const { data: calendars = [], isLoading, refetch } = useQuery(
@@ -672,6 +680,9 @@ export default function CalendarsPage() {
 
   // Fetch addresses
   const { data: addresses = [] } = useQuery(trpc.addresses.list.queryOptions());
+  
+  // Fetch friends for attendee selection
+  const { data: friends = [] } = useQuery(trpc.friends.list.queryOptions());
 
   // Parse coordinates from string
   const parseCoordinates = (coordString: string | undefined): { lat: number | null; lng: number | null } => {
@@ -1547,6 +1558,8 @@ export default function CalendarsPage() {
          setIsGeocoding(false);
          setCreateGoogleMeet(false);
          setEventColor("blue");
+         setEventAttendees([]);
+         setManualAttendeeInput("");
          setSelectedCalendarIds([]);
          // Close modal
          setCreateEventDialogOpen(false);
@@ -1809,6 +1822,7 @@ export default function CalendarsPage() {
       allDay: !eventTime, // If no time, treat as all-day
       createGoogleMeet,
       color: eventColor,
+      attendees: eventAttendees.length > 0 ? eventAttendees : undefined,
     });
   };
 
@@ -1990,6 +2004,11 @@ export default function CalendarsPage() {
     // Add color to update data
     if (editEventColor && editEventColor !== "blue") {
       updateData.color = editEventColor;
+    }
+
+    // Add attendees to update data
+    if (editEventAttendees.length > 0) {
+      updateData.attendees = editEventAttendees;
     }
 
     updateEventMutation.mutate(updateData);
@@ -2918,6 +2937,20 @@ export default function CalendarsPage() {
         onOpenChange={(open) => {
           if (!open) {
             setCreateEventDialogOpen(false);
+            // Reset form when closing
+            setEventTitle("");
+            setEventDate("");
+            setEventTime("");
+            setEventLocation("");
+            setEventAddress("");
+            setEventAddressId("");
+            setEventCoordinates("");
+            setEnableDropPin(false);
+            setAddressComponents({});
+            setCreateGoogleMeet(false);
+            setEventColor("blue");
+            setEventAttendees([]);
+            setManualAttendeeInput("");
           }
         }}
       >
@@ -3192,6 +3225,133 @@ export default function CalendarsPage() {
               <Video className="h-4 w-4 mr-2" />
               {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
             </Button>
+
+            {/* Attendees Section */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Attendees (optional)
+              </label>
+              <p className="text-xs text-gray-500">
+                Add people to invite to this event. Google Calendar requires email addresses.
+              </p>
+              
+              {/* Select from Friends */}
+              {friends.length > 0 && (
+                <div className="space-y-2">
+                  <Select
+                    value=""
+                    onValueChange={(friendId) => {
+                      const friend = friends.find((f: any) => f.id === friendId);
+                      if (friend && friend.email && !eventAttendees.includes(friend.email)) {
+                        setEventAttendees([...eventAttendees, friend.email]);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full text-sm">
+                      <SelectValue placeholder="Select from friends" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {friends
+                        .filter((f: any) => f.email && !eventAttendees.includes(f.email))
+                        .map((friend: any) => (
+                          <SelectItem key={friend.id} value={friend.id}>
+                            {friend.name} {friend.email ? `(${friend.email})` : ''}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Manual Email Entry */}
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="Enter email address"
+                  value={manualAttendeeInput}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setManualAttendeeInput(e.target.value)}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === "Enter" && manualAttendeeInput.trim()) {
+                      e.preventDefault();
+                      const email = manualAttendeeInput.trim().toLowerCase();
+                      // Basic email validation
+                      if (email.includes("@") && email.includes(".") && !eventAttendees.includes(email)) {
+                        setEventAttendees([...eventAttendees, email]);
+                        setManualAttendeeInput("");
+                      } else if (eventAttendees.includes(email)) {
+                        toast({
+                          title: "Already added",
+                          description: "This email is already in the attendees list.",
+                          variant: "info",
+                        });
+                      } else {
+                        toast({
+                          title: "Invalid email",
+                          description: "Please enter a valid email address.",
+                          variant: "error",
+                        });
+                      }
+                    }
+                  }}
+                  className="text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (manualAttendeeInput.trim()) {
+                      const email = manualAttendeeInput.trim().toLowerCase();
+                      if (email.includes("@") && email.includes(".") && !eventAttendees.includes(email)) {
+                        setEventAttendees([...eventAttendees, email]);
+                        setManualAttendeeInput("");
+                      } else if (eventAttendees.includes(email)) {
+                        toast({
+                          title: "Already added",
+                          description: "This email is already in the attendees list.",
+                          variant: "info",
+                        });
+                      } else {
+                        toast({
+                          title: "Invalid email",
+                          description: "Please enter a valid email address.",
+                          variant: "error",
+                        });
+                      }
+                    }
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Selected Attendees List */}
+              {eventAttendees.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-gray-700">Selected attendees:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {eventAttendees.map((email, index) => (
+                      <Badge
+                        key={index}
+                        variant="secondary"
+                        className="flex items-center gap-1 px-2 py-1"
+                      >
+                        <span className="text-xs">{email}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEventAttendees(eventAttendees.filter((_, i) => i !== index));
+                          }}
+                          className="ml-1 hover:bg-gray-300 rounded-full p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">
@@ -3762,6 +3922,133 @@ export default function CalendarsPage() {
                     {editCreateGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
                   </Button>
 
+                  {/* Attendees Section */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Attendees (optional)
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      Add people to invite to this event. Google Calendar requires email addresses.
+                    </p>
+                    
+                    {/* Select from Friends */}
+                    {friends.length > 0 && (
+                      <div className="space-y-2">
+                        <Select
+                          value=""
+                          onValueChange={(friendId) => {
+                            const friend = friends.find((f: any) => f.id === friendId);
+                            if (friend && friend.email && !editEventAttendees.includes(friend.email)) {
+                              setEditEventAttendees([...editEventAttendees, friend.email]);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full text-sm">
+                            <SelectValue placeholder="Select from friends" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {friends
+                              .filter((f: any) => f.email && !editEventAttendees.includes(f.email))
+                              .map((friend: any) => (
+                                <SelectItem key={friend.id} value={friend.id}>
+                                  {friend.name} {friend.email ? `(${friend.email})` : ''}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Manual Email Entry */}
+                    <div className="flex gap-2">
+                      <Input
+                        type="email"
+                        placeholder="Enter email address"
+                        value={editManualAttendeeInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditManualAttendeeInput(e.target.value)}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                          if (e.key === "Enter" && editManualAttendeeInput.trim()) {
+                            e.preventDefault();
+                            const email = editManualAttendeeInput.trim().toLowerCase();
+                            // Basic email validation
+                            if (email.includes("@") && email.includes(".") && !editEventAttendees.includes(email)) {
+                              setEditEventAttendees([...editEventAttendees, email]);
+                              setEditManualAttendeeInput("");
+                            } else if (editEventAttendees.includes(email)) {
+                              toast({
+                                title: "Already added",
+                                description: "This email is already in the attendees list.",
+                                variant: "info",
+                              });
+                            } else {
+                              toast({
+                                title: "Invalid email",
+                                description: "Please enter a valid email address.",
+                                variant: "error",
+                              });
+                            }
+                          }
+                        }}
+                        className="text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (editManualAttendeeInput.trim()) {
+                            const email = editManualAttendeeInput.trim().toLowerCase();
+                            if (email.includes("@") && email.includes(".") && !editEventAttendees.includes(email)) {
+                              setEditEventAttendees([...editEventAttendees, email]);
+                              setEditManualAttendeeInput("");
+                            } else if (editEventAttendees.includes(email)) {
+                              toast({
+                                title: "Already added",
+                                description: "This email is already in the attendees list.",
+                                variant: "info",
+                              });
+                            } else {
+                              toast({
+                                title: "Invalid email",
+                                description: "Please enter a valid email address.",
+                                variant: "error",
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Selected Attendees List */}
+                    {editEventAttendees.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-gray-700">Selected attendees:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {editEventAttendees.map((email, index) => (
+                            <Badge
+                              key={index}
+                              variant="secondary"
+                              className="flex items-center gap-1 px-2 py-1"
+                            >
+                              <span className="text-xs">{email}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditEventAttendees(editEventAttendees.filter((_, i) => i !== index));
+                                }}
+                                className="ml-1 hover:bg-gray-300 rounded-full p-0.5"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
                       Color
@@ -4143,7 +4430,7 @@ export default function CalendarsPage() {
       {/* Mobile Sidebar */}
       <div
         className={cn(
-          "fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto",
+          "fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto mb-12",
           isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         style={{ margin: 0 }}
