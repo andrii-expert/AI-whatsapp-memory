@@ -457,7 +457,7 @@ const TimePicker = ({
   return (
     <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
       <Select value={selectedHour} onValueChange={handleHourChange}>
-        <SelectTrigger id={id} className="w-[70px] sm:w-[85px] text-sm">
+        <SelectTrigger id={id} className="sm:w-[85px] text-sm">
           <SelectValue placeholder="Hour" />
         </SelectTrigger>
         <SelectContent>
@@ -472,7 +472,7 @@ const TimePicker = ({
       <span className="text-gray-500 font-semibold text-base sm:text-lg">:</span>
       
       <Select value={selectedMinute} onValueChange={handleMinuteChange}>
-        <SelectTrigger className="w-[70px] sm:w-[85px] text-sm">
+        <SelectTrigger className="sm:w-[85px] text-sm">
           <SelectValue placeholder="Minute" />
         </SelectTrigger>
         <SelectContent>
