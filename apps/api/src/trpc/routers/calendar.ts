@@ -191,6 +191,7 @@ export const calendarRouter = createTRPCRouter({
           }
 
           // Determine if this should be the primary calendar
+          // Only set as primary if this is the first connection AND it's the provider's primary calendar
           const isPrimary = isFirstConnection && calendar.id === primaryCalendar.id;
 
           try {
@@ -203,6 +204,7 @@ export const calendarRouter = createTRPCRouter({
               accessToken: tokens.accessToken,
               refreshToken: tokens.refreshToken,
               expiresAt: tokens.expiresAt,
+              isPrimary, // Pass isPrimary explicitly
             });
 
             if (connection) {

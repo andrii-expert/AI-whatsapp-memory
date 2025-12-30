@@ -93,14 +93,28 @@ export async function createCalendarConnection(db: Database, data: {
   expiresAt?: Date;
   providerAccountId?: string;
   providerData?: string;
+  isPrimary?: boolean; // Allow explicit primary setting
 }) {
   return withMutationLogging(
     'createCalendarConnection',
     { userId: data.userId, provider: data.provider, email: data.email },
     async () => {
-      // Check if this is the first calendar for the user
-      const existingCalendars = await getUserCalendars(db, data.userId);
-      const isPrimary = existingCalendars.length === 0;
+      // If isPrimary is explicitly set, use it; otherwise check if this is the first calendar
+      let isPrimary: boolean;
+      if (data.isPrimary !== undefined) {
+        isPrimary = data.isPrimary;
+        // If setting as primary, remove primary from all other calendars
+        if (isPrimary) {
+          await db
+            .update(calendarConnections)
+            .set({ isPrimary: false })
+            .where(eq(calendarConnections.userId, data.userId));
+        }
+      } else {
+        // Check if this is the first calendar for the user
+        const existingCalendars = await getUserCalendars(db, data.userId);
+        isPrimary = existingCalendars.length === 0;
+      }
       
       const [calendar] = await db
         .insert(calendarConnections)
@@ -182,16 +196,31 @@ export async function disconnectCalendar(db: Database, id: string) {
     'disconnectCalendar',
     { calendarId: id },
     async () => {
+      // Get the calendar to check if it's primary
+      const calendar = await getCalendarById(db, id);
+      const wasPrimary = calendar?.isPrimary;
+      const userId = calendar?.userId;
+      
       const [disconnected] = await db
         .update(calendarConnections)
         .set({
           isActive: false,
+          isPrimary: false, // Remove primary status when disconnecting
           accessToken: null,
           refreshToken: null,
           updatedAt: new Date(),
         })
         .where(eq(calendarConnections.id, id))
         .returning();
+      
+      // If the disconnected calendar was primary, set the first active calendar as primary
+      if (wasPrimary && userId) {
+        const activeCalendars = await getActiveCalendars(db, userId);
+        if (activeCalendars.length > 0) {
+          // Set the first active calendar as primary
+          await setPrimaryCalendar(db, userId, activeCalendars[0]!.id);
+        }
+      }
         
       return disconnected;
     }
@@ -202,7 +231,26 @@ export async function deleteCalendarConnection(db: Database, id: string) {
   return withMutationLogging(
     'deleteCalendarConnection',
     { calendarId: id },
-    () => db.delete(calendarConnections).where(eq(calendarConnections.id, id))
+    async () => {
+      // Get the calendar to check if it's primary
+      const calendar = await getCalendarById(db, id);
+      const wasPrimary = calendar?.isPrimary;
+      const userId = calendar?.userId;
+      
+      // Delete the calendar
+      await db.delete(calendarConnections).where(eq(calendarConnections.id, id));
+      
+      // If the deleted calendar was primary, set the first active calendar as primary
+      if (wasPrimary && userId) {
+        const activeCalendars = await getActiveCalendars(db, userId);
+        if (activeCalendars.length > 0) {
+          // Set the first active calendar as primary
+          await setPrimaryCalendar(db, userId, activeCalendars[0]!.id);
+        }
+      }
+      
+      return { success: true };
+    }
   );
 }
 

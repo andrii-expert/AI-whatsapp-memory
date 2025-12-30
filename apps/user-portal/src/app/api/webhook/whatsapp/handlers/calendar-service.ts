@@ -307,8 +307,17 @@ export class CalendarService implements ICalendarService {
         throw new Error('None of the selected calendars are active. Please check your calendar connections and ensure at least one selected calendar is active.');
       }
 
-      // Use the first active calendar for creating events
-      const calendarConnection = activeCalendarConnections[0];
+      // Use the primary calendar if available, otherwise use the first active calendar
+      const primaryCalendar = activeCalendarConnections.find(cal => cal.isPrimary);
+      const calendarConnection = primaryCalendar || activeCalendarConnections[0];
+      
+      logger.info({ 
+        userId, 
+        usingPrimary: !!primaryCalendar,
+        calendarId: calendarConnection.id,
+        calendarName: calendarConnection.calendarName || calendarConnection.email,
+        isPrimary: calendarConnection.isPrimary
+      }, 'Selected calendar for event creation');
 
       if (!calendarConnection) {
         throw new Error('Selected calendar not found. Please check your calendar connections.');

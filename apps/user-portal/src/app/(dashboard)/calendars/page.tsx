@@ -46,6 +46,7 @@ import {
   Mail,
   Phone,
   User,
+  Star,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@imaginecalendar/ui/command";
@@ -997,12 +998,17 @@ export default function CalendarsPage() {
     }
   }, [selectedCalendarIds]);
 
-  // Auto-select all active calendars when calendars load (only if no saved selection)
+  // Auto-select primary calendar (or first active calendar) when calendars load (only if no saved selection)
   useEffect(() => {
     if (calendars.length > 0 && selectedCalendarIds.length === 0) {
       const activeCalendars = calendars.filter((cal: any) => cal.isActive);
       if (activeCalendars.length > 0) {
-        setSelectedCalendarIds(activeCalendars.map(cal => cal.id));
+        // Prefer primary calendar, otherwise use first active calendar
+        const primaryCalendar = activeCalendars.find((cal: any) => cal.isPrimary);
+        const defaultCalendar = primaryCalendar || activeCalendars[0];
+        if (defaultCalendar) {
+          setSelectedCalendarIds([defaultCalendar.id]);
+        }
       }
     }
   }, [calendars, selectedCalendarIds.length]);
@@ -1538,12 +1544,20 @@ export default function CalendarsPage() {
   // Update calendar mutation (for toggling active status)
   const updateCalendarMutation = useMutation(
     trpc.calendar.update.mutationOptions({
-      onSuccess: () => {
-        toast({
-          title: "Calendar updated",
-          description: "Calendar settings have been updated.",
-          variant: "success",
-        });
+      onSuccess: (data, variables) => {
+        if (variables.isPrimary) {
+          toast({
+            title: "Primary calendar set",
+            description: "This calendar is now your primary calendar. Events created via WhatsApp will be added here by default.",
+            variant: "success",
+          });
+        } else {
+          toast({
+            title: "Calendar updated",
+            description: "Calendar settings have been updated.",
+            variant: "success",
+          });
+        }
         refetch();
       },
       onError: (error) => {
@@ -1556,6 +1570,14 @@ export default function CalendarsPage() {
       },
     })
   );
+
+  // Handler to set primary calendar
+  const handleSetPrimaryCalendar = (calendarId: string) => {
+    updateCalendarMutation.mutate({
+      id: calendarId,
+      isPrimary: true,
+    });
+  };
 
   // Create event mutation
   const createEventMutation = useMutation(
@@ -2469,6 +2491,27 @@ export default function CalendarsPage() {
                                 </label>
                                 {calendar.isActive ? (
                                   <div className="flex items-center gap-1">
+                                    {calendar.isPrimary ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs py-0 px-1.5 h-5 border-blue-500 text-blue-700 bg-blue-50"
+                                        title="Primary calendar - events will be created here by default"
+                                      >
+                                        <Star className="h-3 w-3 mr-1 fill-blue-500" />
+                                        Primary
+                                      </Badge>
+                                    ) : (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleSetPrimaryCalendar(calendar.id)}
+                                        disabled={updateCalendarMutation.isPending}
+                                        className="text-xs h-6 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                        title="Set as primary calendar"
+                                      >
+                                        <Star className="h-3 w-3" />
+                                      </Button>
+                                    )}
                                     <Badge
                                       variant="outline"
                                       className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
