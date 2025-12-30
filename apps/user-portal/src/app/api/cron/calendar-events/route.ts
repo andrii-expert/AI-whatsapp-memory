@@ -90,7 +90,75 @@ export async function GET(req: NextRequest) {
 
     let notificationsSent = 0;
     let notificationsSkipped = 0;
+    let alertsSent = 0;
     const errors: string[] = [];
+
+    // Group ALL connections by user (for sending alert messages to all users with calendars)
+    const allConnectionsByUser = new Map<string, typeof calendarConnections>();
+    for (const connection of calendarConnections) {
+      if (!allConnectionsByUser.has(connection.userId)) {
+        allConnectionsByUser.set(connection.userId, []);
+      }
+      allConnectionsByUser.get(connection.userId)!.push(connection);
+    }
+
+    // Send "Alert received" message to all users with calendar connections
+    for (const [userId, userConnections] of allConnectionsByUser.entries()) {
+      try {
+        // Get user info
+        const user = await getUserById(db, userId);
+        if (!user) {
+          logger.warn({ userId }, 'User not found for alert message');
+          continue;
+        }
+
+        // Get user's verified WhatsApp numbers
+        const whatsappNumbers = await getUserWhatsAppNumbers(db, userId);
+        const whatsappNumber = whatsappNumbers.find(n => n.isVerified && n.isActive) ||
+                              whatsappNumbers.find(n => n.isVerified);
+
+        if (!whatsappNumber) {
+          logger.debug({ userId }, 'User has no verified WhatsApp number, skipping alert');
+          continue;
+        }
+
+        // Send simple "Alert received" message
+        try {
+          await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, "Alert received");
+          
+          // Log the message
+          await logOutgoingWhatsAppMessage(db, {
+            whatsappNumberId: whatsappNumber.id,
+            userId: whatsappNumber.userId,
+            messageType: 'text',
+            messageContent: "Alert received",
+            isFreeMessage: true,
+          });
+
+          alertsSent++;
+          logger.info(
+            {
+              userId,
+              phoneNumber: whatsappNumber.phoneNumber,
+            },
+            'Alert message "Alert received" sent successfully'
+          );
+        } catch (alertError) {
+          logger.error(
+            {
+              error: alertError,
+              userId,
+              phoneNumber: whatsappNumber.phoneNumber,
+            },
+            'Failed to send alert message'
+          );
+          errors.push(`Failed to send alert message to user ${userId}`);
+        }
+      } catch (userError) {
+        logger.error({ error: userError, userId }, 'Error sending alert message to user');
+        errors.push(`Error sending alert to user ${userId}`);
+      }
+    }
 
     // Group filtered connections by user (for event reminder notifications)
     const connectionsByUser = new Map<string, typeof filteredConnections>();
@@ -101,7 +169,7 @@ export async function GET(req: NextRequest) {
       connectionsByUser.get(connection.userId)!.push(connection);
     }
 
-    // If no filtered connections, exit early
+    // If no filtered connections, exit early after sending alerts
     if (filteredConnections.length === 0) {
       logger.info({}, 'No calendar connections found for users with notifications enabled, exiting');
       return NextResponse.json({
@@ -111,6 +179,7 @@ export async function GET(req: NextRequest) {
         connectionsChecked: 0,
         notificationsSent: 0,
         notificationsSkipped: 0,
+        alertsSent: allConnectionsByUser.size,
       });
     }
 
@@ -224,9 +293,6 @@ export async function GET(req: NextRequest) {
           'Found verified WhatsApp number for user'
         );
 
-        // Collect all events from all calendars for the alert message
-        const allEventsForAlert: Array<{ event: any; connection: any; eventStart: Date }> = [];
-
         // Check each calendar connection and fetch upcoming events
         for (const connection of userConnections) {
           try {
@@ -297,15 +363,6 @@ export async function GET(req: NextRequest) {
               for (const event of events) {
                 try {
                   const eventStart = new Date(event.start);
-                  
-                  // Collect all future events for the alert message
-                  if (eventStart.getTime() > now.getTime()) {
-                    allEventsForAlert.push({
-                      event,
-                      connection,
-                      eventStart,
-                    });
-                  }
                   
                   // Get event start time in user's timezone
                   const eventFormatter = new Intl.DateTimeFormat('en-US', {
@@ -403,10 +460,10 @@ export async function GET(req: NextRequest) {
                   // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
                   // For example: if event is at 2:00 PM and notification is 10 minutes before,
                   // we want to send at 1:50 PM, which means timeDiffMinutes should be 10
-                  // Use a range to account for cron timing (allow ±2 minute tolerance for cron execution timing)
+                  // Use a range to account for cron timing (allow ±1 minute tolerance for cron execution timing)
                   // This ensures we catch notifications even if cron runs slightly early or late
-                  const minMinutes = Math.max(0, calendarNotificationMinutes - 2);
-                  const maxMinutes = calendarNotificationMinutes + 2;
+                  const minMinutes = Math.max(0, calendarNotificationMinutes - 1);
+                  const maxMinutes = calendarNotificationMinutes + 1;
                   
                   // Calculate when the notification should be sent (event time - notification minutes)
                   const notificationTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
@@ -430,8 +487,8 @@ export async function GET(req: NextRequest) {
                       isTomorrow,
                       eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
                       currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
-                      willTriggerByTimeDiff: timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes,
-                      willTriggerByNotificationTime: Math.abs(notificationTimeDiffMinutes) <= 2,
+                      willTrigger: timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes,
+                      willTriggerByNotificationTime: Math.abs(notificationTimeDiffMinutes) <= 1,
                     },
                     'Checking if event should trigger notification'
                   );
@@ -440,10 +497,10 @@ export async function GET(req: NextRequest) {
                   // We want to send when: currentTime is approximately (eventTime - calendarNotificationMinutes)
                   // This means timeDiffMinutes should be approximately calendarNotificationMinutes
                   // Use both checks for reliability:
-                  // 1. Direct time difference check (primary) - check if we're X minutes before event
-                  // 2. Notification time check (backup) - check if we're at the calculated notification time
+                  // 1. Direct time difference check (primary)
+                  // 2. Notification time check (backup, for edge cases)
                   const shouldTriggerByTimeDiff = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
-                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 2 && timeDiffMinutes > 0;
+                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 1 && timeDiffMinutes > 0;
                   const shouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime;
                   
                   logger.debug(
@@ -568,119 +625,6 @@ export async function GET(req: NextRequest) {
             errors.push(`Error processing calendar ${connection.id}`);
           }
         }
-
-        // Send alert message with all events data
-        try {
-          // Sort events by start time (earliest first)
-          allEventsForAlert.sort((a, b) => a.eventStart.getTime() - b.eventStart.getTime());
-          
-          // Format current time for alert
-          const currentTimeStr = `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')}`;
-          const currentDateStr = `${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}`;
-          
-          let alertMessage = `*Alert received*\n\n`;
-          alertMessage += `*Cron job executed at:* ${now.toISOString()}\n`;
-          alertMessage += `*Your local time:* ${currentTimeStr} on ${currentDateStr}\n`;
-          alertMessage += `*Timezone:* ${userTimezone}\n\n`;
-          
-          if (allEventsForAlert.length > 0) {
-            alertMessage += `*Upcoming Events (${allEventsForAlert.length}):*\n\n`;
-            
-            allEventsForAlert.forEach((eventData, index) => {
-              const event = eventData.event;
-              const eventStart = new Date(event.start);
-              
-              // Format event time in user's timezone
-              const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
-                timeZone: userTimezone,
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric',
-                hour12: true,
-              });
-              const eventTimeStr = eventTimeFormatter.format(eventStart);
-              
-              // Calculate time until event
-              const timeDiffMs = eventStart.getTime() - now.getTime();
-              const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
-              const timeDiffHours = Math.floor(timeDiffMinutes / 60);
-              const timeDiffDays = Math.floor(timeDiffHours / 24);
-              
-              let timeUntilEvent = '';
-              if (timeDiffDays > 0) {
-                timeUntilEvent = `(${timeDiffDays} day${timeDiffDays > 1 ? 's' : ''} ${timeDiffHours % 24} hour${(timeDiffHours % 24) !== 1 ? 's' : ''})`;
-              } else if (timeDiffHours > 0) {
-                timeUntilEvent = `(${timeDiffHours} hour${timeDiffHours > 1 ? 's' : ''} ${timeDiffMinutes % 60} minute${(timeDiffMinutes % 60) !== 1 ? 's' : ''})`;
-              } else {
-                timeUntilEvent = `(${timeDiffMinutes} minute${timeDiffMinutes !== 1 ? 's' : ''})`;
-              }
-              
-              alertMessage += `${index + 1}. *${event.title || 'Untitled Event'}*\n`;
-              alertMessage += `   📅 *Time:* ${eventTimeStr} ${timeUntilEvent}\n`;
-              alertMessage += `   📋 *Calendar:* ${eventData.connection.calendarName || 'Calendar'}\n`;
-              
-              if (event.location) {
-                alertMessage += `   📍 *Location:* ${event.location}\n`;
-              }
-              
-              if (event.description) {
-                const description = event.description.length > 100 
-                  ? event.description.substring(0, 100) + '...' 
-                  : event.description;
-                alertMessage += `   📝 *Description:* ${description}\n`;
-              }
-              
-              alertMessage += `\n`;
-            });
-          } else {
-            alertMessage += `*No upcoming events found* in the next 24 hours.\n`;
-          }
-          
-          alertMessage += `\n_Processed ${userConnections.length} calendar connection${userConnections.length !== 1 ? 's' : ''}._`;
-          
-          logger.info(
-            {
-              userId,
-              phoneNumber: whatsappNumber.phoneNumber,
-              eventsCount: allEventsForAlert.length,
-              connectionsCount: userConnections.length,
-            },
-            'Sending alert message with all events data'
-          );
-          
-          await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, alertMessage);
-          
-          // Log the message
-          await logOutgoingWhatsAppMessage(db, {
-            whatsappNumberId: whatsappNumber.id,
-            userId: whatsappNumber.userId,
-            messageType: 'text',
-            messageContent: alertMessage,
-            isFreeMessage: true,
-          });
-          
-          logger.info(
-            {
-              userId,
-              phoneNumber: whatsappNumber.phoneNumber,
-              messageSent: true,
-              eventsIncluded: allEventsForAlert.length,
-            },
-            'Alert message sent successfully'
-          );
-        } catch (alertError) {
-          logger.error(
-            {
-              error: alertError,
-              userId,
-              phoneNumber: whatsappNumber.phoneNumber,
-            },
-            'Failed to send alert message'
-          );
-          errors.push(`Failed to send alert message to user ${userId}`);
-        }
       } catch (userError) {
         logger.error({ error: userError, userId }, 'Error processing user calendar connections');
         errors.push(`Error processing calendars for user ${userId}`);
@@ -692,6 +636,7 @@ export async function GET(req: NextRequest) {
         connectionsChecked: filteredConnections.length,
         notificationsSent,
         notificationsSkipped,
+        alertsSent,
         errorsCount: errors.length,
         usersProcessed: connectionsByUser.size,
       },
@@ -705,6 +650,7 @@ export async function GET(req: NextRequest) {
       connectionsChecked: filteredConnections.length,
       notificationsSent,
       notificationsSkipped,
+      alertsSent,
       usersProcessed: connectionsByUser.size,
       errors: errors.length > 0 ? errors : undefined
     });
