@@ -83,41 +83,46 @@ const frequencyEnum = z.enum(["daily", "hourly", "minutely", "once", "weekly", "
 const createReminderSchema = z.object({
   title: z.string().min(1, "Reminder title is required").max(200),
   frequency: frequencyEnum,
-  time: z.string().optional(),
-  minuteOfHour: z.number().min(0).max(59).optional(),
-  intervalMinutes: z.number().min(1).max(1440).optional(),
-  daysFromNow: z.number().min(0).max(3650).optional(), // Max 10 years
-  targetDate: z.date().optional(),
-  dayOfMonth: z.number().min(1).max(31).optional(),
-  month: z.number().min(1).max(12).optional(),
-  daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day of week must be selected").optional(),
+  time: z.string().nullish().transform((val) => val ?? undefined),
+  minuteOfHour: z.number().min(0).max(59).nullish().transform((val) => val ?? undefined),
+  intervalMinutes: z.number().min(1).max(1440).nullish().transform((val) => val ?? undefined),
+  daysFromNow: z.number().min(0).max(3650).nullish().transform((val) => val ?? undefined), // Max 10 years
+  targetDate: z.union([z.date(), z.string()]).nullish().transform((val) => {
+    if (!val) return undefined;
+    if (val instanceof Date) return val;
+    return new Date(val);
+  }),
+  dayOfMonth: z.number().min(1).max(31).nullish().transform((val) => val ?? undefined),
+  month: z.number().min(1).max(12).nullish().transform((val) => val ?? undefined),
+  daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day of week must be selected").nullish().transform((val) => val ?? undefined),
   active: z.boolean().optional(),
 }).refine((data) => {
   // Validation based on frequency type
-  if (data.frequency === "daily" && !data.time) {
+  // Note: refine runs before transform, so we need to check for both null and undefined
+  if (data.frequency === "daily" && (data.time === null || data.time === undefined || !data.time)) {
     return false;
   }
-  if (data.frequency === "hourly" && data.minuteOfHour === undefined) {
+  if (data.frequency === "hourly" && (data.minuteOfHour === null || data.minuteOfHour === undefined)) {
     return false;
   }
-  if (data.frequency === "minutely" && !data.intervalMinutes) {
+  if (data.frequency === "minutely" && (data.intervalMinutes === null || data.intervalMinutes === undefined || !data.intervalMinutes)) {
     return false;
   }
-  if (data.frequency === "once" && data.daysFromNow === undefined && !data.targetDate) {
+  if (data.frequency === "once" && (data.daysFromNow === null || data.daysFromNow === undefined) && (data.targetDate === null || data.targetDate === undefined || !data.targetDate)) {
     return false;
   }
   if (data.frequency === "weekly") {
-    if (!data.daysOfWeek || data.daysOfWeek.length === 0) {
+    if (data.daysOfWeek === null || data.daysOfWeek === undefined || data.daysOfWeek.length === 0) {
       return false;
     }
-    if (!data.time) {
+    if (data.time === null || data.time === undefined || !data.time) {
       return false;
     }
   }
-  if (data.frequency === "monthly" && !data.dayOfMonth) {
+  if (data.frequency === "monthly" && (data.dayOfMonth === null || data.dayOfMonth === undefined || !data.dayOfMonth)) {
     return false;
   }
-  if (data.frequency === "yearly" && (!data.month || !data.dayOfMonth)) {
+  if (data.frequency === "yearly" && ((data.month === null || data.month === undefined || !data.month) || (data.dayOfMonth === null || data.dayOfMonth === undefined || !data.dayOfMonth))) {
     return false;
   }
   return true;
@@ -129,14 +134,18 @@ const updateReminderSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1).max(200).optional(),
   frequency: frequencyEnum.optional(),
-  time: z.string().optional(),
-  minuteOfHour: z.number().min(0).max(59).optional(),
-  intervalMinutes: z.number().min(1).max(1440).optional(),
-  daysFromNow: z.number().min(0).max(3650).optional(),
-  targetDate: z.date().optional(),
-  dayOfMonth: z.number().min(1).max(31).optional(),
-  month: z.number().min(1).max(12).optional(),
-  daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day of week must be selected").optional(),
+  time: z.string().nullish().transform((val) => val ?? undefined),
+  minuteOfHour: z.number().min(0).max(59).nullish().transform((val) => val ?? undefined),
+  intervalMinutes: z.number().min(1).max(1440).nullish().transform((val) => val ?? undefined),
+  daysFromNow: z.number().min(0).max(3650).nullish().transform((val) => val ?? undefined),
+  targetDate: z.union([z.date(), z.string()]).nullish().transform((val) => {
+    if (!val) return undefined;
+    if (val instanceof Date) return val;
+    return new Date(val);
+  }),
+  dayOfMonth: z.number().min(1).max(31).nullish().transform((val) => val ?? undefined),
+  month: z.number().min(1).max(12).nullish().transform((val) => val ?? undefined),
+  daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "At least one day of week must be selected").nullish().transform((val) => val ?? undefined),
   active: z.boolean().optional(),
 });
 
