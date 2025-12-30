@@ -223,8 +223,8 @@ export async function GET(req: NextRequest) {
           'Found verified WhatsApp number for user'
         );
 
-        // Collect the most recent upcoming event for the alert message
-        let mostRecentEvent: { event: any; connection: any; eventStart: Date } | null = null;
+        // Collect all events for the alert message
+        const allEventsForAlert: Array<{ event: any; connection: any; eventStart: Date }> = [];
 
         // Check each calendar connection and fetch upcoming events
         for (const connection of userConnections) {
@@ -297,16 +297,13 @@ export async function GET(req: NextRequest) {
                 try {
                   const eventStart = new Date(event.start);
                   
-                  // Track the most recent upcoming event for alert message (closest to now but in the future)
-                  // This should be the event that starts soonest from now
+                  // Collect all events for the alert message (only future events)
                   if (eventStart.getTime() > now.getTime()) {
-                    if (!mostRecentEvent || eventStart.getTime() < mostRecentEvent.eventStart.getTime()) {
-                      mostRecentEvent = {
-                        event,
-                        connection,
-                        eventStart,
-                      };
-                    }
+                    allEventsForAlert.push({
+                      event,
+                      connection,
+                      eventStart,
+                    });
                   }
                   
                   // Get event start time in user's timezone
@@ -502,50 +499,82 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // Send alert message with most recent event
+        // Send alert message with all events data
         if (whatsappNumber) {
           try {
-            let alertMessage = `*Alert received*\n\n`;
+            // Sort events by start time (earliest first)
+            allEventsForAlert.sort((a, b) => a.eventStart.getTime() - b.eventStart.getTime());
             
-            if (mostRecentEvent) {
-              const event = mostRecentEvent.event;
-              const eventStart = new Date(event.start);
+            let alertMessage = `*Alert received*\n\n`;
+            alertMessage += `*Cron job executed at:* ${now.toISOString()}\n`;
+            alertMessage += `*Your local time:* ${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}\n`;
+            alertMessage += `*Timezone:* ${userTimezone}\n\n`;
+            
+            if (allEventsForAlert.length > 0) {
+              alertMessage += `*Upcoming Events (${allEventsForAlert.length}):*\n\n`;
               
-              // Format event time in user's timezone
-              const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
-                timeZone: userTimezone,
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric',
-                hour12: true,
+              allEventsForAlert.forEach((eventData, index) => {
+                const event = eventData.event;
+                const eventStart = new Date(event.start);
+                
+                // Format event time in user's timezone
+                const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
+                  timeZone: userTimezone,
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: 'numeric',
+                  hour12: true,
+                });
+                const eventTimeStr = eventTimeFormatter.format(eventStart);
+                
+                // Calculate time until event
+                const timeDiffMs = eventStart.getTime() - now.getTime();
+                const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
+                const timeDiffHours = Math.floor(timeDiffMinutes / 60);
+                const timeDiffDays = Math.floor(timeDiffHours / 24);
+                
+                let timeUntilEvent = '';
+                if (timeDiffDays > 0) {
+                  timeUntilEvent = `(${timeDiffDays} day${timeDiffDays > 1 ? 's' : ''} ${timeDiffHours % 24} hour${(timeDiffHours % 24) !== 1 ? 's' : ''})`;
+                } else if (timeDiffHours > 0) {
+                  timeUntilEvent = `(${timeDiffHours} hour${timeDiffHours > 1 ? 's' : ''} ${timeDiffMinutes % 60} minute${(timeDiffMinutes % 60) !== 1 ? 's' : ''})`;
+                } else {
+                  timeUntilEvent = `(${timeDiffMinutes} minute${timeDiffMinutes !== 1 ? 's' : ''})`;
+                }
+                
+                alertMessage += `${index + 1}. *${event.title || 'Untitled Event'}*\n`;
+                alertMessage += `   📅 *Time:* ${eventTimeStr} ${timeUntilEvent}\n`;
+                alertMessage += `   📋 *Calendar:* ${eventData.connection.calendarName || 'Calendar'}\n`;
+                
+                if (event.location) {
+                  alertMessage += `   📍 *Location:* ${event.location}\n`;
+                }
+                
+                if (event.description) {
+                  const description = event.description.length > 100 
+                    ? event.description.substring(0, 100) + '...' 
+                    : event.description;
+                  alertMessage += `   📝 *Description:* ${description}\n`;
+                }
+                
+                alertMessage += `\n`;
               });
-              const eventTimeStr = eventTimeFormatter.format(eventStart);
-              
-              alertMessage += `*Most Recent Event:*\n`;
-              alertMessage += `*Title:* ${event.title || 'Untitled Event'}\n`;
-              alertMessage += `*Time:* ${eventTimeStr}\n`;
-              alertMessage += `*Calendar:* ${mostRecentEvent.connection.calendarName || 'Calendar'}\n`;
-              
-              if (event.location) {
-                alertMessage += `*Location:* ${event.location}\n`;
-              }
             } else {
-              alertMessage += `No upcoming events found in the next 24 hours.\n`;
+              alertMessage += `*No upcoming events found* in the next 24 hours.\n`;
             }
             
-            alertMessage += `\n_Cron job executed at: ${now.toISOString()}_`;
+            alertMessage += `\n_Processed ${userConnections.length} calendar connection${userConnections.length !== 1 ? 's' : ''}._`;
             
             logger.info(
               {
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
-                hasEvent: !!mostRecentEvent,
-                eventTitle: mostRecentEvent?.event.title,
-                eventStart: mostRecentEvent?.eventStart.toISOString(),
+                eventsCount: allEventsForAlert.length,
+                connectionsCount: userConnections.length,
               },
-              'Sending alert message with most recent event'
+              'Sending alert message with all events data'
             );
             
             await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, alertMessage);
@@ -564,6 +593,7 @@ export async function GET(req: NextRequest) {
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
                 messageSent: true,
+                eventsIncluded: allEventsForAlert.length,
               },
               'Alert message sent successfully'
             );
