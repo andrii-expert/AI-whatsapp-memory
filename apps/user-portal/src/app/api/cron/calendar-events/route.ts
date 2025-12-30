@@ -123,10 +123,15 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Get user's timezone
-        const userTimezone = (user as any).timezone;
+        // Get user's timezone from preferences (preferences.timezone takes precedence over user.timezone)
+        const userTimezone = (user as any).preferences?.timezone || (user as any).timezone;
         if (!userTimezone) {
-          logger.warn({ userId }, 'User has no timezone set, skipping calendar notifications');
+          logger.warn({ 
+            userId, 
+            hasPreferences: !!(user as any).preferences,
+            preferencesTimezone: (user as any).preferences?.timezone,
+            userTimezone: (user as any).timezone,
+          }, 'User has no timezone set, skipping calendar notifications');
           continue; // Skip users without timezone set
         }
 
@@ -236,8 +241,10 @@ export async function GET(req: NextRequest) {
               'Fetching upcoming events for calendar'
             );
 
-            // Calculate the time window for events (from now + notification minutes to a reasonable future)
-            const fromTime = new Date(now.getTime() + (calendarNotificationMinutes * 60 * 1000));
+            // Calculate the time window for events
+            // We want to fetch events that are starting within the next few hours
+            // This ensures we catch events that need notifications now (calendarNotificationMinutes before start)
+            const fromTime = new Date(now.getTime());
             const toTime = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // Next 24 hours
 
             const provider = createCalendarProvider(connection.provider);
@@ -266,11 +273,52 @@ export async function GET(req: NextRequest) {
               for (const event of events) {
                 try {
                   const eventStart = new Date(event.start);
-                  const timeUntilEvent = eventStart.getTime() - now.getTime();
-                  const minutesUntilEvent = Math.floor(timeUntilEvent / (1000 * 60));
+                  
+                  // Get event start time in user's timezone
+                  const eventFormatter = new Intl.DateTimeFormat('en-US', {
+                    timeZone: userTimezone,
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: 'numeric',
+                    second: 'numeric',
+                    hour12: false,
+                  });
+                  
+                  const eventParts = eventFormatter.formatToParts(eventStart);
+                  const getEventPart = (type: string) => eventParts.find(p => p.type === type)?.value || '0';
+                  
+                  const eventLocalTime = {
+                    year: parseInt(getEventPart('year'), 10),
+                    month: parseInt(getEventPart('month'), 10) - 1, // Convert to 0-11
+                    day: parseInt(getEventPart('day'), 10),
+                    hours: parseInt(getEventPart('hour'), 10),
+                    minutes: parseInt(getEventPart('minute'), 10),
+                    seconds: parseInt(getEventPart('second'), 10),
+                  };
+                  
+                  // Calculate minutes until event in user's local time
+                  const currentTimeInMinutes = userLocalTime.hours * 60 + userLocalTime.minutes;
+                  const eventTimeInMinutes = eventLocalTime.hours * 60 + eventLocalTime.minutes;
+                  
+                  // Check if event is today
+                  const isToday = eventLocalTime.year === userLocalTime.year &&
+                                  eventLocalTime.month === userLocalTime.month &&
+                                  eventLocalTime.day === userLocalTime.day;
+                  
+                  if (!isToday) {
+                    // Event is not today, skip it
+                    continue;
+                  }
+                  
+                  // Calculate time difference in minutes
+                  const timeDiff = eventTimeInMinutes - currentTimeInMinutes;
 
-                  // Check if this event should trigger a notification (within notification window)
-                  if (minutesUntilEvent >= calendarNotificationMinutes - 1 && minutesUntilEvent <= calendarNotificationMinutes + 1) {
+                  // Check if this event should trigger a notification (exact match or 1 minute after)
+                  // We want to send notification when: currentTime = eventTime - calendarNotificationMinutes
+                  // So: timeDiff should equal calendarNotificationMinutes (or 1 minute after to account for cron timing)
+                  if (timeDiff === calendarNotificationMinutes || timeDiff === calendarNotificationMinutes + 1) {
                     // Check cache to prevent duplicate notifications
                     const eventDate = new Date(event.start);
                     const dateKey = `${eventDate.getUTCFullYear()}-${eventDate.getUTCMonth() + 1}-${eventDate.getUTCDate()}-${eventDate.getUTCHours()}-${eventDate.getUTCMinutes()}`;
@@ -300,7 +348,9 @@ export async function GET(req: NextRequest) {
                           eventId: event.id,
                           eventTitle: event.title,
                           eventStart: event.start.toISOString(),
-                          minutesUntilEvent,
+                          eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
+                          currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
+                          timeDiff,
                           calendarNotificationMinutes,
                         },
                         'Calendar event notification sent successfully'
@@ -402,16 +452,31 @@ async function sendCalendarEventNotification(
   calendarName: string
 ) {
   try {
-    // Format event time for message using user's timezone with Intl.DateTimeFormat
-    const timeFormatter = new Intl.DateTimeFormat('en-US', {
+    const eventStart = new Date(event.start);
+    
+    // Format event time for message - extract time components from event.start in user's timezone
+    const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
       timeZone: userTimezone,
       hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: false,
     });
-
-    const eventStart = new Date(event.start);
-    const eventTimeStr = timeFormatter.format(eventStart);
+    
+    const eventTimeParts = eventTimeFormatter.formatToParts(eventStart);
+    const getEventTimePart = (type: string) => eventTimeParts.find(p => p.type === type)?.value || '0';
+    
+    const eventHours = parseInt(getEventTimePart('hour'), 10);
+    const eventMinutes = parseInt(getEventTimePart('minute'), 10);
+    
+    // Convert 24-hour format to 12-hour format for display
+    const formatTime24To12 = (hours: number, minutes: number): string => {
+      const hour12 = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
+      const period = hours >= 12 ? 'PM' : 'AM';
+      return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+    };
+    
+    const eventTimeStr = formatTime24To12(eventHours, eventMinutes);
 
     // Also get date for full context
     const dateFormatter = new Intl.DateTimeFormat('en-US', {
