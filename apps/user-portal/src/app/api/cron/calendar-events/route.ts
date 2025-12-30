@@ -599,9 +599,11 @@ export async function GET(req: NextRequest) {
                   };
                   
                   // Calculate time difference in minutes more accurately
-                  // Use the actual Date objects and calculate difference
+                  // Both eventStart and now are UTC timestamps, so the difference is correct
+                  // This gives us the actual time until the event in milliseconds
                   const timeDiffMs = eventStart.getTime() - now.getTime();
                   const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
+                  const timeDiffSeconds = Math.floor(timeDiffMs / 1000);
                   
                   // Only process events that are in the future (positive time difference)
                   // But allow a small negative buffer (up to 5 minutes in the past) to catch events
@@ -670,30 +672,32 @@ export async function GET(req: NextRequest) {
                   // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
                   // For example: if event is at 2:00 PM and notification is 10 minutes before,
                   // we want to send at 1:50 PM, which means timeDiffMinutes should be 10
-                  // Use a wider range to account for cron timing (allow ±3 minute tolerance for cron execution timing)
+                  // 
+                  // The key insight: timeDiffMinutes is the actual time until the event (in UTC milliseconds)
+                  // So if timeDiffMinutes is approximately equal to calendarNotificationMinutes, we should notify
+                  // 
+                  // Use a wider range to account for cron timing (allow ±5 minute tolerance for cron execution timing)
                   // This ensures we catch notifications even if cron runs slightly early or late
-                  const minMinutes = Math.max(0, calendarNotificationMinutes - 3);
-                  const maxMinutes = calendarNotificationMinutes + 3;
+                  const minMinutes = Math.max(0, calendarNotificationMinutes - 5);
+                  const maxMinutes = calendarNotificationMinutes + 5;
                   
-                  // Calculate when the notification should be sent (event time - notification minutes)
+                  // Primary check: Is the time until the event approximately equal to the notification minutes?
+                  // This is the most reliable check because it directly compares the time difference
+                  const shouldTriggerByTimeDiff = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
+                  
+                  // Secondary check: Calculate when the notification should be sent and check if we're at that time
+                  // This is a backup check for edge cases
                   const notificationTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
                   const notificationTimeDiffMs = notificationTime.getTime() - now.getTime();
                   const notificationTimeDiffMinutes = Math.floor(notificationTimeDiffMs / (1000 * 60));
+                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 5 && timeDiffMinutes > 0;
                   
-                  // Check if we're at the notification time
-                  // We want to send when: currentTime is approximately (eventTime - calendarNotificationMinutes)
-                  // This means timeDiffMinutes should be approximately calendarNotificationMinutes
-                  // Use both checks for reliability:
-                  // 1. Direct time difference check (primary) - check if we're X minutes before event
-                  // 2. Notification time check (backup) - check if we're at the calculated notification time
-                  const shouldTriggerByTimeDiff = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
-                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 3 && timeDiffMinutes > 0;
-                  const shouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime;
-                  
-                  // Also check if we're very close to the notification time (within 1 minute past the notification time)
+                  // Also check if we're very close to the notification time (within 2 minutes past the notification time)
                   // This catches cases where the cron runs slightly after the exact notification time
-                  const isJustPastNotificationTime = notificationTimeDiffMinutes < 0 && Math.abs(notificationTimeDiffMinutes) <= 1 && timeDiffMinutes > 0;
-                  const finalShouldTrigger = shouldTrigger || isJustPastNotificationTime;
+                  const isJustPastNotificationTime = notificationTimeDiffMinutes < 0 && Math.abs(notificationTimeDiffMinutes) <= 2 && timeDiffMinutes > 0;
+                  
+                  // Final decision: trigger if any of the conditions are met
+                  const finalShouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime || isJustPastNotificationTime;
                   
                   logger.info(
                     {
@@ -701,9 +705,13 @@ export async function GET(req: NextRequest) {
                       eventId: event.id,
                       eventTitle: event.title,
                       eventStart: eventStart.toISOString(),
+                      eventStartLocal: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}:${String(eventLocalTime.seconds).padStart(2, '0')} on ${eventLocalTime.year}-${String(eventLocalTime.month + 1).padStart(2, '0')}-${String(eventLocalTime.day).padStart(2, '0')}`,
                       now: now.toISOString(),
+                      nowLocal: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}`,
+                      userTimezone,
+                      timeDiffMs,
                       timeDiffMinutes,
-                      timeDiffSeconds: Math.floor(timeDiffMs / 1000),
+                      timeDiffSeconds,
                       calendarNotificationMinutes,
                       notificationTime: notificationTime.toISOString(),
                       notificationTimeDiffMinutes,
@@ -711,16 +719,13 @@ export async function GET(req: NextRequest) {
                       maxMinutes,
                       isToday,
                       isTomorrow,
-                      eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}:${String(eventLocalTime.seconds).padStart(2, '0')}`,
-                      currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')}`,
                       shouldTriggerByTimeDiff,
                       shouldTriggerByNotificationTime,
-                      shouldTrigger,
                       isJustPastNotificationTime,
                       finalShouldTrigger,
                       reason: finalShouldTrigger 
-                        ? 'Event matches notification criteria - will send notification' 
-                        : `Time difference ${timeDiffMinutes} not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} not within ±3 minutes`,
+                        ? `Event matches notification criteria - timeDiffMinutes (${timeDiffMinutes}) is in range [${minMinutes}, ${maxMinutes}] or notification time diff (${notificationTimeDiffMinutes}) is within ±5 minutes` 
+                        : `Time difference ${timeDiffMinutes} not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} not within ±5 minutes`,
                     },
                     'Checking if event should trigger notification'
                   );
@@ -790,9 +795,13 @@ export async function GET(req: NextRequest) {
                         eventId: event.id,
                         eventTitle: event.title,
                         eventStart: eventStart.toISOString(),
+                        eventStartLocal: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}:${String(eventLocalTime.seconds).padStart(2, '0')} on ${eventLocalTime.year}-${String(eventLocalTime.month + 1).padStart(2, '0')}-${String(eventLocalTime.day).padStart(2, '0')}`,
                         now: now.toISOString(),
+                        nowLocal: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}`,
+                        userTimezone,
+                        timeDiffMs,
                         timeDiffMinutes,
-                        timeDiffSeconds: Math.floor(timeDiffMs / 1000),
+                        timeDiffSeconds,
                         calendarNotificationMinutes,
                         minMinutes,
                         maxMinutes,
@@ -800,10 +809,9 @@ export async function GET(req: NextRequest) {
                         notificationTimeDiffMinutes,
                         shouldTriggerByTimeDiff,
                         shouldTriggerByNotificationTime,
-                        eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}:${String(eventLocalTime.seconds).padStart(2, '0')}`,
-                        currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')}`,
+                        isJustPastNotificationTime,
                         reason: !shouldTriggerByTimeDiff && !shouldTriggerByNotificationTime && !isJustPastNotificationTime
-                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±3 minutes`
+                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±5 minutes`
                           : 'Unknown reason',
                       },
                       'Event did not match notification criteria - skipping'
