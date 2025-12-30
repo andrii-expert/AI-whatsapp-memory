@@ -3093,6 +3093,42 @@ export default function CalendarsPage() {
           </AlertDialogHeader>
           <div className="space-y-4 py-2 sm:py-4">
             <div className="space-y-2">
+              <label htmlFor="event-calendar" className="text-sm font-medium">
+                Calendar
+              </label>
+              <Select
+                value={selectedCalendarIds[0] || ""}
+                onValueChange={(value) => {
+                  // If the selected calendar is not in the list, add it; otherwise just set as first
+                  if (!selectedCalendarIds.includes(value)) {
+                    setSelectedCalendarIds([value, ...selectedCalendarIds.filter(id => id !== value)]);
+                  } else {
+                    // Reorder to put selected one first
+                    setSelectedCalendarIds([value, ...selectedCalendarIds.filter(id => id !== value)]);
+                  }
+                }}
+              >
+                <SelectTrigger id="event-calendar" className="w-full text-sm sm:text-base">
+                  <SelectValue placeholder="Select calendar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {calendars.filter((cal: any) => cal.isActive).length > 0 ? (
+                    calendars
+                      .filter((cal: any) => cal.isActive)
+                      .map((cal: any) => (
+                        <SelectItem key={cal.id} value={cal.id}>
+                          {cal.calendarName || cal.email}
+                        </SelectItem>
+                      ))
+                  ) : (
+                    <SelectItem value="none" disabled>
+                      No active calendars
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <label htmlFor="event-title" className="text-sm font-medium">
                 Event Title
               </label>
@@ -3116,7 +3152,7 @@ export default function CalendarsPage() {
                 className="text-sm sm:text-base"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label htmlFor="event-date" className="text-sm font-medium">
                   Date
@@ -3142,219 +3178,8 @@ export default function CalendarsPage() {
                 />
               </div>
             </div>
-            {/* Address Selection */}
-            <div className="space-y-2">
-              <label htmlFor="event-address" className="text-sm font-medium">
-                Address (optional)
-              </label>
-
-              {/* Saved Addresses Dropdown */}
-              {addresses.length > 0 && (
-                <div className="space-y-2">
-                  <Select
-                    value={eventAddressId}
-                    onValueChange={(value) => {
-                      setEventAddressId(value);
-                      if (value) {
-                        const selectedAddr = addresses.find((addr: any) => addr.id === value);
-                        if (selectedAddr) {
-                          setEventAddress(selectedAddr.name || "");
-                          if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
-                            setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
-                          }
-                          setAddressComponents({
-                            street: selectedAddr.street || undefined,
-                            city: selectedAddr.city || undefined,
-                            state: selectedAddr.state || undefined,
-                            zip: selectedAddr.zip || undefined,
-                            country: selectedAddr.country || undefined,
-                          });
-                        }
-                      } else {
-                        setEventAddress("");
-                        setEventCoordinates("");
-                        setAddressComponents({});
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-full text-sm sm:text-base">
-                      <SelectValue placeholder="Select from saved addresses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {addresses.map((address: any) => (
-                        <SelectItem key={address.id} value={address.id}>
-                          {address.name} - {[
-                            address.street,
-                            address.city,
-                            address.state,
-                            address.country,
-                          ].filter(Boolean).join(", ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center gap-2">
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                    <span className="text-xs text-gray-500 bg-white px-2">or</span>
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                  </div>
-                </div>
-              )}
-
-              {/* Address Input */}
-              <div className="space-y-2">
-                <div className="relative">
-              <Input
-                    id="event-address"
-                    placeholder="Type or paste the full address"
-                    value={eventAddress}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      handleAddressPaste(e.target.value)
-                    }
-                    className="h-20 pr-10"
-                  />
-                  {isGeocoding && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500">
-                  You can also paste a Google Maps link here. Your backend can normalise it and store the coordinates.
-                </p>
-              </div>
-
-              {/* Coordinates Input */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="event-coordinates" className="text-sm font-medium">
-                    Pin / coordinates (optional)
-                  </Label>
-                  <button
-                    type="button"
-                    className={cn(
-                      "text-sm font-medium transition-colors",
-                      enableDropPin
-                        ? "text-red-600 hover:text-red-700"
-                        : "text-blue-600 hover:text-blue-700"
-                    )}
-                    onClick={() => {
-                      if (enableDropPin) {
-                        setEnableDropPin(false);
-                        toast({
-                          title: "Drop pin cancelled",
-                          description: "Click 'Drop pin on map' again to enable.",
-                        });
-                      } else {
-                        if (window.google?.maps?.places) {
-                          setEnableDropPin(true);
-                          toast({
-                            title: "Drop pin enabled",
-                            description: "Click anywhere on the map to drop a pin.",
-                          });
-                        } else {
-                          toast({
-                            title: "Google Maps not loaded",
-                            description: "Please wait for Google Maps to load, or enter coordinates manually.",
-                            variant: "destructive",
-                          });
-                        }
-                      }
-                    }}
-                  >
-                    {enableDropPin ? "Cancel drop pin" : "Drop pin on map"}
-                  </button>
-                </div>
-                <Input
-                  id="event-coordinates"
-                  placeholder="e.g. -34.0822, 18.8501"
-                  value={eventCoordinates}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setEventCoordinates(e.target.value);
-                    // If coordinates are entered, try reverse geocoding
-                    if (e.target.value.trim() && window.google?.maps) {
-                      const { lat, lng } = parseCoordinates(e.target.value);
-                      if (lat && lng) {
-                        setIsGeocoding(true);
-                        const geocoder = new window.google.maps.Geocoder();
-                        geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
-                          setIsGeocoding(false);
-                          if (status === "OK" && results?.[0]) {
-                            const result = results[0];
-                            setEventAddress(result.formatted_address);
-
-                            // Extract address components
-                            const components: {
-                              street?: string;
-                              city?: string;
-                              state?: string;
-                              zip?: string;
-                              country?: string;
-                            } = {};
-
-                            if (result.address_components) {
-                              result.address_components.forEach((component: any) => {
-                                const types = component.types;
-
-                                if (types.includes("street_number") || types.includes("route")) {
-                                  const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
-                                  const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
-                                  components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
-                                }
-
-                                if (types.includes("locality")) {
-                                  components.city = component.long_name;
-                                } else if (types.includes("administrative_area_level_1")) {
-                                  components.state = component.long_name;
-                                } else if (types.includes("postal_code")) {
-                                  components.zip = component.long_name;
-                                } else if (types.includes("country")) {
-                                  components.country = component.long_name;
-                                }
-                              });
-                            }
-
-                            setAddressComponents(components);
-                          }
-                        });
-                      }
-                    }
-                  }}
-                className="text-sm sm:text-base"
-              />
-                {enableDropPin && (
-                  <div className="mt-4">
-                    <div className="mb-2">
-                      <p className="text-sm text-blue-600 font-medium mb-1">
-                        Click on the map below to drop a pin
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        The coordinates and address will be automatically filled in.
-                      </p>
-            </div>
-                    <GoogleMap
-                      lat={null}
-                      lng={null}
-                      address=""
-                      enableClickToDrop={true}
-                      onPinDrop={handlePinDrop}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant={createGoogleMeet ? "primary" : "outline"}
-              onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
-              className={editCreateGoogleMeet ? "w-full sm:w-auto bg-primary text-primary-foreground hover:font-bold hover:bg-primary" : "w-full sm:w-auto"}
-            >
-              <Video className="h-4 w-4 mr-2" />
-              {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
-            </Button>
-
-            {/* Attendees Section */}
-            <div className="space-y-2">
+                        {/* Attendees Section */}
+                        <div className="space-y-2">
               <label className="text-sm font-medium">
                 Attendees (optional)
               </label>
@@ -3562,6 +3387,208 @@ export default function CalendarsPage() {
                 </div>
               )}
             </div>
+            {/* Address Selection */}
+            <div className="space-y-2">
+              <label htmlFor="event-address" className="text-sm font-medium">
+                Address (optional)
+              </label>
+
+
+              {/* Saved Addresses Dropdown */}
+              {addresses.length > 0 && (
+                <div className="space-y-2">
+                  <Select
+                    value={eventAddressId}
+                    onValueChange={(value) => {
+                      setEventAddressId(value);
+                      if (value) {
+                        const selectedAddr = addresses.find((addr: any) => addr.id === value);
+                        if (selectedAddr) {
+                          setEventAddress(selectedAddr.name || "");
+                          if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                            setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                          }
+                          setAddressComponents({
+                            street: selectedAddr.street || undefined,
+                            city: selectedAddr.city || undefined,
+                            state: selectedAddr.state || undefined,
+                            zip: selectedAddr.zip || undefined,
+                            country: selectedAddr.country || undefined,
+                          });
+                        }
+                      } else {
+                        setEventAddress("");
+                        setEventCoordinates("");
+                        setAddressComponents({});
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full text-sm sm:text-base">
+                      <SelectValue placeholder="Select from saved addresses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {addresses.map((address: any) => (
+                        <SelectItem key={address.id} value={address.id}>
+                          {address.name} - {[
+                            address.street,
+                            address.city,
+                            address.state,
+                            address.country,
+                          ].filter(Boolean).join(", ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-2">
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                    <span className="text-xs text-gray-500 bg-white px-2">or</span>
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Address Input */}
+              <div className="space-y-2">
+                <div className="relative">
+              <Input
+                    id="event-address"
+                    placeholder="Type or paste the full address"
+                    value={eventAddress}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      handleAddressPaste(e.target.value)
+                    }
+                    className="h-20 pr-10"
+                  />
+                  {isGeocoding && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  You can also paste a Google Maps link here. Your backend can normalise it and store the coordinates.
+                </p>
+              </div>
+
+              {/* Coordinates Input */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="event-coordinates" className="text-sm font-medium">
+                    Pin / coordinates (optional)
+                  </Label>
+                  <button
+                    type="button"
+                    className={cn(
+                      "text-sm font-medium transition-colors",
+                      enableDropPin
+                        ? "text-red-600 hover:text-red-700"
+                        : "text-blue-600 hover:text-blue-700"
+                    )}
+                    onClick={() => {
+                      if (enableDropPin) {
+                        setEnableDropPin(false);
+                        toast({
+                          title: "Drop pin cancelled",
+                          description: "Click 'Drop pin on map' again to enable.",
+                        });
+                      } else {
+                        if (window.google?.maps?.places) {
+                          setEnableDropPin(true);
+                          toast({
+                            title: "Drop pin enabled",
+                            description: "Click anywhere on the map to drop a pin.",
+                          });
+                        } else {
+                          toast({
+                            title: "Google Maps not loaded",
+                            description: "Please wait for Google Maps to load, or enter coordinates manually.",
+                            variant: "destructive",
+                          });
+                        }
+                      }
+                    }}
+                  >
+                    {enableDropPin ? "Cancel drop pin" : "Drop pin on map"}
+                  </button>
+                </div>
+                <Input
+                  id="event-coordinates"
+                  placeholder="e.g. -34.0822, 18.8501"
+                  value={eventCoordinates}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    setEventCoordinates(e.target.value);
+                    // If coordinates are entered, try reverse geocoding
+                    if (e.target.value.trim() && window.google?.maps) {
+                      const { lat, lng } = parseCoordinates(e.target.value);
+                      if (lat && lng) {
+                        setIsGeocoding(true);
+                        const geocoder = new window.google.maps.Geocoder();
+                        geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                          setIsGeocoding(false);
+                          if (status === "OK" && results?.[0]) {
+                            const result = results[0];
+                            setEventAddress(result.formatted_address);
+
+                            // Extract address components
+                            const components: {
+                              street?: string;
+                              city?: string;
+                              state?: string;
+                              zip?: string;
+                              country?: string;
+                            } = {};
+
+                            if (result.address_components) {
+                              result.address_components.forEach((component: any) => {
+                                const types = component.types;
+
+                                if (types.includes("street_number") || types.includes("route")) {
+                                  const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                                  const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                                  components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                                }
+
+                                if (types.includes("locality")) {
+                                  components.city = component.long_name;
+                                } else if (types.includes("administrative_area_level_1")) {
+                                  components.state = component.long_name;
+                                } else if (types.includes("postal_code")) {
+                                  components.zip = component.long_name;
+                                } else if (types.includes("country")) {
+                                  components.country = component.long_name;
+                                }
+                              });
+                            }
+
+                            setAddressComponents(components);
+                          }
+                        });
+                      }
+                    }
+                  }}
+                className="text-sm sm:text-base"
+              />
+                {enableDropPin && (
+                  <div className="mt-4">
+                    <div className="mb-2">
+                      <p className="text-sm text-blue-600 font-medium mb-1">
+                        Click on the map below to drop a pin
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        The coordinates and address will be automatically filled in.
+                      </p>
+            </div>
+                    <GoogleMap
+                      lat={null}
+                      lng={null}
+                      address=""
+                      enableClickToDrop={true}
+                      onPinDrop={handlePinDrop}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">
@@ -3594,44 +3621,15 @@ export default function CalendarsPage() {
                   />
                 ))}
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="event-calendar" className="text-sm font-medium">
-                Calendar
-              </label>
-              <Select
-                value={selectedCalendarIds[0] || ""}
-                onValueChange={(value) => {
-                  // If the selected calendar is not in the list, add it; otherwise just set as first
-                  if (!selectedCalendarIds.includes(value)) {
-                    setSelectedCalendarIds([value, ...selectedCalendarIds.filter(id => id !== value)]);
-                  } else {
-                    // Reorder to put selected one first
-                    setSelectedCalendarIds([value, ...selectedCalendarIds.filter(id => id !== value)]);
-                  }
-                }}
-              >
-                <SelectTrigger id="event-calendar" className="w-full text-sm sm:text-base">
-                  <SelectValue placeholder="Select calendar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {calendars.filter((cal: any) => cal.isActive).length > 0 ? (
-                    calendars
-                      .filter((cal: any) => cal.isActive)
-                      .map((cal: any) => (
-                        <SelectItem key={cal.id} value={cal.id}>
-                          {cal.calendarName || cal.email}
-                        </SelectItem>
-                      ))
-                  ) : (
-                    <SelectItem value="none" disabled>
-                      No active calendars
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+<Button
+              type="button"
+              variant={createGoogleMeet ? "primary" : "outline"}
+              onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
+              className={editCreateGoogleMeet ? "w-full sm:w-auto bg-primary text-primary-foreground hover:font-bold hover:bg-primary" : "w-full sm:w-auto"}
+            >
+              <Video className="h-4 w-4 mr-2" />
+              {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
+            </Button>            </div>
           </div>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <AlertDialogCancel
@@ -4943,13 +4941,6 @@ export default function CalendarsPage() {
                                       <Star className="h-3 w-3" />
                                     </Button>
                                   )}
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
-                                  >
-                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                    Active
-                                  </Badge>
                                   <Button
                                     variant="ghost"
                                     size="sm"
