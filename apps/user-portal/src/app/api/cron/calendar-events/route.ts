@@ -310,8 +310,7 @@ export async function GET(req: NextRequest) {
                   }
                   
                   // Calculate time difference in minutes more accurately
-                  // Use the actual Date objects and calculate difference, then convert to user's timezone
-                  const eventStart = new Date(event.start);
+                  // Use the actual Date objects and calculate difference
                   const timeDiffMs = eventStart.getTime() - now.getTime();
                   const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
                   
