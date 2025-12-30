@@ -244,9 +244,22 @@ export async function GET(req: NextRequest) {
             // Calculate the time window for events
             // We want to fetch events that are starting within the next 24 hours
             // This ensures we catch events that need notifications now (calendarNotificationMinutes before start)
-            // Start from now to avoid processing past events
-            const fromTime = new Date(now.getTime());
+            // Start from a bit in the past to catch events that might have started very recently
+            // but we haven't notified about yet (in case cron was delayed)
+            const fromTime = new Date(now.getTime() - (5 * 60 * 1000)); // 5 minutes ago (to catch any missed events)
             const toTime = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // Next 24 hours
+            
+            logger.debug(
+              {
+                userId,
+                calendarId: connection.id,
+                fromTime: fromTime.toISOString(),
+                toTime: toTime.toISOString(),
+                now: now.toISOString(),
+                windowHours: 24,
+              },
+              'Event fetching time window'
+            );
 
             const provider = createCalendarProvider(connection.provider);
 
@@ -266,6 +279,12 @@ export async function GET(req: NextRequest) {
                   eventsCount: events.length,
                   fromTime: fromTime.toISOString(),
                   toTime: toTime.toISOString(),
+                  events: events.map((e: any) => ({
+                    id: e.id,
+                    title: e.title,
+                    start: e.start,
+                    end: e.end,
+                  })),
                 },
                 'Fetched upcoming calendar events'
               );
@@ -299,20 +318,73 @@ export async function GET(req: NextRequest) {
                     seconds: parseInt(getEventPart('second'), 10),
                   };
                   
-                  // Check if event is today (in user's timezone)
-                  const isToday = eventLocalTime.year === userLocalTime.year &&
-                                  eventLocalTime.month === userLocalTime.month &&
-                                  eventLocalTime.day === userLocalTime.day;
-                  
-                  if (!isToday) {
-                    // Event is not today, skip it
-                    continue;
-                  }
-                  
                   // Calculate time difference in minutes more accurately
                   // Use the actual Date objects and calculate difference
                   const timeDiffMs = eventStart.getTime() - now.getTime();
                   const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
+                  
+                  // Only process events that are in the future (positive time difference)
+                  // But allow a small negative buffer (up to 5 minutes in the past) to catch events
+                  // that might have started very recently but we haven't notified about yet
+                  if (timeDiffMinutes < -5) {
+                    logger.debug(
+                      {
+                        userId,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        timeDiffMinutes,
+                        eventStart: eventStart.toISOString(),
+                        now: now.toISOString(),
+                      },
+                      'Event is too far in the past, skipping'
+                    );
+                    continue;
+                  }
+                  
+                  // Check if event is today or tomorrow (to catch early morning events)
+                  // For example, if it's 11:50 PM and event is at 12:00 AM (midnight), it's "tomorrow" but we should still notify
+                  const isToday = eventLocalTime.year === userLocalTime.year &&
+                                  eventLocalTime.month === userLocalTime.month &&
+                                  eventLocalTime.day === userLocalTime.day;
+                  
+                  // Calculate tomorrow's date in user's timezone
+                  const tomorrowDate = new Date(userLocalTime.date);
+                  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+                  const tomorrowFormatter = new Intl.DateTimeFormat('en-US', {
+                    timeZone: userTimezone,
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric',
+                  });
+                  const tomorrowParts = tomorrowFormatter.formatToParts(tomorrowDate);
+                  const getTomorrowPart = (type: string) => tomorrowParts.find(p => p.type === type)?.value || '0';
+                  const tomorrowLocalDate = {
+                    year: parseInt(getTomorrowPart('year'), 10),
+                    month: parseInt(getTomorrowPart('month'), 10) - 1,
+                    day: parseInt(getTomorrowPart('day'), 10),
+                  };
+                  
+                  const isTomorrow = eventLocalTime.year === tomorrowLocalDate.year &&
+                                     eventLocalTime.month === tomorrowLocalDate.month &&
+                                     eventLocalTime.day === tomorrowLocalDate.day;
+                  
+                  // Only process events that are today or tomorrow (within our 24-hour window)
+                  // This prevents processing events that are too far in the future
+                  if (!isToday && !isTomorrow) {
+                    logger.debug(
+                      {
+                        userId,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        eventDate: `${eventLocalTime.year}-${String(eventLocalTime.month + 1).padStart(2, '0')}-${String(eventLocalTime.day).padStart(2, '0')}`,
+                        todayDate: `${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}`,
+                        tomorrowDate: `${tomorrowLocalDate.year}-${String(tomorrowLocalDate.month + 1).padStart(2, '0')}-${String(tomorrowLocalDate.day).padStart(2, '0')}`,
+                        timeDiffMinutes,
+                      },
+                      'Event is not today or tomorrow, skipping'
+                    );
+                    continue;
+                  }
                   
                   // Check if this event should trigger a notification
                   // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
@@ -321,7 +393,7 @@ export async function GET(req: NextRequest) {
                   const minMinutes = Math.max(0, calendarNotificationMinutes - 1);
                   const maxMinutes = calendarNotificationMinutes + 1;
                   
-                  logger.debug(
+                  logger.info(
                     {
                       userId,
                       eventId: event.id,
@@ -332,8 +404,11 @@ export async function GET(req: NextRequest) {
                       calendarNotificationMinutes,
                       minMinutes,
                       maxMinutes,
+                      isToday,
+                      isTomorrow,
                       eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
                       currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
+                      willTrigger: timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes,
                     },
                     'Checking if event should trigger notification'
                   );
