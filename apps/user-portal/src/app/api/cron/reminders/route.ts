@@ -116,10 +116,15 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Get user's timezone
-        const userTimezone = (user as any).timezone;
+        // Get user's timezone from preferences (preferences.timezone takes precedence over user.timezone)
+        const userTimezone = (user as any).preferences?.timezone || (user as any).timezone;
         if (!userTimezone) {
-          logger.warn({ userId }, 'User has no timezone set, skipping reminders');
+          logger.warn({ 
+            userId, 
+            hasPreferences: !!(user as any).preferences,
+            preferencesTimezone: (user as any).preferences?.timezone,
+            userTimezone: (user as any).timezone,
+          }, 'User has no timezone set, skipping reminders');
           continue; // Skip users without timezone set
         }
 
@@ -743,8 +748,27 @@ function checkIfReminderShouldFire(
   const currentMonth = userLocalTime.month;
   const currentYear = userLocalTime.year;
   // Calculate day of week from user's local time components
-  // Use UTC to avoid timezone issues when creating the date
-  const currentDayOfWeek = new Date(Date.UTC(userLocalTime.year, userLocalTime.month, userLocalTime.day)).getUTCDay();
+  // Create a date object that represents the user's local date at noon (to avoid DST issues)
+  // Then get the day of week from that date
+  const userLocalDateAtNoon = createDateInUserTimezone(
+    currentYear,
+    currentMonth,
+    currentDay,
+    12, // Noon to avoid DST edge cases
+    0,
+    userTimezone
+  );
+  // Get day of week using the user's timezone formatter
+  const dayOfWeekFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: userTimezone,
+    weekday: 'short',
+  });
+  const dayOfWeekStr = dayOfWeekFormatter.format(userLocalDateAtNoon);
+  // Map day name to number (0=Sunday, 1=Monday, ..., 6=Saturday)
+  const dayMap: Record<string, number> = {
+    'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6
+  };
+  const currentDayOfWeek = dayMap[dayOfWeekStr] ?? 0;
 
   try {
     if (reminder.frequency === 'daily') {
@@ -752,22 +776,29 @@ function checkIfReminderShouldFire(
         return { shouldNotify: false, reason: 'No time specified for daily reminder' };
       }
       const [hours, minutes] = reminder.time.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return { shouldNotify: false, reason: `Invalid time format: ${reminder.time}` };
+      }
       // Check if current time matches reminder time (exact match or within 1 minute after)
       // Cron runs every minute, so we check if we're at the exact minute or 1 minute after
       const currentTimeInMinutes = currentHour * 60 + currentMinute;
       const reminderTimeInMinutes = hours * 60 + minutes;
       const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
       // Fire if we're at the exact time (0) or 1 minute after (1) to account for cron timing
-      if (timeDiff >= 0 && timeDiff <= 1) {
+      // This allows for slight delays in cron execution while preventing duplicate notifications
+      if (timeDiff === 0 || timeDiff === 1) {
         const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, hours, minutes, userTimezone);
         return { shouldNotify: true, reason: 'Daily reminder time matches', reminderTime };
       }
       return { shouldNotify: false, reason: `Time doesn't match: current ${currentHour}:${String(currentMinute).padStart(2, '0')}, reminder ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}, diff ${timeDiff}` };
     } else if (reminder.frequency === 'hourly') {
       const minuteOfHour = Number(reminder.minuteOfHour ?? 0);
+      if (isNaN(minuteOfHour) || minuteOfHour < 0 || minuteOfHour > 59) {
+        return { shouldNotify: false, reason: `Invalid minuteOfHour: ${reminder.minuteOfHour}` };
+      }
       // Check if current minute matches (exact or 1 minute after)
       const minuteDiff = currentMinute - minuteOfHour;
-      if (minuteDiff >= 0 && minuteDiff <= 1) {
+      if (minuteDiff === 0 || minuteDiff === 1) {
         const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, currentHour, minuteOfHour, userTimezone);
         return { shouldNotify: true, reason: 'Hourly reminder minute matches', reminderTime };
       }
@@ -793,7 +824,7 @@ function checkIfReminderShouldFire(
         const reminderTimeInMinutes = hours * 60 + minutes;
         const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
         // Fire if we're at the exact time or 1 minute after
-        if (timeDiff >= 0 && timeDiff <= 1) {
+        if (timeDiff === 0 || timeDiff === 1) {
           const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, hours, minutes, userTimezone);
           return { shouldNotify: true, reason: 'Weekly reminder day and time match', reminderTime };
         }
@@ -812,7 +843,7 @@ function checkIfReminderShouldFire(
         const reminderTimeInMinutes = hours * 60 + minutes;
         const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
         // Fire if we're at the exact time or 1 minute after
-        if (timeDiff >= 0 && timeDiff <= 1) {
+        if (timeDiff === 0 || timeDiff === 1) {
           const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, hours, minutes, userTimezone);
           return { shouldNotify: true, reason: 'Monthly reminder day and time match', reminderTime };
         }
@@ -833,7 +864,7 @@ function checkIfReminderShouldFire(
         const reminderTimeInMinutes = hours * 60 + minutes;
         const timeDiff = currentTimeInMinutes - reminderTimeInMinutes;
         // Fire if we're at the exact time or 1 minute after
-        if (timeDiff >= 0 && timeDiff <= 1) {
+        if (timeDiff === 0 || timeDiff === 1) {
           const reminderTime = createDateInUserTimezone(currentYear, currentMonth, currentDay, hours, minutes, userTimezone);
           return { shouldNotify: true, reason: 'Yearly reminder date and time match', reminderTime };
         }
@@ -1000,13 +1031,13 @@ function checkIfReminderShouldFire(
           currentTimeInMinutes,
           targetTimeInMinutes,
           timeDiff,
-          willFire: timeDiff >= 0 && timeDiff <= 1,
+          willFire: timeDiff === 0 || timeDiff === 1,
         },
         'One-time reminder time check'
       );
       
       // Fire if we're at the exact time (0) or 1 minute after (1) to account for cron timing
-      if (timeDiff >= 0 && timeDiff <= 1) {
+      if (timeDiff === 0 || timeDiff === 1) {
         const reminderTime = createDateInUserTimezone(targetYear, targetMonth, targetDay, targetHours, targetMinutes, userTimezone);
         logger.info(
           {
