@@ -255,8 +255,11 @@ export async function GET(req: NextRequest) {
             // This ensures we catch events that need notifications now (calendarNotificationMinutes before start)
             // Start from a bit in the past to catch events that might have started very recently
             // but we haven't notified about yet (in case cron was delayed)
-            const fromTime = new Date(now.getTime() - (5 * 60 * 1000)); // 5 minutes ago (to catch any missed events)
-            const toTime = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // Next 24 hours
+            // Extend time window to catch events that need notifications
+            // Include buffer for notification time (e.g., if notification is 10 mins before, we need events up to 24h + 10mins ahead)
+            const notificationBuffer = Math.max(calendarNotificationMinutes, 60) * 60 * 1000; // At least 1 hour buffer
+            const fromTime = new Date(now.getTime() - (10 * 60 * 1000)); // 10 minutes ago (to catch any missed events)
+            const toTime = new Date(now.getTime() + (24 * 60 * 60 * 1000) + notificationBuffer); // Next 24+ hours (to catch events that need notifications)
             
             logger.debug(
               {
@@ -429,10 +432,15 @@ export async function GET(req: NextRequest) {
                   
                   // Check if this event should trigger a notification
                   // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
-                  // Use a range to account for cron timing (allow ±1 minute tolerance for cron execution timing)
+                  // So: timeDiffMinutes should be approximately equal to calendarNotificationMinutes
+                  // Use a wider range to account for cron timing variations (allow ±2 minute tolerance)
                   // This ensures we catch notifications even if cron runs slightly early or late
-                  const minMinutes = Math.max(0, calendarNotificationMinutes - 1);
-                  const maxMinutes = calendarNotificationMinutes + 1;
+                  const minMinutes = Math.max(0, calendarNotificationMinutes - 2);
+                  const maxMinutes = calendarNotificationMinutes + 2;
+                  
+                  // Also check if we're very close to the notification time (within 5 minutes)
+                  // This helps catch notifications that might have been missed
+                  const isWithinNotificationWindow = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
                   
                   logger.info(
                     {
@@ -449,19 +457,46 @@ export async function GET(req: NextRequest) {
                       isTomorrow,
                       eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
                       currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
-                      willTrigger: timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes,
+                      willTrigger: isWithinNotificationWindow,
+                      notificationWindow: `${minMinutes}-${maxMinutes} minutes before event`,
                     },
                     'Checking if event should trigger notification'
                   );
                   
-                  if (timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes) {
+                  if (isWithinNotificationWindow) {
                     // Check cache to prevent duplicate notifications
+                    // Use event ID and date as cache key to prevent sending same notification multiple times
                     const eventDate = new Date(event.start);
                     const dateKey = `${eventDate.getUTCFullYear()}-${eventDate.getUTCMonth() + 1}-${eventDate.getUTCDate()}-${eventDate.getUTCHours()}-${eventDate.getUTCMinutes()}`;
                     const cacheKey = `${event.id}-${dateKey}`;
                     const lastSent = notificationCache.get(cacheKey);
+                    const timeSinceLastSent = lastSent ? Math.floor((now.getTime() - lastSent) / 1000 / 60) : null;
+
+                    logger.info(
+                      {
+                        userId,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        cacheKey,
+                        lastSent: lastSent ? new Date(lastSent).toISOString() : 'never',
+                        timeSinceLastSent,
+                        cacheTTLMinutes: CACHE_TTL / 1000 / 60,
+                        willSend: !lastSent || (now.getTime() - lastSent) >= CACHE_TTL,
+                      },
+                      'Cache check for calendar event notification'
+                    );
 
                     if (!lastSent || (now.getTime() - lastSent) >= CACHE_TTL) {
+                      logger.info(
+                        {
+                          userId,
+                          eventId: event.id,
+                          eventTitle: event.title,
+                          willSendNotification: true,
+                        },
+                        '✅ Sending calendar event notification NOW'
+                      );
+                      
                       // Send notification
                       await sendCalendarEventNotification(
                         db,
@@ -488,16 +523,38 @@ export async function GET(req: NextRequest) {
                           currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
                           timeDiffMinutes,
                           calendarNotificationMinutes,
+                          messageSent: true,
                         },
-                        'Calendar event notification sent successfully'
+                        '✅✅ Calendar event notification sent successfully'
                       );
                     } else {
                       notificationsSkipped++;
-                      logger.debug(
-                        { eventId: event.id, lastSent: new Date(lastSent).toISOString(), cacheKey },
-                        'Skipping duplicate calendar event notification (already sent recently)'
+                      logger.warn(
+                        { 
+                          eventId: event.id, 
+                          eventTitle: event.title,
+                          lastSent: new Date(lastSent).toISOString(), 
+                          cacheKey,
+                          timeSinceLastSent,
+                          reason: 'Already sent recently (within cache TTL)',
+                        },
+                        '⚠️ Skipping duplicate calendar event notification'
                       );
                     }
+                  } else {
+                    logger.debug(
+                      {
+                        userId,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        timeDiffMinutes,
+                        minMinutes,
+                        maxMinutes,
+                        calendarNotificationMinutes,
+                        reason: `Time difference ${timeDiffMinutes} is outside notification window [${minMinutes}, ${maxMinutes}]`,
+                      },
+                      'Event not within notification window'
+                    );
                   }
                 } catch (eventError) {
                   logger.error(
