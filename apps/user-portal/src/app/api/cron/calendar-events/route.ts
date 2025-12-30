@@ -105,10 +105,9 @@ export async function GET(req: NextRequest) {
 
     let notificationsSent = 0;
     let notificationsSkipped = 0;
-    let alertsSent = 0;
     const errors: string[] = [];
 
-    // Group ALL connections by user (for sending alert messages to all users with calendars)
+    // Group ALL connections by user (for checking events and sending notifications)
     const allConnectionsByUser = new Map<string, typeof calendarConnections>();
     for (const connection of calendarConnections) {
       if (!allConnectionsByUser.has(connection.userId)) {
@@ -325,7 +324,6 @@ export async function GET(req: NextRequest) {
             isFreeMessage: true,
           });
 
-          alertsSent++;
           logger.info(
             {
               userId,
@@ -371,7 +369,6 @@ export async function GET(req: NextRequest) {
         connectionsChecked: 0,
         notificationsSent: 0,
         notificationsSkipped: 0,
-        alertsSent: allConnectionsByUser.size,
       });
     }
 
@@ -916,7 +913,6 @@ export async function GET(req: NextRequest) {
         connectionsChecked: filteredConnections.length,
         notificationsSent,
         notificationsSkipped,
-        alertsSent,
         errorsCount: errors.length,
         usersProcessed: connectionsByUser.size,
       },
@@ -930,7 +926,6 @@ export async function GET(req: NextRequest) {
       connectionsChecked: filteredConnections.length,
       notificationsSent,
       notificationsSkipped,
-      alertsSent,
       usersProcessed: connectionsByUser.size,
       errors: errors.length > 0 ? errors : undefined
     });
