@@ -548,10 +548,12 @@ export default function CalendarsPage() {
     open: boolean;
     calendarId: string | null;
     calendarName: string | null;
+    calendarIdsToDisconnect?: string[]; // For bulk disconnect by email
   }>({
     open: false,
     calendarId: null,
     calendarName: null,
+    calendarIdsToDisconnect: undefined,
   });
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
   const [eventDetailsModal, setEventDetailsModal] = useState<{
@@ -1465,7 +1467,7 @@ export default function CalendarsPage() {
         refetch();
         
         // Close disconnect dialog
-        setDisconnectDialog({ open: false, calendarId: null, calendarName: null });
+        setDisconnectDialog({ open: false, calendarId: null, calendarName: null, calendarIdsToDisconnect: undefined });
       },
       onError: (error) => {
         toast({
@@ -1649,38 +1651,33 @@ export default function CalendarsPage() {
     }
 
     const providerName = provider === "google" ? "Google" : "Microsoft";
-    const calendarNames = activeCalendars.map(cal => cal.calendarName || cal.email).join(", ");
+    const email = activeCalendars[0]?.email || "";
+    const calendarIds = activeCalendars.map(cal => cal.id);
     
     setDisconnectDialog({
       open: true,
-      calendarId: provider, // Use provider as identifier for bulk disconnect
-      calendarName: `${providerName} (${activeCalendars.length} calendar${activeCalendars.length > 1 ? 's' : ''})`,
+      calendarId: `${provider}-${email}`, // Use composite key for bulk disconnect
+      calendarName: `${providerName} (${email}) - ${activeCalendars.length} calendar${activeCalendars.length > 1 ? 's' : ''}`,
+      calendarIdsToDisconnect: calendarIds,
     });
   };
 
   const confirmDisconnect = async () => {
     if (disconnectDialog.calendarId) {
-      // Check if this is a provider-level disconnect (bulk disconnect)
-      if (disconnectDialog.calendarId === "google" || disconnectDialog.calendarId === "microsoft") {
-        const provider = disconnectDialog.calendarId;
-        const providerCalendars = groupedCalendars[provider] || [];
-        const activeCalendars = providerCalendars.filter((cal: any) => cal.isActive);
+      // Check if this is a bulk disconnect (by email)
+      if (disconnectDialog.calendarIdsToDisconnect && disconnectDialog.calendarIdsToDisconnect.length > 0) {
+        const calendarIds = disconnectDialog.calendarIdsToDisconnect;
         
-        if (activeCalendars.length === 0) {
-          setDisconnectDialog({ open: false, calendarId: null, calendarName: null });
-          return;
-        }
-
-        // Disconnect all calendars from this provider sequentially
+        // Disconnect all calendars sequentially
         const disconnectedIds: string[] = [];
         const errors: string[] = [];
 
-        for (const cal of activeCalendars) {
+        for (const calendarId of calendarIds) {
           try {
-            await disconnectCalendarMutation.mutateAsync({ id: (cal as any).id });
-            disconnectedIds.push((cal as any).id);
+            await disconnectCalendarMutation.mutateAsync({ id: calendarId });
+            disconnectedIds.push(calendarId);
           } catch (error: any) {
-            errors.push(error.message || `Failed to disconnect ${(cal as any).calendarName || (cal as any).email}`);
+            errors.push(error.message || `Failed to disconnect calendar ${calendarId}`);
           }
         }
 
@@ -1692,14 +1689,14 @@ export default function CalendarsPage() {
         // Show appropriate message
         if (errors.length === 0) {
           toast({
-            title: "Provider disconnected",
-            description: `All ${activeCalendars.length} ${provider === "google" ? "Google" : "Microsoft"} calendar${activeCalendars.length > 1 ? 's' : ''} have been disconnected.`,
+            title: "Calendars disconnected",
+            description: `Successfully disconnected ${disconnectedIds.length} calendar${disconnectedIds.length > 1 ? 's' : ''}.`,
             variant: "success",
           });
         } else if (disconnectedIds.length > 0) {
           toast({
             title: "Partially disconnected",
-            description: `Disconnected ${disconnectedIds.length} of ${activeCalendars.length} calendars. Some errors occurred.`,
+            description: `Disconnected ${disconnectedIds.length} of ${calendarIds.length} calendars. Some errors occurred.`,
             variant: "warning",
             duration: 5000,
           });
@@ -1713,7 +1710,7 @@ export default function CalendarsPage() {
         }
 
         refetch();
-        setDisconnectDialog({ open: false, calendarId: null, calendarName: null });
+        setDisconnectDialog({ open: false, calendarId: null, calendarName: null, calendarIdsToDisconnect: undefined });
       } else {
         // Single calendar disconnect
         disconnectCalendarMutation.mutate({ id: disconnectDialog.calendarId });
@@ -1998,13 +1995,17 @@ export default function CalendarsPage() {
     updateEventMutation.mutate(updateData);
   };
 
-  // Group calendars by provider
+  // Group calendars by provider and email
   const groupedCalendars = calendars.reduce((acc: any, calendar: any) => {
-    const key = calendar.provider;
+    const key = `${calendar.provider}-${calendar.email}`;
     if (!acc[key]) {
-      acc[key] = [];
+      acc[key] = {
+        provider: calendar.provider,
+        email: calendar.email,
+        calendars: []
+      };
     }
-    acc[key].push(calendar);
+    acc[key].calendars.push(calendar);
     return acc;
   }, {});
 
@@ -2274,33 +2275,47 @@ export default function CalendarsPage() {
               ) : (
               <div className="space-y-3">
                   {Object.entries(groupedCalendars).map(
-                    ([provider, providerCalendars]: [string, any]) => (
-                      <Card key={provider} className="border-gray-200 shadow-sm">
+                    ([key, group]: [string, any]) => (
+                      <Card key={key} className="border-gray-200 shadow-sm">
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between gap-2 mb-3">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={cn(
-                                  "h-3 w-3 rounded-full flex-shrink-0",
-                                  providerCalendars.some((cal: any) => cal.isActive)
-                                    ? provider === "google"
-                                      ? "bg-blue-500"
-                                      : "bg-purple-500"
-                                    : "bg-gray-300"
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div
+                                  className={cn(
+                                    "h-3 w-3 rounded-full flex-shrink-0",
+                                    group.calendars.some((cal: any) => cal.isActive)
+                                      ? group.provider === "google"
+                                        ? "bg-blue-500"
+                                        : "bg-purple-500"
+                                      : "bg-gray-300"
+                                  )}
+                                ></div>
+                                <span className="text-sm font-semibold text-gray-900 capitalize">
+                                  {group.provider === "google" ? "Google" : "Microsoft"}
+                                </span>
+                                {group.calendars.some((cal: any) => cal.isActive) && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
+                                  >
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    Active
+                                  </Badge>
                                 )}
-                              ></div>
-                              <span className="text-sm font-semibold text-gray-900 capitalize">
-                                {provider === "google" ? "Google" : "Microsoft"}
-                              </span>
+                              </div>
+                              <p className="text-xs text-gray-600 truncate ml-5">
+                                {group.email}
+                              </p>
                             </div>
-                            {providerCalendars.some((cal: any) => cal.isActive) && (
+                            {group.calendars.some((cal: any) => cal.isActive) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDisconnectProvider(provider, providerCalendars)}
+                                onClick={() => handleDisconnectProvider(group.provider, group.calendars)}
                                 disabled={disconnectCalendarMutation.isPending}
-                                className="text-xs h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title={`Disconnect all ${provider === "google" ? "Google" : "Microsoft"} calendars`}
+                                className="text-xs h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+                                title={`Disconnect all ${group.provider === "google" ? "Google" : "Microsoft"} calendars for ${group.email}`}
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -2308,7 +2323,7 @@ export default function CalendarsPage() {
                           </div>
 
                           <div className="space-y-2">
-                            {providerCalendars.map((calendar: any) => (
+                            {group.calendars.map((calendar: any) => (
                               <div key={calendar.id} className="flex items-center gap-2">
                                 <Checkbox
                                   id={`calendar-${calendar.id}`}
@@ -2364,11 +2379,11 @@ export default function CalendarsPage() {
                                     size="sm"
                                     onClick={() =>
                                       handleConnectCalendar(
-                                        provider as "google" | "microsoft"
+                                        group.provider as "google" | "microsoft"
                                       )
                                     }
                                     disabled={
-                                      connectingProvider === provider || !canAddMore
+                                      connectingProvider === group.provider || !canAddMore
                                     }
                                     className="text-xs h-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                   >
@@ -3449,6 +3464,7 @@ export default function CalendarsPage() {
               open: false,
               calendarId: null,
               calendarName: null,
+              calendarIdsToDisconnect: undefined,
             });
           }
         }}
@@ -4218,8 +4234,8 @@ export default function CalendarsPage() {
             ) : (
               <div className="space-y-3">
                 {Object.entries(groupedCalendars).map(
-                  ([provider, providerCalendars]: [string, any]) => (
-                    <Card key={provider} className="border-gray-200 shadow-sm">
+                  ([key, group]: [string, any]) => (
+                    <Card key={key} className="border-gray-200 shadow-sm">
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div className="flex-1 min-w-0">
@@ -4227,17 +4243,17 @@ export default function CalendarsPage() {
                               <div
                                 className={cn(
                                   "h-3 w-3 rounded-full flex-shrink-0",
-                                  providerCalendars.some((cal: any) => cal.isActive)
-                                    ? provider === "google"
+                                  group.calendars.some((cal: any) => cal.isActive)
+                                    ? group.provider === "google"
                                       ? "bg-blue-500"
                                       : "bg-purple-500"
                                     : "bg-gray-300"
                                 )}
                               ></div>
                               <span className="text-sm font-semibold text-gray-900 capitalize">
-                                {provider === "google" ? "Google" : "Microsoft"}
+                                {group.provider === "google" ? "Google" : "Microsoft"}
                               </span>
-                              {providerCalendars.some((cal: any) => cal.isActive) && (
+                              {group.calendars.some((cal: any) => cal.isActive) && (
                                 <Badge
                                   variant="outline"
                                   className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
@@ -4248,17 +4264,17 @@ export default function CalendarsPage() {
                               )}
                             </div>
                             <p className="text-xs text-gray-600 truncate ml-5">
-                              {providerCalendars[0]?.email || "N/A"}
+                              {group.email}
                             </p>
                           </div>
-                          {providerCalendars.some((cal: any) => cal.isActive) && (
+                          {group.calendars.some((cal: any) => cal.isActive) && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDisconnectProvider(provider, providerCalendars)}
+                              onClick={() => handleDisconnectProvider(group.provider, group.calendars)}
                               disabled={disconnectCalendarMutation.isPending}
                               className="text-xs h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
-                              title={`Disconnect all ${provider === "google" ? "Google" : "Microsoft"} calendars`}
+                              title={`Disconnect all ${group.provider === "google" ? "Google" : "Microsoft"} calendars for ${group.email}`}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -4267,7 +4283,7 @@ export default function CalendarsPage() {
 
                         {/* All calendars list */}
                         <div className="space-y-2">
-                          {providerCalendars.map((calendar: any) => (
+                          {group.calendars.map((calendar: any) => (
                             <div key={calendar.id} className="flex items-center gap-2">
                               <Checkbox
                                 id={`mobile-calendar-${calendar.id}`}
@@ -4323,11 +4339,11 @@ export default function CalendarsPage() {
                                   size="sm"
                                   onClick={() =>
                                     handleConnectCalendar(
-                                      provider as "google" | "microsoft"
+                                      group.provider as "google" | "microsoft"
                                     )
                                   }
                                   disabled={
-                                    connectingProvider === provider || !canAddMore
+                                    connectingProvider === group.provider || !canAddMore
                                   }
                                   className="text-xs h-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                 >
