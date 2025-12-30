@@ -302,23 +302,36 @@ export async function GET(req: NextRequest) {
                 try {
                   const eventStart = new Date(event.start);
                   
-                  // Collect event for test message (only future events)
+                  // Collect event for test message (all future events within 24 hours)
                   const eventTimeDiff = eventStart.getTime() - now.getTime();
-                  if (eventTimeDiff > 0) {
+                  const eventTimeDiffMinutes = Math.floor(eventTimeDiff / (1000 * 60));
+                  
+                  // Collect all events that are in the future (up to 24 hours ahead)
+                  if (eventTimeDiffMinutes > 0 && eventTimeDiffMinutes <= (24 * 60)) {
                     // Calculate when reminder will be sent (event time - notification minutes)
                     const reminderTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
                     const reminderTimeDiff = reminderTime.getTime() - now.getTime();
                     const reminderMinutesUntil = Math.floor(reminderTimeDiff / (1000 * 60));
                     
-                    // Only include events where reminder hasn't been sent yet
-                    if (reminderMinutesUntil >= 0) {
-                      allUpcomingEvents.push({
-                        event,
-                        connection,
-                        reminderTime,
-                        reminderMinutes: reminderMinutesUntil,
-                      });
-                    }
+                    // Include all future events (even if reminder time has passed, as long as event is in future)
+                    allUpcomingEvents.push({
+                      event,
+                      connection,
+                      reminderTime,
+                      reminderMinutes: reminderMinutesUntil,
+                    });
+                    
+                    logger.debug(
+                      {
+                        userId,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        eventTimeDiffMinutes,
+                        reminderMinutesUntil,
+                        eventStart: eventStart.toISOString(),
+                      },
+                      'Collected event for test message'
+                    );
                   }
                   
                   // Get event start time in user's timezone
@@ -515,13 +528,43 @@ export async function GET(req: NextRequest) {
         }
 
         // Send test message with next 3 upcoming events
+        logger.info(
+          {
+            userId,
+            phoneNumber: whatsappNumber.phoneNumber,
+            totalEventsCollected: allUpcomingEvents.length,
+            events: allUpcomingEvents.map(e => ({
+              title: e.event.title,
+              start: e.event.start,
+              reminderMinutes: e.reminderMinutes,
+            })),
+          },
+          'Preparing to send test message'
+        );
+        
         if (allUpcomingEvents.length > 0) {
           try {
-            // Sort events by reminder time (soonest first)
-            allUpcomingEvents.sort((a, b) => a.reminderTime.getTime() - b.reminderTime.getTime());
+            // Sort events by event start time (soonest first), not reminder time
+            allUpcomingEvents.sort((a, b) => {
+              const aStart = new Date(a.event.start).getTime();
+              const bStart = new Date(b.event.start).getTime();
+              return aStart - bStart;
+            });
             
             // Get top 3 events
             const top3Events = allUpcomingEvents.slice(0, 3);
+            
+            logger.info(
+              {
+                userId,
+                top3Events: top3Events.map(e => ({
+                  title: e.event.title,
+                  start: e.event.start,
+                  reminderMinutes: e.reminderMinutes,
+                })),
+              },
+              'Selected top 3 events for test message'
+            );
             
             // Build test message
             let testMessage = `*test*\n\n`;
@@ -529,23 +572,16 @@ export async function GET(req: NextRequest) {
             for (const { event, connection, reminderMinutes } of top3Events) {
               const eventStart = new Date(event.start);
               
-              // Format event time in user's timezone
-              const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
-                timeZone: userTimezone,
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric',
-                hour12: true,
-              });
-              const eventTimeStr = eventTimeFormatter.format(eventStart);
-              
-              testMessage += `*${event.title}*\n`;
+              testMessage += `*${event.title || 'Untitled Event'}*\n`;
               if (reminderMinutes > 0) {
                 testMessage += `it will send you remind message in ${reminderMinutes} ${reminderMinutes === 1 ? 'min' : 'mins'}\n`;
-              } else {
+              } else if (reminderMinutes === 0) {
                 testMessage += `it will send you remind message now\n`;
+              } else {
+                // Reminder time has passed but event hasn't started yet
+                const eventTimeDiff = eventStart.getTime() - now.getTime();
+                const eventMinutesUntil = Math.floor(eventTimeDiff / (1000 * 60));
+                testMessage += `reminder already sent, event starts in ${eventMinutesUntil} ${eventMinutesUntil === 1 ? 'min' : 'mins'}\n`;
               }
               testMessage += `\n`;
             }
@@ -556,12 +592,14 @@ export async function GET(req: NextRequest) {
                 phoneNumber: whatsappNumber.phoneNumber,
                 eventsCount: top3Events.length,
                 totalEvents: allUpcomingEvents.length,
+                messageLength: testMessage.length,
+                messagePreview: testMessage.substring(0, 200),
               },
               'Sending test message with upcoming events'
             );
             
             // Send test message
-            await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, testMessage);
+            const result = await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, testMessage);
             
             // Log the message
             await logOutgoingWhatsAppMessage(db, {
@@ -576,6 +614,7 @@ export async function GET(req: NextRequest) {
               {
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
+                messageId: result.messages?.[0]?.id,
                 messageSent: true,
               },
               'Test message sent successfully'
@@ -584,6 +623,8 @@ export async function GET(req: NextRequest) {
             logger.error(
               {
                 error: testError,
+                errorMessage: testError instanceof Error ? testError.message : String(testError),
+                errorStack: testError instanceof Error ? testError.stack : undefined,
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
               },
@@ -591,6 +632,14 @@ export async function GET(req: NextRequest) {
             );
             // Don't add to errors array - test message failure shouldn't fail the cron job
           }
+        } else {
+          logger.info(
+            {
+              userId,
+              phoneNumber: whatsappNumber.phoneNumber,
+            },
+            'No upcoming events found to send test message'
+          );
         }
       } catch (userError) {
         logger.error({ error: userError, userId }, 'Error processing user calendar connections');
