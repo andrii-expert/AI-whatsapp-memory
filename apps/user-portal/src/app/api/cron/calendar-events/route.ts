@@ -402,6 +402,7 @@ export async function GET(req: NextRequest) {
             hasPreferences: !!userPreferences,
             preferencesIsArray: Array.isArray(userPrefsRaw),
             preferencesSource: 'user object',
+            userPreferencesData: userPreferences,
           },
           'User calendar notification settings'
         );
@@ -411,6 +412,7 @@ export async function GET(req: NextRequest) {
             {
               userId,
               calendarNotifications: userPreferences?.calendarNotifications,
+              userPreferencesData: userPreferences,
             },
             'User has calendar notifications disabled, skipping event reminders'
           );
@@ -668,10 +670,10 @@ export async function GET(req: NextRequest) {
                   // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
                   // For example: if event is at 2:00 PM and notification is 10 minutes before,
                   // we want to send at 1:50 PM, which means timeDiffMinutes should be 10
-                  // Use a wider range to account for cron timing (allow ±2 minute tolerance for cron execution timing)
+                  // Use a wider range to account for cron timing (allow ±3 minute tolerance for cron execution timing)
                   // This ensures we catch notifications even if cron runs slightly early or late
-                  const minMinutes = Math.max(0, calendarNotificationMinutes - 2);
-                  const maxMinutes = calendarNotificationMinutes + 2;
+                  const minMinutes = Math.max(0, calendarNotificationMinutes - 3);
+                  const maxMinutes = calendarNotificationMinutes + 3;
                   
                   // Calculate when the notification should be sent (event time - notification minutes)
                   const notificationTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
@@ -685,8 +687,13 @@ export async function GET(req: NextRequest) {
                   // 1. Direct time difference check (primary) - check if we're X minutes before event
                   // 2. Notification time check (backup) - check if we're at the calculated notification time
                   const shouldTriggerByTimeDiff = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
-                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 2 && timeDiffMinutes > 0;
+                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 3 && timeDiffMinutes > 0;
                   const shouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime;
+                  
+                  // Also check if we're very close to the notification time (within 1 minute past the notification time)
+                  // This catches cases where the cron runs slightly after the exact notification time
+                  const isJustPastNotificationTime = notificationTimeDiffMinutes < 0 && Math.abs(notificationTimeDiffMinutes) <= 1 && timeDiffMinutes > 0;
+                  const finalShouldTrigger = shouldTrigger || isJustPastNotificationTime;
                   
                   logger.info(
                     {
@@ -709,14 +716,16 @@ export async function GET(req: NextRequest) {
                       shouldTriggerByTimeDiff,
                       shouldTriggerByNotificationTime,
                       shouldTrigger,
-                      reason: shouldTrigger 
+                      isJustPastNotificationTime,
+                      finalShouldTrigger,
+                      reason: finalShouldTrigger 
                         ? 'Event matches notification criteria - will send notification' 
-                        : `Time difference ${timeDiffMinutes} not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} not within ±2 minutes`,
+                        : `Time difference ${timeDiffMinutes} not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} not within ±3 minutes`,
                     },
                     'Checking if event should trigger notification'
                   );
                   
-                  if (shouldTrigger) {
+                  if (finalShouldTrigger) {
                     // Check cache to prevent duplicate notifications
                     const eventDate = new Date(event.start);
                     const dateKey = `${eventDate.getUTCFullYear()}-${eventDate.getUTCMonth() + 1}-${eventDate.getUTCDate()}-${eventDate.getUTCHours()}-${eventDate.getUTCMinutes()}`;
@@ -793,8 +802,8 @@ export async function GET(req: NextRequest) {
                         shouldTriggerByNotificationTime,
                         eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}:${String(eventLocalTime.seconds).padStart(2, '0')}`,
                         currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')}`,
-                        reason: !shouldTriggerByTimeDiff && !shouldTriggerByNotificationTime 
-                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±2 minutes`
+                        reason: !shouldTriggerByTimeDiff && !shouldTriggerByNotificationTime && !isJustPastNotificationTime
+                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±3 minutes`
                           : 'Unknown reason',
                       },
                       'Event did not match notification criteria - skipping'
