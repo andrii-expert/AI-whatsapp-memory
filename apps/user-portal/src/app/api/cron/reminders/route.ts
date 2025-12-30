@@ -299,23 +299,95 @@ export async function GET(req: NextRequest) {
         // Send notifications for reminders that are due now (within 1 minute)
         for (const { reminder, reminderTime } of dueReminders) {
           try {
-            // Format reminder time for message using user's timezone with Intl.DateTimeFormat
-            const timeFormatter = new Intl.DateTimeFormat('en-US', {
-              timeZone: userTimezone,
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true,
-            });
-            const reminderTimeStr = timeFormatter.format(reminderTime);
+            // Format reminder time for message - use the reminder's configured time
+            // This ensures we show the time the user actually set, correctly formatted in their timezone
+            let reminderTimeStr: string;
+            let reminderDateStr: string;
             
-            // Also get date for full context
+            // Date formatter for the reminder date (using current user local time)
             const dateFormatter = new Intl.DateTimeFormat('en-US', {
               timeZone: userTimezone,
               year: 'numeric',
               month: 'long',
               day: 'numeric',
             });
-            const reminderDateStr = dateFormatter.format(reminderTime);
+            
+            // Get the date string from current user local time
+            reminderDateStr = dateFormatter.format(now);
+            
+            // Format the time based on reminder configuration
+            // Helper function to convert 24-hour time to 12-hour format
+            const formatTime24To12 = (hours: number, minutes: number): string => {
+              const hour12 = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
+              const period = hours >= 12 ? 'PM' : 'AM';
+              return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+            };
+            
+            if (reminder.time) {
+              // For reminders with a specific time (daily, weekly, monthly, yearly, once)
+              // Parse the time string (e.g., "17:00" in 24-hour format)
+              const timeMatch = reminder.time.match(/^(\d{1,2}):(\d{2})$/);
+              if (timeMatch) {
+                const hours = parseInt(timeMatch[1]!, 10);
+                const minutes = parseInt(timeMatch[2]!, 10);
+                
+                if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+                  // Convert 24-hour format to 12-hour format for display
+                  reminderTimeStr = formatTime24To12(hours, minutes);
+                } else {
+                  // Invalid time format, use the reminderTime Date object as fallback
+                  const timeFormatter = new Intl.DateTimeFormat('en-US', {
+                    timeZone: userTimezone,
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                  });
+                  reminderTimeStr = timeFormatter.format(reminderTime);
+                }
+              } else {
+                // Time format not recognized, use the reminderTime Date object as fallback
+                const timeFormatter = new Intl.DateTimeFormat('en-US', {
+                  timeZone: userTimezone,
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                });
+                reminderTimeStr = timeFormatter.format(reminderTime);
+              }
+            } else if (reminder.frequency === 'hourly' && reminder.minuteOfHour !== null && reminder.minuteOfHour !== undefined) {
+              // For hourly reminders, use the current hour with the configured minute
+              const minuteOfHour = reminder.minuteOfHour;
+              if (minuteOfHour >= 0 && minuteOfHour <= 59) {
+                reminderTimeStr = formatTime24To12(userLocalTime.hours, minuteOfHour);
+              } else {
+                // Invalid minute, use current time
+                const timeFormatter = new Intl.DateTimeFormat('en-US', {
+                  timeZone: userTimezone,
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                });
+                reminderTimeStr = timeFormatter.format(now);
+              }
+            } else if (reminder.frequency === 'minutely') {
+              // For minutely reminders, show current time in user's timezone
+              const timeFormatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: userTimezone,
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              });
+              reminderTimeStr = timeFormatter.format(now);
+            } else {
+              // Fallback: format the reminderTime Date object in user's timezone
+              const timeFormatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: userTimezone,
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              });
+              reminderTimeStr = timeFormatter.format(reminderTime);
+            }
             
             logger.info(
               {
