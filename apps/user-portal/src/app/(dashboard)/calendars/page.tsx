@@ -2435,15 +2435,6 @@ export default function CalendarsPage() {
                                 <span className="text-sm font-semibold text-gray-900 capitalize">
                                   {group.provider === "google" ? "Google" : "Microsoft"}
                                 </span>
-                                {group.calendars.some((cal: any) => cal.isActive) && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
-                                  >
-                                    <CheckCircle className="h-3 w-3 mr-1" />
-                                    Active
-                                  </Badge>
-                                )}
                               </div>
                               <p className="text-xs text-gray-600 truncate ml-5">
                                 {group.email}
@@ -2512,13 +2503,6 @@ export default function CalendarsPage() {
                                         <Star className="h-3 w-3" />
                                       </Button>
                                     )}
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
-                                    >
-                                      <CheckCircle className="h-3 w-3 mr-1" />
-                                      Active
-                                    </Badge>
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -4890,15 +4874,6 @@ export default function CalendarsPage() {
                               <span className="text-sm font-semibold text-gray-900 capitalize">
                                 {group.provider === "google" ? "Google" : "Microsoft"}
                               </span>
-                              {group.calendars.some((cal: any) => cal.isActive) && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
-                                >
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  Active
-                                </Badge>
-                              )}
                             </div>
                             <p className="text-xs text-gray-600 truncate ml-5">
                               {group.email}
