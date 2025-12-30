@@ -723,13 +723,15 @@ export async function GET(req: NextRequest) {
                   // The key insight: timeDiffMinutes is the actual time until the event (in UTC milliseconds)
                   // So if timeDiffMinutes is approximately equal to calendarNotificationMinutes, we should notify
                   // 
-                  // Use a wider range to account for cron timing (allow ±5 minute tolerance for cron execution timing)
+                  // Use a wider range to account for cron timing (allow ±10 minute tolerance for cron execution timing)
                   // This ensures we catch notifications even if cron runs slightly early or late
-                  const minMinutes = Math.max(0, calendarNotificationMinutes - 5);
-                  const maxMinutes = calendarNotificationMinutes + 5;
+                  // This is important because cron jobs may not run exactly on time
+                  const minMinutes = Math.max(0, calendarNotificationMinutes - 10);
+                  const maxMinutes = calendarNotificationMinutes + 10;
                   
                   // Primary check: Is the time until the event approximately equal to the notification minutes?
                   // This is the most reliable check because it directly compares the time difference
+                  // We want to trigger if we're within the notification window (e.g., 0-20 minutes for a 10-minute notification)
                   const shouldTriggerByTimeDiff = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
                   
                   // Secondary check: Calculate when the notification should be sent and check if we're at that time
@@ -737,14 +739,18 @@ export async function GET(req: NextRequest) {
                   const notificationTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
                   const notificationTimeDiffMs = notificationTime.getTime() - now.getTime();
                   const notificationTimeDiffMinutes = Math.floor(notificationTimeDiffMs / (1000 * 60));
-                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 5 && timeDiffMinutes > 0;
+                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 10 && timeDiffMinutes > 0;
                   
-                  // Also check if we're very close to the notification time (within 2 minutes past the notification time)
+                  // Also check if we're very close to the notification time (within 5 minutes past the notification time)
                   // This catches cases where the cron runs slightly after the exact notification time
-                  const isJustPastNotificationTime = notificationTimeDiffMinutes < 0 && Math.abs(notificationTimeDiffMinutes) <= 2 && timeDiffMinutes > 0;
+                  const isJustPastNotificationTime = notificationTimeDiffMinutes < 0 && Math.abs(notificationTimeDiffMinutes) <= 5 && timeDiffMinutes > 0;
+                  
+                  // Additional check: If the event is very close (within 1 minute of notification time), always trigger
+                  // This is a safety net to ensure we don't miss notifications
+                  const isVeryCloseToNotificationTime = timeDiffMinutes > 0 && timeDiffMinutes <= (calendarNotificationMinutes + 2);
                   
                   // Final decision: trigger if any of the conditions are met
-                  const finalShouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime || isJustPastNotificationTime;
+                  const finalShouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime || isJustPastNotificationTime || isVeryCloseToNotificationTime;
                   
                   logger.info(
                     {
@@ -769,10 +775,17 @@ export async function GET(req: NextRequest) {
                       shouldTriggerByTimeDiff,
                       shouldTriggerByNotificationTime,
                       isJustPastNotificationTime,
+                      isVeryCloseToNotificationTime,
                       finalShouldTrigger,
+                      triggerReasons: {
+                        byTimeDiff: shouldTriggerByTimeDiff,
+                        byNotificationTime: shouldTriggerByNotificationTime,
+                        justPast: isJustPastNotificationTime,
+                        veryClose: isVeryCloseToNotificationTime,
+                      },
                       reason: finalShouldTrigger 
-                        ? `Event matches notification criteria - timeDiffMinutes (${timeDiffMinutes}) is in range [${minMinutes}, ${maxMinutes}] or notification time diff (${notificationTimeDiffMinutes}) is within ±5 minutes` 
-                        : `Time difference ${timeDiffMinutes} not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} not within ±5 minutes`,
+                        ? `✅ Event matches notification criteria - timeDiffMinutes (${timeDiffMinutes}) is in range [${minMinutes}, ${maxMinutes}] or notification time diff (${notificationTimeDiffMinutes}) is within ±10 minutes or very close (${isVeryCloseToNotificationTime})` 
+                        : `❌ Time difference ${timeDiffMinutes} not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} not within ±10 minutes and not very close`,
                     },
                     'Checking if event should trigger notification'
                   );
@@ -857,8 +870,8 @@ export async function GET(req: NextRequest) {
                         shouldTriggerByTimeDiff,
                         shouldTriggerByNotificationTime,
                         isJustPastNotificationTime,
-                        reason: !shouldTriggerByTimeDiff && !shouldTriggerByNotificationTime && !isJustPastNotificationTime
-                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±5 minutes`
+                        reason: !shouldTriggerByTimeDiff && !shouldTriggerByNotificationTime && !isJustPastNotificationTime && !isVeryCloseToNotificationTime
+                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±10 minutes and not very close`
                           : 'Unknown reason',
                       },
                       'Event did not match notification criteria - skipping'
