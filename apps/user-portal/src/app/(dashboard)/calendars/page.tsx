@@ -3392,6 +3392,11 @@ export default function CalendarsPage() {
               <label htmlFor="event-address" className="text-sm font-medium">
                 Address (optional)
               </label>
+              <div className="flex items-center gap-2">
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                    <span className="text-xs text-gray-500 bg-white px-2">or</span>
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                  </div>
               <Button
                 type="button"
                 variant={createGoogleMeet ? "primary" : "outline"}
