@@ -127,8 +127,24 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Get user's timezone from preferences
-        const userTimezone = (user as any).preferences?.timezone || (user as any).timezone || 'UTC';
+        // Get user's timezone from database - handle both array and object formats for preferences
+        const userPrefsRawForAlert = (user as any).preferences;
+        const userPreferencesForAlert = Array.isArray(userPrefsRawForAlert) 
+          ? userPrefsRawForAlert[0] 
+          : userPrefsRawForAlert;
+        // Priority: userPreferences.timezone > user.timezone > default "Africa/Johannesburg"
+        const userTimezone = userPreferencesForAlert?.timezone || (user as any).timezone || 'Africa/Johannesburg';
+        
+        logger.debug(
+          {
+            userId,
+            timezoneSource: userPreferencesForAlert?.timezone ? 'userPreferences' : (user as any).timezone ? 'user' : 'default',
+            userTimezone,
+            preferencesTimezone: userPreferencesForAlert?.timezone,
+            userTableTimezone: (user as any).timezone,
+          },
+          'User timezone from database (for alert)'
+        );
 
         // Get user's verified WhatsApp numbers
         const whatsappNumbers = await getUserWhatsAppNumbers(db, userId);
@@ -375,17 +391,32 @@ export async function GET(req: NextRequest) {
           ? userPrefsRaw[0] 
           : userPrefsRaw;
         
-        // Get user's timezone from preferences (preferences.timezone takes precedence over user.timezone)
-        const userTimezone = userPreferences?.timezone || (user as any).timezone;
-        if (!userTimezone) {
+        // Get user's timezone from database
+        // Priority: userPreferences.timezone > user.timezone > default "Africa/Johannesburg"
+        // The timezone MUST come from the database, not from server settings
+        const userTimezone = userPreferences?.timezone || (user as any).timezone || 'Africa/Johannesburg';
+        
+        logger.info(
+          {
+            userId,
+            timezoneSource: userPreferences?.timezone ? 'userPreferences' : (user as any).timezone ? 'user' : 'default',
+            userTimezone,
+            preferencesTimezone: userPreferences?.timezone,
+            userTableTimezone: (user as any).timezone,
+            hasPreferences: !!userPreferences,
+            preferencesIsArray: Array.isArray(userPrefsRaw),
+          },
+          'User timezone from database'
+        );
+        
+        if (!userTimezone || userTimezone === 'UTC') {
           logger.warn({ 
             userId, 
             hasPreferences: !!userPreferences,
             preferencesTimezone: userPreferences?.timezone,
             userTimezone: (user as any).timezone,
             preferencesIsArray: Array.isArray(userPrefsRaw),
-          }, 'User has no timezone set, skipping calendar notifications');
-          continue; // Skip users without timezone set
+          }, 'User has no valid timezone set, using default');
         }
 
         // Get user's calendar notification minutes from user preferences
@@ -420,8 +451,10 @@ export async function GET(req: NextRequest) {
         }
 
         // Get current time in user's timezone using Intl.DateTimeFormat for accurate conversion
+        // CRITICAL: All time calculations MUST use the user's timezone from the database
+        // The userTimezone variable contains the timezone string from userPreferences.timezone or user.timezone
         const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: userTimezone,
+          timeZone: userTimezone, // This MUST be from the database, not server timezone
           year: 'numeric',
           month: 'numeric',
           day: 'numeric',
@@ -434,7 +467,8 @@ export async function GET(req: NextRequest) {
         const parts = formatter.formatToParts(now);
         const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
 
-        // Extract user's local time components (these represent the actual time in user's timezone)
+        // Extract user's local time components (these represent the actual time in user's timezone from database)
+        // These components are calculated using the user's timezone, not the server timezone
         const userLocalTime = {
           year: parseInt(getPart('year'), 10),
           month: parseInt(getPart('month'), 10) - 1, // Convert to 0-11
@@ -444,6 +478,17 @@ export async function GET(req: NextRequest) {
           seconds: parseInt(getPart('second'), 10),
           date: now, // Use server time as base, but components are in user's timezone
         };
+        
+        logger.info(
+          {
+            userId,
+            userTimezone,
+            serverTimeUTC: now.toISOString(),
+            userLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}`,
+            timezoneSource: userPreferences?.timezone ? 'userPreferences' : (user as any).timezone ? 'user' : 'default',
+          },
+          'Current time in user timezone (from database)'
+        );
 
         logger.info(
           {
@@ -574,9 +619,10 @@ export async function GET(req: NextRequest) {
                 try {
                   const eventStart = new Date(event.start);
                   
-                  // Get event start time in user's timezone
+                  // Get event start time in user's timezone from database
+                  // CRITICAL: This MUST use the userTimezone from the database, not server timezone
                   const eventFormatter = new Intl.DateTimeFormat('en-US', {
-                    timeZone: userTimezone,
+                    timeZone: userTimezone, // This MUST be from the database (userPreferences.timezone or user.timezone)
                     year: 'numeric',
                     month: 'numeric',
                     day: 'numeric',
@@ -589,6 +635,7 @@ export async function GET(req: NextRequest) {
                   const eventParts = eventFormatter.formatToParts(eventStart);
                   const getEventPart = (type: string) => eventParts.find(p => p.type === type)?.value || '0';
                   
+                  // Extract event time components in user's timezone from database
                   const eventLocalTime = {
                     year: parseInt(getEventPart('year'), 10),
                     month: parseInt(getEventPart('month'), 10) - 1, // Convert to 0-11
