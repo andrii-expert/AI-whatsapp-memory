@@ -43,7 +43,12 @@ import {
   X,
   Loader2,
   Video,
+  Mail,
+  Phone,
+  User,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@imaginecalendar/ui/command";
 
 // Google Maps component
 declare global {
@@ -528,6 +533,7 @@ export default function CalendarsPage() {
   const [eventColor, setEventColor] = useState("blue");
   const [eventAttendees, setEventAttendees] = useState<string[]>([]); // Array of email addresses
   const [manualAttendeeInput, setManualAttendeeInput] = useState(""); // For manual email/phone entry
+  const [attendeeSearchOpen, setAttendeeSearchOpen] = useState(false); // For autocomplete popover
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
     // Try to load from localStorage
     if (typeof window !== 'undefined') {
@@ -672,6 +678,7 @@ export default function CalendarsPage() {
   const [editEventColor, setEditEventColor] = useState("blue");
   const [editEventAttendees, setEditEventAttendees] = useState<string[]>([]); // Array of email addresses
   const [editManualAttendeeInput, setEditManualAttendeeInput] = useState(""); // For manual email/phone entry
+  const [editAttendeeSearchOpen, setEditAttendeeSearchOpen] = useState(false); // For autocomplete popover
 
   // Fetch user's calendars
   const { data: calendars = [], isLoading, refetch } = useQuery(
@@ -683,6 +690,20 @@ export default function CalendarsPage() {
   
   // Fetch friends for attendee selection
   const { data: friends = [] } = useQuery(trpc.friends.list.queryOptions());
+  
+  // Search users for attendee autocomplete (create form)
+  const [attendeeSearchTerm, setAttendeeSearchTerm] = useState("");
+  const { data: searchedUsers = [], isLoading: isSearchingUsers } = useQuery({
+    ...trpc.friends.searchUsers.queryOptions({ searchTerm: attendeeSearchTerm }),
+    enabled: attendeeSearchTerm.length >= 2 && attendeeSearchOpen,
+  });
+  
+  // Search users for attendee autocomplete (edit form)
+  const [editAttendeeSearchTerm, setEditAttendeeSearchTerm] = useState("");
+  const { data: editSearchedUsers = [], isLoading: isEditSearchingUsers } = useQuery({
+    ...trpc.friends.searchUsers.queryOptions({ searchTerm: editAttendeeSearchTerm }),
+    enabled: editAttendeeSearchTerm.length >= 2 && editAttendeeSearchOpen,
+  });
 
   // Parse coordinates from string
   const parseCoordinates = (coordString: string | undefined): { lat: number | null; lng: number | null } => {
@@ -1753,6 +1774,85 @@ export default function CalendarsPage() {
       id: calendarId,
       syncEnabled: !currentStatus,
     });
+  };
+
+  // Helper function to add attendee (validates email and checks duplicates)
+  const handleAddAttendee = (input: string) => {
+    const trimmed = input.trim().toLowerCase();
+    
+    // Check if it's already added
+    if (eventAttendees.includes(trimmed)) {
+      toast({
+        title: "Already added",
+        description: "This email is already in the attendees list.",
+        variant: "info",
+      });
+      return;
+    }
+    
+    // Validate email format (basic validation)
+    if (trimmed.includes("@") && trimmed.includes(".")) {
+      // Looks like an email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (emailRegex.test(trimmed)) {
+        setEventAttendees([...eventAttendees, trimmed]);
+        setManualAttendeeInput("");
+        setAttendeeSearchTerm("");
+        setAttendeeSearchOpen(false);
+      } else {
+        toast({
+          title: "Invalid email",
+          description: "Please enter a valid email address.",
+          variant: "error",
+        });
+      }
+    } else {
+      // Not an email format - show error
+      toast({
+        title: "Invalid email",
+        description: "Please enter a valid email address. Google Calendar requires email addresses for attendees.",
+        variant: "error",
+      });
+    }
+  };
+
+  // Helper function to add attendee for edit form
+  const handleAddEditAttendee = (input: string) => {
+    const trimmed = input.trim().toLowerCase();
+    
+    // Check if it's already added
+    if (editEventAttendees.includes(trimmed)) {
+      toast({
+        title: "Already added",
+        description: "This email is already in the attendees list.",
+        variant: "info",
+      });
+      return;
+    }
+    
+    // Validate email format (basic validation)
+    if (trimmed.includes("@") && trimmed.includes(".")) {
+      // Looks like an email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (emailRegex.test(trimmed)) {
+        setEditEventAttendees([...editEventAttendees, trimmed]);
+        setEditManualAttendeeInput("");
+        setEditAttendeeSearchOpen(false);
+      } else {
+        toast({
+          title: "Invalid email",
+          description: "Please enter a valid email address.",
+          variant: "error",
+        });
+      }
+    } else {
+      // Not an email format - show error
+      toast({
+        title: "Invalid email",
+        description: "Please enter a valid email address. Google Calendar requires email addresses for attendees.",
+        variant: "error",
+      });
+    }
   };
 
   const handleCreateEvent = () => {
@@ -3263,67 +3363,150 @@ export default function CalendarsPage() {
                 </div>
               )}
 
-              {/* Manual Email Entry */}
-              <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder="Enter email address"
-                  value={manualAttendeeInput}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setManualAttendeeInput(e.target.value)}
-                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                    if (e.key === "Enter" && manualAttendeeInput.trim()) {
-                      e.preventDefault();
-                      const email = manualAttendeeInput.trim().toLowerCase();
-                      // Basic email validation
-                      if (email.includes("@") && email.includes(".") && !eventAttendees.includes(email)) {
-                        setEventAttendees([...eventAttendees, email]);
-                        setManualAttendeeInput("");
-                      } else if (eventAttendees.includes(email)) {
-                        toast({
-                          title: "Already added",
-                          description: "This email is already in the attendees list.",
-                          variant: "info",
-                        });
-                      } else {
-                        toast({
-                          title: "Invalid email",
-                          description: "Please enter a valid email address.",
-                          variant: "error",
-                        });
+              {/* Email/Phone Entry with Autocomplete */}
+              <Popover open={attendeeSearchOpen} onOpenChange={setAttendeeSearchOpen}>
+                <div className="flex gap-2">
+                  <PopoverTrigger asChild>
+                        <div className="relative flex-1">
+                          <Input
+                            type="text"
+                            placeholder="Type email or phone to search users..."
+                            value={manualAttendeeInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          const value = e.target.value;
+                          setManualAttendeeInput(value);
+                          setAttendeeSearchTerm(value);
+                          if (value.length >= 2) {
+                            setAttendeeSearchOpen(true);
+                          }
+                        }}
+                        onFocus={() => {
+                          if (manualAttendeeInput.length >= 2) {
+                            setAttendeeSearchOpen(true);
+                          }
+                        }}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                          if (e.key === "Enter" && manualAttendeeInput.trim()) {
+                            e.preventDefault();
+                            handleAddAttendee(manualAttendeeInput.trim());
+                          } else if (e.key === "Escape") {
+                            setAttendeeSearchOpen(false);
+                          }
+                        }}
+                        className="text-sm"
+                      />
+                    </div>
+                  </PopoverTrigger>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (manualAttendeeInput.trim()) {
+                        handleAddAttendee(manualAttendeeInput.trim());
                       }
-                    }
-                  }}
-                  className="text-sm"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (manualAttendeeInput.trim()) {
-                      const email = manualAttendeeInput.trim().toLowerCase();
-                      if (email.includes("@") && email.includes(".") && !eventAttendees.includes(email)) {
-                        setEventAttendees([...eventAttendees, email]);
-                        setManualAttendeeInput("");
-                      } else if (eventAttendees.includes(email)) {
-                        toast({
-                          title: "Already added",
-                          description: "This email is already in the attendees list.",
-                          variant: "info",
-                        });
-                      } else {
-                        toast({
-                          title: "Invalid email",
-                          description: "Please enter a valid email address.",
-                          variant: "error",
-                        });
-                      }
-                    }
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Search by email or phone..."
+                      value={attendeeSearchTerm}
+                      onValueChange={setAttendeeSearchTerm}
+                    />
+                    <CommandList>
+                      {isSearchingUsers && (
+                        <div className="flex items-center justify-center py-6">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+                      {!isSearchingUsers && searchedUsers.length > 0 && (
+                        <CommandGroup heading="Users">
+                          {searchedUsers
+                            .filter((user: any) => {
+                              const email = user.email?.toLowerCase() || "";
+                              return email && !eventAttendees.includes(email);
+                            })
+                            .map((user: any) => {
+                              const displayName = user.firstName && user.lastName
+                                ? `${user.firstName} ${user.lastName}`
+                                : user.name || user.email || "Unknown";
+                              const email = user.email?.toLowerCase() || "";
+                              return (
+                                <CommandItem
+                                  key={user.id}
+                                  value={user.id}
+                                  onSelect={() => {
+                                    if (email && !eventAttendees.includes(email)) {
+                                      setEventAttendees([...eventAttendees, email]);
+                                      setManualAttendeeInput("");
+                                      setAttendeeSearchTerm("");
+                                      setAttendeeSearchOpen(false);
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  {user.avatarUrl ? (
+                                    <img
+                                      src={user.avatarUrl}
+                                      alt={displayName}
+                                      className="h-6 w-6 rounded-full"
+                                    />
+                                  ) : (
+                                    <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center">
+                                      <User className="h-4 w-4 text-gray-500" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-sm truncate">{displayName}</div>
+                                    <div className="text-xs text-gray-500 truncate flex items-center gap-1">
+                                      {email && (
+                                        <>
+                                          <Mail className="h-3 w-3" />
+                                          {email}
+                                        </>
+                                      )}
+                                      {user.phone && (
+                                        <>
+                                          {email && <span className="mx-1">•</span>}
+                                          <Phone className="h-3 w-3" />
+                                          {user.phone}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </CommandItem>
+                              );
+                            })}
+                        </CommandGroup>
+                      )}
+                      {!isSearchingUsers && attendeeSearchTerm.length >= 2 && searchedUsers.length === 0 && (
+                        <CommandEmpty>
+                          <div className="py-4 text-center text-sm text-gray-500">
+                            No users found. You can still add "{attendeeSearchTerm}" as an email address.
+                          </div>
+                        </CommandEmpty>
+                      )}
+                      {!isSearchingUsers && attendeeSearchTerm.length >= 2 && (
+                        <CommandGroup>
+                          <CommandItem
+                            onSelect={() => {
+                              handleAddAttendee(attendeeSearchTerm);
+                            }}
+                            className="flex items-center gap-2 cursor-pointer text-blue-600"
+                          >
+                            <Plus className="h-4 w-4" />
+                            <span>Add "{attendeeSearchTerm}" as email</span>
+                          </CommandItem>
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
 
               {/* Selected Attendees List */}
               {eventAttendees.length > 0 && (
@@ -3959,67 +4142,150 @@ export default function CalendarsPage() {
                       </div>
                     )}
 
-                    {/* Manual Email Entry */}
-                    <div className="flex gap-2">
-                      <Input
-                        type="email"
-                        placeholder="Enter email address"
-                        value={editManualAttendeeInput}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditManualAttendeeInput(e.target.value)}
-                        onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                          if (e.key === "Enter" && editManualAttendeeInput.trim()) {
-                            e.preventDefault();
-                            const email = editManualAttendeeInput.trim().toLowerCase();
-                            // Basic email validation
-                            if (email.includes("@") && email.includes(".") && !editEventAttendees.includes(email)) {
-                              setEditEventAttendees([...editEventAttendees, email]);
-                              setEditManualAttendeeInput("");
-                            } else if (editEventAttendees.includes(email)) {
-                              toast({
-                                title: "Already added",
-                                description: "This email is already in the attendees list.",
-                                variant: "info",
-                              });
-                            } else {
-                              toast({
-                                title: "Invalid email",
-                                description: "Please enter a valid email address.",
-                                variant: "error",
-                              });
+                    {/* Email/Phone Entry with Autocomplete */}
+                    <Popover open={editAttendeeSearchOpen} onOpenChange={setEditAttendeeSearchOpen}>
+                      <div className="flex gap-2">
+                        <PopoverTrigger asChild>
+                          <div className="relative flex-1">
+                            <Input
+                              type="text"
+                              placeholder="Type email or phone to search users..."
+                              value={editManualAttendeeInput}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                const value = e.target.value;
+                                setEditManualAttendeeInput(value);
+                                setEditAttendeeSearchTerm(value);
+                                if (value.length >= 2) {
+                                  setEditAttendeeSearchOpen(true);
+                                }
+                              }}
+                              onFocus={() => {
+                                if (editManualAttendeeInput.length >= 2) {
+                                  setEditAttendeeSearchOpen(true);
+                                }
+                              }}
+                              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                                if (e.key === "Enter" && editManualAttendeeInput.trim()) {
+                                  e.preventDefault();
+                                  handleAddEditAttendee(editManualAttendeeInput.trim());
+                                } else if (e.key === "Escape") {
+                                  setEditAttendeeSearchOpen(false);
+                                }
+                              }}
+                              className="text-sm"
+                            />
+                          </div>
+                        </PopoverTrigger>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (editManualAttendeeInput.trim()) {
+                              handleAddEditAttendee(editManualAttendeeInput.trim());
                             }
-                          }
-                        }}
-                        className="text-sm"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (editManualAttendeeInput.trim()) {
-                            const email = editManualAttendeeInput.trim().toLowerCase();
-                            if (email.includes("@") && email.includes(".") && !editEventAttendees.includes(email)) {
-                              setEditEventAttendees([...editEventAttendees, email]);
-                              setEditManualAttendeeInput("");
-                            } else if (editEventAttendees.includes(email)) {
-                              toast({
-                                title: "Already added",
-                                description: "This email is already in the attendees list.",
-                                variant: "info",
-                              });
-                            } else {
-                              toast({
-                                title: "Invalid email",
-                                description: "Please enter a valid email address.",
-                                variant: "error",
-                              });
-                            }
-                          }
-                        }}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search by email or phone..."
+                            value={editAttendeeSearchTerm}
+                            onValueChange={setEditAttendeeSearchTerm}
+                          />
+                          <CommandList>
+                            {isEditSearchingUsers && (
+                              <div className="flex items-center justify-center py-6">
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                              </div>
+                            )}
+                            {!isEditSearchingUsers && editSearchedUsers.length > 0 && (
+                              <CommandGroup heading="Users">
+                                {editSearchedUsers
+                                  .filter((user: any) => {
+                                    const email = user.email?.toLowerCase() || "";
+                                    return email && !editEventAttendees.includes(email);
+                                  })
+                                  .map((user: any) => {
+                                    const displayName = user.firstName && user.lastName
+                                      ? `${user.firstName} ${user.lastName}`
+                                      : user.name || user.email || "Unknown";
+                                    const email = user.email?.toLowerCase() || "";
+                                    return (
+                                      <CommandItem
+                                        key={user.id}
+                                        value={user.id}
+                                        onSelect={() => {
+                                          if (email && !editEventAttendees.includes(email)) {
+                                            setEditEventAttendees([...editEventAttendees, email]);
+                                            setEditManualAttendeeInput("");
+                                            setEditAttendeeSearchTerm("");
+                                            setEditAttendeeSearchOpen(false);
+                                          }
+                                        }}
+                                        className="flex items-center gap-2 cursor-pointer"
+                                      >
+                                        {user.avatarUrl ? (
+                                          <img
+                                            src={user.avatarUrl}
+                                            alt={displayName}
+                                            className="h-6 w-6 rounded-full"
+                                          />
+                                        ) : (
+                                          <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center">
+                                            <User className="h-4 w-4 text-gray-500" />
+                                          </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-medium text-sm truncate">{displayName}</div>
+                                          <div className="text-xs text-gray-500 truncate flex items-center gap-1">
+                                            {email && (
+                                              <>
+                                                <Mail className="h-3 w-3" />
+                                                {email}
+                                              </>
+                                            )}
+                                            {user.phone && (
+                                              <>
+                                                {email && <span className="mx-1">•</span>}
+                                                <Phone className="h-3 w-3" />
+                                                {user.phone}
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </CommandItem>
+                                    );
+                                  })}
+                              </CommandGroup>
+                            )}
+                            {!isEditSearchingUsers && editAttendeeSearchTerm.length >= 2 && editSearchedUsers.length === 0 && (
+                              <CommandEmpty>
+                                <div className="py-4 text-center text-sm text-gray-500">
+                                  No users found. You can still add "{editAttendeeSearchTerm}" as an email address.
+                                </div>
+                              </CommandEmpty>
+                            )}
+                            {!isEditSearchingUsers && editAttendeeSearchTerm.length >= 2 && (
+                              <CommandGroup>
+                                <CommandItem
+                                  onSelect={() => {
+                                    handleAddEditAttendee(editAttendeeSearchTerm);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer text-blue-600"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  <span>Add "{editAttendeeSearchTerm}" as email</span>
+                                </CommandItem>
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
 
                     {/* Selected Attendees List */}
                     {editEventAttendees.length > 0 && (
