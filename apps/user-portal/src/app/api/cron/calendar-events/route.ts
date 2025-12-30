@@ -77,13 +77,28 @@ export async function GET(req: NextRequest) {
     // Filter to only connections where user has calendar notifications enabled
     const filteredConnections = calendarConnections.filter(connection => {
       const userPrefs = (connection as any).user?.preferences?.[0];
-      return userPrefs && userPrefs.calendarNotifications === true;
+      const hasNotificationsEnabled = userPrefs && userPrefs.calendarNotifications === true;
+      
+      if (!hasNotificationsEnabled) {
+        logger.debug(
+          {
+            userId: connection.userId,
+            calendarId: connection.id,
+            hasPreferences: !!userPrefs,
+            calendarNotifications: userPrefs?.calendarNotifications,
+          },
+          'Calendar connection filtered out - notifications not enabled'
+        );
+      }
+      
+      return hasNotificationsEnabled;
     });
 
     logger.info(
       {
         totalConnections: calendarConnections.length,
         filteredConnections: filteredConnections.length,
+        filteredOut: calendarConnections.length - filteredConnections.length,
       },
       'Found calendar connections for users with notifications enabled'
     );
@@ -354,21 +369,53 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
+        // Get user's preferences - handle both array and object formats
+        const userPrefsRaw = (user as any).preferences;
+        const userPreferences = Array.isArray(userPrefsRaw) 
+          ? userPrefsRaw[0] 
+          : userPrefsRaw;
+        
         // Get user's timezone from preferences (preferences.timezone takes precedence over user.timezone)
-        const userTimezone = (user as any).preferences?.timezone || (user as any).timezone;
+        const userTimezone = userPreferences?.timezone || (user as any).timezone;
         if (!userTimezone) {
           logger.warn({ 
             userId, 
-            hasPreferences: !!(user as any).preferences,
-            preferencesTimezone: (user as any).preferences?.timezone,
+            hasPreferences: !!userPreferences,
+            preferencesTimezone: userPreferences?.timezone,
             userTimezone: (user as any).timezone,
+            preferencesIsArray: Array.isArray(userPrefsRaw),
           }, 'User has no timezone set, skipping calendar notifications');
           continue; // Skip users without timezone set
         }
 
-        // Get user's calendar notification minutes
-        const userPreferences = (userConnections[0] as any).user?.preferences?.[0];
+        // Get user's calendar notification minutes from user preferences
         const calendarNotificationMinutes = userPreferences?.calendarNotificationMinutes || 10;
+        
+        // Verify calendar notifications are enabled
+        const calendarNotificationsEnabled = userPreferences?.calendarNotifications === true;
+        
+        logger.info(
+          {
+            userId,
+            calendarNotificationMinutes,
+            calendarNotificationsEnabled,
+            hasPreferences: !!userPreferences,
+            preferencesIsArray: Array.isArray(userPrefsRaw),
+            preferencesSource: 'user object',
+          },
+          'User calendar notification settings'
+        );
+        
+        if (!calendarNotificationsEnabled) {
+          logger.warn(
+            {
+              userId,
+              calendarNotifications: userPreferences?.calendarNotifications,
+            },
+            'User has calendar notifications disabled, skipping event reminders'
+          );
+          continue; // Skip users with notifications disabled
+        }
 
         // Get current time in user's timezone using Intl.DateTimeFormat for accurate conversion
         const formatter = new Intl.DateTimeFormat('en-US', {
@@ -621,15 +668,25 @@ export async function GET(req: NextRequest) {
                   // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
                   // For example: if event is at 2:00 PM and notification is 10 minutes before,
                   // we want to send at 1:50 PM, which means timeDiffMinutes should be 10
-                  // Use a range to account for cron timing (allow ±1 minute tolerance for cron execution timing)
+                  // Use a wider range to account for cron timing (allow ±2 minute tolerance for cron execution timing)
                   // This ensures we catch notifications even if cron runs slightly early or late
-                  const minMinutes = Math.max(0, calendarNotificationMinutes - 1);
-                  const maxMinutes = calendarNotificationMinutes + 1;
+                  const minMinutes = Math.max(0, calendarNotificationMinutes - 2);
+                  const maxMinutes = calendarNotificationMinutes + 2;
                   
                   // Calculate when the notification should be sent (event time - notification minutes)
                   const notificationTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
                   const notificationTimeDiffMs = notificationTime.getTime() - now.getTime();
                   const notificationTimeDiffMinutes = Math.floor(notificationTimeDiffMs / (1000 * 60));
+                  
+                  // Check if we're at the notification time
+                  // We want to send when: currentTime is approximately (eventTime - calendarNotificationMinutes)
+                  // This means timeDiffMinutes should be approximately calendarNotificationMinutes
+                  // Use both checks for reliability:
+                  // 1. Direct time difference check (primary) - check if we're X minutes before event
+                  // 2. Notification time check (backup) - check if we're at the calculated notification time
+                  const shouldTriggerByTimeDiff = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
+                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 2 && timeDiffMinutes > 0;
+                  const shouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime;
                   
                   logger.info(
                     {
@@ -639,6 +696,7 @@ export async function GET(req: NextRequest) {
                       eventStart: eventStart.toISOString(),
                       now: now.toISOString(),
                       timeDiffMinutes,
+                      timeDiffSeconds: Math.floor(timeDiffMs / 1000),
                       calendarNotificationMinutes,
                       notificationTime: notificationTime.toISOString(),
                       notificationTimeDiffMinutes,
@@ -646,37 +704,16 @@ export async function GET(req: NextRequest) {
                       maxMinutes,
                       isToday,
                       isTomorrow,
-                      eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
-                      currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
-                      willTrigger: timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes,
-                      willTriggerByNotificationTime: Math.abs(notificationTimeDiffMinutes) <= 1,
-                    },
-                    'Checking if event should trigger notification'
-                  );
-                  
-                  // Check if we're at the notification time
-                  // We want to send when: currentTime is approximately (eventTime - calendarNotificationMinutes)
-                  // This means timeDiffMinutes should be approximately calendarNotificationMinutes
-                  // Use both checks for reliability:
-                  // 1. Direct time difference check (primary)
-                  // 2. Notification time check (backup, for edge cases)
-                  const shouldTriggerByTimeDiff = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
-                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 1 && timeDiffMinutes > 0;
-                  const shouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime;
-                  
-                  logger.debug(
-                    {
-                      userId,
-                      eventId: event.id,
-                      eventTitle: event.title,
+                      eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}:${String(eventLocalTime.seconds).padStart(2, '0')}`,
+                      currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')}`,
                       shouldTriggerByTimeDiff,
                       shouldTriggerByNotificationTime,
                       shouldTrigger,
-                      timeDiffMinutes,
-                      notificationTimeDiffMinutes,
-                      calendarNotificationMinutes,
+                      reason: shouldTrigger 
+                        ? 'Event matches notification criteria - will send notification' 
+                        : `Time difference ${timeDiffMinutes} not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} not within ±2 minutes`,
                     },
-                    'Notification trigger decision'
+                    'Checking if event should trigger notification'
                   );
                   
                   if (shouldTrigger) {
@@ -737,22 +774,27 @@ export async function GET(req: NextRequest) {
                       );
                     }
                   } else {
-                    // Log why event didn't trigger
-                    logger.debug(
+                    // Log why event didn't trigger with detailed information
+                    logger.warn(
                       {
                         userId,
                         eventId: event.id,
                         eventTitle: event.title,
                         eventStart: eventStart.toISOString(),
+                        now: now.toISOString(),
                         timeDiffMinutes,
+                        timeDiffSeconds: Math.floor(timeDiffMs / 1000),
                         calendarNotificationMinutes,
                         minMinutes,
                         maxMinutes,
+                        notificationTime: notificationTime.toISOString(),
                         notificationTimeDiffMinutes,
                         shouldTriggerByTimeDiff,
                         shouldTriggerByNotificationTime,
+                        eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}:${String(eventLocalTime.seconds).padStart(2, '0')}`,
+                        currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')}`,
                         reason: !shouldTriggerByTimeDiff && !shouldTriggerByNotificationTime 
-                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±1 minute`
+                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±2 minutes`
                           : 'Unknown reason',
                       },
                       'Event did not match notification criteria - skipping'
