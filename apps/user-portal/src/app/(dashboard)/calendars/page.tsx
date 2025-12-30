@@ -4739,14 +4739,13 @@ export default function CalendarsPage() {
       {/* Mobile Sidebar */}
       <div
         className={cn(
-          "fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto mb-12",
+          "fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto",
           isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
-        style={{ margin: 0 }}
       >
-        <div className="p-4">
+        <div className="p-4 space-y-4">
           {/* Close Button */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-gray-900">Calendars</h2>
             <Button
               variant="ghost"
@@ -4757,8 +4756,50 @@ export default function CalendarsPage() {
             </Button>
           </div>
 
+          {/* View Mode Selector - Mobile */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
+              View Mode
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={viewMode === "week" ? "blue-primary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("week")}
+                className={cn(
+                  "flex items-center justify-center gap-2"
+                )}
+              >
+                <CalendarDays className="h-4 w-4" />
+                <span>Week</span>
+              </Button>
+              <Button
+                variant={viewMode === "month" ? "blue-primary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("month")}
+                className={cn(
+                  "flex items-center justify-center gap-2"
+                )}
+              >
+                <CalendarRange className="h-4 w-4" />
+                <span>Month</span>
+              </Button>
+              <Button
+                variant={viewMode === "year" ? "blue-primary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("year")}
+                className={cn(
+                  "flex items-center justify-center gap-2"
+                )}
+              >
+                <Calendar className="h-4 w-4" />
+                <span>Year</span>
+              </Button>
+            </div>
+          </div>
+
           {/* Connect Calendar Buttons */}
-          <div className="space-y-3 mb-6">
+          <div className="space-y-3">
             <Button
               onClick={() => {
                 handleConnectCalendar("google");
@@ -4833,7 +4874,7 @@ export default function CalendarsPage() {
                   ([key, group]: [string, any]) => (
                     <Card key={key} className="border-gray-200 shadow-sm">
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center justify-between gap-2 mb-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <div
@@ -4906,6 +4947,27 @@ export default function CalendarsPage() {
                               </label>
                               {calendar.isActive ? (
                                 <div className="flex items-center gap-1">
+                                  {calendar.isPrimary ? (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs py-0 px-1.5 h-5 border-blue-500 text-blue-700 bg-blue-50"
+                                      title="Primary calendar - events will be created here by default"
+                                    >
+                                      <Star className="h-3 w-3 mr-1 fill-blue-500" />
+                                      Primary
+                                    </Badge>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleSetPrimaryCalendar(calendar.id)}
+                                      disabled={updateCalendarMutation.isPending}
+                                      className="text-xs h-6 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      title="Set as primary calendar"
+                                    >
+                                      <Star className="h-3 w-3" />
+                                    </Button>
+                                  )}
                                   <Badge
                                     variant="outline"
                                     className="text-xs py-0 px-1.5 h-5 border-green-500 text-green-700 bg-green-50"
