@@ -160,6 +160,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Group filtered connections by user (for event reminder notifications)
+    const connectionsByUser = new Map<string, typeof filteredConnections>();
+    for (const connection of filteredConnections) {
+      if (!connectionsByUser.has(connection.userId)) {
+        connectionsByUser.set(connection.userId, []);
+      }
+      connectionsByUser.get(connection.userId)!.push(connection);
+    }
+
     // If no filtered connections, exit early after sending alerts
     if (filteredConnections.length === 0) {
       logger.info({}, 'No calendar connections found for users with notifications enabled, exiting');
@@ -449,10 +458,17 @@ export async function GET(req: NextRequest) {
                   
                   // Check if this event should trigger a notification
                   // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
+                  // For example: if event is at 2:00 PM and notification is 10 minutes before,
+                  // we want to send at 1:50 PM, which means timeDiffMinutes should be 10
                   // Use a range to account for cron timing (allow ±1 minute tolerance for cron execution timing)
                   // This ensures we catch notifications even if cron runs slightly early or late
                   const minMinutes = Math.max(0, calendarNotificationMinutes - 1);
                   const maxMinutes = calendarNotificationMinutes + 1;
+                  
+                  // Calculate when the notification should be sent (event time - notification minutes)
+                  const notificationTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
+                  const notificationTimeDiffMs = notificationTime.getTime() - now.getTime();
+                  const notificationTimeDiffMinutes = Math.floor(notificationTimeDiffMs / (1000 * 60));
                   
                   logger.info(
                     {
@@ -463,6 +479,8 @@ export async function GET(req: NextRequest) {
                       now: now.toISOString(),
                       timeDiffMinutes,
                       calendarNotificationMinutes,
+                      notificationTime: notificationTime.toISOString(),
+                      notificationTimeDiffMinutes,
                       minMinutes,
                       maxMinutes,
                       isToday,
@@ -470,16 +488,55 @@ export async function GET(req: NextRequest) {
                       eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
                       currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
                       willTrigger: timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes,
+                      willTriggerByNotificationTime: Math.abs(notificationTimeDiffMinutes) <= 1,
                     },
                     'Checking if event should trigger notification'
                   );
                   
-                  if (timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes) {
+                  // Check if we're at the notification time
+                  // We want to send when: currentTime is approximately (eventTime - calendarNotificationMinutes)
+                  // This means timeDiffMinutes should be approximately calendarNotificationMinutes
+                  // Use both checks for reliability:
+                  // 1. Direct time difference check (primary)
+                  // 2. Notification time check (backup, for edge cases)
+                  const shouldTriggerByTimeDiff = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
+                  const shouldTriggerByNotificationTime = Math.abs(notificationTimeDiffMinutes) <= 1 && timeDiffMinutes > 0;
+                  const shouldTrigger = shouldTriggerByTimeDiff || shouldTriggerByNotificationTime;
+                  
+                  logger.debug(
+                    {
+                      userId,
+                      eventId: event.id,
+                      eventTitle: event.title,
+                      shouldTriggerByTimeDiff,
+                      shouldTriggerByNotificationTime,
+                      shouldTrigger,
+                      timeDiffMinutes,
+                      notificationTimeDiffMinutes,
+                      calendarNotificationMinutes,
+                    },
+                    'Notification trigger decision'
+                  );
+                  
+                  if (shouldTrigger) {
                     // Check cache to prevent duplicate notifications
                     const eventDate = new Date(event.start);
                     const dateKey = `${eventDate.getUTCFullYear()}-${eventDate.getUTCMonth() + 1}-${eventDate.getUTCDate()}-${eventDate.getUTCHours()}-${eventDate.getUTCMinutes()}`;
                     const cacheKey = `${event.id}-${dateKey}`;
                     const lastSent = notificationCache.get(cacheKey);
+                    
+                    logger.info(
+                      {
+                        userId,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        cacheKey,
+                        lastSent: lastSent ? new Date(lastSent).toISOString() : null,
+                        cacheAge: lastSent ? Math.floor((now.getTime() - lastSent) / 1000) : null,
+                        willSend: !lastSent || (now.getTime() - lastSent) >= CACHE_TTL,
+                      },
+                      'Event matches notification criteria - checking cache'
+                    );
 
                     if (!lastSent || (now.getTime() - lastSent) >= CACHE_TTL) {
                       // Send notification
@@ -518,6 +575,27 @@ export async function GET(req: NextRequest) {
                         'Skipping duplicate calendar event notification (already sent recently)'
                       );
                     }
+                  } else {
+                    // Log why event didn't trigger
+                    logger.debug(
+                      {
+                        userId,
+                        eventId: event.id,
+                        eventTitle: event.title,
+                        eventStart: eventStart.toISOString(),
+                        timeDiffMinutes,
+                        calendarNotificationMinutes,
+                        minMinutes,
+                        maxMinutes,
+                        notificationTimeDiffMinutes,
+                        shouldTriggerByTimeDiff,
+                        shouldTriggerByNotificationTime,
+                        reason: !shouldTriggerByTimeDiff && !shouldTriggerByNotificationTime 
+                          ? `Time difference ${timeDiffMinutes} is not in range [${minMinutes}, ${maxMinutes}] and notification time diff ${notificationTimeDiffMinutes} is not within ±1 minute`
+                          : 'Unknown reason',
+                      },
+                      'Event did not match notification criteria - skipping'
+                    );
                   }
                 } catch (eventError) {
                   logger.error(
