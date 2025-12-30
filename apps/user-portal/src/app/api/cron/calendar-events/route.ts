@@ -223,6 +223,14 @@ export async function GET(req: NextRequest) {
           'Found verified WhatsApp number for user'
         );
 
+        // Collect all upcoming events for test message
+        const allUpcomingEvents: Array<{
+          event: any;
+          connection: any;
+          reminderTime: Date;
+          reminderMinutes: number;
+        }> = [];
+
         // Check each calendar connection and fetch upcoming events
         for (const connection of userConnections) {
           try {
@@ -293,6 +301,25 @@ export async function GET(req: NextRequest) {
               for (const event of events) {
                 try {
                   const eventStart = new Date(event.start);
+                  
+                  // Collect event for test message (only future events)
+                  const eventTimeDiff = eventStart.getTime() - now.getTime();
+                  if (eventTimeDiff > 0) {
+                    // Calculate when reminder will be sent (event time - notification minutes)
+                    const reminderTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
+                    const reminderTimeDiff = reminderTime.getTime() - now.getTime();
+                    const reminderMinutesUntil = Math.floor(reminderTimeDiff / (1000 * 60));
+                    
+                    // Only include events where reminder hasn't been sent yet
+                    if (reminderMinutesUntil >= 0) {
+                      allUpcomingEvents.push({
+                        event,
+                        connection,
+                        reminderTime,
+                        reminderMinutes: reminderMinutesUntil,
+                      });
+                    }
+                  }
                   
                   // Get event start time in user's timezone
                   const eventFormatter = new Intl.DateTimeFormat('en-US', {
@@ -484,6 +511,85 @@ export async function GET(req: NextRequest) {
               'Error processing calendar connection'
             );
             errors.push(`Error processing calendar ${connection.id}`);
+          }
+        }
+
+        // Send test message with next 3 upcoming events
+        if (allUpcomingEvents.length > 0) {
+          try {
+            // Sort events by reminder time (soonest first)
+            allUpcomingEvents.sort((a, b) => a.reminderTime.getTime() - b.reminderTime.getTime());
+            
+            // Get top 3 events
+            const top3Events = allUpcomingEvents.slice(0, 3);
+            
+            // Build test message
+            let testMessage = `*test*\n\n`;
+            
+            for (const { event, connection, reminderMinutes } of top3Events) {
+              const eventStart = new Date(event.start);
+              
+              // Format event time in user's timezone
+              const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: userTimezone,
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: true,
+              });
+              const eventTimeStr = eventTimeFormatter.format(eventStart);
+              
+              testMessage += `*${event.title}*\n`;
+              if (reminderMinutes > 0) {
+                testMessage += `it will send you remind message in ${reminderMinutes} ${reminderMinutes === 1 ? 'min' : 'mins'}\n`;
+              } else {
+                testMessage += `it will send you remind message now\n`;
+              }
+              testMessage += `\n`;
+            }
+            
+            logger.info(
+              {
+                userId,
+                phoneNumber: whatsappNumber.phoneNumber,
+                eventsCount: top3Events.length,
+                totalEvents: allUpcomingEvents.length,
+              },
+              'Sending test message with upcoming events'
+            );
+            
+            // Send test message
+            await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, testMessage);
+            
+            // Log the message
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId: whatsappNumber.userId,
+              messageType: 'text',
+              messageContent: testMessage,
+              isFreeMessage: true,
+            });
+            
+            logger.info(
+              {
+                userId,
+                phoneNumber: whatsappNumber.phoneNumber,
+                messageSent: true,
+              },
+              'Test message sent successfully'
+            );
+          } catch (testError) {
+            logger.error(
+              {
+                error: testError,
+                userId,
+                phoneNumber: whatsappNumber.phoneNumber,
+              },
+              'Failed to send test message'
+            );
+            // Don't add to errors array - test message failure shouldn't fail the cron job
           }
         }
       } catch (userError) {
