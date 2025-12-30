@@ -3392,11 +3392,7 @@ export default function CalendarsPage() {
               <label htmlFor="event-address" className="text-sm font-medium">
                 Address (optional)
               </label>
-              <div className="flex items-center gap-2">
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                    <span className="text-xs text-gray-500 bg-white px-2">or</span>
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                  </div>
+              <br />
               <Button
                 type="button"
                 variant={createGoogleMeet ? "primary" : "outline"}
@@ -3406,6 +3402,11 @@ export default function CalendarsPage() {
                 <Video className="h-4 w-4 mr-2" />
                 {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
               </Button>
+              <div className="flex items-center gap-2">
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                    <span className="text-xs text-gray-500 bg-white px-2">or</span>
+                    <div className="h-px bg-gray-200 flex-1"></div>
+                  </div>
 
               {/* Saved Addresses Dropdown */}
               {addresses.length > 0 && (
