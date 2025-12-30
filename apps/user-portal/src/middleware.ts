@@ -10,6 +10,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhook/payfast(.*)",  // PayFast ITN webhook - no auth needed
   "/api/webhook/whatsapp(.*)",  // WhatsApp webhook - no auth needed
   "/api/cron/reminders(.*)",  // Cron job endpoint - uses CRON_SECRET for auth
+  "/api/cron/calendar-events(.*)",  // Calendar events cron job endpoint - uses CRON_SECRET for auth
   "/api/calendars/callback",  // OAuth providers redirect here, no session cookie
   "/api/payment/billing-cancel",  // PayFast redirects here after cancellation
   "/api/payment/billing-success",  // PayFast redirects here after success
