@@ -74,16 +74,47 @@ export async function GET(req: NextRequest) {
     // Get all active calendar connections
     const calendarConnections = await getUsersWithCalendarNotifications(db);
 
+    logger.info(
+      {
+        totalConnections: calendarConnections.length,
+        connections: calendarConnections.map((c: any) => ({
+          userId: c.userId,
+          provider: c.provider,
+          email: c.email,
+          isActive: c.isActive,
+          hasAccessToken: !!c.accessToken,
+          userHasPreferences: !!(c as any).user?.preferences?.[0],
+          calendarNotifications: (c as any).user?.preferences?.[0]?.calendarNotifications,
+        })),
+      },
+      'Found all calendar connections'
+    );
+
     // Filter to only connections where user has calendar notifications enabled
     const filteredConnections = calendarConnections.filter(connection => {
       const userPrefs = (connection as any).user?.preferences?.[0];
-      return userPrefs && userPrefs.calendarNotifications === true;
+      const hasNotificationsEnabled = userPrefs && userPrefs.calendarNotifications === true;
+      
+      if (!hasNotificationsEnabled) {
+        logger.debug(
+          {
+            userId: connection.userId,
+            calendarId: connection.id,
+            hasPreferences: !!userPrefs,
+            calendarNotifications: userPrefs?.calendarNotifications,
+          },
+          'Skipping connection - calendar notifications not enabled'
+        );
+      }
+      
+      return hasNotificationsEnabled;
     });
 
     logger.info(
       {
         totalConnections: calendarConnections.length,
         filteredConnections: filteredConnections.length,
+        skippedConnections: calendarConnections.length - filteredConnections.length,
       },
       'Found calendar connections for users with notifications enabled'
     );
@@ -103,14 +134,21 @@ export async function GET(req: NextRequest) {
 
     // If no filtered connections, exit early
     if (filteredConnections.length === 0) {
-      logger.info({}, 'No calendar connections found for users with notifications enabled, exiting');
+      logger.warn(
+        {
+          totalConnections: calendarConnections.length,
+          reason: 'No users have calendar notifications enabled',
+        },
+        'No calendar connections found for users with notifications enabled, exiting'
+      );
       return NextResponse.json({
         success: true,
-        message: 'No calendar connections to check',
+        message: 'No calendar connections to check - users may not have calendar notifications enabled',
         checkedAt: now.toISOString(),
         connectionsChecked: 0,
         notificationsSent: 0,
         notificationsSkipped: 0,
+        totalConnections: calendarConnections.length,
       });
     }
 
@@ -277,11 +315,19 @@ export async function GET(req: NextRequest) {
                   calendarId: connection.id,
                   provider: connection.provider,
                   eventsCount: events.length,
+                  events: events.map((e: any) => ({
+                    id: e.id,
+                    title: e.title,
+                    start: e.start,
+                    end: e.end,
+                    isFuture: new Date(e.start).getTime() > now.getTime(),
+                  })),
                 },
                 'Fetched upcoming calendar events'
               );
 
               // Add all future events to the collection
+              let futureEventsCount = 0;
               for (const event of events) {
                 const eventStart = new Date(event.start);
                 // Only include events in the future
@@ -291,8 +337,42 @@ export async function GET(req: NextRequest) {
                     connection,
                     eventStart,
                   });
+                  futureEventsCount++;
+                  logger.debug(
+                    {
+                      userId,
+                      eventId: event.id,
+                      eventTitle: event.title,
+                      eventStart: eventStart.toISOString(),
+                      timeUntilEvent: Math.floor((eventStart.getTime() - now.getTime()) / (1000 * 60)),
+                    },
+                    'Added future event to collection'
+                  );
+                } else {
+                  logger.debug(
+                    {
+                      userId,
+                      eventId: event.id,
+                      eventTitle: event.title,
+                      eventStart: eventStart.toISOString(),
+                      now: now.toISOString(),
+                      isPast: true,
+                    },
+                    'Skipping past event'
+                  );
                 }
               }
+              
+              logger.info(
+                {
+                  userId,
+                  calendarId: connection.id,
+                  totalEvents: events.length,
+                  futureEvents: futureEventsCount,
+                  addedToCollection: futureEventsCount,
+                },
+                'Processed events for calendar'
+              );
             } catch (fetchError: any) {
               logger.error(
                 {
@@ -313,6 +393,15 @@ export async function GET(req: NextRequest) {
             errors.push(`Error processing calendar ${connection.id}`);
           }
         }
+
+        logger.info(
+          {
+            userId,
+            totalUpcomingEvents: allUpcomingEvents.length,
+            connectionsChecked: userConnections.length,
+          },
+          'Finished collecting events from all calendars'
+        );
 
         // Find the most recent upcoming event (earliest start time)
         if (allUpcomingEvents.length > 0) {
@@ -373,13 +462,48 @@ export async function GET(req: NextRequest) {
             errors.push(`Failed to send alert for event ${mostRecentEvent.event.id}`);
           }
         } else {
-          logger.info(
+          logger.warn(
             {
               userId,
               connectionsChecked: userConnections.length,
+              userTimezone,
+              calendarNotificationMinutes,
             },
-            'No upcoming events found for user'
+            'No upcoming events found for user - cannot send alert'
           );
+          // Still send a message to inform user there are no upcoming events
+          try {
+            const noEventsMessage = `🗓️ *Calendar Check*\n\nNo upcoming events found in your calendars for the next 7 days.\n\n_From your calendar system._`;
+            
+            await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, noEventsMessage);
+            
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId: whatsappNumber.userId,
+              messageType: 'text',
+              messageContent: noEventsMessage,
+              isFreeMessage: true,
+            });
+            
+            notificationsSent++;
+            logger.info(
+              {
+                userId,
+                phoneNumber: whatsappNumber.phoneNumber,
+              },
+              'Sent "no events" message to user'
+            );
+          } catch (noEventsError) {
+            logger.error(
+              {
+                error: noEventsError,
+                userId,
+                phoneNumber: whatsappNumber.phoneNumber,
+              },
+              'Failed to send "no events" message'
+            );
+            errors.push(`Failed to send "no events" message to user ${userId}`);
+          }
         }
       } catch (userError) {
         logger.error({ error: userError, userId }, 'Error processing user calendar connections');
