@@ -242,8 +242,9 @@ export async function GET(req: NextRequest) {
             );
 
             // Calculate the time window for events
-            // We want to fetch events that are starting within the next few hours
+            // We want to fetch events that are starting within the next 24 hours
             // This ensures we catch events that need notifications now (calendarNotificationMinutes before start)
+            // Start from now to avoid processing past events
             const fromTime = new Date(now.getTime());
             const toTime = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // Next 24 hours
 
@@ -298,11 +299,7 @@ export async function GET(req: NextRequest) {
                     seconds: parseInt(getEventPart('second'), 10),
                   };
                   
-                  // Calculate minutes until event in user's local time
-                  const currentTimeInMinutes = userLocalTime.hours * 60 + userLocalTime.minutes;
-                  const eventTimeInMinutes = eventLocalTime.hours * 60 + eventLocalTime.minutes;
-                  
-                  // Check if event is today
+                  // Check if event is today (in user's timezone)
                   const isToday = eventLocalTime.year === userLocalTime.year &&
                                   eventLocalTime.month === userLocalTime.month &&
                                   eventLocalTime.day === userLocalTime.day;
@@ -312,13 +309,37 @@ export async function GET(req: NextRequest) {
                     continue;
                   }
                   
-                  // Calculate time difference in minutes
-                  const timeDiff = eventTimeInMinutes - currentTimeInMinutes;
-
-                  // Check if this event should trigger a notification (exact match or 1 minute after)
-                  // We want to send notification when: currentTime = eventTime - calendarNotificationMinutes
-                  // So: timeDiff should equal calendarNotificationMinutes (or 1 minute after to account for cron timing)
-                  if (timeDiff === calendarNotificationMinutes || timeDiff === calendarNotificationMinutes + 1) {
+                  // Calculate time difference in minutes more accurately
+                  // Use the actual Date objects and calculate difference, then convert to user's timezone
+                  const eventStart = new Date(event.start);
+                  const timeDiffMs = eventStart.getTime() - now.getTime();
+                  const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
+                  
+                  // Check if this event should trigger a notification
+                  // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
+                  // Use a range to account for cron timing (allow ±1 minute tolerance for cron execution timing)
+                  // This ensures we catch notifications even if cron runs slightly early or late
+                  const minMinutes = Math.max(0, calendarNotificationMinutes - 1);
+                  const maxMinutes = calendarNotificationMinutes + 1;
+                  
+                  logger.debug(
+                    {
+                      userId,
+                      eventId: event.id,
+                      eventTitle: event.title,
+                      eventStart: eventStart.toISOString(),
+                      now: now.toISOString(),
+                      timeDiffMinutes,
+                      calendarNotificationMinutes,
+                      minMinutes,
+                      maxMinutes,
+                      eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
+                      currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
+                    },
+                    'Checking if event should trigger notification'
+                  );
+                  
+                  if (timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes) {
                     // Check cache to prevent duplicate notifications
                     const eventDate = new Date(event.start);
                     const dateKey = `${eventDate.getUTCFullYear()}-${eventDate.getUTCMonth() + 1}-${eventDate.getUTCDate()}-${eventDate.getUTCHours()}-${eventDate.getUTCMinutes()}`;
@@ -350,7 +371,7 @@ export async function GET(req: NextRequest) {
                           eventStart: event.start.toISOString(),
                           eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
                           currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
-                          timeDiff,
+                          timeDiffMinutes,
                           calendarNotificationMinutes,
                         },
                         'Calendar event notification sent successfully'
