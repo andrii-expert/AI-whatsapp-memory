@@ -89,145 +89,121 @@ export async function GET(req: NextRequest) {
     );
 
     if (filteredConnections.length === 0) {
-      logger.info({}, 'No calendar connections found for users with notifications enabled, exiting');
-      return NextResponse.json({
-        success: true,
-        message: 'No calendar connections to check',
-        checkedAt: now.toISOString(),
-        connectionsChecked: 0,
-        notificationsSent: 0,
-        notificationsSkipped: 0,
-      });
+      logger.info({}, 'No calendar connections found for users with notifications enabled');
+      // Don't exit early - we still want to send alerts to users even if they have no connections
     }
 
     let notificationsSent = 0;
     let notificationsSkipped = 0;
     const errors: string[] = [];
 
-    // Group connections by user to batch WhatsApp lookups
-    const connectionsByUser = new Map<string, typeof filteredConnections>();
-    for (const connection of filteredConnections) {
-      if (!connectionsByUser.has(connection.userId)) {
-        connectionsByUser.set(connection.userId, []);
+    // Group ALL connections by user (not just filtered ones) - we want to send alerts to all users
+    const allConnectionsByUser = new Map<string, typeof calendarConnections>();
+    for (const connection of calendarConnections) {
+      if (!allConnectionsByUser.has(connection.userId)) {
+        allConnectionsByUser.set(connection.userId, []);
       }
-      connectionsByUser.get(connection.userId)!.push(connection);
+      allConnectionsByUser.get(connection.userId)!.push(connection);
     }
 
-    // Process each user's calendar connections
-    for (const [userId, userConnections] of connectionsByUser.entries()) {
+    // Group filtered connections by user (for event reminder notifications)
+    const filteredConnectionsByUser = new Map<string, typeof filteredConnections>();
+    for (const connection of filteredConnections) {
+      if (!filteredConnectionsByUser.has(connection.userId)) {
+        filteredConnectionsByUser.set(connection.userId, []);
+      }
+      filteredConnectionsByUser.get(connection.userId)!.push(connection);
+    }
+
+    logger.info(
+      {
+        totalUsers: allConnectionsByUser.size,
+        usersWithNotificationsEnabled: filteredConnectionsByUser.size,
+      },
+      'Processing users for calendar event alerts'
+    );
+
+    // Process each user - send alert to ALL users with calendar connections
+    for (const [userId, userConnections] of allConnectionsByUser.entries()) {
+      // Get filtered connections for this user (for event reminders)
+      const filteredUserConnections = filteredConnectionsByUser.get(userId) || [];
+      
+      // Collect all events for the alert message (from ALL connections, not just filtered)
+      const allEventsForAlert: Array<{ event: any; connection: any; eventStart: Date }> = [];
+      
       try {
-        // Get user info
+        // Get user info first
         const user = await getUserById(db, userId);
         if (!user) {
-          logger.warn({ userId }, 'User not found for calendar notifications');
+          logger.warn({ userId }, 'User not found, skipping');
           continue;
         }
 
-        // Get user's timezone from preferences (preferences.timezone takes precedence over user.timezone)
-        const userTimezone = (user as any).preferences?.timezone || (user as any).timezone;
-        if (!userTimezone) {
-          logger.warn({ 
-            userId, 
-            hasPreferences: !!(user as any).preferences,
-            preferencesTimezone: (user as any).preferences?.timezone,
-            userTimezone: (user as any).timezone,
-          }, 'User has no timezone set, skipping calendar notifications');
-          continue; // Skip users without timezone set
-        }
+        // Get user's timezone from preferences
+        const userTimezone = (user as any).preferences?.timezone || (user as any).timezone || 'UTC';
 
-        // Get user's calendar notification minutes
-        const userPreferences = (userConnections[0] as any).user?.preferences?.[0];
-        const calendarNotificationMinutes = userPreferences?.calendarNotificationMinutes || 10;
-
-        // Get current time in user's timezone using Intl.DateTimeFormat for accurate conversion
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: userTimezone,
-          year: 'numeric',
-          month: 'numeric',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: 'numeric',
-          second: 'numeric',
-          hour12: false,
-        });
-
-        const parts = formatter.formatToParts(now);
-        const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
-
-        // Extract user's local time components (these represent the actual time in user's timezone)
-        const userLocalTime = {
-          year: parseInt(getPart('year'), 10),
-          month: parseInt(getPart('month'), 10) - 1, // Convert to 0-11
-          day: parseInt(getPart('day'), 10),
-          hours: parseInt(getPart('hour'), 10),
-          minutes: parseInt(getPart('minute'), 10),
-          seconds: parseInt(getPart('second'), 10),
-          date: now, // Use server time as base, but components are in user's timezone
-        };
-
-        logger.info(
-          {
-            userId,
-            serverTime: now.toISOString(),
-            userTimezone,
-            userLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
-            calendarNotificationMinutes,
-            connectionsCount: userConnections.length,
-          },
-          'Processing calendar connections for user'
-        );
-
-        // Get user's verified WhatsApp numbers (prefer primary, then any verified)
+        // Get user's verified WhatsApp numbers
         const whatsappNumbers = await getUserWhatsAppNumbers(db, userId);
-        logger.info(
-          {
-            userId,
-            whatsappNumbersCount: whatsappNumbers.length,
-            whatsappNumbers: whatsappNumbers.map(n => ({
-              phoneNumber: n.phoneNumber,
-              isVerified: n.isVerified,
-              isActive: n.isActive,
-              isPrimary: n.isPrimary,
-            })),
-          },
-          'Checking WhatsApp numbers for user'
-        );
-
         const whatsappNumber = whatsappNumbers.find(n => n.isVerified && n.isActive) ||
                               whatsappNumbers.find(n => n.isVerified);
 
         if (!whatsappNumber) {
-          logger.warn(
+          logger.debug(
             {
               userId,
               whatsappNumbersCount: whatsappNumbers.length,
-              availableNumbers: whatsappNumbers.map(n => ({
-                phoneNumber: n.phoneNumber,
-                isVerified: n.isVerified,
-                isActive: n.isActive,
-              })),
             },
-            'User has no verified WhatsApp number, skipping'
+            'User has no verified WhatsApp number, skipping alert'
           );
-          continue; // Skip users without verified WhatsApp
+          continue;
         }
 
-        logger.info(
-          {
-            userId,
-            whatsappNumberId: whatsappNumber.id,
-            phoneNumber: whatsappNumber.phoneNumber,
-            isVerified: whatsappNumber.isVerified,
-            isActive: whatsappNumber.isActive,
-          },
-          'Found verified WhatsApp number for user'
-        );
+        // Process event reminders only if user has notifications enabled
+        if (filteredUserConnections.length > 0) {
+          // Get user's calendar notification minutes
+          const userPreferences = (filteredUserConnections[0] as any).user?.preferences?.[0];
+          const calendarNotificationMinutes = userPreferences?.calendarNotificationMinutes || 10;
 
-        // Collect all events for the alert message
-        const allEventsForAlert: Array<{ event: any; connection: any; eventStart: Date }> = [];
+          // Get current time in user's timezone using Intl.DateTimeFormat for accurate conversion
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: userTimezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false,
+          });
 
-        // Check each calendar connection and fetch upcoming events
-        for (const connection of userConnections) {
+          const parts = formatter.formatToParts(now);
+          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+
+          // Extract user's local time components (these represent the actual time in user's timezone)
+          const userLocalTime = {
+            year: parseInt(getPart('year'), 10),
+            month: parseInt(getPart('month'), 10) - 1, // Convert to 0-11
+            day: parseInt(getPart('day'), 10),
+            hours: parseInt(getPart('hour'), 10),
+            minutes: parseInt(getPart('minute'), 10),
+            seconds: parseInt(getPart('second'), 10),
+            date: now, // Use server time as base, but components are in user's timezone
+          };
+
+          logger.info(
+            {
+              userId,
+              serverTime: now.toISOString(),
+              userTimezone,
+              userLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+              calendarNotificationMinutes,
+              connectionsCount: filteredUserConnections.length,
+            },
+            'Processing calendar connections for event reminders'
+          );
+
+          // Check each filtered calendar connection for event reminders
+          for (const connection of filteredUserConnections) {
           try {
             if (!connection.accessToken) {
               logger.debug({ userId, calendarId: connection.id }, 'Calendar connection has no access token, skipping');
@@ -498,120 +474,192 @@ export async function GET(req: NextRequest) {
             errors.push(`Error processing calendar ${connection.id}`);
           }
         }
+        }
 
-        // Send alert message with all events data
-        if (whatsappNumber) {
+        // Fetch events from ALL connections for the alert (not just filtered ones)
+        for (const connection of userConnections) {
           try {
-            // Sort events by start time (earliest first)
-            allEventsForAlert.sort((a, b) => a.eventStart.getTime() - b.eventStart.getTime());
-            
-            let alertMessage = `*Alert received*\n\n`;
-            alertMessage += `*Cron job executed at:* ${now.toISOString()}\n`;
-            alertMessage += `*Your local time:* ${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}\n`;
-            alertMessage += `*Timezone:* ${userTimezone}\n\n`;
-            
-            if (allEventsForAlert.length > 0) {
-              alertMessage += `*Upcoming Events (${allEventsForAlert.length}):*\n\n`;
-              
-              allEventsForAlert.forEach((eventData, index) => {
-                const event = eventData.event;
-                const eventStart = new Date(event.start);
-                
-                // Format event time in user's timezone
-                const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
-                  timeZone: userTimezone,
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: 'numeric',
-                  hour12: true,
-                });
-                const eventTimeStr = eventTimeFormatter.format(eventStart);
-                
-                // Calculate time until event
-                const timeDiffMs = eventStart.getTime() - now.getTime();
-                const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
-                const timeDiffHours = Math.floor(timeDiffMinutes / 60);
-                const timeDiffDays = Math.floor(timeDiffHours / 24);
-                
-                let timeUntilEvent = '';
-                if (timeDiffDays > 0) {
-                  timeUntilEvent = `(${timeDiffDays} day${timeDiffDays > 1 ? 's' : ''} ${timeDiffHours % 24} hour${(timeDiffHours % 24) !== 1 ? 's' : ''})`;
-                } else if (timeDiffHours > 0) {
-                  timeUntilEvent = `(${timeDiffHours} hour${timeDiffHours > 1 ? 's' : ''} ${timeDiffMinutes % 60} minute${(timeDiffMinutes % 60) !== 1 ? 's' : ''})`;
-                } else {
-                  timeUntilEvent = `(${timeDiffMinutes} minute${timeDiffMinutes !== 1 ? 's' : ''})`;
-                }
-                
-                alertMessage += `${index + 1}. *${event.title || 'Untitled Event'}*\n`;
-                alertMessage += `   📅 *Time:* ${eventTimeStr} ${timeUntilEvent}\n`;
-                alertMessage += `   📋 *Calendar:* ${eventData.connection.calendarName || 'Calendar'}\n`;
-                
-                if (event.location) {
-                  alertMessage += `   📍 *Location:* ${event.location}\n`;
-                }
-                
-                if (event.description) {
-                  const description = event.description.length > 100 
-                    ? event.description.substring(0, 100) + '...' 
-                    : event.description;
-                  alertMessage += `   📝 *Description:* ${description}\n`;
-                }
-                
-                alertMessage += `\n`;
-              });
-            } else {
-              alertMessage += `*No upcoming events found* in the next 24 hours.\n`;
+            if (!connection.accessToken) {
+              logger.debug({ userId, calendarId: connection.id }, 'Calendar connection has no access token, skipping');
+              continue;
             }
-            
-            alertMessage += `\n_Processed ${userConnections.length} calendar connection${userConnections.length !== 1 ? 's' : ''}._`;
-            
-            logger.info(
-              {
-                userId,
-                phoneNumber: whatsappNumber.phoneNumber,
-                eventsCount: allEventsForAlert.length,
-                connectionsCount: userConnections.length,
-              },
-              'Sending alert message with all events data'
-            );
-            
-            await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, alertMessage);
-            
-            // Log the message
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId: whatsappNumber.userId,
-              messageType: 'text',
-              messageContent: alertMessage,
-              isFreeMessage: true,
-            });
-            
-            logger.info(
-              {
-                userId,
-                phoneNumber: whatsappNumber.phoneNumber,
-                messageSent: true,
-                eventsIncluded: allEventsForAlert.length,
-              },
-              'Alert message sent successfully'
-            );
-          } catch (alertError) {
+
+            const provider = createCalendarProvider(connection.provider);
+            const fromTime = new Date(now.getTime() - (5 * 60 * 1000));
+            const toTime = new Date(now.getTime() + (24 * 60 * 60 * 1000));
+
+            try {
+              const events = await provider.searchEvents(connection.accessToken, {
+                calendarId: connection.calendarId || 'primary',
+                timeMin: fromTime,
+                timeMax: toTime,
+                maxResults: 50,
+              });
+
+              // Collect events for alert
+              for (const event of events) {
+                const eventStart = new Date(event.start);
+                if (eventStart.getTime() > now.getTime()) {
+                  allEventsForAlert.push({
+                    event,
+                    connection,
+                    eventStart,
+                  });
+                }
+              }
+            } catch (fetchError: any) {
+              logger.error(
+                {
+                  error: fetchError,
+                  userId,
+                  calendarId: connection.id,
+                  provider: connection.provider,
+                },
+                'Failed to fetch calendar events for alert'
+              );
+            }
+          } catch (connectionError) {
             logger.error(
-              {
-                error: alertError,
-                userId,
-                phoneNumber: whatsappNumber.phoneNumber,
-              },
-              'Failed to send alert message'
+              { error: connectionError, calendarId: connection.id, userId },
+              'Error processing calendar connection for alert'
             );
-            errors.push(`Failed to send alert message to user ${userId}`);
           }
         }
+
+        // Get current time in user's timezone for alert message
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: userTimezone,
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+          hour12: false,
+        });
+
+        const parts = formatter.formatToParts(now);
+        const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+
+        const userLocalTime = {
+          year: parseInt(getPart('year'), 10),
+          month: parseInt(getPart('month'), 10) - 1,
+          day: parseInt(getPart('day'), 10),
+          hours: parseInt(getPart('hour'), 10),
+          minutes: parseInt(getPart('minute'), 10),
+          seconds: parseInt(getPart('second'), 10),
+        };
+
+        try {
+          // Sort events by start time (earliest first)
+          allEventsForAlert.sort((a, b) => a.eventStart.getTime() - b.eventStart.getTime());
+          
+          let alertMessage = `*Alert received*\n\n`;
+          alertMessage += `*Cron job executed at:* ${now.toISOString()}\n`;
+          alertMessage += `*Your local time:* ${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}:${String(userLocalTime.seconds).padStart(2, '0')} on ${userLocalTime.year}-${String(userLocalTime.month + 1).padStart(2, '0')}-${String(userLocalTime.day).padStart(2, '0')}\n`;
+          alertMessage += `*Timezone:* ${userTimezone}\n\n`;
+          
+          if (allEventsForAlert.length > 0) {
+            alertMessage += `*Upcoming Events (${allEventsForAlert.length}):*\n\n`;
+            
+            allEventsForAlert.forEach((eventData, index) => {
+              const event = eventData.event;
+              const eventStart = new Date(event.start);
+              
+              // Format event time in user's timezone
+              const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: userTimezone,
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: true,
+              });
+              const eventTimeStr = eventTimeFormatter.format(eventStart);
+              
+              // Calculate time until event
+              const timeDiffMs = eventStart.getTime() - now.getTime();
+              const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
+              const timeDiffHours = Math.floor(timeDiffMinutes / 60);
+              const timeDiffDays = Math.floor(timeDiffHours / 24);
+              
+              let timeUntilEvent = '';
+              if (timeDiffDays > 0) {
+                timeUntilEvent = `(${timeDiffDays} day${timeDiffDays > 1 ? 's' : ''} ${timeDiffHours % 24} hour${(timeDiffHours % 24) !== 1 ? 's' : ''})`;
+              } else if (timeDiffHours > 0) {
+                timeUntilEvent = `(${timeDiffHours} hour${timeDiffHours > 1 ? 's' : ''} ${timeDiffMinutes % 60} minute${(timeDiffMinutes % 60) !== 1 ? 's' : ''})`;
+              } else {
+                timeUntilEvent = `(${timeDiffMinutes} minute${timeDiffMinutes !== 1 ? 's' : ''})`;
+              }
+              
+              alertMessage += `${index + 1}. *${event.title || 'Untitled Event'}*\n`;
+              alertMessage += `   📅 *Time:* ${eventTimeStr} ${timeUntilEvent}\n`;
+              alertMessage += `   📋 *Calendar:* ${eventData.connection.calendarName || 'Calendar'}\n`;
+              
+              if (event.location) {
+                alertMessage += `   📍 *Location:* ${event.location}\n`;
+              }
+              
+              if (event.description) {
+                const description = event.description.length > 100 
+                  ? event.description.substring(0, 100) + '...' 
+                  : event.description;
+                alertMessage += `   📝 *Description:* ${description}\n`;
+              }
+              
+              alertMessage += `\n`;
+            });
+          } else {
+            alertMessage += `*No upcoming events found* in the next 24 hours.\n`;
+          }
+          
+          alertMessage += `\n_Processed ${userConnections.length} calendar connection${userConnections.length !== 1 ? 's' : ''}._`;
+          
+          logger.info(
+            {
+              userId,
+              phoneNumber: whatsappNumber.phoneNumber,
+              eventsCount: allEventsForAlert.length,
+              connectionsCount: userConnections.length,
+            },
+            'Sending alert message with all events data'
+          );
+          
+          await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, alertMessage);
+          
+          // Log the message
+          await logOutgoingWhatsAppMessage(db, {
+            whatsappNumberId: whatsappNumber.id,
+            userId: whatsappNumber.userId,
+            messageType: 'text',
+            messageContent: alertMessage,
+            isFreeMessage: true,
+          });
+          
+          logger.info(
+            {
+              userId,
+              phoneNumber: whatsappNumber.phoneNumber,
+              messageSent: true,
+              eventsIncluded: allEventsForAlert.length,
+            },
+            'Alert message sent successfully'
+          );
+        } catch (alertError) {
+          logger.error(
+            {
+              error: alertError,
+              userId,
+              phoneNumber: whatsappNumber.phoneNumber,
+            },
+            'Failed to send alert message'
+          );
+          errors.push(`Failed to send alert message to user ${userId}`);
+        }
       } catch (userError) {
-        logger.error({ error: userError, userId }, 'Error processing user calendar connections');
-        errors.push(`Error processing calendars for user ${userId}`);
+        logger.error({ error: userError, userId }, 'Error processing user for alert');
+        errors.push(`Error processing user ${userId} for alert`);
       }
     }
 
@@ -621,7 +669,7 @@ export async function GET(req: NextRequest) {
         notificationsSent,
         notificationsSkipped,
         errorsCount: errors.length,
-        usersProcessed: connectionsByUser.size,
+        usersProcessed: allConnectionsByUser.size,
       },
       'Calendar events check completed'
     );
@@ -633,7 +681,7 @@ export async function GET(req: NextRequest) {
       connectionsChecked: filteredConnections.length,
       notificationsSent,
       notificationsSkipped,
-      usersProcessed: connectionsByUser.size,
+      usersProcessed: allConnectionsByUser.size,
       errors: errors.length > 0 ? errors : undefined
     });
   } catch (error) {
