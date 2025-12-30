@@ -207,9 +207,10 @@ export async function GET(req: NextRequest) {
                 isActive: n.isActive,
               })),
             },
-            'User has no verified WhatsApp number, skipping'
+            'User has no verified WhatsApp number, skipping test message'
           );
-          continue; // Skip users without verified WhatsApp
+          // Continue processing but skip test message for this user
+          // Don't skip the entire user processing - they might still have events to notify about
         }
 
         logger.info(
@@ -527,79 +528,109 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // Send test message with next 3 upcoming events
-        logger.info(
-          {
-            userId,
-            phoneNumber: whatsappNumber.phoneNumber,
-            totalEventsCollected: allUpcomingEvents.length,
-            events: allUpcomingEvents.map(e => ({
-              title: e.event.title,
-              start: e.event.start,
-              reminderMinutes: e.reminderMinutes,
-            })),
-          },
-          'Preparing to send test message'
-        );
-        
-        if (allUpcomingEvents.length > 0) {
+        // ALWAYS send test message when cron runs (even if no events or no WhatsApp number)
+        if (!whatsappNumber) {
+          logger.warn(
+            {
+              userId,
+              message: 'Cannot send test message - user has no verified WhatsApp number',
+            },
+            'Skipping test message - no WhatsApp number'
+          );
+        } else {
           try {
-            // Sort events by event start time (soonest first), not reminder time
-            allUpcomingEvents.sort((a, b) => {
-              const aStart = new Date(a.event.start).getTime();
-              const bStart = new Date(b.event.start).getTime();
-              return aStart - bStart;
-            });
-            
-            // Get top 3 events
-            const top3Events = allUpcomingEvents.slice(0, 3);
-            
             logger.info(
               {
                 userId,
-                top3Events: top3Events.map(e => ({
+                phoneNumber: whatsappNumber.phoneNumber,
+                totalEventsCollected: allUpcomingEvents.length,
+                events: allUpcomingEvents.map(e => ({
                   title: e.event.title,
                   start: e.event.start,
                   reminderMinutes: e.reminderMinutes,
                 })),
+                cronRunTime: now.toISOString(),
               },
-              'Selected top 3 events for test message'
+              'Preparing to send test message (ALWAYS sent on cron run)'
             );
             
             // Build test message
             let testMessage = `*test*\n\n`;
             
-            for (const { event, connection, reminderMinutes } of top3Events) {
-              const eventStart = new Date(event.start);
+            if (allUpcomingEvents.length > 0) {
+              // Sort events by event start time (soonest first)
+              allUpcomingEvents.sort((a, b) => {
+                const aStart = new Date(a.event.start).getTime();
+                const bStart = new Date(b.event.start).getTime();
+                return aStart - bStart;
+              });
               
-              testMessage += `*${event.title || 'Untitled Event'}*\n`;
-              if (reminderMinutes > 0) {
-                testMessage += `it will send you remind message in ${reminderMinutes} ${reminderMinutes === 1 ? 'min' : 'mins'}\n`;
-              } else if (reminderMinutes === 0) {
-                testMessage += `it will send you remind message now\n`;
-              } else {
-                // Reminder time has passed but event hasn't started yet
-                const eventTimeDiff = eventStart.getTime() - now.getTime();
-                const eventMinutesUntil = Math.floor(eventTimeDiff / (1000 * 60));
-                testMessage += `reminder already sent, event starts in ${eventMinutesUntil} ${eventMinutesUntil === 1 ? 'min' : 'mins'}\n`;
+              // Get top 3 events
+              const top3Events = allUpcomingEvents.slice(0, 3);
+              
+              logger.info(
+                {
+                  userId,
+                  top3Events: top3Events.map(e => ({
+                    title: e.event.title,
+                    start: e.event.start,
+                    reminderMinutes: e.reminderMinutes,
+                  })),
+                },
+                'Selected top 3 events for test message'
+              );
+              
+              for (const { event, connection, reminderMinutes } of top3Events) {
+                const eventStart = new Date(event.start);
+                
+                testMessage += `*${event.title || 'Untitled Event'}*\n`;
+                if (reminderMinutes > 0) {
+                  testMessage += `it will send you remind message in ${reminderMinutes} ${reminderMinutes === 1 ? 'min' : 'mins'}\n`;
+                } else if (reminderMinutes === 0) {
+                  testMessage += `it will send you remind message now\n`;
+                } else {
+                  // Reminder time has passed but event hasn't started yet
+                  const eventTimeDiff = eventStart.getTime() - now.getTime();
+                  const eventMinutesUntil = Math.floor(eventTimeDiff / (1000 * 60));
+                  testMessage += `reminder already sent, event starts in ${eventMinutesUntil} ${eventMinutesUntil === 1 ? 'min' : 'mins'}\n`;
+                }
+                testMessage += `\n`;
               }
-              testMessage += `\n`;
+            } else {
+              // No events found - send message anyway to confirm cron is running
+              testMessage += `Cron job executed successfully!\n\n`;
+              testMessage += `No upcoming events found in the next 24 hours.\n`;
+              testMessage += `Cron ran at: ${now.toISOString()}\n`;
+              testMessage += `Your timezone: ${userTimezone}\n`;
+              testMessage += `Notification setting: ${calendarNotificationMinutes} minutes before events\n`;
+              testMessage += `\nThis message confirms the cron job is working.`;
             }
             
             logger.info(
               {
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
-                eventsCount: top3Events.length,
+                eventsCount: allUpcomingEvents.length > 0 ? Math.min(3, allUpcomingEvents.length) : 0,
                 totalEvents: allUpcomingEvents.length,
                 messageLength: testMessage.length,
-                messagePreview: testMessage.substring(0, 200),
+                messagePreview: testMessage.substring(0, 300),
+                willSend: true,
               },
-              'Sending test message with upcoming events'
+              'About to send test message (ALWAYS sent on cron run)'
             );
             
-            // Send test message
+            // ALWAYS send test message - this is the critical part
             const result = await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, testMessage);
+            
+            logger.info(
+              {
+                userId,
+                phoneNumber: whatsappNumber.phoneNumber,
+                messageId: result.messages?.[0]?.id,
+                whatsappResponse: result,
+              },
+              'WhatsApp API response received'
+            );
             
             // Log the message
             await logOutgoingWhatsAppMessage(db, {
@@ -616,8 +647,10 @@ export async function GET(req: NextRequest) {
                 phoneNumber: whatsappNumber.phoneNumber,
                 messageId: result.messages?.[0]?.id,
                 messageSent: true,
+                hasEvents: allUpcomingEvents.length > 0,
+                cronRunTime: now.toISOString(),
               },
-              'Test message sent successfully'
+              '✅ Test message sent successfully (cron job executed)'
             );
           } catch (testError) {
             logger.error(
@@ -627,19 +660,15 @@ export async function GET(req: NextRequest) {
                 errorStack: testError instanceof Error ? testError.stack : undefined,
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
+                hasWhatsAppConfig: !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
+                whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN ? 'present' : 'missing',
+                whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ? 'present' : 'missing',
               },
-              'Failed to send test message'
+              '❌ CRITICAL: Failed to send test message'
             );
-            // Don't add to errors array - test message failure shouldn't fail the cron job
+            // Add to errors so we know the test message failed
+            errors.push(`Failed to send test message to user ${userId}: ${testError instanceof Error ? testError.message : String(testError)}`);
           }
-        } else {
-          logger.info(
-            {
-              userId,
-              phoneNumber: whatsappNumber.phoneNumber,
-            },
-            'No upcoming events found to send test message'
-          );
         }
       } catch (userError) {
         logger.error({ error: userError, userId }, 'Error processing user calendar connections');
