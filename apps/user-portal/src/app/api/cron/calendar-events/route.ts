@@ -207,10 +207,9 @@ export async function GET(req: NextRequest) {
                 isActive: n.isActive,
               })),
             },
-            'User has no verified WhatsApp number, skipping test message'
+            'User has no verified WhatsApp number, skipping'
           );
-          // Continue processing but skip test message for this user
-          // Don't skip the entire user processing - they might still have events to notify about
+          continue; // Skip users without verified WhatsApp
         }
 
         logger.info(
@@ -224,13 +223,8 @@ export async function GET(req: NextRequest) {
           'Found verified WhatsApp number for user'
         );
 
-        // Collect all upcoming events for test message
-        const allUpcomingEvents: Array<{
-          event: any;
-          connection: any;
-          reminderTime: Date;
-          reminderMinutes: number;
-        }> = [];
+        // Collect the most recent upcoming event for the alert message
+        let mostRecentEvent: { event: any; connection: any; eventStart: Date } | null = null;
 
         // Check each calendar connection and fetch upcoming events
         for (const connection of userConnections) {
@@ -255,11 +249,8 @@ export async function GET(req: NextRequest) {
             // This ensures we catch events that need notifications now (calendarNotificationMinutes before start)
             // Start from a bit in the past to catch events that might have started very recently
             // but we haven't notified about yet (in case cron was delayed)
-            // Extend time window to catch events that need notifications
-            // Include buffer for notification time (e.g., if notification is 10 mins before, we need events up to 24h + 10mins ahead)
-            const notificationBuffer = Math.max(calendarNotificationMinutes, 60) * 60 * 1000; // At least 1 hour buffer
-            const fromTime = new Date(now.getTime() - (10 * 60 * 1000)); // 10 minutes ago (to catch any missed events)
-            const toTime = new Date(now.getTime() + (24 * 60 * 60 * 1000) + notificationBuffer); // Next 24+ hours (to catch events that need notifications)
+            const fromTime = new Date(now.getTime() - (5 * 60 * 1000)); // 5 minutes ago (to catch any missed events)
+            const toTime = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // Next 24 hours
             
             logger.debug(
               {
@@ -306,36 +297,16 @@ export async function GET(req: NextRequest) {
                 try {
                   const eventStart = new Date(event.start);
                   
-                  // Collect event for test message (all future events within 24 hours)
-                  const eventTimeDiff = eventStart.getTime() - now.getTime();
-                  const eventTimeDiffMinutes = Math.floor(eventTimeDiff / (1000 * 60));
-                  
-                  // Collect all events that are in the future (up to 24 hours ahead)
-                  if (eventTimeDiffMinutes > 0 && eventTimeDiffMinutes <= (24 * 60)) {
-                    // Calculate when reminder will be sent (event time - notification minutes)
-                    const reminderTime = new Date(eventStart.getTime() - (calendarNotificationMinutes * 60 * 1000));
-                    const reminderTimeDiff = reminderTime.getTime() - now.getTime();
-                    const reminderMinutesUntil = Math.floor(reminderTimeDiff / (1000 * 60));
-                    
-                    // Include all future events (even if reminder time has passed, as long as event is in future)
-                    allUpcomingEvents.push({
-                      event,
-                      connection,
-                      reminderTime,
-                      reminderMinutes: reminderMinutesUntil,
-                    });
-                    
-                    logger.debug(
-                      {
-                        userId,
-                        eventId: event.id,
-                        eventTitle: event.title,
-                        eventTimeDiffMinutes,
-                        reminderMinutesUntil,
-                        eventStart: eventStart.toISOString(),
-                      },
-                      'Collected event for test message'
-                    );
+                  // Track the most recent upcoming event for alert message (closest to now but in the future)
+                  // This should be the event that starts soonest from now
+                  if (eventStart.getTime() > now.getTime()) {
+                    if (!mostRecentEvent || eventStart.getTime() < mostRecentEvent.eventStart.getTime()) {
+                      mostRecentEvent = {
+                        event,
+                        connection,
+                        eventStart,
+                      };
+                    }
                   }
                   
                   // Get event start time in user's timezone
@@ -432,15 +403,10 @@ export async function GET(req: NextRequest) {
                   
                   // Check if this event should trigger a notification
                   // We want to send notification when: currentTime ≈ eventTime - calendarNotificationMinutes
-                  // So: timeDiffMinutes should be approximately equal to calendarNotificationMinutes
-                  // Use a wider range to account for cron timing variations (allow ±2 minute tolerance)
+                  // Use a range to account for cron timing (allow ±1 minute tolerance for cron execution timing)
                   // This ensures we catch notifications even if cron runs slightly early or late
-                  const minMinutes = Math.max(0, calendarNotificationMinutes - 2);
-                  const maxMinutes = calendarNotificationMinutes + 2;
-                  
-                  // Also check if we're very close to the notification time (within 5 minutes)
-                  // This helps catch notifications that might have been missed
-                  const isWithinNotificationWindow = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
+                  const minMinutes = Math.max(0, calendarNotificationMinutes - 1);
+                  const maxMinutes = calendarNotificationMinutes + 1;
                   
                   logger.info(
                     {
@@ -457,46 +423,19 @@ export async function GET(req: NextRequest) {
                       isTomorrow,
                       eventLocalTime: `${eventLocalTime.hours}:${String(eventLocalTime.minutes).padStart(2, '0')}`,
                       currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
-                      willTrigger: isWithinNotificationWindow,
-                      notificationWindow: `${minMinutes}-${maxMinutes} minutes before event`,
+                      willTrigger: timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes,
                     },
                     'Checking if event should trigger notification'
                   );
                   
-                  if (isWithinNotificationWindow) {
+                  if (timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes) {
                     // Check cache to prevent duplicate notifications
-                    // Use event ID and date as cache key to prevent sending same notification multiple times
                     const eventDate = new Date(event.start);
                     const dateKey = `${eventDate.getUTCFullYear()}-${eventDate.getUTCMonth() + 1}-${eventDate.getUTCDate()}-${eventDate.getUTCHours()}-${eventDate.getUTCMinutes()}`;
                     const cacheKey = `${event.id}-${dateKey}`;
                     const lastSent = notificationCache.get(cacheKey);
-                    const timeSinceLastSent = lastSent ? Math.floor((now.getTime() - lastSent) / 1000 / 60) : null;
-
-                    logger.info(
-                      {
-                        userId,
-                        eventId: event.id,
-                        eventTitle: event.title,
-                        cacheKey,
-                        lastSent: lastSent ? new Date(lastSent).toISOString() : 'never',
-                        timeSinceLastSent,
-                        cacheTTLMinutes: CACHE_TTL / 1000 / 60,
-                        willSend: !lastSent || (now.getTime() - lastSent) >= CACHE_TTL,
-                      },
-                      'Cache check for calendar event notification'
-                    );
 
                     if (!lastSent || (now.getTime() - lastSent) >= CACHE_TTL) {
-                      logger.info(
-                        {
-                          userId,
-                          eventId: event.id,
-                          eventTitle: event.title,
-                          willSendNotification: true,
-                        },
-                        '✅ Sending calendar event notification NOW'
-                      );
-                      
                       // Send notification
                       await sendCalendarEventNotification(
                         db,
@@ -523,38 +462,16 @@ export async function GET(req: NextRequest) {
                           currentLocalTime: `${userLocalTime.hours}:${String(userLocalTime.minutes).padStart(2, '0')}`,
                           timeDiffMinutes,
                           calendarNotificationMinutes,
-                          messageSent: true,
                         },
-                        '✅✅ Calendar event notification sent successfully'
+                        'Calendar event notification sent successfully'
                       );
                     } else {
                       notificationsSkipped++;
-                      logger.warn(
-                        { 
-                          eventId: event.id, 
-                          eventTitle: event.title,
-                          lastSent: new Date(lastSent).toISOString(), 
-                          cacheKey,
-                          timeSinceLastSent,
-                          reason: 'Already sent recently (within cache TTL)',
-                        },
-                        '⚠️ Skipping duplicate calendar event notification'
+                      logger.debug(
+                        { eventId: event.id, lastSent: new Date(lastSent).toISOString(), cacheKey },
+                        'Skipping duplicate calendar event notification (already sent recently)'
                       );
                     }
-                  } else {
-                    logger.debug(
-                      {
-                        userId,
-                        eventId: event.id,
-                        eventTitle: event.title,
-                        timeDiffMinutes,
-                        minMinutes,
-                        maxMinutes,
-                        calendarNotificationMinutes,
-                        reason: `Time difference ${timeDiffMinutes} is outside notification window [${minMinutes}, ${maxMinutes}]`,
-                      },
-                      'Event not within notification window'
-                    );
                   }
                 } catch (eventError) {
                   logger.error(
@@ -585,116 +502,60 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // ALWAYS send test message when cron runs (even if no events or no WhatsApp number)
-        if (!whatsappNumber) {
-          logger.warn(
-            {
-              userId,
-              message: 'Cannot send test message - user has no verified WhatsApp number',
-            },
-            'Skipping test message - no WhatsApp number'
-          );
-        } else {
+        // Send alert message with most recent event
+        if (whatsappNumber) {
           try {
-            logger.info(
-              {
-                userId,
-                phoneNumber: whatsappNumber.phoneNumber,
-                totalEventsCollected: allUpcomingEvents.length,
-                events: allUpcomingEvents.map(e => ({
-                  title: e.event.title,
-                  start: e.event.start,
-                  reminderMinutes: e.reminderMinutes,
-                })),
-                cronRunTime: now.toISOString(),
-              },
-              'Preparing to send test message (ALWAYS sent on cron run)'
-            );
+            let alertMessage = `*Alert received*\n\n`;
             
-            // Build test message
-            let testMessage = `*test*\n\n`;
-            
-            if (allUpcomingEvents.length > 0) {
-              // Sort events by event start time (soonest first)
-              allUpcomingEvents.sort((a, b) => {
-                const aStart = new Date(a.event.start).getTime();
-                const bStart = new Date(b.event.start).getTime();
-                return aStart - bStart;
+            if (mostRecentEvent) {
+              const event = mostRecentEvent.event;
+              const eventStart = new Date(event.start);
+              
+              // Format event time in user's timezone
+              const eventTimeFormatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: userTimezone,
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                hour12: true,
               });
+              const eventTimeStr = eventTimeFormatter.format(eventStart);
               
-              // Get top 3 events
-              const top3Events = allUpcomingEvents.slice(0, 3);
+              alertMessage += `*Most Recent Event:*\n`;
+              alertMessage += `*Title:* ${event.title || 'Untitled Event'}\n`;
+              alertMessage += `*Time:* ${eventTimeStr}\n`;
+              alertMessage += `*Calendar:* ${mostRecentEvent.connection.calendarName || 'Calendar'}\n`;
               
-              logger.info(
-                {
-                  userId,
-                  top3Events: top3Events.map(e => ({
-                    title: e.event.title,
-                    start: e.event.start,
-                    reminderMinutes: e.reminderMinutes,
-                  })),
-                },
-                'Selected top 3 events for test message'
-              );
-              
-              for (const { event, connection, reminderMinutes } of top3Events) {
-                const eventStart = new Date(event.start);
-                
-                testMessage += `*${event.title || 'Untitled Event'}*\n`;
-                if (reminderMinutes > 0) {
-                  testMessage += `it will send you remind message in ${reminderMinutes} ${reminderMinutes === 1 ? 'min' : 'mins'}\n`;
-                } else if (reminderMinutes === 0) {
-                  testMessage += `it will send you remind message now\n`;
-                } else {
-                  // Reminder time has passed but event hasn't started yet
-                  const eventTimeDiff = eventStart.getTime() - now.getTime();
-                  const eventMinutesUntil = Math.floor(eventTimeDiff / (1000 * 60));
-                  testMessage += `reminder already sent, event starts in ${eventMinutesUntil} ${eventMinutesUntil === 1 ? 'min' : 'mins'}\n`;
-                }
-                testMessage += `\n`;
+              if (event.location) {
+                alertMessage += `*Location:* ${event.location}\n`;
               }
             } else {
-              // No events found - send message anyway to confirm cron is running
-              testMessage += `Cron job executed successfully!\n\n`;
-              testMessage += `No upcoming events found in the next 24 hours.\n`;
-              testMessage += `Cron ran at: ${now.toISOString()}\n`;
-              testMessage += `Your timezone: ${userTimezone}\n`;
-              testMessage += `Notification setting: ${calendarNotificationMinutes} minutes before events\n`;
-              testMessage += `\nThis message confirms the cron job is working.`;
+              alertMessage += `No upcoming events found in the next 24 hours.\n`;
             }
             
-            logger.info(
-              {
-                userId,
-                phoneNumber: whatsappNumber.phoneNumber,
-                eventsCount: allUpcomingEvents.length > 0 ? Math.min(3, allUpcomingEvents.length) : 0,
-                totalEvents: allUpcomingEvents.length,
-                messageLength: testMessage.length,
-                messagePreview: testMessage.substring(0, 300),
-                willSend: true,
-              },
-              'About to send test message (ALWAYS sent on cron run)'
-            );
-            
-            // ALWAYS send test message - this is the critical part
-            const result = await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, testMessage);
+            alertMessage += `\n_Cron job executed at: ${now.toISOString()}_`;
             
             logger.info(
               {
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
-                messageId: result.messages?.[0]?.id,
-                whatsappResponse: result,
+                hasEvent: !!mostRecentEvent,
+                eventTitle: mostRecentEvent?.event.title,
+                eventStart: mostRecentEvent?.eventStart.toISOString(),
               },
-              'WhatsApp API response received'
+              'Sending alert message with most recent event'
             );
+            
+            await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, alertMessage);
             
             // Log the message
             await logOutgoingWhatsAppMessage(db, {
               whatsappNumberId: whatsappNumber.id,
               userId: whatsappNumber.userId,
               messageType: 'text',
-              messageContent: testMessage,
+              messageContent: alertMessage,
               isFreeMessage: true,
             });
             
@@ -702,29 +563,20 @@ export async function GET(req: NextRequest) {
               {
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
-                messageId: result.messages?.[0]?.id,
                 messageSent: true,
-                hasEvents: allUpcomingEvents.length > 0,
-                cronRunTime: now.toISOString(),
               },
-              '✅ Test message sent successfully (cron job executed)'
+              'Alert message sent successfully'
             );
-          } catch (testError) {
+          } catch (alertError) {
             logger.error(
               {
-                error: testError,
-                errorMessage: testError instanceof Error ? testError.message : String(testError),
-                errorStack: testError instanceof Error ? testError.stack : undefined,
+                error: alertError,
                 userId,
                 phoneNumber: whatsappNumber.phoneNumber,
-                hasWhatsAppConfig: !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
-                whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN ? 'present' : 'missing',
-                whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ? 'present' : 'missing',
               },
-              '❌ CRITICAL: Failed to send test message'
+              'Failed to send alert message'
             );
-            // Add to errors so we know the test message failed
-            errors.push(`Failed to send test message to user ${userId}: ${testError instanceof Error ? testError.message : String(testError)}`);
+            errors.push(`Failed to send alert message to user ${userId}`);
           }
         }
       } catch (userError) {
