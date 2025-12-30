@@ -90,75 +90,7 @@ export async function GET(req: NextRequest) {
 
     let notificationsSent = 0;
     let notificationsSkipped = 0;
-    let alertsSent = 0;
     const errors: string[] = [];
-
-    // Group ALL connections by user (for sending alert messages to all users with calendars)
-    const allConnectionsByUser = new Map<string, typeof calendarConnections>();
-    for (const connection of calendarConnections) {
-      if (!allConnectionsByUser.has(connection.userId)) {
-        allConnectionsByUser.set(connection.userId, []);
-      }
-      allConnectionsByUser.get(connection.userId)!.push(connection);
-    }
-
-    // Send "Alert received" message to all users with calendar connections
-    for (const [userId, userConnections] of allConnectionsByUser.entries()) {
-      try {
-        // Get user info
-        const user = await getUserById(db, userId);
-        if (!user) {
-          logger.warn({ userId }, 'User not found for alert message');
-          continue;
-        }
-
-        // Get user's verified WhatsApp numbers
-        const whatsappNumbers = await getUserWhatsAppNumbers(db, userId);
-        const whatsappNumber = whatsappNumbers.find(n => n.isVerified && n.isActive) ||
-                              whatsappNumbers.find(n => n.isVerified);
-
-        if (!whatsappNumber) {
-          logger.debug({ userId }, 'User has no verified WhatsApp number, skipping alert');
-          continue;
-        }
-
-        // Send simple "Alert received" message
-        try {
-          await whatsappService.sendTextMessage(whatsappNumber.phoneNumber, "Alert received");
-          
-          // Log the message
-          await logOutgoingWhatsAppMessage(db, {
-            whatsappNumberId: whatsappNumber.id,
-            userId: whatsappNumber.userId,
-            messageType: 'text',
-            messageContent: "Alert received",
-            isFreeMessage: true,
-          });
-
-          alertsSent++;
-          logger.info(
-            {
-              userId,
-              phoneNumber: whatsappNumber.phoneNumber,
-            },
-            'Alert message "Alert received" sent successfully'
-          );
-        } catch (alertError) {
-          logger.error(
-            {
-              error: alertError,
-              userId,
-              phoneNumber: whatsappNumber.phoneNumber,
-            },
-            'Failed to send alert message'
-          );
-          errors.push(`Failed to send alert message to user ${userId}`);
-        }
-      } catch (userError) {
-        logger.error({ error: userError, userId }, 'Error sending alert message to user');
-        errors.push(`Error sending alert to user ${userId}`);
-      }
-    }
 
     // Group filtered connections by user (for event reminder notifications)
     const connectionsByUser = new Map<string, typeof filteredConnections>();
@@ -169,7 +101,7 @@ export async function GET(req: NextRequest) {
       connectionsByUser.get(connection.userId)!.push(connection);
     }
 
-    // If no filtered connections, exit early after sending alerts
+    // If no filtered connections, exit early
     if (filteredConnections.length === 0) {
       logger.info({}, 'No calendar connections found for users with notifications enabled, exiting');
       return NextResponse.json({
@@ -179,7 +111,6 @@ export async function GET(req: NextRequest) {
         connectionsChecked: 0,
         notificationsSent: 0,
         notificationsSkipped: 0,
-        alertsSent: allConnectionsByUser.size,
       });
     }
 
@@ -636,7 +567,6 @@ export async function GET(req: NextRequest) {
         connectionsChecked: filteredConnections.length,
         notificationsSent,
         notificationsSkipped,
-        alertsSent,
         errorsCount: errors.length,
         usersProcessed: connectionsByUser.size,
       },
@@ -650,7 +580,6 @@ export async function GET(req: NextRequest) {
       connectionsChecked: filteredConnections.length,
       notificationsSent,
       notificationsSkipped,
-      alertsSent,
       usersProcessed: connectionsByUser.size,
       errors: errors.length > 0 ? errors : undefined
     });
