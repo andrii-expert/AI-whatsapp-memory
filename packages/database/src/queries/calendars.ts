@@ -1,4 +1,4 @@
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, or } from "drizzle-orm";
 import type { Database } from "../client";
 import { calendarConnections, userPreferences } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
@@ -44,6 +44,28 @@ export async function getCalendarsByIds(db: Database, calendarIds: string[]) {
     () => db.query.calendarConnections.findMany({
       where: inArray(calendarConnections.id, calendarIds),
     })
+  );
+}
+
+export async function getCalendarsByProviderCalendarIds(db: Database, userId: string, providerCalendarIds: string[]) {
+  return withQueryLogging(
+    'getCalendarsByProviderCalendarIds',
+    { userId, providerCalendarIds },
+    () => {
+      // Build conditions: match by calendarId OR email
+      // For calendars with null calendarId (primary calendars), match by email
+      const conditions = [
+        eq(calendarConnections.userId, userId),
+        or(
+          inArray(calendarConnections.calendarId, providerCalendarIds),
+          inArray(calendarConnections.email, providerCalendarIds)
+        )
+      ];
+      
+      return db.query.calendarConnections.findMany({
+        where: and(...conditions),
+      });
+    }
   );
 }
 

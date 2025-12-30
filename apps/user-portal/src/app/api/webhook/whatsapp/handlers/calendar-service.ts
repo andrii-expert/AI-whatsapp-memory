@@ -2,7 +2,7 @@
 // Copied from voice-worker for use in text message handling
 
 import type { Database } from '@imaginecalendar/database/client';
-import { getPrimaryCalendar, updateCalendarTokens, getUserPreferences, getWhatsAppCalendars, getCalendarsByIds } from '@imaginecalendar/database/queries';
+import { getPrimaryCalendar, updateCalendarTokens, getUserPreferences, getWhatsAppCalendars, getCalendarsByIds, getCalendarsByProviderCalendarIds } from '@imaginecalendar/database/queries';
 import { createCalendarProvider } from '@imaginecalendar/calendar-integrations/factory';
 import type { Contact, CalendarProvider } from '@imaginecalendar/calendar-integrations/types';
 import type { ICalendarService, CalendarIntent } from '@imaginecalendar/ai-services';
@@ -289,9 +289,11 @@ export class CalendarService implements ICalendarService {
         throw new Error('No calendars selected for WhatsApp. Please select calendars in your settings.');
       }
 
-      // Get the selected calendar connections
-      const calendarConnections = await getCalendarsByIds(this.db, whatsappCalendarIds);
-      logger.info({ userId, calendarConnectionsCount: calendarConnections.length, calendarConnections: calendarConnections.map(c => ({ id: c.id, isActive: c.isActive, provider: c.provider })) }, 'Retrieved calendar connections');
+      // Get the selected calendar connections by provider calendar IDs
+      // whatsappCalendarIds contains provider calendar IDs (like email addresses or Google calendar IDs),
+      // not database connection IDs, so we need to match against the calendarId field
+      const calendarConnections = await getCalendarsByProviderCalendarIds(this.db, userId, whatsappCalendarIds);
+      logger.info({ userId, calendarConnectionsCount: calendarConnections.length, calendarConnections: calendarConnections.map(c => ({ id: c.id, calendarId: c.calendarId, isActive: c.isActive, provider: c.provider })) }, 'Retrieved calendar connections');
 
       if (calendarConnections.length === 0) {
         throw new Error('Selected calendars not found. Please check your calendar connections.');
