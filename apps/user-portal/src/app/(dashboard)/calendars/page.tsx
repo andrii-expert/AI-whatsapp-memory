@@ -455,7 +455,7 @@ const TimePicker = ({
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"));
 
   return (
-    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+    <div className="flex items-center gap-1 sm:gap-2">
       <Select value={selectedHour} onValueChange={handleHourChange}>
         <SelectTrigger id={id} className="sm:w-[85px] text-sm">
           <SelectValue placeholder="Hour" />
@@ -3152,7 +3152,7 @@ export default function CalendarsPage() {
                 className="text-sm sm:text-base"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
                 <label htmlFor="event-date" className="text-sm font-medium">
                   Date
