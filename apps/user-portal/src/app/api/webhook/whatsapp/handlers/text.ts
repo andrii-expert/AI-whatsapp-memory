@@ -407,6 +407,97 @@ async function processAIResponse(
     const isListOperation = actionTemplate.toLowerCase().startsWith('list ');
     const isListEvents = actionTemplate.toLowerCase().startsWith('list events:');
     
+    // For events, check if "List events: [name/number]" is actually a view/show request
+    // This must be checked BEFORE handling as a list operation
+    if (titleType === 'event' && isListEvents) {
+      const listEventsMatch = actionTemplate.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
+      const hasEventNameInList = listEventsMatch && listEventsMatch[1] && listEventsMatch[1].trim().length > 0;
+      const listEventValue = listEventsMatch && listEventsMatch[1] ? listEventsMatch[1].trim() : '';
+      
+      // Check if user wants to view a specific event (not list all events)
+      const userWantsToView = originalUserText?.toLowerCase().match(/(?:show|view|get|see|details?|overview)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)/i) ||
+                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?[^"]+\s+event/i) ||
+                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s+(?:of|for|details?|overview)/i) ||
+                              // Also match "show me [number]" - likely referring to a numbered item from a list
+                              (originalUserText?.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue));
+      
+      const isListEventsWithName = hasEventNameInList && userWantsToView;
+      
+      if (isListEventsWithName) {
+        // Convert to show event details operation
+        let eventActionTemplate = actionTemplate;
+        const eventNameMatch = actionTemplate.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
+        if (eventNameMatch && eventNameMatch[1]) {
+          eventActionTemplate = `Show event details: ${eventNameMatch[1].trim()}`;
+        } else if (originalUserText) {
+          // Extract event name from original text
+          const originalMatch = originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)\s+(?:of\s+)?["']?([^"']+)["']?/i) ||
+                             originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i);
+          if (originalMatch && originalMatch[1]) {
+            eventActionTemplate = `Show event details: ${originalMatch[1].trim()}`;
+          } else {
+            eventActionTemplate = `Show event details: ${originalUserText}`;
+          }
+        }
+        
+        logger.info(
+          {
+            userId,
+            titleType,
+            originalActionTemplate: actionTemplate.substring(0, 200),
+            eventActionTemplate: eventActionTemplate.substring(0, 200),
+          },
+          'Converting List events to Show event details'
+        );
+        
+        const parsed = executor.parseAction(eventActionTemplate);
+        if (parsed) {
+          parsed.resourceType = 'event';
+          
+          // Get timezone for event operations
+          let eventTimezone = userTimezone || 'Africa/Johannesburg';
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              const calendarService = new CalendarService(db);
+              eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
+          }
+          
+          const result = await executor.executeAction(parsed, eventTimezone);
+          
+          if (result.message.trim().length > 0) {
+            await whatsappService.sendTextMessage(recipient, result.message);
+            
+            // Log outgoing message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'text',
+                  messageContent: result.message,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to log outgoing message');
+            }
+          }
+        } else {
+          logger.warn({ userId, actionTemplate, eventActionTemplate }, 'Failed to parse converted show event action');
+          await whatsappService.sendTextMessage(
+            recipient,
+            `I'm sorry, I couldn't understand what event you want to view. Please try again.`
+          );
+        }
+        return; // Exit early after handling view/show event operation
+      }
+    }
+    
     // Handle list operations for all types (tasks, notes, reminders, events, documents, addresses)
     if (isListOperation && (titleType === 'shopping' || titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event' || titleType === 'document' || titleType === 'address' || titleType === 'friend')) {
       try {
@@ -885,15 +976,20 @@ async function processAIResponse(
     // Handle event operations (create, update, delete, view, show)
     if (titleType === 'event') {
       // Check if this is a view/show operation (should go to ActionExecutor)
-      // Also check if "List events: [name]" is actually a request to show a specific event
-      // This happens when user says "show me [event name] event" but AI generates "List events: [name]"
+      // Also check if "List events: [name/number]" is actually a request to show a specific event
+      // This happens when user says "show me [event name] event" or "show me 2" but AI generates "List events: [name/number]"
       const listEventsMatch = actionTemplate.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
       const hasEventNameInList = listEventsMatch && listEventsMatch[1] && listEventsMatch[1].trim().length > 0;
+      const listEventValue = listEventsMatch && listEventsMatch[1] ? listEventsMatch[1].trim() : '';
+      
       // Check if user wants to view a specific event (not list all events)
-      // Pattern matches: "show me [name] event", "show event [name]", "view [name] event", etc.
+      // Pattern matches: "show me [name] event", "show event [name]", "view [name] event", "show me 2", etc.
       const userWantsToView = originalUserText?.toLowerCase().match(/(?:show|view|get|see|details?|overview)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)/i) ||
                               originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?[^"]+\s+event/i) ||
-                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s+(?:of|for|details?|overview)/i);
+                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s+(?:of|for|details?|overview)/i) ||
+                              // Also match "show me [number]" - likely referring to a numbered item from a list
+                              (originalUserText?.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue));
+      
       const isListEventsWithName = actionTemplate.toLowerCase().startsWith('list events:') && 
                                    hasEventNameInList &&
                                    userWantsToView;
