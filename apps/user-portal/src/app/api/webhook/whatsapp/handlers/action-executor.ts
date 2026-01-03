@@ -5985,26 +5985,9 @@ export class ActionExecutor {
         
         let headerText = "Events:";
         if (allToday) {
-          // Format header with calendar icon and date (e.g., "JUL 17")
-          const todayMonth = now.toLocaleDateString('en-US', {
-            month: 'short',
-            timeZone: calendarTimezone,
-          }).toUpperCase();
-          const todayDay = now.toLocaleDateString('en-US', {
-            day: 'numeric',
-            timeZone: calendarTimezone,
-          });
-          headerText = `📅 ${todayMonth} ${todayDay}\n*Today's Events:*`;
+          headerText = `📅 *Today's Events:*`;
         } else if (allTomorrow) {
-          const tomorrowMonth = tomorrow.toLocaleDateString('en-US', {
-            month: 'short',
-            timeZone: calendarTimezone,
-          }).toUpperCase();
-          const tomorrowDay = tomorrow.toLocaleDateString('en-US', {
-            day: 'numeric',
-            timeZone: calendarTimezone,
-          });
-          headerText = `📅 ${tomorrowMonth} ${tomorrowDay}\n*Tomorrow's Events:*`;
+          headerText = `📅 *Tomorrow's Events:*`;
         } else {
           headerText = `📅 *Events:*`;
         }
@@ -6040,7 +6023,7 @@ export class ActionExecutor {
           const eventDate = `${weekday}, ${day} ${month}`;
           
           // Format: Numbered list, title on one line, date and time on next line (indented)
-          message += `${index + 1}. ${event.title || 'Untitled Event'}\n   ${eventDate} | *${eventTime24}*\n\n`;
+          message += `*${index + 1}*. ${event.title || 'Untitled Event'}\n${eventDate} | *${eventTime24}*\n\n`;
         });
         
         if (result.events.length > 20) {
