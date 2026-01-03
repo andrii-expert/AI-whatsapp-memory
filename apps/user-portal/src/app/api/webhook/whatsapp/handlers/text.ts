@@ -1493,12 +1493,20 @@ async function handleEventOperation(
             });
             
             // Format date as "Sat, 3 Jan" (short weekday, day, short month)
-            const eventDate = eventStart.toLocaleDateString('en-US', {
+            // We need to manually format to get "day month" order instead of "month day"
+            const dateParts = eventStart.toLocaleDateString('en-US', {
               weekday: 'short',
               day: 'numeric',
               month: 'short',
               timeZone: calendarTimezone,
-            });
+            }).split(', ');
+            const weekday = dateParts[0] || '';
+            const monthDay = dateParts[1] || '';
+            // Split monthDay to get month and day separately, then reorder
+            const monthDayParts = monthDay.split(' ');
+            const month = monthDayParts[0] || '';
+            const day = monthDayParts[1] || '';
+            const eventDate = `${weekday}, ${day} ${month}`;
             
             // Format: Numbered list, title on one line, date and time on next line (indented)
             responseMessage += `${index + 1}. ${event.title || 'Untitled Event'}\n   ${eventDate} | *${eventTime24}*\n\n`;
