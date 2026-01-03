@@ -483,4 +483,3 @@ async function sendEventReminder(
     throw error;
   }
 }
-

@@ -281,6 +281,16 @@ export class CalendarService implements ICalendarService {
     try {
       logger.info({ userId }, 'Creating calendar event');
 
+      // First, get the user's actual primary calendar
+      const userPrimaryCalendar = await getPrimaryCalendar(this.db, userId);
+      logger.info({ 
+        userId, 
+        hasPrimaryCalendar: !!userPrimaryCalendar,
+        primaryCalendarId: userPrimaryCalendar?.id,
+        primaryCalendarName: userPrimaryCalendar?.calendarName || userPrimaryCalendar?.email,
+        primaryIsActive: userPrimaryCalendar?.isActive
+      }, 'Retrieved user primary calendar');
+
       // Get user's selected WhatsApp calendars
       const whatsappCalendarIds = await getWhatsAppCalendars(this.db, userId);
       logger.info({ userId, whatsappCalendarIds }, 'Retrieved WhatsApp calendar IDs');
@@ -307,21 +317,63 @@ export class CalendarService implements ICalendarService {
         throw new Error('None of the selected calendars are active. Please check your calendar connections and ensure at least one selected calendar is active.');
       }
 
-      // Use the primary calendar if available, otherwise use the first active calendar
-      const primaryCalendar = activeCalendarConnections.find(cal => cal.isPrimary);
-      const calendarConnection = primaryCalendar || activeCalendarConnections[0];
+      // Determine which calendar to use:
+      // 1. If user has a primary calendar that is active and in WhatsApp selected calendars, use it
+      // 2. If user has a primary calendar that is active but NOT in WhatsApp selected calendars, use it anyway (primary takes precedence)
+      // 3. Otherwise, use the first active calendar from WhatsApp selected calendars
+      let calendarConnection: typeof calendarConnections[0] | undefined;
       
+      if (userPrimaryCalendar && userPrimaryCalendar.isActive) {
+        // Check if primary calendar is in the WhatsApp selected calendars
+        const primaryInWhatsAppSelected = whatsappCalendarIds.some(id => 
+          id === userPrimaryCalendar.calendarId || id === userPrimaryCalendar.email
+        );
+        
+        if (primaryInWhatsAppSelected) {
+          // Primary is in WhatsApp selected calendars, use it
+          calendarConnection = userPrimaryCalendar;
+          logger.info({ 
+            userId, 
+            reason: 'primary_in_whatsapp_selected',
+            calendarId: calendarConnection.id,
+            calendarName: calendarConnection.calendarName || calendarConnection.email
+          }, 'Using primary calendar (in WhatsApp selected)');
+        } else {
+          // Primary is not in WhatsApp selected calendars, but we'll use it anyway
+          // because primary should take precedence
+          calendarConnection = userPrimaryCalendar;
+          logger.info({ 
+            userId, 
+            reason: 'primary_not_in_whatsapp_selected_but_using_anyway',
+            calendarId: calendarConnection.id,
+            calendarName: calendarConnection.calendarName || calendarConnection.email,
+            warning: 'Primary calendar is not in WhatsApp selected calendars, but using it anyway as primary takes precedence'
+          }, 'Using primary calendar (not in WhatsApp selected, but primary takes precedence)');
+        }
+      } else {
+        // No primary calendar or primary is not active, use first active from WhatsApp selected
+        calendarConnection = activeCalendarConnections[0];
+        logger.info({ 
+          userId, 
+          reason: 'no_primary_or_inactive',
+          calendarId: calendarConnection?.id,
+          calendarName: calendarConnection?.calendarName || calendarConnection?.email
+        }, 'Using first active calendar from WhatsApp selected (no primary or primary inactive)');
+      }
+      
+      // Ensure we have a valid calendar connection
+      if (!calendarConnection) {
+        throw new Error('No valid calendar found. Please check your calendar connections and ensure at least one calendar is active.');
+      }
+
       logger.info({ 
         userId, 
-        usingPrimary: !!primaryCalendar,
+        usingPrimary: calendarConnection.isPrimary || false,
         calendarId: calendarConnection.id,
         calendarName: calendarConnection.calendarName || calendarConnection.email,
-        isPrimary: calendarConnection.isPrimary
+        isPrimary: calendarConnection.isPrimary,
+        calendarProvider: calendarConnection.provider
       }, 'Selected calendar for event creation');
-
-      if (!calendarConnection) {
-        throw new Error('Selected calendar not found. Please check your calendar connections.');
-      }
 
       if (!calendarConnection.isActive) {
         throw new Error('Selected calendar is inactive. Please reconnect your calendar.');
