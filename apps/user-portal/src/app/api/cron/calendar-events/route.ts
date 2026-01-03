@@ -369,14 +369,8 @@ async function sendEventReminder(
     const eventHours = parseInt(getEventTimePart('hour'), 10);
     const eventMinutes = parseInt(getEventTimePart('minute'), 10);
     
-    // Convert 24-hour format to 12-hour format for display
-    const formatTime24To12 = (hours: number, minutes: number): string => {
-      const hour12 = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
-      const period = hours >= 12 ? 'PM' : 'AM';
-      return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
-    };
-    
-    const eventTimeStr = formatTime24To12(eventHours, eventMinutes);
+    // Format time as 24-hour format (e.g., "15:00")
+    const eventTimeStr = `${String(eventHours).padStart(2, '0')}:${String(eventMinutes).padStart(2, '0')}`;
 
     // Get event date in user's timezone - format as "January 3," (month and day with comma)
     const dateFormatter = new Intl.DateTimeFormat('en-US', {

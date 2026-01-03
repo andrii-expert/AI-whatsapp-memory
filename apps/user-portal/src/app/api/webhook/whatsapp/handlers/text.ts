@@ -1404,13 +1404,13 @@ async function handleEventOperation(
     let responseMessage: string;
     if (result.success) {
       if (result.action === 'CREATE' && result.event) {
-        // Format time as lowercase am/pm
+        // Format time as 24-hour format (e.g., "15:00")
         const eventTime = result.event.start.toLocaleTimeString('en-US', {
-          hour: 'numeric',
+          hour: '2-digit',
           minute: '2-digit',
-          hour12: true,
+          hour12: false,
           timeZone: calendarTimezone,
-        }).toLowerCase();
+        });
         
         // Format date as "Tue, Dec 9"
         const eventDate = result.event.start.toLocaleDateString('en-US', {
