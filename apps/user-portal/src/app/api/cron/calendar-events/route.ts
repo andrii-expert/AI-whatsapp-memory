@@ -199,10 +199,15 @@ export async function GET(req: NextRequest) {
                   const timeDiffMs = eventStart.getTime() - now.getTime();
                   const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
 
-                  // Check if event is within notification window (with ±5 minute tolerance for cron timing)
-                  const minMinutes = Math.max(0, calendarNotificationMinutes - 5);
-                  const maxMinutes = calendarNotificationMinutes + 5;
+                  // Check if event is at the exact reminder time
+                  // We use Math.floor to ensure we don't trigger too early
+                  // Window: [calendarNotificationMinutes, calendarNotificationMinutes + 1]
+                  // This means for a 10-minute reminder, we notify when timeDiff is exactly 10-11 minutes
+                  // The +1 minute tolerance accounts for cron timing (cron might run slightly after the exact minute)
+                  const minMinutes = calendarNotificationMinutes;
+                  const maxMinutes = calendarNotificationMinutes + 1;
                   
+                  // Only notify if we're at the reminder time (or up to 1 minute after due to cron timing)
                   const shouldNotify = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
 
                   if (shouldNotify) {
