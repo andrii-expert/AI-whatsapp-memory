@@ -882,8 +882,85 @@ async function processAIResponse(
       return; // Exit early after handling document operation
     }
     
-    // Handle non-list event operations (create, update, delete)
+    // Handle event operations (create, update, delete, view, show)
     if (titleType === 'event') {
+      // Check if this is a view/show operation (should go to ActionExecutor)
+      const isViewShowOperation = actionTemplate.toLowerCase().match(/^(view|show|get|see|details? of|overview of)\s+(?:event|events?|me\s+event|me\s+the\s+event)/i) ||
+                                  actionTemplate.toLowerCase().match(/^(view|show|get|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
+                                  (actionTemplate.toLowerCase().startsWith('view a file:') && originalUserText?.toLowerCase().includes('event'));
+      
+      if (isViewShowOperation) {
+        // Handle view/show event operations via ActionExecutor
+        // If AI generated "View a file:" but user asked about an event, extract the event name
+        let eventActionTemplate = actionTemplate;
+        if (actionTemplate.toLowerCase().startsWith('view a file:')) {
+          // Extract event name from "View a file: [event name]"
+          const eventNameMatch = actionTemplate.match(/View a file:\s*(.+?)(?:\s*-\s*on folder:.*)?$/i);
+          if (eventNameMatch && eventNameMatch[1]) {
+            eventActionTemplate = `Show event details: ${eventNameMatch[1].trim()}`;
+          } else if (originalUserText) {
+            // Fallback: use original user text
+            eventActionTemplate = `Show event details: ${originalUserText}`;
+          }
+        }
+        
+        logger.info(
+          {
+            userId,
+            titleType,
+            originalActionTemplate: actionTemplate.substring(0, 200),
+            eventActionTemplate: eventActionTemplate.substring(0, 200),
+          },
+          'Processing view/show event operation'
+        );
+        
+        const parsed = executor.parseAction(eventActionTemplate);
+        if (parsed) {
+          parsed.resourceType = 'event';
+          
+          // Get timezone for event operations
+          let eventTimezone = userTimezone || 'Africa/Johannesburg';
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              const calendarService = new CalendarService(db);
+              eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
+          }
+          
+          const result = await executor.executeAction(parsed, eventTimezone);
+          
+          if (result.message.trim().length > 0) {
+            await whatsappService.sendTextMessage(recipient, result.message);
+            
+            // Log outgoing message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'text',
+                  messageContent: result.message,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to log outgoing message');
+            }
+          }
+        } else {
+          logger.warn({ userId, actionTemplate, eventActionTemplate }, 'Failed to parse view/show event action');
+          await whatsappService.sendTextMessage(
+            recipient,
+            `I'm sorry, I couldn't understand what event you want to view. Please try again.`
+          );
+        }
+        return; // Exit early after handling view/show event operation
+      }
+      
       // Log AI response for debugging
       logger.info(
         {

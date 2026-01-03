@@ -612,28 +612,35 @@ export class ActionExecutor {
     } else if (trimmed.match(/^(Show|View|Get|See|Details? of|Overview of)\s+(?:event|events?)\s*(?:details?|overview|info|information)?/i) || 
                trimmed.match(/^(Show|View|Get|See)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
                trimmed.match(/^(?:What|What's|Tell me about)\s+(?:event|events?)\s*(\d+)/i) ||
-               trimmed.match(/^(?:Show|View|Get|See)\s+(?:me\s+)?(?:event|events?)\s*(\d+)/i)) {
+               trimmed.match(/^(?:Show|View|Get|See)\s+(?:me\s+)?(?:event|events?)\s*(\d+)/i) ||
+               trimmed.match(/^Show\s+event\s+details:/i)) {
       // Detect event detail requests
       action = 'show';
       resourceType = 'event';
       
-      // Extract event number or name
-      const eventNumberMatch = trimmed.match(/(?:event|#|number)\s*(\d+)/i) || trimmed.match(/^(\d+)$/);
-      if (eventNumberMatch && eventNumberMatch[1]) {
-        parsed.action = `event ${eventNumberMatch[1]}`;
+      // Check for "Show event details: [name]" format first
+      const showEventDetailsMatch = trimmed.match(/^Show\s+event\s+details:\s*(.+)$/i);
+      if (showEventDetailsMatch && showEventDetailsMatch[1]) {
+        parsed.action = showEventDetailsMatch[1].trim();
       } else {
-        // Extract event name/title
-        const eventNameMatch = trimmed.match(/(?:event|details?|overview|info|information)\s+(?:of|for|about)?\s*["']?([^"']+)["']?/i) ||
-                              trimmed.match(/(?:Show|View|Get|See)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+["']?([^"']+)["']?/i);
-        if (eventNameMatch && eventNameMatch[1]) {
-          parsed.action = eventNameMatch[1].trim();
+        // Extract event number or name
+        const eventNumberMatch = trimmed.match(/(?:event|#|number)\s*(\d+)/i) || trimmed.match(/^(\d+)$/);
+        if (eventNumberMatch && eventNumberMatch[1]) {
+          parsed.action = `event ${eventNumberMatch[1]}`;
         } else {
-          // Try to extract anything after common prefixes
-          const afterPrefix = trimmed.replace(/^(Show|View|Get|See|Details? of|Overview of|What|What's|Tell me about)\s+(?:event|events?|me\s+the\s+details?\s+of|me\s+details?\s+of)\s*/i, '').trim();
-          if (afterPrefix) {
-            parsed.action = afterPrefix;
+          // Extract event name/title
+          const eventNameMatch = trimmed.match(/(?:event|details?|overview|info|information)\s+(?:of|for|about)?\s*["']?([^"']+)["']?/i) ||
+                                trimmed.match(/(?:Show|View|Get|See)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+["']?([^"']+)["']?/i);
+          if (eventNameMatch && eventNameMatch[1]) {
+            parsed.action = eventNameMatch[1].trim();
           } else {
-            missingFields.push('event number or name');
+            // Try to extract anything after common prefixes
+            const afterPrefix = trimmed.replace(/^(Show|View|Get|See|Details? of|Overview of|What|What's|Tell me about)\s+(?:event|events?|me\s+the\s+details?\s+of|me\s+details?\s+of)\s*/i, '').trim();
+            if (afterPrefix) {
+              parsed.action = afterPrefix;
+            } else {
+              missingFields.push('event number or name');
+            }
           }
         }
       }
