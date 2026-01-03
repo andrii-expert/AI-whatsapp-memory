@@ -621,23 +621,23 @@ export class ActionExecutor {
       // Check for "Show event details: [name]" format first
       const showEventDetailsMatch = trimmed.match(/^Show\s+event\s+details:\s*(.+)$/i);
       if (showEventDetailsMatch && showEventDetailsMatch[1]) {
-        parsed.action = showEventDetailsMatch[1].trim();
+        taskName = showEventDetailsMatch[1].trim();
       } else {
         // Extract event number or name
         const eventNumberMatch = trimmed.match(/(?:event|#|number)\s*(\d+)/i) || trimmed.match(/^(\d+)$/);
         if (eventNumberMatch && eventNumberMatch[1]) {
-          parsed.action = `event ${eventNumberMatch[1]}`;
+          taskName = `event ${eventNumberMatch[1]}`;
         } else {
           // Extract event name/title
           const eventNameMatch = trimmed.match(/(?:event|details?|overview|info|information)\s+(?:of|for|about)?\s*["']?([^"']+)["']?/i) ||
                                 trimmed.match(/(?:Show|View|Get|See)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+["']?([^"']+)["']?/i);
           if (eventNameMatch && eventNameMatch[1]) {
-            parsed.action = eventNameMatch[1].trim();
+            taskName = eventNameMatch[1].trim();
           } else {
             // Try to extract anything after common prefixes
             const afterPrefix = trimmed.replace(/^(Show|View|Get|See|Details? of|Overview of|What|What's|Tell me about)\s+(?:event|events?|me\s+the\s+details?\s+of|me\s+details?\s+of)\s*/i, '').trim();
             if (afterPrefix) {
-              parsed.action = afterPrefix;
+              taskName = afterPrefix;
             } else {
               missingFields.push('event number or name');
             }
@@ -655,7 +655,6 @@ export class ActionExecutor {
         {
           originalText: trimmed,
           extractedListFilter: listFilter,
-          afterPrefix,
         },
         'Parsed List events action'
       );
@@ -6086,13 +6085,18 @@ export class ActionExecutor {
 
       const calendarService = new CalendarService(this.db);
       
+      // Use the calendar connection we already have
+      const calendarId = calendarConnection.calendarId || calendarConnection.email || 'primary';
+      
       // Try to find the event - could be by number, name, or ID
       let event: any = null;
       let eventId: string | undefined;
-      let calendarId: string | undefined;
 
       // Get the action text (could be in parsed.action or parsed.taskName)
-      const actionText = parsed.action || parsed.taskName || '';
+      // For event details, taskName contains the event name/number
+      const actionText = parsed.taskName || parsed.action || '';
+      
+      logger.info({ userId: this.userId, actionText, calendarId, parsedAction: parsed.action, parsedTaskName: parsed.taskName }, 'Searching for event');
 
       // Check if user specified an event number (e.g., "event 1", "show me 1")
       const eventNumberMatch = actionText.match(/(?:event|#|number)\s*(\d+)/i) || 
@@ -6110,12 +6114,7 @@ export class ActionExecutor {
         const queryResult = await calendarService.query(this.userId, intent);
         if (queryResult.success && queryResult.events && queryResult.events.length > eventIndex && eventIndex >= 0) {
           event = queryResult.events[eventIndex];
-          // Get the calendar connection to find calendarId
-          const primaryCalendar = await getPrimaryCalendar(this.db, this.userId);
-          if (primaryCalendar) {
-            calendarId = primaryCalendar.calendarId || 'primary';
-            eventId = event.id;
-          }
+          eventId = event.id;
         }
       } else if (actionText) {
         // Try to find event by name/title
@@ -6126,26 +6125,36 @@ export class ActionExecutor {
           queryTimeframe: 'all',
         };
         
+        logger.info({ userId: this.userId, searchTitle: actionText }, 'Querying events by title');
         const queryResult = await calendarService.query(this.userId, intent);
+        
+        logger.info({ 
+          userId: this.userId, 
+          success: queryResult.success, 
+          eventCount: queryResult.events?.length || 0,
+          foundEvents: queryResult.events?.map((e: any) => ({ id: e.id, title: e.title })) || []
+        }, 'Event query result');
+        
         if (queryResult.success && queryResult.events && queryResult.events.length > 0) {
           // Use the first matching event
           event = queryResult.events[0];
-          const primaryCalendar = await getPrimaryCalendar(this.db, this.userId);
-          if (primaryCalendar) {
-            calendarId = primaryCalendar.calendarId || 'primary';
-            eventId = event.id;
-          }
+          eventId = event.id;
+          logger.info({ userId: this.userId, eventId, eventTitle: event.title }, 'Found event by title');
+        } else {
+          logger.warn({ userId: this.userId, searchTitle: actionText }, 'No events found matching title');
         }
       }
 
-      if (!event || !eventId || !calendarId) {
+      if (!event || !eventId) {
+        logger.warn({ userId: this.userId, actionText, hasEvent: !!event, hasEventId: !!eventId }, 'Event not found');
         return {
           success: false,
-          message: "I couldn't find that event. Please specify the event number or name.",
+          message: `I couldn't find an event matching "${actionText}". Please check the event name or try using the event number.`,
         };
       }
 
       // Get full event details
+      logger.info({ userId: this.userId, calendarId, eventId }, 'Getting full event details');
       const eventDetailsResult = await calendarService.getEvent(this.userId, calendarId, eventId);
       
       if (!eventDetailsResult.success || !eventDetailsResult.event) {
