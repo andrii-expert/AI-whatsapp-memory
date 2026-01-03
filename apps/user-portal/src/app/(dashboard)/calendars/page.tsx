@@ -1879,19 +1879,20 @@ export default function CalendarsPage() {
 
   // Helper function to format full address from address components
   const formatFullAddress = (address: {
-    street?: string;
-    city?: string;
-    state?: string;
-    zip?: string;
-    country?: string;
+    street?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    country?: string | null;
   }): string => {
+    // Filter out null, undefined, and empty strings, then join
     const addressParts = [
       address.street,
       address.city,
       address.state,
       address.zip,
       address.country,
-    ].filter(Boolean);
+    ].filter((part): part is string => Boolean(part) && typeof part === 'string' && part.trim().length > 0);
     return addressParts.join(", ");
   };
 
@@ -3436,20 +3437,44 @@ export default function CalendarsPage() {
                       if (value) {
                         const selectedAddr = addresses.find((addr: any) => addr.id === value);
                         if (selectedAddr) {
-                          // Build address components object
+                          // Build address components object - handle null/undefined properly
                           const components = {
-                            street: selectedAddr.street || undefined,
-                            city: selectedAddr.city || undefined,
-                            state: selectedAddr.state || undefined,
-                            zip: selectedAddr.zip || undefined,
-                            country: selectedAddr.country || undefined,
+                            street: selectedAddr.street ?? undefined,
+                            city: selectedAddr.city ?? undefined,
+                            state: selectedAddr.state ?? undefined,
+                            zip: selectedAddr.zip ?? undefined,
+                            country: selectedAddr.country ?? undefined,
                           };
                           setAddressComponents(components);
                           
                           // Format full address from components
                           const fullAddress = formatFullAddress(components);
-                          // Use full address if available, otherwise fall back to name
-                          setEventAddress(fullAddress || selectedAddr.name || "");
+                          
+                          // If we have coordinates but no formatted address, try reverse geocoding
+                          if (!fullAddress && selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                            setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                            // Try reverse geocoding to get full address
+                            if (window.google?.maps) {
+                              const geocoder = new window.google.maps.Geocoder();
+                              geocoder.geocode(
+                                { location: { lat: selectedAddr.latitude, lng: selectedAddr.longitude } },
+                                (results: any, status: string) => {
+                                  if (status === "OK" && results?.[0]) {
+                                    setEventAddress(results[0].formatted_address);
+                                  } else {
+                                    // Fallback to name if reverse geocoding fails
+                                    setEventAddress(selectedAddr.name || "");
+                                  }
+                                }
+                              );
+                            } else {
+                              // Fallback to name if Google Maps not loaded
+                              setEventAddress(selectedAddr.name || "");
+                            }
+                          } else {
+                            // Use full address if available, otherwise fall back to name
+                            setEventAddress(fullAddress || selectedAddr.name || "");
+                          }
                           
                           if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
                             setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
@@ -4009,20 +4034,44 @@ export default function CalendarsPage() {
                             if (value) {
                               const selectedAddr = addresses.find((addr: any) => addr.id === value);
                               if (selectedAddr) {
-                                // Build address components object
+                                // Build address components object - handle null/undefined properly
                                 const components = {
-                                  street: selectedAddr.street || undefined,
-                                  city: selectedAddr.city || undefined,
-                                  state: selectedAddr.state || undefined,
-                                  zip: selectedAddr.zip || undefined,
-                                  country: selectedAddr.country || undefined,
+                                  street: selectedAddr.street ?? undefined,
+                                  city: selectedAddr.city ?? undefined,
+                                  state: selectedAddr.state ?? undefined,
+                                  zip: selectedAddr.zip ?? undefined,
+                                  country: selectedAddr.country ?? undefined,
                                 };
                                 setEditAddressComponents(components);
                                 
                                 // Format full address from components
                                 const fullAddress = formatFullAddress(components);
-                                // Use full address if available, otherwise fall back to name
-                                setEditEventAddress(fullAddress || selectedAddr.name || "");
+                                
+                                // If we have coordinates but no formatted address, try reverse geocoding
+                                if (!fullAddress && selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                                  // Try reverse geocoding to get full address
+                                  if (window.google?.maps) {
+                                    const geocoder = new window.google.maps.Geocoder();
+                                    geocoder.geocode(
+                                      { location: { lat: selectedAddr.latitude, lng: selectedAddr.longitude } },
+                                      (results: any, status: string) => {
+                                        if (status === "OK" && results?.[0]) {
+                                          setEditEventAddress(results[0].formatted_address);
+                                        } else {
+                                          // Fallback to name if reverse geocoding fails
+                                          setEditEventAddress(selectedAddr.name || "");
+                                        }
+                                      }
+                                    );
+                                  } else {
+                                    // Fallback to name if Google Maps not loaded
+                                    setEditEventAddress(selectedAddr.name || "");
+                                  }
+                                } else {
+                                  // Use full address if available, otherwise fall back to name
+                                  setEditEventAddress(fullAddress || selectedAddr.name || "");
+                                }
                                 
                                 if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
                                   setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
@@ -4427,20 +4476,44 @@ export default function CalendarsPage() {
                             if (value) {
                               const selectedAddr = addresses.find((addr: any) => addr.id === value);
                               if (selectedAddr) {
-                                // Build address components object
+                                // Build address components object - handle null/undefined properly
                                 const components = {
-                                  street: selectedAddr.street || undefined,
-                                  city: selectedAddr.city || undefined,
-                                  state: selectedAddr.state || undefined,
-                                  zip: selectedAddr.zip || undefined,
-                                  country: selectedAddr.country || undefined,
+                                  street: selectedAddr.street ?? undefined,
+                                  city: selectedAddr.city ?? undefined,
+                                  state: selectedAddr.state ?? undefined,
+                                  zip: selectedAddr.zip ?? undefined,
+                                  country: selectedAddr.country ?? undefined,
                                 };
                                 setEditAddressComponents(components);
                                 
                                 // Format full address from components
                                 const fullAddress = formatFullAddress(components);
-                                // Use full address if available, otherwise fall back to name
-                                setEditEventAddress(fullAddress || selectedAddr.name || "");
+                                
+                                // If we have coordinates but no formatted address, try reverse geocoding
+                                if (!fullAddress && selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                                  // Try reverse geocoding to get full address
+                                  if (window.google?.maps) {
+                                    const geocoder = new window.google.maps.Geocoder();
+                                    geocoder.geocode(
+                                      { location: { lat: selectedAddr.latitude, lng: selectedAddr.longitude } },
+                                      (results: any, status: string) => {
+                                        if (status === "OK" && results?.[0]) {
+                                          setEditEventAddress(results[0].formatted_address);
+                                        } else {
+                                          // Fallback to name if reverse geocoding fails
+                                          setEditEventAddress(selectedAddr.name || "");
+                                        }
+                                      }
+                                    );
+                                  } else {
+                                    // Fallback to name if Google Maps not loaded
+                                    setEditEventAddress(selectedAddr.name || "");
+                                  }
+                                } else {
+                                  // Use full address if available, otherwise fall back to name
+                                  setEditEventAddress(fullAddress || selectedAddr.name || "");
+                                }
                                 
                                 if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
                                   setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
