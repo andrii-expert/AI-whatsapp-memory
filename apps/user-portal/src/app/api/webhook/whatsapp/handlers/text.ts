@@ -436,33 +436,66 @@ async function processAIResponse(
       // Only convert if:
       // 1. It's NOT a timeframe keyword
       // 2. User explicitly says "show me [number]" or "show me event [name]" or "show me [name] event"
+      const userTextLower = originalUserText?.toLowerCase() || '';
+      const hasEventKeyword = userTextLower.includes('event');
+      // Check for timeframe keywords as whole words (not substrings)
+      const hasTimeframeInUserText = timeframeKeywords.some(keyword => {
+        const lowerKeyword = keyword.toLowerCase();
+        // Check for whole word matches using word boundaries
+        const regex = new RegExp(`\\b${lowerKeyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
+        return regex.test(userTextLower);
+      });
+      
       const userWantsToView = !isTimeframe && (
         // "show me 2" - number only
-        (originalUserText?.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i) && /^\d+$/.test(listEventValue)) ||
-        // "show me event [name]" or "show me [name] event" - explicit event keyword
-        originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s+["']?([^"']+)["']?/i) ||
-        originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i) ||
-        // "show me [specific event name]" - but NOT if it's a timeframe
-        (originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?["']?([^"']+)/i) && 
-         !timeframeKeywords.some(keyword => originalUserText.toLowerCase().includes(keyword)))
+        (userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i) && /^\d+$/.test(listEventValue)) ||
+        // "show me event [name]" or "show me event- [name]" - explicit event keyword with name
+        userTextLower.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i) ||
+        // "show me [name] event" - name followed by event keyword
+        userTextLower.match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i) ||
+        // "show me [specific event name]" - but NOT if user text contains timeframe keywords
+        (hasEventKeyword && !hasTimeframeInUserText && userTextLower.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i))
       );
       
-      const isListEventsWithName = hasEventNameInList && userWantsToView && !isTimeframe;
+      // Also check if user text clearly indicates viewing a specific event, even if AI generated wrong action
+      // This handles cases where AI generates "List events: today" but user said "show me event [name]"
+      let eventNameFromUserText: string | null = null;
+      if (originalUserText && hasEventKeyword && !hasTimeframeInUserText) {
+        // Try to extract event name from "show me event [name]" or "show me event- [name]"
+        const eventNameMatch1 = originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i);
+        if (eventNameMatch1 && eventNameMatch1[1]) {
+          eventNameFromUserText = eventNameMatch1[1].trim();
+        } else {
+          // Try "show me [name] event"
+          const eventNameMatch2 = originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i);
+          if (eventNameMatch2 && eventNameMatch2[1]) {
+            eventNameFromUserText = eventNameMatch2[1].trim();
+          }
+        }
+      }
+      
+      const isListEventsWithName = (hasEventNameInList && userWantsToView && !isTimeframe) || (eventNameFromUserText !== null);
       
       if (isListEventsWithName) {
         // Convert to show event details operation
         let eventActionTemplate = actionTemplate;
-        const eventNameMatch = actionTemplate.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
-        if (eventNameMatch && eventNameMatch[1]) {
-          eventActionTemplate = `Show event details: ${eventNameMatch[1].trim()}`;
-        } else if (originalUserText) {
-          // Extract event name from original text
-          const originalMatch = originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)\s+(?:of\s+)?["']?([^"']+)["']?/i) ||
-                             originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i);
-          if (originalMatch && originalMatch[1]) {
-            eventActionTemplate = `Show event details: ${originalMatch[1].trim()}`;
-          } else {
-            eventActionTemplate = `Show event details: ${originalUserText}`;
+        
+        // Prefer event name from user text if available (more accurate than AI's interpretation)
+        if (eventNameFromUserText) {
+          eventActionTemplate = `Show event details: ${eventNameFromUserText}`;
+        } else {
+          const eventNameMatch = actionTemplate.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
+          if (eventNameMatch && eventNameMatch[1]) {
+            eventActionTemplate = `Show event details: ${eventNameMatch[1].trim()}`;
+          } else if (originalUserText) {
+            // Extract event name from original text
+            const originalMatch = originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)\s+(?:of\s+)?["']?([^"']+)["']?/i) ||
+                               originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i);
+            if (originalMatch && originalMatch[1]) {
+              eventActionTemplate = `Show event details: ${originalMatch[1].trim()}`;
+            } else {
+              eventActionTemplate = `Show event details: ${originalUserText}`;
+            }
           }
         }
         
