@@ -195,20 +195,25 @@ export async function GET(req: NextRequest) {
                     continue;
                   }
 
-                  // Calculate time until event in minutes
+                  // Calculate the exact target reminder time (event start - notification minutes)
+                  const reminderTimeMs = calendarNotificationMinutes * 60 * 1000;
+                  const targetReminderTime = new Date(eventStart.getTime() - reminderTimeMs);
+                  
+                  // Get the current minute (rounded down to the start of the minute)
+                  const currentMinute = new Date(now.getTime());
+                  currentMinute.setSeconds(0, 0);
+                  
+                  // Get the target reminder minute (rounded down to the start of the minute)
+                  const targetReminderMinute = new Date(targetReminderTime.getTime());
+                  targetReminderMinute.setSeconds(0, 0);
+                  
+                  // Check if we're in the exact minute when the reminder should be sent
+                  // This ensures reminders are sent at the correct time (e.g., 7:51 AM for an 8:01 AM event with 10-minute reminder)
+                  const shouldNotify = currentMinute.getTime() === targetReminderMinute.getTime();
+                  
+                  // Calculate time difference for logging purposes
                   const timeDiffMs = eventStart.getTime() - now.getTime();
                   const timeDiffMinutes = Math.floor(timeDiffMs / (1000 * 60));
-
-                  // Check if event is at the exact reminder time
-                  // We use Math.floor to ensure we don't trigger too early
-                  // Window: [calendarNotificationMinutes, calendarNotificationMinutes + 1]
-                  // This means for a 10-minute reminder, we notify when timeDiff is exactly 10-11 minutes
-                  // The +1 minute tolerance accounts for cron timing (cron might run slightly after the exact minute)
-                  const minMinutes = calendarNotificationMinutes;
-                  const maxMinutes = calendarNotificationMinutes + 1;
-                  
-                  // Only notify if we're at the reminder time (or up to 1 minute after due to cron timing)
-                  const shouldNotify = timeDiffMinutes >= minMinutes && timeDiffMinutes <= maxMinutes;
 
                   if (shouldNotify) {
                     // Check cache to prevent duplicate notifications
@@ -240,6 +245,8 @@ export async function GET(req: NextRequest) {
                           eventId: event.id,
                           eventTitle: event.title,
                           eventStart: event.start.toISOString(),
+                          targetReminderTime: targetReminderTime.toISOString(),
+                          currentTime: now.toISOString(),
                           timeDiffMinutes,
                           calendarNotificationMinutes,
                         },
