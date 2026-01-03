@@ -885,15 +885,44 @@ async function processAIResponse(
     // Handle event operations (create, update, delete, view, show)
     if (titleType === 'event') {
       // Check if this is a view/show operation (should go to ActionExecutor)
+      // Also check if "List events: [name]" is actually a request to show a specific event
+      // This happens when user says "show me [event name] event" but AI generates "List events: [name]"
+      const listEventsMatch = actionTemplate.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
+      const hasEventNameInList = listEventsMatch && listEventsMatch[1] && listEventsMatch[1].trim().length > 0;
+      // Check if user wants to view a specific event (not list all events)
+      // Pattern matches: "show me [name] event", "show event [name]", "view [name] event", etc.
+      const userWantsToView = originalUserText?.toLowerCase().match(/(?:show|view|get|see|details?|overview)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)/i) ||
+                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?[^"]+\s+event/i) ||
+                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s+(?:of|for|details?|overview)/i);
+      const isListEventsWithName = actionTemplate.toLowerCase().startsWith('list events:') && 
+                                   hasEventNameInList &&
+                                   userWantsToView;
+      
       const isViewShowOperation = actionTemplate.toLowerCase().match(/^(view|show|get|see|details? of|overview of)\s+(?:event|events?|me\s+event|me\s+the\s+event)/i) ||
                                   actionTemplate.toLowerCase().match(/^(view|show|get|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
-                                  (actionTemplate.toLowerCase().startsWith('view a file:') && originalUserText?.toLowerCase().includes('event'));
+                                  (actionTemplate.toLowerCase().startsWith('view a file:') && originalUserText?.toLowerCase().includes('event')) ||
+                                  isListEventsWithName;
       
       if (isViewShowOperation) {
         // Handle view/show event operations via ActionExecutor
-        // If AI generated "View a file:" but user asked about an event, extract the event name
         let eventActionTemplate = actionTemplate;
-        if (actionTemplate.toLowerCase().startsWith('view a file:')) {
+        
+        // If AI generated "List events: [name]" but user wants to see a specific event
+        if (isListEventsWithName) {
+          const eventNameMatch = actionTemplate.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
+          if (eventNameMatch && eventNameMatch[1]) {
+            eventActionTemplate = `Show event details: ${eventNameMatch[1].trim()}`;
+          } else if (originalUserText) {
+            // Extract event name from original text
+            const originalMatch = originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)\s+(?:of\s+)?["']?([^"']+)["']?/i) ||
+                               originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i);
+            if (originalMatch && originalMatch[1]) {
+              eventActionTemplate = `Show event details: ${originalMatch[1].trim()}`;
+            } else {
+              eventActionTemplate = `Show event details: ${originalUserText}`;
+            }
+          }
+        } else if (actionTemplate.toLowerCase().startsWith('view a file:')) {
           // Extract event name from "View a file: [event name]"
           const eventNameMatch = actionTemplate.match(/View a file:\s*(.+?)(?:\s*-\s*on folder:.*)?$/i);
           if (eventNameMatch && eventNameMatch[1]) {
