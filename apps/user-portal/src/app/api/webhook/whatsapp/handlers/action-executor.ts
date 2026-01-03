@@ -621,7 +621,14 @@ export class ActionExecutor {
       // Check for "Show event details: [name]" format first
       const showEventDetailsMatch = trimmed.match(/^Show\s+event\s+details:\s*(.+)$/i);
       if (showEventDetailsMatch && showEventDetailsMatch[1]) {
-        taskName = showEventDetailsMatch[1].trim();
+        const extractedValue = showEventDetailsMatch[1].trim();
+        // If it's just a number, keep it as-is (don't add "event" prefix)
+        // This allows the showEventDetails method to properly detect it as a number
+        if (/^\d+$/.test(extractedValue)) {
+          taskName = extractedValue;
+        } else {
+          taskName = extractedValue;
+        }
       } else {
         // Extract event number or name
         const eventNumberMatch = trimmed.match(/(?:event|#|number)\s*(\d+)/i) || trimmed.match(/^(\d+)$/);
