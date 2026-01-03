@@ -1877,6 +1877,24 @@ export default function CalendarsPage() {
     }
   };
 
+  // Helper function to format full address from address components
+  const formatFullAddress = (address: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+  }): string => {
+    const addressParts = [
+      address.street,
+      address.city,
+      address.state,
+      address.zip,
+      address.country,
+    ].filter(Boolean);
+    return addressParts.join(", ");
+  };
+
   const handleCreateEvent = () => {
     if (!eventTitle.trim()) {
       toast({
@@ -3418,17 +3436,24 @@ export default function CalendarsPage() {
                       if (value) {
                         const selectedAddr = addresses.find((addr: any) => addr.id === value);
                         if (selectedAddr) {
-                          setEventAddress(selectedAddr.name || "");
-                          if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
-                            setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
-                          }
-                          setAddressComponents({
+                          // Build address components object
+                          const components = {
                             street: selectedAddr.street || undefined,
                             city: selectedAddr.city || undefined,
                             state: selectedAddr.state || undefined,
                             zip: selectedAddr.zip || undefined,
                             country: selectedAddr.country || undefined,
-                          });
+                          };
+                          setAddressComponents(components);
+                          
+                          // Format full address from components
+                          const fullAddress = formatFullAddress(components);
+                          // Use full address if available, otherwise fall back to name
+                          setEventAddress(fullAddress || selectedAddr.name || "");
+                          
+                          if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                            setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                          }
                         }
                       } else {
                         setEventAddress("");
@@ -3984,17 +4009,24 @@ export default function CalendarsPage() {
                             if (value) {
                               const selectedAddr = addresses.find((addr: any) => addr.id === value);
                               if (selectedAddr) {
-                                setEditEventAddress(selectedAddr.name || "");
-                                if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
-                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
-                                }
-                                setEditAddressComponents({
+                                // Build address components object
+                                const components = {
                                   street: selectedAddr.street || undefined,
                                   city: selectedAddr.city || undefined,
                                   state: selectedAddr.state || undefined,
                                   zip: selectedAddr.zip || undefined,
                                   country: selectedAddr.country || undefined,
-                                });
+                                };
+                                setEditAddressComponents(components);
+                                
+                                // Format full address from components
+                                const fullAddress = formatFullAddress(components);
+                                // Use full address if available, otherwise fall back to name
+                                setEditEventAddress(fullAddress || selectedAddr.name || "");
+                                
+                                if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                                }
                               }
                             } else {
                               setEditEventAddress("");
@@ -4395,17 +4427,24 @@ export default function CalendarsPage() {
                             if (value) {
                               const selectedAddr = addresses.find((addr: any) => addr.id === value);
                               if (selectedAddr) {
-                                setEditEventAddress(selectedAddr.name || "");
-                                if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
-                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
-                                }
-                                setEditAddressComponents({
+                                // Build address components object
+                                const components = {
                                   street: selectedAddr.street || undefined,
                                   city: selectedAddr.city || undefined,
                                   state: selectedAddr.state || undefined,
                                   zip: selectedAddr.zip || undefined,
                                   country: selectedAddr.country || undefined,
-                                });
+                                };
+                                setEditAddressComponents(components);
+                                
+                                // Format full address from components
+                                const fullAddress = formatFullAddress(components);
+                                // Use full address if available, otherwise fall back to name
+                                setEditEventAddress(fullAddress || selectedAddr.name || "");
+                                
+                                if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                                }
                               }
                             } else {
                               setEditEventAddress("");
