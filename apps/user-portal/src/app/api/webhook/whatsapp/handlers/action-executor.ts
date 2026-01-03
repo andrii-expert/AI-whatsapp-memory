@@ -5892,35 +5892,110 @@ export class ActionExecutor {
           logger.warn({ error, userId: this.userId }, 'Failed to get calendar timezone for event formatting, using default');
         }
         
-        const timeframeText = queryTimeframe === 'today' ? 'today' 
-          : queryTimeframe === 'tomorrow' ? 'tomorrow'
-          : queryTimeframe === 'this_week' ? 'this week'
-          : queryTimeframe === 'this_month' ? 'this month'
-          : 'all';
+        // Determine header based on timeframe or infer from events
+        // Use calendar timezone for date comparisons
+        const now = new Date();
         
-        const titleText = timeframeText === 'all' 
-          ? `You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}`
-          : `Your events ${timeframeText}`;
+        // Get today's date in calendar timezone
+        const todayStr = now.toLocaleDateString('en-US', {
+          timeZone: calendarTimezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        const todayParts = todayStr.split('/');
+        const today = new Date(parseInt(todayParts[2] || '2024', 10), parseInt(todayParts[0] || '1', 10) - 1, parseInt(todayParts[1] || '1', 10));
         
-        let message = `📅 *${titleText}:*\n`;
-        
-        // Format each event using calendar's timezone
-        result.events.slice(0, 20).forEach((event: { title: string; start: Date; location?: string }, index: number) => {
-          const eventTime = event.start.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
+        // Check if all events are today (in calendar timezone)
+        const allToday = result.events.every((event: any) => {
+          const eventDate = new Date(event.start);
+          const eventDateStr = eventDate.toLocaleDateString('en-US', {
             timeZone: calendarTimezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
           });
-          const eventDate = event.start.toLocaleDateString('en-US', {
-            weekday: 'short',
+          return eventDateStr === todayStr;
+        });
+        
+        // Check if all events are tomorrow (in calendar timezone)
+        const tomorrowDate = new Date(today);
+        tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+        const tomorrowStr = tomorrowDate.toLocaleDateString('en-US', {
+          timeZone: calendarTimezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        const allTomorrow = result.events.every((event: any) => {
+          const eventDate = new Date(event.start);
+          const eventDateStr = eventDate.toLocaleDateString('en-US', {
+            timeZone: calendarTimezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          });
+          return eventDateStr === tomorrowStr;
+        });
+        
+        let headerText = "Events:";
+        if (allToday) {
+          // Format header with calendar icon and date (e.g., "JUL 17")
+          const todayMonth = now.toLocaleDateString('en-US', {
             month: 'short',
+            timeZone: calendarTimezone,
+          }).toUpperCase();
+          const todayDay = now.toLocaleDateString('en-US', {
             day: 'numeric',
             timeZone: calendarTimezone,
           });
+          headerText = `📅 ${todayMonth} ${todayDay}\n*Today's Events:*`;
+        } else if (allTomorrow) {
+          const tomorrowMonth = tomorrow.toLocaleDateString('en-US', {
+            month: 'short',
+            timeZone: calendarTimezone,
+          }).toUpperCase();
+          const tomorrowDay = tomorrow.toLocaleDateString('en-US', {
+            day: 'numeric',
+            timeZone: calendarTimezone,
+          });
+          headerText = `📅 ${tomorrowMonth} ${tomorrowDay}\n*Tomorrow's Events:*`;
+        } else {
+          headerText = `📅 *Events:*`;
+        }
+        
+        let message = `${headerText}\n\n`;
+        
+        // Format each event using calendar's timezone
+        result.events.slice(0, 20).forEach((event: { title: string; start: Date; location?: string }, index: number) => {
+          const eventStart = new Date(event.start);
           
-          const locationText = event.location ? ` at ${event.location}` : '';
-          message += `*${index + 1}.* "${event.title}"\n   ${eventDate} at ${eventTime}${locationText}\n\n`;
+          // Format time as 24-hour format (e.g., "15:00") in bold
+          const eventTime24 = eventStart.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: calendarTimezone,
+          });
+          
+          // Format date as "Sat, 3 Jan" (short weekday, day, short month)
+          // We need to manually format to get "day month" order instead of "month day"
+          const dateParts = eventStart.toLocaleDateString('en-US', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            timeZone: calendarTimezone,
+          }).split(', ');
+          const weekday = dateParts[0] || '';
+          const monthDay = dateParts[1] || '';
+          // Split monthDay to get month and day separately, then reorder
+          const monthDayParts = monthDay.split(' ');
+          const month = monthDayParts[0] || '';
+          const day = monthDayParts[1] || '';
+          const eventDate = `${weekday}, ${day} ${month}`;
+          
+          // Format: Numbered list, title on one line, date and time on next line (indented)
+          message += `${index + 1}. ${event.title || 'Untitled Event'}\n   ${eventDate} | *${eventTime24}*\n\n`;
         });
         
         if (result.events.length > 20) {
