@@ -414,14 +414,40 @@ async function processAIResponse(
       const hasEventNameInList = listEventsMatch && listEventsMatch[1] && listEventsMatch[1].trim().length > 0;
       const listEventValue = listEventsMatch && listEventsMatch[1] ? listEventsMatch[1].trim() : '';
       
-      // Check if user wants to view a specific event (not list all events)
-      const userWantsToView = originalUserText?.toLowerCase().match(/(?:show|view|get|see|details?|overview)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)/i) ||
-                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?[^"]+\s+event/i) ||
-                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s+(?:of|for|details?|overview)/i) ||
-                              // Also match "show me [number]" - likely referring to a numbered item from a list
-                              (originalUserText?.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue));
+      // Timeframe keywords that should NOT be converted to view/show (these are list operations)
+      // Check for exact matches or if the value starts with a timeframe keyword
+      const timeframeKeywords = ['today', 'tomorrow', 'this week', 'this month', 'next week', 'next month', 'all', 'upcoming'];
+      const lowerValue = listEventValue.toLowerCase().trim();
+      const isTimeframe = timeframeKeywords.some(keyword => {
+        const lowerKeyword = keyword.toLowerCase();
+        // Exact match
+        if (lowerValue === lowerKeyword) return true;
+        // Starts with keyword followed by space (e.g., "this week" matches "this week events")
+        if (lowerValue.startsWith(lowerKeyword + ' ')) return true;
+        // For single words like "week" or "month", check if they're standalone or part of "this week"/"next month"
+        if ((lowerKeyword === 'week' || lowerKeyword === 'month') && 
+            (lowerValue === lowerKeyword || lowerValue.includes('this ' + lowerKeyword) || lowerValue.includes('next ' + lowerKeyword))) {
+          return true;
+        }
+        return false;
+      });
       
-      const isListEventsWithName = hasEventNameInList && userWantsToView;
+      // Check if user wants to view a specific event (not list all events)
+      // Only convert if:
+      // 1. It's NOT a timeframe keyword
+      // 2. User explicitly says "show me [number]" or "show me event [name]" or "show me [name] event"
+      const userWantsToView = !isTimeframe && (
+        // "show me 2" - number only
+        (originalUserText?.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i) && /^\d+$/.test(listEventValue)) ||
+        // "show me event [name]" or "show me [name] event" - explicit event keyword
+        originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s+["']?([^"']+)["']?/i) ||
+        originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i) ||
+        // "show me [specific event name]" - but NOT if it's a timeframe
+        (originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?["']?([^"']+)/i) && 
+         !timeframeKeywords.some(keyword => originalUserText.toLowerCase().includes(keyword)))
+      );
+      
+      const isListEventsWithName = hasEventNameInList && userWantsToView && !isTimeframe;
       
       if (isListEventsWithName) {
         // Convert to show event details operation
