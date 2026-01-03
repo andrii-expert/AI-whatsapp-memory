@@ -123,8 +123,8 @@ export interface ParsedAction {
 }
 
 // In-memory cache to store last displayed list context for each user
-// Key: userId, Value: { type: 'tasks' | 'notes' | 'shopping', items: Array<{ id: string, number: number, name?: string }> }
-const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping', items: Array<{ id: string, number: number, name?: string }>, folderRoute?: string }>();
+// Key: userId, Value: { type: 'tasks' | 'notes' | 'shopping' | 'event', items: Array<{ id: string, number: number, name?: string, calendarId?: string }> }
+const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping' | 'event', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string }>();
 const LIST_CONTEXT_TTL = 10 * 60 * 1000; // 10 minutes
 
 export class ActionExecutor {
@@ -136,9 +136,9 @@ export class ActionExecutor {
   ) {}
   
   /**
-   * Store list context for number-based deletion
+   * Store list context for number-based operations (deletion, viewing, etc.)
    */
-  private storeListContext(type: 'tasks' | 'notes' | 'shopping', items: Array<{ id: string, number: number, name?: string }>, folderRoute?: string): void {
+  private storeListContext(type: 'tasks' | 'notes' | 'shopping' | 'event', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string): void {
     listContextCache.set(this.userId, { type, items, folderRoute });
     // Auto-cleanup after TTL
     setTimeout(() => {
@@ -147,9 +147,9 @@ export class ActionExecutor {
   }
   
   /**
-   * Get list context for number-based deletion
+   * Get list context for number-based operations (deletion, viewing, etc.)
    */
-  private getListContext(): { type: 'tasks' | 'notes' | 'shopping', items: Array<{ id: string, number: number, name?: string }>, folderRoute?: string } | null {
+  private getListContext(): { type: 'tasks' | 'notes' | 'shopping' | 'event', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string } | null {
     return listContextCache.get(this.userId) || null;
   }
   
@@ -6029,6 +6029,16 @@ export class ActionExecutor {
           message += `\n... and ${result.events.length - 20} more event${result.events.length - 20 !== 1 ? 's' : ''}.`;
         }
         
+        // Store event list context for number-based operations (e.g., "show me 2")
+        const eventCalendarId = calendarConnection.calendarId || calendarConnection.email || 'primary';
+        const displayedEvents = result.events.slice(0, 20).map((event: any, index: number) => ({
+          id: event.id,
+          number: index + 1,
+          name: event.title,
+          calendarId: eventCalendarId,
+        }));
+        this.storeListContext('event', displayedEvents);
+        
         return {
           success: true,
           message: message.trim(),
@@ -6086,7 +6096,7 @@ export class ActionExecutor {
       const calendarService = new CalendarService(this.db);
       
       // Use the calendar connection we already have
-      const calendarId = calendarConnection.calendarId || calendarConnection.email || 'primary';
+      let calendarId = calendarConnection.calendarId || calendarConnection.email || 'primary';
       
       // Try to find the event - could be by number, name, or ID
       let event: any = null;
@@ -6098,23 +6108,41 @@ export class ActionExecutor {
       
       logger.info({ userId: this.userId, actionText, calendarId, parsedAction: parsed.action, parsedTaskName: parsed.taskName }, 'Searching for event');
 
-      // Check if user specified an event number (e.g., "event 1", "show me 1")
+      // Check if user specified an event number (e.g., "event 1", "show me 1", "2")
       const eventNumberMatch = actionText.match(/(?:event|#|number)\s*(\d+)/i) || 
                                actionText.match(/^(\d+)$/);
       if (eventNumberMatch && eventNumberMatch[1]) {
-        const eventIndex = parseInt(eventNumberMatch[1], 10) - 1; // Convert to 0-based index
+        const eventNumber = parseInt(eventNumberMatch[1], 10);
         
-        // Get events list first
-        const intent: CalendarIntent = {
-          action: 'QUERY',
-          confidence: 0.9,
-          queryTimeframe: 'all',
-        };
+        // First, check if there's a cached event list context
+        const listContext = this.getListContext();
+        if (listContext && listContext.type === 'event' && listContext.items.length > 0) {
+          const cachedEvent = listContext.items.find(item => item.number === eventNumber);
+          if (cachedEvent && cachedEvent.id) {
+            logger.info({ userId: this.userId, eventNumber, cachedEventId: cachedEvent.id, cachedCalendarId: cachedEvent.calendarId }, 'Using cached event from list context');
+            eventId = cachedEvent.id;
+            if (cachedEvent.calendarId) {
+              calendarId = cachedEvent.calendarId;
+            }
+          }
+        }
         
-        const queryResult = await calendarService.query(this.userId, intent);
-        if (queryResult.success && queryResult.events && queryResult.events.length > eventIndex && eventIndex >= 0) {
-          event = queryResult.events[eventIndex];
-          eventId = event.id;
+        // If not found in cache, query all events
+        if (!eventId) {
+          const eventIndex = eventNumber - 1; // Convert to 0-based index
+          
+          // Get events list first
+          const intent: CalendarIntent = {
+            action: 'QUERY',
+            confidence: 0.9,
+            queryTimeframe: 'all',
+          };
+          
+          const queryResult = await calendarService.query(this.userId, intent);
+          if (queryResult.success && queryResult.events && queryResult.events.length > eventIndex && eventIndex >= 0) {
+            event = queryResult.events[eventIndex];
+            eventId = event.id;
+          }
         }
       } else if (actionText) {
         // Try to find event by name/title
@@ -6145,7 +6173,7 @@ export class ActionExecutor {
         }
       }
 
-      if (!event || !eventId) {
+      if (!eventId) {
         logger.warn({ userId: this.userId, actionText, hasEvent: !!event, hasEventId: !!eventId }, 'Event not found');
         return {
           success: false,
@@ -6205,7 +6233,7 @@ export class ActionExecutor {
       }
 
       // Build Event Overview message
-      let message = `📅 ${eventDay}\n*Event Overview*\n\n`;
+      let message = `📅 *Event Overview*\n\n`;
       message += `*Title:* ${fullEvent.title || 'Untitled Event'}\n`;
       message += `*Date:* ${eventDate}\n`;
       message += `*Time:* ${eventTime}\n`;
