@@ -1038,6 +1038,66 @@ export class CalendarService implements ICalendarService {
   }
 
   /**
+   * Get a single event by ID with full details
+   */
+  async getEvent(userId: string, calendarId: string, eventId: string): Promise<CalendarOperationResult> {
+    try {
+      logger.info({ userId, calendarId, eventId }, 'Getting event details');
+
+      // Get calendar connection
+      const calendarConnection = await getPrimaryCalendar(this.db, userId);
+      if (!calendarConnection) {
+        throw new Error('No calendar connected');
+      }
+
+      if (!calendarConnection.isActive) {
+        throw new Error('Calendar connection is inactive');
+      }
+
+      const provider = createCalendarProvider(calendarConnection.provider);
+
+      // Get event details from provider
+      const event = await provider.getEvent(calendarConnection.accessToken!, {
+        calendarId: calendarId || calendarConnection.calendarId || 'primary',
+        eventId: eventId,
+      });
+
+      const calendarEvent: CalendarEvent = {
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        start: event.start,
+        end: event.end,
+        location: event.location,
+        provider: calendarConnection.provider as 'google' | 'microsoft',
+        htmlLink: event.htmlLink,
+        webLink: event.webLink,
+      };
+
+      // Add conference URL and attendees if available
+      const result: CalendarOperationResult = {
+        success: true,
+        action: 'QUERY',
+        event: calendarEvent,
+        message: 'Event retrieved successfully',
+      };
+
+      // Add extended fields if available
+      if (event.conferenceUrl) {
+        (result.event as any).conferenceUrl = event.conferenceUrl;
+      }
+      if (event.attendees && event.attendees.length > 0) {
+        (result.event as any).attendees = event.attendees;
+      }
+
+      return result;
+    } catch (error) {
+      logger.error({ error, userId, calendarId, eventId }, 'Failed to get event details');
+      throw error;
+    }
+  }
+
+  /**
    * Find target event for UPDATE/DELETE operations
    * When multiple events are found, tries to narrow down by:
    * 1. Using date/time information if available

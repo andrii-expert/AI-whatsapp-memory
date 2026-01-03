@@ -609,6 +609,34 @@ export class ActionExecutor {
         // If nothing after "List events:", default to 'all'
         listFilter = 'all';
       }
+    } else if (trimmed.match(/^(Show|View|Get|See|Details? of|Overview of)\s+(?:event|events?)\s*(?:details?|overview|info|information)?/i) || 
+               trimmed.match(/^(Show|View|Get|See)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
+               trimmed.match(/^(?:What|What's|Tell me about)\s+(?:event|events?)\s*(\d+)/i) ||
+               trimmed.match(/^(?:Show|View|Get|See)\s+(?:me\s+)?(?:event|events?)\s*(\d+)/i)) {
+      // Detect event detail requests
+      action = 'show';
+      resourceType = 'event';
+      
+      // Extract event number or name
+      const eventNumberMatch = trimmed.match(/(?:event|#|number)\s*(\d+)/i) || trimmed.match(/^(\d+)$/);
+      if (eventNumberMatch && eventNumberMatch[1]) {
+        parsed.action = `event ${eventNumberMatch[1]}`;
+      } else {
+        // Extract event name/title
+        const eventNameMatch = trimmed.match(/(?:event|details?|overview|info|information)\s+(?:of|for|about)?\s*["']?([^"']+)["']?/i) ||
+                              trimmed.match(/(?:Show|View|Get|See)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+["']?([^"']+)["']?/i);
+        if (eventNameMatch && eventNameMatch[1]) {
+          parsed.action = eventNameMatch[1].trim();
+        } else {
+          // Try to extract anything after common prefixes
+          const afterPrefix = trimmed.replace(/^(Show|View|Get|See|Details? of|Overview of|What|What's|Tell me about)\s+(?:event|events?|me\s+the\s+details?\s+of|me\s+details?\s+of)\s*/i, '').trim();
+          if (afterPrefix) {
+            parsed.action = afterPrefix;
+          } else {
+            missingFields.push('event number or name');
+          }
+        }
+      }
       
       // Also check for calendar specification (if present)
       const calendarMatch = trimmed.match(/\s*-\s*calendar:\s*(.+)$/i);
@@ -1477,10 +1505,20 @@ export class ActionExecutor {
         case 'view':
           if (parsed.resourceType === 'document') {
             return await this.viewFile(parsed);
+          } else if (parsed.resourceType === 'event') {
+            return await this.showEventDetails(parsed);
           }
           return {
             success: false,
             message: "I'm sorry, I couldn't understand what you want to view.",
+          };
+        case 'show':
+          if (parsed.resourceType === 'event') {
+            return await this.showEventDetails(parsed);
+          }
+          return {
+            success: false,
+            message: "I'm sorry, I couldn't understand what you want to show.",
           };
         case 'create_subfolder':
           if (parsed.isShoppingListFolder) {
@@ -6017,6 +6055,183 @@ export class ActionExecutor {
       return {
         success: false,
         message: "I'm sorry, I couldn't retrieve your events. Please try again.",
+      };
+    }
+  }
+
+  /**
+   * Show event details/overview for a specific event
+   */
+  private async showEventDetails(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    try {
+      // Check calendar connection first
+      const calendarConnection = await getPrimaryCalendar(this.db, this.userId);
+      
+      if (!calendarConnection) {
+        logger.warn({ userId: this.userId }, 'No calendar connection found for event details');
+        return {
+          success: false,
+          message: "I couldn't find a connected calendar. Please connect your calendar in settings first.",
+        };
+      }
+      
+      if (!calendarConnection.isActive) {
+        logger.warn({ userId: this.userId, calendarId: calendarConnection.id }, 'Calendar connection is inactive');
+        return {
+          success: false,
+          message: "Your calendar connection is inactive. Please reconnect your calendar in settings.",
+        };
+      }
+
+      // Get calendar timezone for formatting
+      let calendarTimezone = 'Africa/Johannesburg'; // Default fallback
+      try {
+        const calendarService = new CalendarService(this.db);
+        if (calendarConnection) {
+          calendarTimezone = await (calendarService as any).getUserTimezone(this.userId, calendarConnection);
+        }
+      } catch (error) {
+        logger.warn({ error, userId: this.userId }, 'Failed to get calendar timezone for event formatting, using default');
+      }
+
+      const calendarService = new CalendarService(this.db);
+      
+      // Try to find the event - could be by number, name, or ID
+      let event: any = null;
+      let eventId: string | undefined;
+      let calendarId: string | undefined;
+
+      // Get the action text (could be in parsed.action or parsed.taskName)
+      const actionText = parsed.action || parsed.taskName || '';
+
+      // Check if user specified an event number (e.g., "event 1", "show me 1")
+      const eventNumberMatch = actionText.match(/(?:event|#|number)\s*(\d+)/i) || 
+                               actionText.match(/^(\d+)$/);
+      if (eventNumberMatch && eventNumberMatch[1]) {
+        const eventIndex = parseInt(eventNumberMatch[1], 10) - 1; // Convert to 0-based index
+        
+        // Get events list first
+        const intent: CalendarIntent = {
+          action: 'QUERY',
+          confidence: 0.9,
+          queryTimeframe: 'all',
+        };
+        
+        const queryResult = await calendarService.query(this.userId, intent);
+        if (queryResult.success && queryResult.events && queryResult.events.length > eventIndex && eventIndex >= 0) {
+          event = queryResult.events[eventIndex];
+          // Get the calendar connection to find calendarId
+          const primaryCalendar = await getPrimaryCalendar(this.db, this.userId);
+          if (primaryCalendar) {
+            calendarId = primaryCalendar.calendarId || 'primary';
+            eventId = event.id;
+          }
+        }
+      } else if (actionText) {
+        // Try to find event by name/title
+        const intent: CalendarIntent = {
+          action: 'QUERY',
+          confidence: 0.9,
+          title: actionText,
+          queryTimeframe: 'all',
+        };
+        
+        const queryResult = await calendarService.query(this.userId, intent);
+        if (queryResult.success && queryResult.events && queryResult.events.length > 0) {
+          // Use the first matching event
+          event = queryResult.events[0];
+          const primaryCalendar = await getPrimaryCalendar(this.db, this.userId);
+          if (primaryCalendar) {
+            calendarId = primaryCalendar.calendarId || 'primary';
+            eventId = event.id;
+          }
+        }
+      }
+
+      if (!event || !eventId || !calendarId) {
+        return {
+          success: false,
+          message: "I couldn't find that event. Please specify the event number or name.",
+        };
+      }
+
+      // Get full event details
+      const eventDetailsResult = await calendarService.getEvent(this.userId, calendarId, eventId);
+      
+      if (!eventDetailsResult.success || !eventDetailsResult.event) {
+        return {
+          success: false,
+          message: "I couldn't retrieve the event details. Please try again.",
+        };
+      }
+
+      const fullEvent = eventDetailsResult.event as any;
+      const eventStart = new Date(fullEvent.start);
+
+      // Format date as "3 Jan" (day and month, no weekday)
+      const eventDate = eventStart.toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        timeZone: calendarTimezone,
+      });
+
+      // Format time as 24-hour format (e.g., "13:40")
+      const eventTime = eventStart.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: calendarTimezone,
+      });
+
+      // Get event date for calendar icon (day number)
+      const eventDay = eventStart.toLocaleDateString('en-US', {
+        day: 'numeric',
+        timeZone: calendarTimezone,
+      });
+
+      // Format attendees - extract names from emails if possible
+      let attendeeNames: string[] = [];
+      if (fullEvent.attendees && fullEvent.attendees.length > 0) {
+        attendeeNames = fullEvent.attendees.map((attendee: string) => {
+          if (attendee.includes('@')) {
+            const namePart = attendee.split('@')[0];
+            if (namePart) {
+              return namePart.split('.').map((part: string) =>
+                part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+              ).join(' ');
+            }
+          }
+          return attendee;
+        });
+      }
+
+      // Build Event Overview message
+      let message = `📅 ${eventDay}\n*Event Overview*\n\n`;
+      message += `*Title:* ${fullEvent.title || 'Untitled Event'}\n`;
+      message += `*Date:* ${eventDate}\n`;
+      message += `*Time:* ${eventTime}\n`;
+
+      if (fullEvent.location) {
+        message += `*Location:* ${fullEvent.location}\n`;
+      }
+
+      if (fullEvent.conferenceUrl) {
+        message += `*Link:* ${fullEvent.conferenceUrl}\n`;
+      }
+
+      if (attendeeNames.length > 0) {
+        message += `*Invited:* ${attendeeNames.join(', ')}\n`;
+      }
+
+      return {
+        success: true,
+        message: message.trim(),
+      };
+    } catch (error) {
+      logger.error({ error, userId: this.userId, action: parsed.action }, 'Failed to show event details');
+      return {
+        success: false,
+        message: "I'm sorry, I couldn't retrieve the event details. Please try again.",
       };
     }
   }

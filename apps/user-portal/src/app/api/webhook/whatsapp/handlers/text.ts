@@ -1464,7 +1464,7 @@ async function handleEventOperation(
               day: 'numeric',
               timeZone: calendarTimezone,
             });
-            headerText = `📅 ${todayMonth} ${todayDay}\n*Today's Events:*`;
+            headerText = `📅 *Today's Events:*`;
           } else if (allTomorrow) {
             const tomorrowMonth = tomorrow.toLocaleDateString('en-US', {
               month: 'short',
@@ -1474,7 +1474,7 @@ async function handleEventOperation(
               day: 'numeric',
               timeZone: calendarTimezone,
             });
-            headerText = `📅 ${tomorrowMonth} ${tomorrowDay}\n*Tomorrow's Events:*`;
+            headerText = `📅 *Tomorrow's Events:*`;
           } else {
             headerText = `📅 *Events:*`;
           }
@@ -1509,7 +1509,7 @@ async function handleEventOperation(
             const eventDate = `${weekday}, ${day} ${month}`;
             
             // Format: Numbered list, title on one line, date and time on next line (indented)
-            responseMessage += `${index + 1}. ${event.title || 'Untitled Event'}\n   ${eventDate} | *${eventTime24}*\n\n`;
+            responseMessage += `*${index + 1}*. ${event.title || 'Untitled Event'}\n${eventDate} | *${eventTime24}*\n\n`;
           });
           
           if (result.events.length > 10) {
