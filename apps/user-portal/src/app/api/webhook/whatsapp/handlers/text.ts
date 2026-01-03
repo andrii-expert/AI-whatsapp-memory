@@ -1433,24 +1433,79 @@ async function handleEventOperation(
         if (result.events.length === 0) {
           responseMessage = "📅 *You have no events scheduled.*";
         } else {
-          responseMessage = `📅 *You have ${result.events.length} event${result.events.length !== 1 ? 's' : ''}:*\n\n`;
-          result.events.slice(0, 10).forEach((event: { title: string; start: Date }, index: number) => {
-            const eventTime = event.start.toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true,
-              timeZone: calendarTimezone,
-            });
-            const eventDate = event.start.toLocaleDateString('en-US', {
-              weekday: 'short',
+          // Determine header based on timeframe or infer from events
+          let headerText = "Events:";
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          
+          // Check if all events are today
+          const allToday = result.events.every((event: any) => {
+            const eventDate = new Date(event.start);
+            const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+            return eventDay.getTime() === today.getTime();
+          });
+          
+          // Check if all events are tomorrow
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const allTomorrow = result.events.every((event: any) => {
+            const eventDate = new Date(event.start);
+            const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+            return eventDay.getTime() === tomorrow.getTime();
+          });
+          
+          if (allToday) {
+            // Format header with calendar icon and date (e.g., "JUL 17")
+            const todayMonth = now.toLocaleDateString('en-US', {
               month: 'short',
+              timeZone: calendarTimezone,
+            }).toUpperCase();
+            const todayDay = now.toLocaleDateString('en-US', {
               day: 'numeric',
               timeZone: calendarTimezone,
             });
-            responseMessage += `*${index + 1}.* ${event.title}\n   ${eventDate} at ${eventTime}\n\n`;
+            headerText = `📅 ${todayMonth} ${todayDay}\n*Today's Events:*`;
+          } else if (allTomorrow) {
+            const tomorrowMonth = tomorrow.toLocaleDateString('en-US', {
+              month: 'short',
+              timeZone: calendarTimezone,
+            }).toUpperCase();
+            const tomorrowDay = tomorrow.toLocaleDateString('en-US', {
+              day: 'numeric',
+              timeZone: calendarTimezone,
+            });
+            headerText = `📅 ${tomorrowMonth} ${tomorrowDay}\n*Tomorrow's Events:*`;
+          } else {
+            headerText = `📅 *Events:*`;
+          }
+          
+          responseMessage = `${headerText}\n\n`;
+          
+          result.events.slice(0, 10).forEach((event: any, index: number) => {
+            const eventStart = new Date(event.start);
+            
+            // Format time as 24-hour format (e.g., "15:00") in bold
+            const eventTime24 = eventStart.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+              timeZone: calendarTimezone,
+            });
+            
+            // Format date as "Sat, 3 Jan" (short weekday, day, short month)
+            const eventDate = eventStart.toLocaleDateString('en-US', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              timeZone: calendarTimezone,
+            });
+            
+            // Format: Numbered list, title on one line, date and time on next line (indented)
+            responseMessage += `${index + 1}. ${event.title || 'Untitled Event'}\n   ${eventDate} | *${eventTime24}*\n\n`;
           });
+          
           if (result.events.length > 10) {
-            responseMessage += `\n... and ${result.events.length - 10} more events.`;
+            responseMessage += `... and ${result.events.length - 10} more event${result.events.length - 10 !== 1 ? 's' : ''}.`;
           }
         }
       } else {

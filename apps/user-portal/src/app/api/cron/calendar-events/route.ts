@@ -378,32 +378,47 @@ async function sendEventReminder(
     
     const eventTimeStr = formatTime24To12(eventHours, eventMinutes);
 
-    // Get event date in user's timezone
+    // Get event date in user's timezone - format as "January 3," (month and day with comma)
     const dateFormatter = new Intl.DateTimeFormat('en-US', {
       timeZone: userTimezone,
-      year: 'numeric',
       month: 'long',
       day: 'numeric',
     });
     const eventDateStr = dateFormatter.format(eventStart);
 
-    // Create calendar event reminder message
-    let message = `🗓️ *Calendar Event Reminder*\n\n`;
+    // Create calendar event reminder message in the new format
+    let message = `📅 *Event Reminder*\n\n`;
     message += `*Title:* ${event.title || 'Untitled Event'}\n`;
     message += `*Date:* ${eventDateStr}\n`;
     message += `*Time:* ${eventTimeStr}\n`;
-    message += `*Calendar:* ${calendarName}\n`;
 
     if (event.location) {
       message += `*Location:* ${event.location}\n`;
     }
 
-    if (event.description) {
-      message += `\n*Description:*\n${event.description}\n`;
+    if (event.conferenceUrl) {
+      message += `*Link:* ${event.conferenceUrl}\n`;
     }
 
-    message += `\n⏰ *${calendarNotificationMinutes} minutes* until your event starts!`;
-    message += `\n\n_From your ${calendarName} calendar._`;
+    if (event.attendees && event.attendees.length > 0) {
+      // Format attendees - extract names from emails if possible, or use emails
+      const attendeeNames = event.attendees.map((attendee: string) => {
+        // If it's an email, try to extract the name part before @
+        if (attendee.includes('@')) {
+          const namePart = attendee.split('@')[0];
+          if (namePart) {
+            // Capitalize first letter of each word
+            return namePart.split('.').map((part: string) => 
+              part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+            ).join(' ');
+          }
+        }
+        return attendee;
+      });
+      message += `*Invited:* ${attendeeNames.join(', ')}\n`;
+    }
+
+    message += `\n_This is a ${calendarNotificationMinutes} minute automated reminder from CrackOn._`;
 
     logger.info(
       {
