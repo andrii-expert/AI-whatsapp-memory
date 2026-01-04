@@ -6204,13 +6204,6 @@ export class ActionExecutor {
       const fullEvent = eventDetailsResult.event as any;
       const eventStart = new Date(fullEvent.start);
 
-      // Format date as "3 Jan" (day and month, no weekday)
-      const eventDate = eventStart.toLocaleDateString('en-US', {
-        day: 'numeric',
-        month: 'short',
-        timeZone: calendarTimezone,
-      });
-
       // Format time as 24-hour format (e.g., "13:40")
       const eventTime = eventStart.toLocaleTimeString('en-US', {
         hour: '2-digit',
@@ -6219,11 +6212,17 @@ export class ActionExecutor {
         timeZone: calendarTimezone,
       });
 
-      // Get event date for calendar icon (day number)
-      const eventDay = eventStart.toLocaleDateString('en-US', {
+      // Format date as "3 Jan" (day month) - manually format to ensure correct order
+      const dateStr = eventStart.toLocaleDateString('en-US', {
         day: 'numeric',
+        month: 'short',
         timeZone: calendarTimezone,
       });
+      // Split and reorder: "Jan 3" -> ["Jan", "3"] -> "3 Jan"
+      const dateParts = dateStr.split(' ');
+      const month = dateParts[0] || '';
+      const day = dateParts[1] || '';
+      const eventDate = `${day} ${month}`;
 
       // Format attendees - extract names from emails if possible
       let attendeeNames: string[] = [];
@@ -6241,27 +6240,37 @@ export class ActionExecutor {
         });
       }
 
-      // Build Event Overview message
+      // Build Event Overview message - matching create event style
       let message = `📅 *Event Overview*\n\n`;
       message += `*Title:* ${fullEvent.title || 'Untitled Event'}\n`;
       message += `*Date:* ${eventDate}\n`;
       message += `*Time:* ${eventTime}\n`;
 
+      // Location (without URL - will be sent as button if available)
       if (fullEvent.location) {
         message += `*Location:* ${fullEvent.location}\n`;
       }
 
+      // Google Meet link (if available) - will be sent as button
       if (fullEvent.conferenceUrl) {
-        message += `*Link:* ${fullEvent.conferenceUrl}\n`;
+        message += `*Link:* Google Meet\n`;
       }
 
+      // Attendees
       if (attendeeNames.length > 0) {
         message += `*Invited:* ${attendeeNames.join(', ')}\n`;
       }
 
+      // Send text message first
+      await this.whatsappService.sendTextMessage(this.recipient, message.trim());
+
+      // Get Google Maps link and send all buttons together
+      const mapsLink = fullEvent.location ? await this.getGoogleMapsLinkForLocation(fullEvent.location) : null;
+      await this.sendEventLinkButtons(fullEvent.location, mapsLink, fullEvent.conferenceUrl);
+
       return {
         success: true,
-        message: message.trim(),
+        message: '', // Empty since we already sent the message with buttons
       };
     } catch (error) {
       logger.error({ error, userId: this.userId, action: parsed.action }, 'Failed to show event details');
@@ -6269,6 +6278,110 @@ export class ActionExecutor {
         success: false,
         message: "I'm sorry, I couldn't retrieve the event details. Please try again.",
       };
+    }
+  }
+
+  /**
+   * Helper function to get Google Maps link for a location
+   */
+  private async getGoogleMapsLinkForLocation(location: string): Promise<string | null> {
+    if (!location) return null;
+    
+    try {
+      const addresses = await getUserAddresses(this.db, this.userId);
+      
+      // Try to find matching address by name or full address
+      const locationLower = location.toLowerCase().trim();
+      
+      for (const address of addresses) {
+        // Check if location matches address name
+        if (address.name.toLowerCase().trim() === locationLower) {
+          // Build Google Maps link from coordinates or address
+          if (address.latitude != null && address.longitude != null) {
+            return `https://www.google.com/maps?q=${address.latitude},${address.longitude}`;
+          } else {
+            // Build full address string
+            const addressParts = [
+              address.street,
+              address.city,
+              address.state,
+              address.zip,
+              address.country,
+            ].filter((part): part is string => typeof part === 'string' && part.trim() !== '');
+            
+            if (addressParts.length > 0) {
+              const fullAddress = addressParts.join(', ');
+              return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+            }
+          }
+        }
+        
+        // Check if location matches full address
+        const addressParts = [
+          address.street,
+          address.city,
+          address.state,
+          address.zip,
+          address.country,
+        ].filter((part): part is string => typeof part === 'string' && part.trim() !== '');
+        
+        if (addressParts.length > 0) {
+          const fullAddress = addressParts.join(', ').toLowerCase();
+          if (fullAddress === locationLower || locationLower.includes(fullAddress) || fullAddress.includes(locationLower)) {
+            if (address.latitude != null && address.longitude != null) {
+              return `https://www.google.com/maps?q=${address.latitude},${address.longitude}`;
+            } else {
+              return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressParts.join(', '))}`;
+            }
+          }
+        }
+      }
+      
+      // If no match found, create Google Maps link from location string
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+    } catch (error) {
+      logger.warn({ error, userId: this.userId, location }, 'Failed to get Google Maps link for location');
+      // Fallback: create Google Maps link from location string
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+    }
+  }
+
+  /**
+   * Helper function to send Google Maps and Google Meet buttons together
+   */
+  private async sendEventLinkButtons(
+    location: string | undefined,
+    mapsLink: string | null,
+    conferenceUrl: string | undefined
+  ): Promise<void> {
+    const buttons: Array<{ bodyText: string; buttonText: string; buttonUrl: string }> = [];
+    
+    // Prepare Google Maps button if available
+    if (location && mapsLink) {
+      buttons.push({
+        bodyText: `📍 Location: ${location}`,
+        buttonText: 'Open in Google Maps',
+        buttonUrl: mapsLink,
+      });
+    }
+    
+    // Prepare Google Meet button if available
+    if (conferenceUrl) {
+      buttons.push({
+        bodyText: '🔗 Join the meeting',
+        buttonText: 'Join Google Meet',
+        buttonUrl: conferenceUrl,
+      });
+    }
+    
+    // Send all buttons in quick succession so they appear together
+    for (const button of buttons) {
+      try {
+        await this.whatsappService.sendCTAButtonMessage(this.recipient, button);
+      } catch (error) {
+        logger.warn({ error, userId: this.userId, buttonUrl: button.buttonUrl }, `Failed to send ${button.buttonText} button, falling back to text`);
+        await this.whatsappService.sendTextMessage(this.recipient, `${button.bodyText}\n${button.buttonUrl}`);
+      }
     }
   }
 
