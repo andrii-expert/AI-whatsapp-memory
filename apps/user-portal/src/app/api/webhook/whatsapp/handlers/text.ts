@@ -1661,7 +1661,25 @@ async function handleEventOperation(
       if (intent.attendees && intent.attendees.length > 0 && isCreate) {
         try {
           const originalAttendees = [...intent.attendees];
+          logger.info(
+            {
+              userId,
+              originalAttendees,
+              attendeeCount: originalAttendees.length,
+            },
+            'Starting attendee resolution'
+          );
+          
           const friends = await getUserFriends(db, userId);
+          logger.info(
+            {
+              userId,
+              friendsCount: friends.length,
+              friendNames: friends.map(f => ({ name: f.name, email: f.email })),
+            },
+            'Retrieved friends for attendee resolution'
+          );
+          
           const resolvedAttendees: string[] = [];
           
           for (const attendee of intent.attendees) {
@@ -1673,39 +1691,73 @@ async function handleEventOperation(
               continue;
             }
             
-            // Try to find matching friend by name (case-insensitive, partial match)
-            const matchingFriend = friends.find(friend => {
-              const friendNameLower = friend.name.toLowerCase();
-              const attendeeLower = attendeeTrimmed.toLowerCase();
-              
-              // Exact match
-              if (friendNameLower === attendeeLower) {
-                return true;
-              }
-              
-              // Partial match (e.g., "Drala" matches "Drala Smith")
-              if (friendNameLower.includes(attendeeLower) || attendeeLower.includes(friendNameLower)) {
-                return true;
-              }
-              
-              // Word boundary match (e.g., "John" matches "John Doe")
-              const friendWords = friendNameLower.split(/\s+/);
-              const attendeeWords = attendeeLower.split(/\s+/);
-              return friendWords.some(word => attendeeWords.includes(word)) || 
-                     attendeeWords.some(word => friendWords.includes(word));
+            // Try to find matching friend by name (case-insensitive, with priority matching)
+            // First, try exact match
+            let matchingFriend = friends.find(friend => {
+              const friendNameLower = friend.name.toLowerCase().trim();
+              const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+              return friendNameLower === attendeeLower;
             });
             
+            // If no exact match, try first name match (e.g., "Paul" matches "Paul Smith")
+            if (!matchingFriend) {
+              matchingFriend = friends.find(friend => {
+                const friendNameLower = friend.name.toLowerCase().trim();
+                const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+                const friendWords = friendNameLower.split(/\s+/);
+                const firstWord = friendWords[0];
+                // Check if attendee matches the first word of friend's name
+                return firstWord === attendeeLower || attendeeLower === firstWord;
+              });
+            }
+            
+            // If still no match, try word boundary match (e.g., "John" matches "John Doe" or "Doe, John")
+            if (!matchingFriend) {
+              matchingFriend = friends.find(friend => {
+                const friendNameLower = friend.name.toLowerCase().trim();
+                const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+                const friendWords = friendNameLower.split(/\s+/);
+                // Check if any word in friend's name matches the attendee name
+                return friendWords.some(word => word === attendeeLower);
+              });
+            }
+            
+            // Last resort: try partial match (e.g., "Drala" matches "Draladanyil")
+            if (!matchingFriend) {
+              matchingFriend = friends.find(friend => {
+                const friendNameLower = friend.name.toLowerCase().trim();
+                const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+                // Only match if friend name starts with attendee name (to avoid false matches)
+                return friendNameLower.startsWith(attendeeLower) || attendeeLower.startsWith(friendNameLower);
+              });
+            }
+            
             if (matchingFriend && matchingFriend.email) {
-              resolvedAttendees.push(matchingFriend.email.toLowerCase());
-              logger.info(
-                {
-                  userId,
-                  attendeeName: attendeeTrimmed,
-                  friendName: matchingFriend.name,
-                  resolvedEmail: matchingFriend.email,
-                },
-                'Resolved attendee name to friend email'
-              );
+              const emailLower = matchingFriend.email.toLowerCase();
+              // Avoid duplicates
+              if (!resolvedAttendees.includes(emailLower)) {
+                resolvedAttendees.push(emailLower);
+                logger.info(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                    friendName: matchingFriend.name,
+                    resolvedEmail: matchingFriend.email,
+                    resolvedCount: resolvedAttendees.length,
+                  },
+                  'Resolved attendee name to friend email'
+                );
+              } else {
+                logger.warn(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                    friendName: matchingFriend.name,
+                    resolvedEmail: matchingFriend.email,
+                  },
+                  'Skipping duplicate email address'
+                );
+              }
             } else {
               // If not found in friends, check if it's already a valid email
               const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1757,12 +1809,30 @@ async function handleEventOperation(
             {
               userId,
               originalAttendees,
+              originalCount: originalAttendees.length,
               resolvedAttendees,
+              resolvedCount: resolvedAttendees.length,
               validEmails,
+              validCount: validEmails.length,
               filteredCount: resolvedAttendees.length - validEmails.length,
             },
             'Attendee resolution and validation completed'
           );
+          
+          // Final check: warn if we lost attendees
+          if (validEmails.length < originalAttendees.length) {
+            logger.warn(
+              {
+                userId,
+                originalAttendees,
+                originalCount: originalAttendees.length,
+                validEmails,
+                validCount: validEmails.length,
+                lostCount: originalAttendees.length - validEmails.length,
+              },
+              'Some attendees were not resolved to valid emails'
+            );
+          }
         } catch (error) {
           logger.error(
             {

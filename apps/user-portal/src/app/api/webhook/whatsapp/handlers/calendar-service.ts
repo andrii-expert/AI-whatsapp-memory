@@ -470,6 +470,8 @@ export class CalendarService implements ICalendarService {
             ...createParams,
             start: createParams.start.toISOString(),
             end: createParams.end.toISOString(),
+            attendees: createParams.attendees,
+            attendeesCount: createParams.attendees?.length || 0,
           },
         },
         'Calendar createEvent parameters'
