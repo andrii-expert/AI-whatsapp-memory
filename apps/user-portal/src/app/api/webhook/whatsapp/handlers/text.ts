@@ -1823,9 +1823,24 @@ async function handleEventOperation(
             {
               userId,
               friendsCount: friends.length,
-              friendNames: friends.map(f => ({ name: f.name, email: f.email })),
+              friendDetails: friends.map(f => ({
+                id: f.id,
+                name: f.name,
+                email: f.email,
+                connectedUserEmail: f.connectedUser?.email,
+                hasEmail: !!(f.email || f.connectedUser?.email),
+                allFields: {
+                  name: f.name,
+                  email: f.email,
+                  phone: f.phone,
+                  connectedUser: f.connectedUser ? {
+                    email: f.connectedUser.email,
+                    name: f.connectedUser.name,
+                  } : null,
+                },
+              })),
             },
-            'Retrieved friends for attendee resolution'
+            '📋 Retrieved friends for attendee resolution - FULL DETAILS'
           );
           
           const resolvedAttendees: string[] = [];
@@ -1909,15 +1924,24 @@ async function handleEventOperation(
             let matchingFriend: typeof friends[0] | undefined = undefined;
             let matchType: string = '';
             
-            logger.debug(
+            logger.info(
               {
                 userId,
                 attendeeIndex: i,
                 attendeeName: attendeeTrimmed,
+                attendeeLower: attendeeTrimmed.toLowerCase().trim(),
                 friendsCount: friends.length,
                 friendNames: friends.map(f => f.name),
+                friendNamesLower: friends.map(f => f.name.toLowerCase().trim()),
+                friendDetails: friends.map(f => ({
+                  name: f.name,
+                  nameLower: f.name.toLowerCase().trim(),
+                  email: f.email,
+                  connectedUserEmail: f.connectedUser?.email,
+                  hasEmail: !!(f.email || f.connectedUser?.email),
+                })),
               },
-              `🔍 Starting friend matching for "${attendeeTrimmed}"`
+              `🔍 Starting friend matching for "${attendeeTrimmed}" - checking against ${friends.length} friends`
             );
             
             // First, try exact match
@@ -2050,8 +2074,11 @@ async function handleEventOperation(
             
             // Process the match result
             if (matchingFriend) {
-              if (matchingFriend.email) {
-                const emailLower = matchingFriend.email.toLowerCase();
+              // Get email from friend.email or connectedUser.email
+              const friendEmail = matchingFriend.email || matchingFriend.connectedUser?.email;
+              
+              if (friendEmail) {
+                const emailLower = friendEmail.toLowerCase();
                 // Avoid duplicates
                 if (!resolvedAttendees.includes(emailLower)) {
                   resolvedAttendees.push(emailLower);
@@ -2061,12 +2088,14 @@ async function handleEventOperation(
                       attendeeIndex: i,
                       attendeeName: attendeeTrimmed,
                       friendName: matchingFriend.name,
-                      resolvedEmail: matchingFriend.email,
+                      friendEmailDirect: matchingFriend.email,
+                      friendEmailFromConnected: matchingFriend.connectedUser?.email,
+                      resolvedEmail: friendEmail,
                       resolvedCount: resolvedAttendees.length,
                       matchType: matchType,
                       allResolvedSoFar: [...resolvedAttendees],
                     },
-                    `✅ SUCCESS: Resolved "${attendeeTrimmed}" -> ${matchingFriend.email} (${matchType} match)`
+                    `✅ SUCCESS: Resolved "${attendeeTrimmed}" -> ${friendEmail} (${matchType} match)`
                   );
                 } else {
                   logger.warn(
@@ -2075,9 +2104,9 @@ async function handleEventOperation(
                       attendeeIndex: i,
                       attendeeName: attendeeTrimmed,
                       friendName: matchingFriend.name,
-                      resolvedEmail: matchingFriend.email,
+                      resolvedEmail: friendEmail,
                     },
-                    `⚠️ Skipping duplicate email: ${matchingFriend.email} (already resolved)`
+                    `⚠️ Skipping duplicate email: ${friendEmail} (already resolved)`
                   );
                 }
               } else {
@@ -2088,8 +2117,11 @@ async function handleEventOperation(
                     attendeeName: attendeeTrimmed,
                     friendName: matchingFriend.name,
                     matchType: matchType,
+                    friendHasEmail: !!matchingFriend.email,
+                    friendHasConnectedUser: !!matchingFriend.connectedUser,
+                    friendConnectedUserEmail: matchingFriend.connectedUser?.email,
                   },
-                  `❌ ERROR: Found matching friend "${matchingFriend.name}" but friend has NO email address!`
+                  `❌ ERROR: Found matching friend "${matchingFriend.name}" but friend has NO email address (checked both friend.email and connectedUser.email)!`
                 );
               }
             } else {
