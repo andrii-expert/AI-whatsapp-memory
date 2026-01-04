@@ -2356,25 +2356,34 @@ async function handleEventOperation(
         const day = dateParts[1] || '';
         const eventDate = `${day} ${month}`;
         
-        // Build message text with clickable URLs (all in one message)
+        // Build message text (all in one message)
         responseMessage = `✅ *New Event Created*\n\n`;
         responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
         responseMessage += `*Date:* ${eventDate}\n`;
         responseMessage += `*Time:* ${eventTime}\n`;
         
-        // Location with clickable Google Maps link
+        // Determine what to show in Location field:
+        // - If location/address exists: show Google Maps link
+        // - If no location OR Google Meet requested: show Google Meet link
+        let locationLink: string | null = null;
+        let buttonUrl: string | null = null;
+        let buttonText: string = '';
+        
         if (result.event.location) {
-          const mapsLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
-          if (mapsLink) {
-            responseMessage += `*Location:* ${mapsLink}\n`;
+          // User provided location/address - use Google Maps
+          locationLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
+          if (locationLink) {
+            responseMessage += `*Location:* ${locationLink}\n`;
+            buttonUrl = locationLink;
+            buttonText = 'Open in Google Maps';
           } else {
             responseMessage += `*Location:* ${result.event.location}\n`;
           }
-        }
-        
-        // Google Meet link (if available) - as clickable URL
-        if (fullEvent.conferenceUrl) {
-          responseMessage += `*Link:* ${fullEvent.conferenceUrl}\n`;
+        } else if (fullEvent.conferenceUrl) {
+          // No location but Google Meet exists - use Google Meet in Location field
+          responseMessage += `*Location:* ${fullEvent.conferenceUrl}\n`;
+          buttonUrl = fullEvent.conferenceUrl;
+          buttonText = 'Google Meet';
         }
         
         // Attendees
@@ -2392,6 +2401,58 @@ async function handleEventOperation(
           });
           responseMessage += `*Invited:* ${attendeeNames.join(', ')}\n`;
         }
+        
+        // Send text message
+        await whatsappService.sendTextMessage(recipient, responseMessage);
+        
+        // Log text message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: responseMessage,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing text message');
+        }
+        
+        // Send button if we have a link (Google Maps or Google Meet)
+        if (buttonUrl && buttonText) {
+          try {
+            await whatsappService.sendCTAButtonMessage(recipient, {
+              bodyText: buttonText === 'Google Meet' ? '🔗 Join the meeting' : `📍 Location: ${result.event.location || ''}`,
+              buttonText: buttonText,
+              buttonUrl: buttonUrl,
+            });
+            
+            // Log button message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'interactive',
+                  messageContent: `${buttonText} button: ${buttonUrl}`,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (logError) {
+              logger.warn({ error: logError, userId }, `Failed to log ${buttonText} button message`);
+            }
+          } catch (error) {
+            logger.warn({ error, userId, buttonUrl }, `Failed to send ${buttonText} button, falling back to text`);
+            await whatsappService.sendTextMessage(recipient, `${buttonText}: ${buttonUrl}`);
+          }
+        }
+        
+        // Set responseMessage to empty since we've already sent the messages
+        responseMessage = '';
       } else if (result.action === 'UPDATE' && result.event) {
         const fullEvent = result.event as any; // Access conferenceUrl and attendees if available
         

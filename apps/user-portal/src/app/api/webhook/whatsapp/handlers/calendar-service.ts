@@ -425,8 +425,10 @@ export class CalendarService implements ICalendarService {
       );
       
       // Check if user wants Google Meet (check description and location for keywords)
+      // Also create Google Meet if no location is provided
       const descriptionLower = intent.description?.toLowerCase() || '';
       const locationLower = intent.location?.toLowerCase() || '';
+      const hasLocation = !!intent.location && intent.location.trim().length > 0;
       const wantsGoogleMeet = 
         (descriptionLower.includes('google meet') ||
          descriptionLower.includes('meet link') ||
@@ -438,10 +440,15 @@ export class CalendarService implements ICalendarService {
          locationLower === 'meet') &&
         calendarConnection.provider === 'google'; // Only for Google Calendar
       
+      // If no location provided OR Google Meet is requested, create Google Meet
+      const shouldCreateGoogleMeet = (!hasLocation || wantsGoogleMeet) && calendarConnection.provider === 'google';
+      
       logger.info(
         {
           userId,
           wantsGoogleMeet,
+          hasLocation,
+          shouldCreateGoogleMeet,
           hasDescription: !!intent.description,
           description: intent.description,
           location: intent.location,
@@ -460,7 +467,7 @@ export class CalendarService implements ICalendarService {
         location: intent.location,
         attendees: intent.attendees,
         timeZone: calendarTimezone, // Use calendar's timezone
-        createGoogleMeet: wantsGoogleMeet || false,
+        createGoogleMeet: shouldCreateGoogleMeet, // Create Google Meet if no location or if requested
       };
       
       logger.info(
