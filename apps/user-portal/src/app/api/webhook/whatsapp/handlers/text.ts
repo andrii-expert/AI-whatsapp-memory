@@ -1685,9 +1685,39 @@ async function handleEventOperation(
           for (const attendee of intent.attendees) {
             const attendeeTrimmed = attendee.trim();
             
+            logger.info(
+              {
+                userId,
+                processingAttendee: attendeeTrimmed,
+                currentResolvedCount: resolvedAttendees.length,
+              },
+              'Processing attendee for resolution'
+            );
+            
             // If it's already an email address, use it directly
             if (attendeeTrimmed.includes('@') && attendeeTrimmed.includes('.')) {
-              resolvedAttendees.push(attendeeTrimmed.toLowerCase());
+              const emailLower = attendeeTrimmed.toLowerCase();
+              if (!resolvedAttendees.includes(emailLower)) {
+                resolvedAttendees.push(emailLower);
+                logger.info(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                    resolvedEmail: emailLower,
+                    resolvedCount: resolvedAttendees.length,
+                  },
+                  'Attendee is already a valid email address'
+                );
+              } else {
+                logger.warn(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                    resolvedEmail: emailLower,
+                  },
+                  'Skipping duplicate email address (already in resolved list)'
+                );
+              }
               continue;
             }
             
@@ -1699,6 +1729,18 @@ async function handleEventOperation(
               return friendNameLower === attendeeLower;
             });
             
+            if (matchingFriend) {
+              logger.info(
+                {
+                  userId,
+                  attendeeName: attendeeTrimmed,
+                  matchType: 'exact',
+                  friendName: matchingFriend.name,
+                },
+                'Found exact match for attendee'
+              );
+            }
+            
             // If no exact match, try first name match (e.g., "Paul" matches "Paul Smith")
             if (!matchingFriend) {
               matchingFriend = friends.find(friend => {
@@ -1709,6 +1751,18 @@ async function handleEventOperation(
                 // Check if attendee matches the first word of friend's name
                 return firstWord === attendeeLower || attendeeLower === firstWord;
               });
+              
+              if (matchingFriend) {
+                logger.info(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                    matchType: 'first_name',
+                    friendName: matchingFriend.name,
+                  },
+                  'Found first name match for attendee'
+                );
+              }
             }
             
             // If still no match, try word boundary match (e.g., "John" matches "John Doe" or "Doe, John")
@@ -1720,6 +1774,18 @@ async function handleEventOperation(
                 // Check if any word in friend's name matches the attendee name
                 return friendWords.some(word => word === attendeeLower);
               });
+              
+              if (matchingFriend) {
+                logger.info(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                    matchType: 'word_boundary',
+                    friendName: matchingFriend.name,
+                  },
+                  'Found word boundary match for attendee'
+                );
+              }
             }
             
             // Last resort: try partial match (e.g., "Drala" matches "Draladanyil")
@@ -1730,6 +1796,18 @@ async function handleEventOperation(
                 // Only match if friend name starts with attendee name (to avoid false matches)
                 return friendNameLower.startsWith(attendeeLower) || attendeeLower.startsWith(friendNameLower);
               });
+              
+              if (matchingFriend) {
+                logger.info(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                    matchType: 'partial',
+                    friendName: matchingFriend.name,
+                  },
+                  'Found partial match for attendee'
+                );
+              }
             }
             
             if (matchingFriend && matchingFriend.email) {
@@ -1763,14 +1841,28 @@ async function handleEventOperation(
               const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
               if (emailRegex.test(attendeeTrimmed)) {
                 // It's already a valid email, use it
-                resolvedAttendees.push(attendeeTrimmed.toLowerCase());
-                logger.info(
-                  {
-                    userId,
-                    attendeeName: attendeeTrimmed,
-                  },
-                  'Attendee is already a valid email address'
-                );
+                const emailLower = attendeeTrimmed.toLowerCase();
+                if (!resolvedAttendees.includes(emailLower)) {
+                  resolvedAttendees.push(emailLower);
+                  logger.info(
+                    {
+                      userId,
+                      attendeeName: attendeeTrimmed,
+                      resolvedEmail: emailLower,
+                      resolvedCount: resolvedAttendees.length,
+                    },
+                    'Attendee is already a valid email address (not in friends but valid email)'
+                  );
+                } else {
+                  logger.warn(
+                    {
+                      userId,
+                      attendeeName: attendeeTrimmed,
+                      resolvedEmail: emailLower,
+                    },
+                    'Skipping duplicate email address (already in resolved list)'
+                  );
+                }
               } else {
                 // Not a friend and not an email - skip it and warn
                 logger.warn(
@@ -1778,6 +1870,8 @@ async function handleEventOperation(
                     userId,
                     attendeeName: attendeeTrimmed,
                     availableFriends: friends.map(f => ({ name: f.name, email: f.email })),
+                    allFriendNames: friends.map(f => f.name),
+                    allFriendEmails: friends.map(f => f.email).filter(Boolean),
                   },
                   'Could not resolve attendee name to email - skipping (not a friend and not a valid email)'
                 );
@@ -2304,7 +2398,7 @@ function parseEventTemplateToIntent(
         const attendeesStr = attendeesMatch[1].trim();
         // Filter out "Google Meet" and similar phrases that are not actual attendees
         const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'googlemeet'];
-        intent.attendees = attendeesStr.split(',')
+        const parsedAttendees = attendeesStr.split(',')
           .map(a => a.trim())
           .filter(a => {
             if (a.length === 0) return false;
@@ -2322,6 +2416,18 @@ function parseEventTemplateToIntent(
             });
             return !hasGoogleMeetKeyword;
           });
+        
+        intent.attendees = parsedAttendees;
+        
+        logger.info(
+          {
+            template,
+            attendeesStr,
+            parsedAttendees,
+            parsedCount: parsedAttendees.length,
+          },
+          'Parsed attendees from template'
+        );
       }
     
     // Ensure we have at least a title
