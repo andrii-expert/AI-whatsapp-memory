@@ -6240,20 +6240,25 @@ export class ActionExecutor {
         });
       }
 
-      // Build Event Overview message - matching create event style
+      // Build Event Overview message - matching create event style with clickable URLs
       let message = `📅 *Event Overview*\n\n`;
       message += `*Title:* ${fullEvent.title || 'Untitled Event'}\n`;
       message += `*Date:* ${eventDate}\n`;
       message += `*Time:* ${eventTime}\n`;
 
-      // Location (without URL - will be sent as button if available)
+      // Location with clickable Google Maps link
       if (fullEvent.location) {
-        message += `*Location:* ${fullEvent.location}\n`;
+        const mapsLink = await this.getGoogleMapsLinkForLocation(fullEvent.location);
+        if (mapsLink) {
+          message += `*Location:* ${mapsLink}\n`;
+        } else {
+          message += `*Location:* ${fullEvent.location}\n`;
+        }
       }
 
-      // Google Meet link (if available) - will be sent as button
+      // Google Meet link (if available) - as clickable URL
       if (fullEvent.conferenceUrl) {
-        message += `*Link:* Google Meet\n`;
+        message += `*Link:* ${fullEvent.conferenceUrl}\n`;
       }
 
       // Attendees
@@ -6261,16 +6266,9 @@ export class ActionExecutor {
         message += `*Invited:* ${attendeeNames.join(', ')}\n`;
       }
 
-      // Send text message first
-      await this.whatsappService.sendTextMessage(this.recipient, message.trim());
-
-      // Get Google Maps link and send all buttons together
-      const mapsLink = fullEvent.location ? await this.getGoogleMapsLinkForLocation(fullEvent.location) : null;
-      await this.sendEventLinkButtons(fullEvent.location, mapsLink, fullEvent.conferenceUrl);
-
       return {
         success: true,
-        message: '', // Empty since we already sent the message with buttons
+        message: message.trim(),
       };
     } catch (error) {
       logger.error({ error, userId: this.userId, action: parsed.action }, 'Failed to show event details');

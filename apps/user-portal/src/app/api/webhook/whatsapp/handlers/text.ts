@@ -2356,25 +2356,25 @@ async function handleEventOperation(
         const day = dateParts[1] || '';
         const eventDate = `${day} ${month}`;
         
-        // Build message text without URLs (URLs will be sent as buttons)
+        // Build message text with clickable URLs (all in one message)
         responseMessage = `✅ *New Event Created*\n\n`;
         responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
         responseMessage += `*Date:* ${eventDate}\n`;
         responseMessage += `*Time:* ${eventTime}\n`;
         
-        // Location (without URL - will be sent as button if available)
+        // Location with clickable Google Maps link
         if (result.event.location) {
           const mapsLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
           if (mapsLink) {
-            responseMessage += `*Location:* ${result.event.location}\n`;
+            responseMessage += `*Location:* ${mapsLink}\n`;
           } else {
             responseMessage += `*Location:* ${result.event.location}\n`;
           }
         }
         
-        // Google Meet link (if available) - will be sent as button
+        // Google Meet link (if available) - as clickable URL
         if (fullEvent.conferenceUrl) {
-          responseMessage += `*Link:* Google Meet\n`;
+          responseMessage += `*Link:* ${fullEvent.conferenceUrl}\n`;
         }
         
         // Attendees
@@ -2392,32 +2392,6 @@ async function handleEventOperation(
           });
           responseMessage += `*Invited:* ${attendeeNames.join(', ')}\n`;
         }
-        
-        // Send text message first
-        await whatsappService.sendTextMessage(recipient, responseMessage);
-        
-        // Log text message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: responseMessage,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing text message');
-        }
-        
-        // Get Google Maps link and send buttons
-        const mapsLink = result.event.location ? await getGoogleMapsLinkForLocation(result.event.location, userId) : null;
-        await sendEventLinkButtons(recipient, userId, result.event.location, mapsLink, fullEvent.conferenceUrl);
-        
-        // Set responseMessage to empty since we've already sent the messages
-        responseMessage = '';
       } else if (result.action === 'UPDATE' && result.event) {
         const fullEvent = result.event as any; // Access conferenceUrl and attendees if available
         
@@ -2441,20 +2415,25 @@ async function handleEventOperation(
         const day = dateParts[1] || '';
         const eventDate = `${day} ${month}`;
         
-        // Build message text without URLs (URLs will be sent as buttons)
+        // Build message text with clickable URLs (all in one message)
         responseMessage = `✅ *Event Updated*\n\n`;
         responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
         responseMessage += `*Date:* ${eventDate}\n`;
         responseMessage += `*Time:* ${eventTime}\n`;
         
-        // Location (without URL - will be sent as button if available)
+        // Location with clickable Google Maps link
         if (result.event.location) {
-          responseMessage += `*Location:* ${result.event.location}\n`;
+          const mapsLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
+          if (mapsLink) {
+            responseMessage += `*Location:* ${mapsLink}\n`;
+          } else {
+            responseMessage += `*Location:* ${result.event.location}\n`;
+          }
         }
         
-        // Google Meet link (if available) - will be sent as button
+        // Google Meet link (if available) - as clickable URL
         if (fullEvent.conferenceUrl) {
-          responseMessage += `*Link:* Google Meet\n`;
+          responseMessage += `*Link:* ${fullEvent.conferenceUrl}\n`;
         }
         
         // Attendees
@@ -2472,32 +2451,6 @@ async function handleEventOperation(
           });
           responseMessage += `*Invited:* ${attendeeNames.join(', ')}\n`;
         }
-        
-        // Send text message first
-        await whatsappService.sendTextMessage(recipient, responseMessage);
-        
-        // Log text message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: responseMessage,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing text message');
-        }
-        
-        // Get Google Maps link and send buttons
-        const mapsLink = result.event.location ? await getGoogleMapsLinkForLocation(result.event.location, userId) : null;
-        await sendEventLinkButtons(recipient, userId, result.event.location, mapsLink, fullEvent.conferenceUrl);
-        
-        // Set responseMessage to empty since we've already sent the messages
-        responseMessage = '';
       } else if (result.action === 'DELETE' && result.event) {
         const fullEvent = result.event as any; // Access conferenceUrl and attendees if available
         
@@ -2521,20 +2474,25 @@ async function handleEventOperation(
         const day = dateParts[1] || '';
         const eventDate = `${day} ${month}`;
         
-        // Build message text without URLs (URLs will be sent as buttons)
+        // Build message text with clickable URLs (all in one message)
         responseMessage = `✅ *Event Deleted*\n\n`;
         responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
         responseMessage += `*Date:* ${eventDate}\n`;
         responseMessage += `*Time:* ${eventTime}\n`;
         
-        // Location (without URL - will be sent as button if available)
+        // Location with clickable Google Maps link
         if (result.event.location) {
-          responseMessage += `*Location:* ${result.event.location}\n`;
+          const mapsLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
+          if (mapsLink) {
+            responseMessage += `*Location:* ${mapsLink}\n`;
+          } else {
+            responseMessage += `*Location:* ${result.event.location}\n`;
+          }
         }
         
-        // Google Meet link (if available) - will be sent as button
+        // Google Meet link (if available) - as clickable URL
         if (fullEvent.conferenceUrl) {
-          responseMessage += `*Link:* Google Meet\n`;
+          responseMessage += `*Link:* ${fullEvent.conferenceUrl}\n`;
         }
         
         // Attendees
@@ -2552,32 +2510,6 @@ async function handleEventOperation(
           });
           responseMessage += `*Invited:* ${attendeeNames.join(', ')}\n`;
         }
-        
-        // Send text message first
-        await whatsappService.sendTextMessage(recipient, responseMessage);
-        
-        // Log text message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: responseMessage,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing text message');
-        }
-        
-        // Get Google Maps link and send buttons
-        const mapsLink = result.event.location ? await getGoogleMapsLinkForLocation(result.event.location, userId) : null;
-        await sendEventLinkButtons(recipient, userId, result.event.location, mapsLink, fullEvent.conferenceUrl);
-        
-        // Set responseMessage to empty since we've already sent the messages
-        responseMessage = '';
       } else if (result.action === 'QUERY' && result.events) {
         if (result.events.length === 0) {
           responseMessage = "📅 *You have no events scheduled.*";
