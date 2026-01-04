@@ -5992,11 +5992,18 @@ export class ActionExecutor {
         });
         
         let headerText = "Events:";
+        // Prioritize queryTimeframe over inferred dates
         if (queryTimeframe === 'this_week') {
           headerText = `📅 *Events This Week*`;
+        } else if (queryTimeframe === 'tomorrow') {
+          headerText = `📅 *Tomorrow's Events:*`;
+        } else if (queryTimeframe === 'today') {
+          headerText = `📅 *Today's Events:*`;
         } else if (allToday) {
+          // Fallback: infer from events if no explicit timeframe
           headerText = `📅 *Today's Events:*`;
         } else if (allTomorrow) {
+          // Fallback: infer from events if no explicit timeframe
           headerText = `📅 *Tomorrow's Events:*`;
         } else {
           headerText = `📅 *Events:*`;

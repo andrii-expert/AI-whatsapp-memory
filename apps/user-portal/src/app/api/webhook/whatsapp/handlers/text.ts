@@ -1144,10 +1144,17 @@ async function processAIResponse(
                                      actionTemplate.toLowerCase().match(/^show\s+event\s+details?:/i) ||
                                      actionTemplate.toLowerCase().startsWith('show details for event:');
       
-      // Check if user said "show me [number]" after listing events - this is always an event operation in event context
+      // Check if user said "show me [number]" or "show info on [number]" after listing events - this is always an event operation in event context
       const isNumberBasedView = titleType === 'event' && 
                                 originalUserText && 
-                                originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i);
+                                (originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                 originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i));
+      
+      // If user said "show info on 1" or "show me 1" in event context, always treat as view operation
+      // This handles cases where AI generates "List events: tomorrow" but user wants to see event #1
+      const isNumberViewInEventContext = isNumberBasedView && 
+                                         (actionTemplate.toLowerCase().startsWith('list events:') || 
+                                          actionTemplate.toLowerCase().startsWith('view a file:'));
       
       const isViewShowOperation = actionTemplate.toLowerCase().match(/^(view|show|get|see|details? of|overview of)\s+(?:event|events?|me\s+event|me\s+the\s+event)/i) ||
                                   actionTemplate.toLowerCase().match(/^(view|show|get|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
@@ -1155,7 +1162,8 @@ async function processAIResponse(
                                   isViewAnEvent ||
                                   isShowDetailsForEvent ||
                                   isListEventsWithName ||
-                                  isNumberBasedView;
+                                  isNumberBasedView ||
+                                  isNumberViewInEventContext;
       
       if (isViewShowOperation) {
         // Handle view/show event operations via ActionExecutor
@@ -1282,8 +1290,9 @@ async function processAIResponse(
               eventActionTemplate = `Show event details: ${originalUserText}`;
             }
           }
-        } else if (isNumberBasedView) {
-          // User said "show me 1" or similar - extract number directly
+        } else if (isNumberBasedView || isNumberViewInEventContext) {
+          // User said "show me 1" or "show info on 1" or similar - extract number directly
+          // This handles cases where AI generates "List events: tomorrow" but user wants to see event #1
           const userNumberMatch = originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
                                  originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i);
           if (userNumberMatch && userNumberMatch[1]) {
@@ -1295,6 +1304,7 @@ async function processAIResponse(
                 convertedAction: eventActionTemplate,
                 extractedNumber: userNumberMatch[1],
                 originalUserText,
+                isNumberViewInEventContext: !!isNumberViewInEventContext,
                 reason: 'number_based_view_in_event_context'
               },
               '✅ Extracted number from user text for number-based view request'
@@ -3062,19 +3072,31 @@ async function handleEventOperation(
         if (result.events.length === 0) {
           responseMessage = "📅 *You have no events scheduled.*";
         } else {
-          // Determine header based on timeframe or infer from events
+          // Determine header based on actionTemplate timeframe first, then infer from events
           let headerText = "Events:";
           const now = new Date();
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           
-          // Check if all events are today
+          // Check actionTemplate for timeframe keywords (this takes priority)
+          const actionTemplateLower = actionTemplate.toLowerCase();
+          const isTodayQuery = actionTemplateLower.includes('list events: today') || 
+                              actionTemplateLower.includes('list events:today') ||
+                              actionTemplateLower.match(/list events:\s*today/i);
+          const isTomorrowQuery = actionTemplateLower.includes('list events: tomorrow') || 
+                                 actionTemplateLower.includes('list events:tomorrow') ||
+                                 actionTemplateLower.match(/list events:\s*tomorrow/i);
+          const isThisWeekQuery = actionTemplateLower.includes('list events: this week') || 
+                                  actionTemplateLower.includes('list events:this week') ||
+                                  actionTemplateLower.match(/list events:\s*this\s+week/i);
+          
+          // Check if all events are today (for fallback when timeframe not in template)
           const allToday = result.events.every((event: any) => {
             const eventDate = new Date(event.start);
             const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
             return eventDay.getTime() === today.getTime();
           });
           
-          // Check if all events are tomorrow
+          // Check if all events are tomorrow (for fallback when timeframe not in template)
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
           const allTomorrow = result.events.every((event: any) => {
@@ -3083,27 +3105,13 @@ async function handleEventOperation(
             return eventDay.getTime() === tomorrow.getTime();
           });
           
-          if (allToday) {
-            // Format header with calendar icon and date (e.g., "JUL 17")
-            const todayMonth = now.toLocaleDateString('en-US', {
-              month: 'short',
-              timeZone: calendarTimezone,
-            }).toUpperCase();
-            const todayDay = now.toLocaleDateString('en-US', {
-              day: 'numeric',
-              timeZone: calendarTimezone,
-            });
+          // Determine header - prioritize actionTemplate timeframe
+          if (isTodayQuery || (allToday && !isTomorrowQuery && !isThisWeekQuery)) {
             headerText = `📅 *Today's Events:*`;
-          } else if (allTomorrow) {
-            const tomorrowMonth = tomorrow.toLocaleDateString('en-US', {
-              month: 'short',
-              timeZone: calendarTimezone,
-            }).toUpperCase();
-            const tomorrowDay = tomorrow.toLocaleDateString('en-US', {
-              day: 'numeric',
-              timeZone: calendarTimezone,
-            });
+          } else if (isTomorrowQuery || (allTomorrow && !isTodayQuery && !isThisWeekQuery)) {
             headerText = `📅 *Tomorrow's Events:*`;
+          } else if (isThisWeekQuery) {
+            headerText = `📅 *Events This Week*`;
           } else {
             headerText = `📅 *Events:*`;
           }
