@@ -1,5 +1,5 @@
 import type { Database } from '@imaginecalendar/database/client';
-import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar, getWhatsAppCalendars, getUserAddresses } from '@imaginecalendar/database/queries';
+import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar, getWhatsAppCalendars, getUserAddresses, getUserFriends } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
 import { WhatsappTextAnalysisService, IntentAnalysisService, type CalendarIntent, calendarIntentSchema } from '@imaginecalendar/ai-services';
@@ -1613,14 +1613,107 @@ async function handleEventOperation(
       
       // Remove "Google Meet" from attendees if it was incorrectly added
       if (intent.attendees && intent.attendees.length > 0) {
-        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'googlemeet'];
+        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'googlemeet', 'meet'];
         intent.attendees = intent.attendees.filter(attendee => {
-          const lower = attendee.toLowerCase();
-          return !googleMeetKeywords.some(keyword => lower.includes(keyword));
+          const lower = attendee.toLowerCase().trim();
+          // Filter out Google Meet keywords (but allow "meet" if it's part of a name like "Meeta")
+          if (lower === 'meet' || lower === 'google meet' || lower === 'googlemeet') {
+            return false;
+          }
+          return !googleMeetKeywords.some(keyword => 
+            lower === keyword || lower.includes(keyword + ' ') || lower.includes(' ' + keyword)
+          );
         });
         // If all attendees were filtered out, set to undefined
         if (intent.attendees.length === 0) {
           intent.attendees = undefined;
+        }
+      }
+      
+      // Resolve attendee names to email addresses (for friends and direct emails)
+      if (intent.attendees && intent.attendees.length > 0 && isCreate) {
+        try {
+          const originalAttendees = [...intent.attendees];
+          const friends = await getUserFriends(db, userId);
+          const resolvedAttendees: string[] = [];
+          
+          for (const attendee of intent.attendees) {
+            const attendeeTrimmed = attendee.trim();
+            
+            // If it's already an email address, use it directly
+            if (attendeeTrimmed.includes('@') && attendeeTrimmed.includes('.')) {
+              resolvedAttendees.push(attendeeTrimmed.toLowerCase());
+              continue;
+            }
+            
+            // Try to find matching friend by name (case-insensitive, partial match)
+            const matchingFriend = friends.find(friend => {
+              const friendNameLower = friend.name.toLowerCase();
+              const attendeeLower = attendeeTrimmed.toLowerCase();
+              
+              // Exact match
+              if (friendNameLower === attendeeLower) {
+                return true;
+              }
+              
+              // Partial match (e.g., "Drala" matches "Drala Smith")
+              if (friendNameLower.includes(attendeeLower) || attendeeLower.includes(friendNameLower)) {
+                return true;
+              }
+              
+              // Word boundary match (e.g., "John" matches "John Doe")
+              const friendWords = friendNameLower.split(/\s+/);
+              const attendeeWords = attendeeLower.split(/\s+/);
+              return friendWords.some(word => attendeeWords.includes(word)) || 
+                     attendeeWords.some(word => friendWords.includes(word));
+            });
+            
+            if (matchingFriend && matchingFriend.email) {
+              resolvedAttendees.push(matchingFriend.email.toLowerCase());
+              logger.info(
+                {
+                  userId,
+                  attendeeName: attendeeTrimmed,
+                  friendName: matchingFriend.name,
+                  resolvedEmail: matchingFriend.email,
+                },
+                'Resolved attendee name to friend email'
+              );
+            } else {
+              // If not found in friends, keep the original (might be a valid email or will fail later with clear error)
+              logger.warn(
+                {
+                  userId,
+                  attendeeName: attendeeTrimmed,
+                  availableFriends: friends.map(f => ({ name: f.name, email: f.email })),
+                },
+                'Could not resolve attendee name to email - keeping original'
+              );
+              // Still add it - the calendar service will validate it's an email
+              resolvedAttendees.push(attendeeTrimmed);
+            }
+          }
+          
+          intent.attendees = resolvedAttendees.length > 0 ? resolvedAttendees : undefined;
+          
+          logger.info(
+            {
+              userId,
+              originalAttendees,
+              resolvedAttendees,
+            },
+            'Attendee resolution completed'
+          );
+        } catch (error) {
+          logger.error(
+            {
+              error,
+              userId,
+              attendees: intent.attendees,
+            },
+            'Failed to resolve attendee names to emails'
+          );
+          // Continue with original attendees - will fail with clear error if invalid
         }
       }
       
