@@ -79,6 +79,8 @@ import {
   getNoteResourceShares,
   deleteNoteShare,
   createNoteShare,
+  getVerifiedWhatsappNumberByPhone,
+  logOutgoingWhatsAppMessage,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -6240,35 +6242,48 @@ export class ActionExecutor {
         });
       }
 
-      // Build Event Overview message - matching create event style with clickable URLs
-      let message = `📅 *Event Overview*\n\n`;
-      message += `*Title:* ${fullEvent.title || 'Untitled Event'}\n`;
-      message += `*Date:* ${eventDate}\n`;
-      message += `*Time:* ${eventTime}\n`;
+      // Build Event Overview message - matching create event style with button
+      let messageBody = `📅 *Event Overview*\n\n`;
+      messageBody += `*Title:* ${fullEvent.title || 'Untitled Event'}\n`;
+      messageBody += `*Date:* ${eventDate}\n`;
+      messageBody += `*Time:* ${eventTime}\n`;
 
-      // Location with clickable Google Maps link
+      // Determine what to show in Location field:
+      // - If location/address exists: show location name (not URL)
+      // - If no location OR Google Meet requested: show Google Meet link
+      let buttonUrl: string | null = null;
+      let buttonText: string = '';
+
       if (fullEvent.location) {
+        // User provided location/address - show location name, button will have Google Maps link
         const mapsLink = await this.getGoogleMapsLinkForLocation(fullEvent.location);
+        messageBody += `*Location:* ${fullEvent.location}\n`;
         if (mapsLink) {
-          message += `*Location:* ${mapsLink}\n`;
-        } else {
-          message += `*Location:* ${fullEvent.location}\n`;
+          buttonUrl = mapsLink;
+          buttonText = 'Open in Google Maps';
         }
-      }
-
-      // Google Meet link (if available) - as clickable URL
-      if (fullEvent.conferenceUrl) {
-        message += `*Link:* ${fullEvent.conferenceUrl}\n`;
+      } else if (fullEvent.conferenceUrl) {
+        // No location but Google Meet exists - show "No location"
+        messageBody += `*Location:* No location\n`;
+        buttonUrl = fullEvent.conferenceUrl;
+        buttonText = 'Google Meet';
       }
 
       // Attendees
       if (attendeeNames.length > 0) {
-        message += `*Invited:* ${attendeeNames.join(', ')}\n`;
+        messageBody += `*Invited:* ${attendeeNames.join(', ')}\n`;
+      }
+
+      // Send as CTA button message if we have a button, otherwise send as text
+      if (buttonUrl && buttonText) {
+        await this.sendSingleButtonMessage(messageBody, buttonText, buttonUrl);
+      } else {
+        await this.whatsappService.sendTextMessage(this.recipient, messageBody);
       }
 
       return {
         success: true,
-        message: message.trim(),
+        message: '', // Empty since we already sent the message with buttons
       };
     } catch (error) {
       logger.error({ error, userId: this.userId, action: parsed.action }, 'Failed to show event details');
@@ -6276,6 +6291,41 @@ export class ActionExecutor {
         success: false,
         message: "I'm sorry, I couldn't retrieve the event details. Please try again.",
       };
+    }
+  }
+
+  /**
+   * Helper function to send a single CTA button message
+   */
+  private async sendSingleButtonMessage(
+    bodyText: string,
+    buttonText: string,
+    buttonUrl: string
+  ): Promise<void> {
+    try {
+      await this.whatsappService.sendCTAButtonMessage(this.recipient, {
+        bodyText: bodyText,
+        buttonText: buttonText,
+        buttonUrl: buttonUrl,
+      });
+      // Log button message
+      try {
+        const whatsappNumber = await getVerifiedWhatsappNumberByPhone(this.db, this.recipient);
+        if (whatsappNumber) {
+          await logOutgoingWhatsAppMessage(this.db, {
+            whatsappNumberId: whatsappNumber.id,
+            userId: this.userId,
+            messageType: 'interactive',
+            messageContent: `Button: ${buttonText} - ${buttonUrl}`,
+            isFreeMessage: true,
+          });
+        }
+      } catch (logError) {
+        logger.warn({ error: logError, userId: this.userId }, 'Failed to log outgoing button message');
+      }
+    } catch (error) {
+      logger.warn({ error, userId: this.userId, buttonUrl }, `Failed to send button message, falling back to text: ${buttonText}`);
+      await this.whatsappService.sendTextMessage(this.recipient, `${bodyText}\n\n${buttonText}: ${buttonUrl}`);
     }
   }
 

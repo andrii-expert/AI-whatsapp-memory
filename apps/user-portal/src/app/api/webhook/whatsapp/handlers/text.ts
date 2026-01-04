@@ -2683,8 +2683,8 @@ async function handleEventOperation(
             buttonText = 'Open in Google Maps';
           }
         } else if (fullEvent.conferenceUrl) {
-          // No location but Google Meet exists - use Google Meet in Location field
-          responseMessage += `*Location:* ${fullEvent.conferenceUrl}\n`;
+          // No location but Google Meet exists - show "No location"
+          responseMessage += `*Location:* No location\n`;
           buttonUrl = fullEvent.conferenceUrl;
           buttonText = 'Google Meet';
         }
@@ -2796,25 +2796,32 @@ async function handleEventOperation(
         const day = dateParts[1] || '';
         const eventDate = `${day} ${month}`;
         
-        // Build message text with clickable URLs (all in one message)
+        // Build message text (all in one message with button) - matching CREATE style
         responseMessage = `✅ *Event Updated*\n\n`;
         responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
         responseMessage += `*Date:* ${eventDate}\n`;
         responseMessage += `*Time:* ${eventTime}\n`;
         
-        // Location with clickable Google Maps link
-        if (result.event.location) {
-          const mapsLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
-          if (mapsLink) {
-            responseMessage += `*Location:* ${mapsLink}\n`;
-          } else {
-            responseMessage += `*Location:* ${result.event.location}\n`;
-          }
-        }
+        // Determine what to show in Location field:
+        // - If location/address exists: show location name (not URL)
+        // - If no location OR Google Meet requested: show Google Meet link
+        let locationLink: string | null = null;
+        let buttonUrl: string | null = null;
+        let buttonText: string = '';
         
-        // Google Meet link (if available) - as clickable URL
-        if (fullEvent.conferenceUrl) {
-          responseMessage += `*Link:* ${fullEvent.conferenceUrl}\n`;
+        if (result.event.location) {
+          // User provided location/address - show location name, button will have Google Maps link
+          locationLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
+          responseMessage += `*Location:* ${result.event.location}\n`;
+          if (locationLink) {
+            buttonUrl = locationLink;
+            buttonText = 'Open in Google Maps';
+          }
+        } else if (fullEvent.conferenceUrl) {
+          // No location but Google Meet exists - show "No location"
+          responseMessage += `*Location:* No location\n`;
+          buttonUrl = fullEvent.conferenceUrl;
+          buttonText = 'Google Meet';
         }
         
         // Attendees
@@ -2832,65 +2839,78 @@ async function handleEventOperation(
           });
           responseMessage += `*Invited:* ${attendeeNames.join(', ')}\n`;
         }
+        
+        // Send as CTA button message if we have a button, otherwise send as text
+        if (buttonUrl && buttonText) {
+          try {
+            await whatsappService.sendCTAButtonMessage(recipient, {
+              bodyText: responseMessage.trim(),
+              buttonText: buttonText,
+              buttonUrl: buttonUrl,
+            });
+            
+            // Log button message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'interactive',
+                  messageContent: `${responseMessage.trim()}\n[Button: ${buttonText}]`,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (logError) {
+              logger.warn({ error: logError, userId }, `Failed to log ${buttonText} button message`);
+            }
+          } catch (error) {
+            logger.warn({ error, userId, buttonUrl }, `Failed to send ${buttonText} button, falling back to text`);
+            // Fallback: send as text message with URL
+            await whatsappService.sendTextMessage(recipient, `${responseMessage.trim()}\n\n${buttonText}: ${buttonUrl}`);
+            
+            // Log fallback text message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'text',
+                  messageContent: `${responseMessage.trim()}\n\n${buttonText}: ${buttonUrl}`,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (logError) {
+              logger.warn({ error: logError, userId }, 'Failed to log fallback text message');
+            }
+          }
+        } else {
+          // No button, send as regular text message
+          await whatsappService.sendTextMessage(recipient, responseMessage);
+          
+          // Log text message
+          try {
+            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+            if (whatsappNumber) {
+              await logOutgoingWhatsAppMessage(db, {
+                whatsappNumberId: whatsappNumber.id,
+                userId,
+                messageType: 'text',
+                messageContent: responseMessage,
+                isFreeMessage: true,
+              });
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to log outgoing text message');
+          }
+        }
+        
+        // Set responseMessage to empty since we've already sent the messages
+        responseMessage = '';
       } else if (result.action === 'DELETE' && result.event) {
-        const fullEvent = result.event as any; // Access conferenceUrl and attendees if available
-        
-        // Format time as 24-hour format (e.g., "13:40")
-        const eventTime = result.event.start.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-          timeZone: calendarTimezone,
-        });
-        
-        // Format date as "3 Jan" (day month) - manually format to ensure correct order
-        const dateStr = result.event.start.toLocaleDateString('en-US', {
-          day: 'numeric',
-          month: 'short',
-          timeZone: calendarTimezone,
-        });
-        // Split and reorder: "Jan 3" -> ["Jan", "3"] -> "3 Jan"
-        const dateParts = dateStr.split(' ');
-        const month = dateParts[0] || '';
-        const day = dateParts[1] || '';
-        const eventDate = `${day} ${month}`;
-        
-        // Build message text with clickable URLs (all in one message)
-        responseMessage = `✅ *Event Deleted*\n\n`;
-        responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
-        responseMessage += `*Date:* ${eventDate}\n`;
-        responseMessage += `*Time:* ${eventTime}\n`;
-        
-        // Location with clickable Google Maps link
-        if (result.event.location) {
-          const mapsLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
-          if (mapsLink) {
-            responseMessage += `*Location:* ${mapsLink}\n`;
-          } else {
-            responseMessage += `*Location:* ${result.event.location}\n`;
-          }
-        }
-        
-        // Google Meet link (if available) - as clickable URL
-        if (fullEvent.conferenceUrl) {
-          responseMessage += `*Link:* ${fullEvent.conferenceUrl}\n`;
-        }
-        
-        // Attendees
-        if (fullEvent.attendees && fullEvent.attendees.length > 0) {
-          const attendeeNames = fullEvent.attendees.map((attendee: string) => {
-            if (attendee.includes('@')) {
-              const namePart = attendee.split('@')[0];
-              if (namePart) {
-                return namePart.split('.').map((part: string) =>
-                  part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-                ).join(' ');
-              }
-            }
-            return attendee;
-          });
-          responseMessage += `*Invited:* ${attendeeNames.join(', ')}\n`;
-        }
+        // Simple delete message - only show event name
+        responseMessage = `✅ ${result.event.title || 'Untitled Event'} deleted`;
       } else if (result.action === 'QUERY' && result.events) {
         if (result.events.length === 0) {
           responseMessage = "📅 *You have no events scheduled.*";
