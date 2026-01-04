@@ -2356,28 +2356,26 @@ async function handleEventOperation(
         const day = dateParts[1] || '';
         const eventDate = `${day} ${month}`;
         
-        // Build message text (all in one message)
+        // Build message text (all in one message with button)
         responseMessage = `✅ *New Event Created*\n\n`;
         responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
         responseMessage += `*Date:* ${eventDate}\n`;
         responseMessage += `*Time:* ${eventTime}\n`;
         
         // Determine what to show in Location field:
-        // - If location/address exists: show Google Maps link
+        // - If location/address exists: show location name (not URL)
         // - If no location OR Google Meet requested: show Google Meet link
         let locationLink: string | null = null;
         let buttonUrl: string | null = null;
         let buttonText: string = '';
         
         if (result.event.location) {
-          // User provided location/address - use Google Maps
+          // User provided location/address - show location name, button will have Google Maps link
           locationLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
+          responseMessage += `*Location:* ${result.event.location}\n`;
           if (locationLink) {
-            responseMessage += `*Location:* ${locationLink}\n`;
             buttonUrl = locationLink;
             buttonText = 'Open in Google Maps';
-          } else {
-            responseMessage += `*Location:* ${result.event.location}\n`;
           }
         } else if (fullEvent.conferenceUrl) {
           // No location but Google Meet exists - use Google Meet in Location field
@@ -2402,30 +2400,11 @@ async function handleEventOperation(
           responseMessage += `*Invited:* ${attendeeNames.join(', ')}\n`;
         }
         
-        // Send text message
-        await whatsappService.sendTextMessage(recipient, responseMessage);
-        
-        // Log text message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: responseMessage,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing text message');
-        }
-        
-        // Send button if we have a link (Google Maps or Google Meet)
+        // Send as CTA button message if we have a button, otherwise send as text
         if (buttonUrl && buttonText) {
           try {
             await whatsappService.sendCTAButtonMessage(recipient, {
-              bodyText: buttonText === 'Google Meet' ? '🔗 Join the meeting' : `📍 Location: ${result.event.location || ''}`,
+              bodyText: responseMessage.trim(),
               buttonText: buttonText,
               buttonUrl: buttonUrl,
             });
@@ -2438,7 +2417,7 @@ async function handleEventOperation(
                   whatsappNumberId: whatsappNumber.id,
                   userId,
                   messageType: 'interactive',
-                  messageContent: `${buttonText} button: ${buttonUrl}`,
+                  messageContent: `${responseMessage.trim()}\n[Button: ${buttonText}]`,
                   isFreeMessage: true,
                 });
               }
@@ -2447,7 +2426,43 @@ async function handleEventOperation(
             }
           } catch (error) {
             logger.warn({ error, userId, buttonUrl }, `Failed to send ${buttonText} button, falling back to text`);
-            await whatsappService.sendTextMessage(recipient, `${buttonText}: ${buttonUrl}`);
+            // Fallback: send as text message with URL
+            await whatsappService.sendTextMessage(recipient, `${responseMessage.trim()}\n\n${buttonText}: ${buttonUrl}`);
+            
+            // Log fallback text message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'text',
+                  messageContent: `${responseMessage.trim()}\n\n${buttonText}: ${buttonUrl}`,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (logError) {
+              logger.warn({ error: logError, userId }, 'Failed to log fallback text message');
+            }
+          }
+        } else {
+          // No button, send as regular text message
+          await whatsappService.sendTextMessage(recipient, responseMessage);
+          
+          // Log text message
+          try {
+            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+            if (whatsappNumber) {
+              await logOutgoingWhatsAppMessage(db, {
+                whatsappNumberId: whatsappNumber.id,
+                userId,
+                messageType: 'text',
+                messageContent: responseMessage,
+                isFreeMessage: true,
+              });
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to log outgoing text message');
           }
         }
         
