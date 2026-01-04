@@ -1840,13 +1840,28 @@ async function handleEventOperation(
             'Starting attendee resolution loop - ALL ATTENDEES TO PROCESS'
           );
           
+          // Process ALL attendees - no special cases, no early exits
+          logger.info(
+            {
+              userId,
+              totalAttendeesToProcess: intent.attendees.length,
+              allAttendeesToProcess: intent.attendees,
+            },
+            '🔄 Starting to process ALL attendees - no special handling for any attendee'
+          );
+          
           for (let i = 0; i < intent.attendees.length; i++) {
             const attendee = intent.attendees[i];
             if (!attendee) {
-              logger.warn({ userId, attendeeIndex: i }, 'Skipping undefined attendee at index');
+              logger.warn({ userId, attendeeIndex: i, totalAttendees: intent.attendees.length }, 'Skipping undefined attendee at index');
               continue;
             }
             const attendeeTrimmed = attendee.trim();
+            
+            if (!attendeeTrimmed) {
+              logger.warn({ userId, attendeeIndex: i, totalAttendees: intent.attendees.length }, 'Skipping empty attendee at index');
+              continue;
+            }
             
             logger.info(
               {
@@ -1856,9 +1871,9 @@ async function handleEventOperation(
                 processingAttendee: attendeeTrimmed,
                 attendeeType: typeof attendee,
                 currentResolvedCount: resolvedAttendees.length,
-                currentResolvedEmails: resolvedAttendees,
+                currentResolvedEmails: [...resolvedAttendees], // Copy array to show current state
               },
-              `Processing attendee ${i + 1}/${intent.attendees.length} for resolution`
+              `🔄 Processing attendee ${i + 1}/${intent.attendees.length}: "${attendeeTrimmed}"`
             );
             
             // Check if it's already a valid email address (use proper regex validation)
@@ -1890,8 +1905,20 @@ async function handleEventOperation(
             }
             
             // Try to find matching friend by name (case-insensitive, with priority matching)
+            // IMPORTANT: Reset matchingFriend for each attendee - no shared state
             let matchingFriend: typeof friends[0] | undefined = undefined;
             let matchType: string = '';
+            
+            logger.debug(
+              {
+                userId,
+                attendeeIndex: i,
+                attendeeName: attendeeTrimmed,
+                friendsCount: friends.length,
+                friendNames: friends.map(f => f.name),
+              },
+              `🔍 Starting friend matching for "${attendeeTrimmed}"`
+            );
             
             // First, try exact match
             matchingFriend = friends.find(friend => {
@@ -1905,12 +1932,13 @@ async function handleEventOperation(
               logger.info(
                 {
                   userId,
+                  attendeeIndex: i,
                   attendeeName: attendeeTrimmed,
                   matchType: 'exact',
                   friendName: matchingFriend.name,
                   friendEmail: matchingFriend.email,
                 },
-                'Found exact match for attendee'
+                `✅ Found exact match for "${attendeeTrimmed}" -> ${matchingFriend.name} (${matchingFriend.email})`
               );
             }
             
@@ -2020,33 +2048,60 @@ async function handleEventOperation(
               }
             }
             
-            if (matchingFriend && matchingFriend.email) {
-              const emailLower = matchingFriend.email.toLowerCase();
-              // Avoid duplicates
-              if (!resolvedAttendees.includes(emailLower)) {
-                resolvedAttendees.push(emailLower);
-                logger.info(
-                  {
-                    userId,
-                    attendeeName: attendeeTrimmed,
-                    friendName: matchingFriend.name,
-                    resolvedEmail: matchingFriend.email,
-                    resolvedCount: resolvedAttendees.length,
-                  },
-                  'Resolved attendee name to friend email'
-                );
+            // Process the match result
+            if (matchingFriend) {
+              if (matchingFriend.email) {
+                const emailLower = matchingFriend.email.toLowerCase();
+                // Avoid duplicates
+                if (!resolvedAttendees.includes(emailLower)) {
+                  resolvedAttendees.push(emailLower);
+                  logger.info(
+                    {
+                      userId,
+                      attendeeIndex: i,
+                      attendeeName: attendeeTrimmed,
+                      friendName: matchingFriend.name,
+                      resolvedEmail: matchingFriend.email,
+                      resolvedCount: resolvedAttendees.length,
+                      matchType: matchType,
+                      allResolvedSoFar: [...resolvedAttendees],
+                    },
+                    `✅ SUCCESS: Resolved "${attendeeTrimmed}" -> ${matchingFriend.email} (${matchType} match)`
+                  );
+                } else {
+                  logger.warn(
+                    {
+                      userId,
+                      attendeeIndex: i,
+                      attendeeName: attendeeTrimmed,
+                      friendName: matchingFriend.name,
+                      resolvedEmail: matchingFriend.email,
+                    },
+                    `⚠️ Skipping duplicate email: ${matchingFriend.email} (already resolved)`
+                  );
+                }
               } else {
-                logger.warn(
+                logger.error(
                   {
                     userId,
+                    attendeeIndex: i,
                     attendeeName: attendeeTrimmed,
                     friendName: matchingFriend.name,
-                    resolvedEmail: matchingFriend.email,
+                    matchType: matchType,
                   },
-                  'Skipping duplicate email address'
+                  `❌ ERROR: Found matching friend "${matchingFriend.name}" but friend has NO email address!`
                 );
               }
             } else {
+              // No matching friend found - try other options
+              logger.debug(
+                {
+                  userId,
+                  attendeeIndex: i,
+                  attendeeName: attendeeTrimmed,
+                },
+                `❌ No friend match found for "${attendeeTrimmed}" - checking if it's an email`
+              );
               // If not found in friends, check if it's already a valid email (double-check)
               const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
               if (emailRegex.test(attendeeTrimmed)) {
@@ -2075,13 +2130,16 @@ async function handleEventOperation(
                 }
               } else {
                 // Not a friend and not an email - skip it and warn with detailed info
-                logger.warn(
+                logger.error(
                   {
                     userId,
+                    attendeeIndex: i,
                     attendeeName: attendeeTrimmed,
+                    totalAttendees: intent.attendees.length,
+                    currentResolvedCount: resolvedAttendees.length,
                     availableFriends: friends.map(f => ({ name: f.name, email: f.email })),
                     allFriendNames: friends.map(f => f.name),
-                    allFriendEmails: friends.map(f => f.email).filter(Boolean),
+                    allFriendEmails: friends.map(f => f.email).filter((e): e is string => !!e),
                     attemptedMatches: friends.map(f => ({
                       friendName: f.name,
                       friendNameLower: f.name.toLowerCase().trim(),
@@ -2093,12 +2151,36 @@ async function handleEventOperation(
                       containsMatch: f.name.toLowerCase().trim().includes(attendeeTrimmed.toLowerCase().trim()) || attendeeTrimmed.toLowerCase().trim().includes(f.name.toLowerCase().trim()),
                     })),
                   },
-                  'Could not resolve attendee name to email - skipping (not a friend and not a valid email)'
+                  `❌ FAILED: Could not resolve "${attendeeTrimmed}" - not a friend and not a valid email - SKIPPING`
                 );
-                // Don't add it - it will cause an error
+                // Don't add it - it will cause an error with the calendar API
               }
             }
+            
+            // Log completion of this attendee processing
+            logger.info(
+              {
+                userId,
+                attendeeIndex: i,
+                attendeeName: attendeeTrimmed,
+                wasResolved: matchingFriend && matchingFriend.email ? true : false,
+                resolvedEmail: matchingFriend && matchingFriend.email ? matchingFriend.email : null,
+                totalResolvedSoFar: resolvedAttendees.length,
+                allResolvedEmails: [...resolvedAttendees],
+              },
+              `✅ Completed processing attendee ${i + 1}/${intent.attendees.length}: "${attendeeTrimmed}"`
+            );
           }
+          
+          logger.info(
+            {
+              userId,
+              totalAttendeesProcessed: intent.attendees.length,
+              totalResolved: resolvedAttendees.length,
+              resolvedAttendees: [...resolvedAttendees],
+            },
+            '🎯 FINISHED processing ALL attendees - summary'
+          );
           
           // Create a summary of what was resolved vs what wasn't
           const resolutionSummary = originalAttendees.map(orig => {
@@ -3014,7 +3096,13 @@ function parseEventTemplateToIntent(
       const attendeesMatch = template.match(/\s*-\s*attendees:\s*(.+?)(?:\s*-\s*calendar:|$)/i);
       if (attendeesMatch && attendeesMatch[1]) {
         const attendeesStr = attendeesMatch[1].trim();
-        logger.debug({ attendeesStrFromTemplate: attendeesStr }, 'Raw attendees string from template');
+        logger.info(
+          {
+            attendeesStrFromTemplate: attendeesStr,
+            template: template,
+          },
+          '📋 Raw attendees string extracted from template'
+        );
 
         // Filter out "Google Meet" and similar phrases that are not actual attendees
         const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'meet', 'googlemeet'];
@@ -3022,15 +3110,28 @@ function parseEventTemplateToIntent(
         // Split by comma, but also handle "and" as a separator (e.g., "Paul and Liz" or "Paul, Liz and John")
         // First, replace " and " with comma for easier parsing
         const normalizedStr = attendeesStr.replace(/\s+and\s+/gi, ', ');
+        logger.info(
+          {
+            originalAttendeesStr: attendeesStr,
+            normalizedStr: normalizedStr,
+          },
+          '🔄 Normalized attendees string (replaced "and" with commas)'
+        );
         
-        intent.attendees = normalizedStr.split(',')
-          .map(a => a.trim())
-          .filter(a => {
-            if (a.length === 0) return false;
+        const splitAttendees = normalizedStr.split(',').map(a => a.trim()).filter(a => a.length > 0);
+        logger.info(
+          {
+            splitAttendees: splitAttendees,
+            splitCount: splitAttendees.length,
+          },
+          '📝 Split attendees by comma'
+        );
+        
+        intent.attendees = splitAttendees.filter(a => {
             const lower = a.toLowerCase().trim();
             // Filter out exact matches for Google Meet keywords
             if (googleMeetKeywords.includes(lower)) {
-              logger.debug({ filteredAttendee: a, reason: 'exact_keyword_match_in_parse' }, 'Filtered out attendee during parsing (exact Google Meet keyword)');
+              logger.info({ filteredAttendee: a, reason: 'exact_keyword_match_in_parse' }, '❌ Filtered out attendee during parsing (exact Google Meet keyword)');
               return false;
             }
             // Filter out if it contains Google Meet keywords as whole words
@@ -3039,11 +3140,20 @@ function parseEventTemplateToIntent(
               return regex.test(lower);
             });
             if (hasGoogleMeetKeyword) {
-              logger.debug({ filteredAttendee: a, reason: 'whole_word_keyword_match_in_parse' }, 'Filtered out attendee during parsing (whole word Google Meet keyword)');
+              logger.info({ filteredAttendee: a, reason: 'whole_word_keyword_match_in_parse' }, '❌ Filtered out attendee during parsing (whole word Google Meet keyword)');
             }
             return !hasGoogleMeetKeyword;
           });
-        logger.debug({ parsedAttendeesAfterFilter: intent.attendees, parsedAttendeesCount: intent.attendees?.length || 0 }, 'Parsed attendees after Google Meet filter');
+        logger.info(
+          {
+            parsedAttendeesAfterFilter: intent.attendees,
+            parsedAttendeesCount: intent.attendees?.length || 0,
+            allParsedAttendees: [...(intent.attendees || [])],
+          },
+          '✅ Parsed attendees after Google Meet filter - FINAL PARSED LIST'
+        );
+      } else {
+        logger.info({ template: template }, 'No attendees found in template');
       }
     
     // Ensure we have at least a title
