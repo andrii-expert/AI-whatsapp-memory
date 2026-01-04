@@ -861,15 +861,12 @@ export class CalendarService implements ICalendarService {
             timeMax.setHours(23, 59, 59, 999);
             break;
           case 'this_week':
-            // Start of current week (Sunday)
-            const weekStart = new Date(now);
-            weekStart.setDate(now.getDate() - now.getDay());
-            timeMin = new Date(weekStart);
+            // Start from today (the day requested) + 6 more days = 7 days total (one full week)
+            timeMin = new Date(now);
             timeMin.setHours(0, 0, 0, 0);
-            // End of current week (Saturday)
-            const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekStart.getDate() + 6);
-            timeMax = new Date(weekEnd);
+            // End is 6 days after today (7 days total including today)
+            timeMax = new Date(now);
+            timeMax.setDate(now.getDate() + 6);
             timeMax.setHours(23, 59, 59, 999);
             break;
           case 'this_month':
