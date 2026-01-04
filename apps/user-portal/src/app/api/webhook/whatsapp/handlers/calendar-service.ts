@@ -425,15 +425,30 @@ export class CalendarService implements ICalendarService {
       );
       
       // Check if user wants Google Meet (check description and location for keywords)
+      const descriptionLower = intent.description?.toLowerCase() || '';
+      const locationLower = intent.location?.toLowerCase() || '';
       const wantsGoogleMeet = 
-        (intent.description?.toLowerCase().includes('google meet') ||
-         intent.description?.toLowerCase().includes('meet link') ||
-         intent.description?.toLowerCase().includes('video call') ||
-         intent.description?.toLowerCase().includes('video meeting') ||
-         intent.location?.toLowerCase().includes('google meet') ||
-         intent.location?.toLowerCase().includes('meet') ||
-         intent.location?.toLowerCase() === 'meet') &&
+        (descriptionLower.includes('google meet') ||
+         descriptionLower.includes('meet link') ||
+         descriptionLower.includes('video call') ||
+         descriptionLower.includes('video meeting') ||
+         descriptionLower.includes('meet requested') ||
+         locationLower.includes('google meet') ||
+         locationLower.includes('meet link') ||
+         locationLower === 'meet') &&
         calendarConnection.provider === 'google'; // Only for Google Calendar
+      
+      logger.info(
+        {
+          userId,
+          wantsGoogleMeet,
+          hasDescription: !!intent.description,
+          description: intent.description,
+          location: intent.location,
+          provider: calendarConnection.provider,
+        },
+        'Google Meet detection for event creation'
+      );
 
       const createParams = {
         calendarId: calendarConnection.calendarId || 'primary',

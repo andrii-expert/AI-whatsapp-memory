@@ -1596,8 +1596,9 @@ async function handleEventOperation(
     try {
       intent = parseEventTemplateToIntent(actionTemplate, isCreate, isUpdate, isDelete);
       
-      // Check if user wants Google Meet (check original user text for keywords)
+      // Check if user wants Google Meet (check both original user text and action template for keywords)
       const userTextLower = originalUserText.toLowerCase();
+      const actionTemplateLower = actionTemplate.toLowerCase();
       const wantsGoogleMeet = 
         userTextLower.includes('google meet') ||
         userTextLower.includes('meet link') ||
@@ -1605,7 +1606,23 @@ async function handleEventOperation(
         userTextLower.includes('video meeting') ||
         userTextLower.includes('create meet') ||
         userTextLower.includes('add meet') ||
-        (userTextLower.includes('meet') && (userTextLower.includes('link') || userTextLower.includes('url')));
+        (userTextLower.includes('meet') && (userTextLower.includes('link') || userTextLower.includes('url'))) ||
+        actionTemplateLower.includes('google meet') ||
+        actionTemplateLower.includes('meet link') ||
+        (actionTemplateLower.includes('attendees:') && actionTemplateLower.includes('google meet'));
+      
+      // Remove "Google Meet" from attendees if it was incorrectly added
+      if (intent.attendees && intent.attendees.length > 0) {
+        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'googlemeet'];
+        intent.attendees = intent.attendees.filter(attendee => {
+          const lower = attendee.toLowerCase();
+          return !googleMeetKeywords.some(keyword => lower.includes(keyword));
+        });
+        // If all attendees were filtered out, set to undefined
+        if (intent.attendees.length === 0) {
+          intent.attendees = undefined;
+        }
+      }
       
       // If Google Meet is requested, add it to description if not already present
       if (wantsGoogleMeet && isCreate && intent.description && !intent.description.toLowerCase().includes('google meet')) {
@@ -1613,6 +1630,17 @@ async function handleEventOperation(
       } else if (wantsGoogleMeet && isCreate && !intent.description) {
         intent.description = 'Google Meet requested';
       }
+      
+      logger.info(
+        {
+          userId,
+          wantsGoogleMeet,
+          hasAttendees: !!intent.attendees,
+          attendeesCount: intent.attendees?.length || 0,
+          attendees: intent.attendees,
+        },
+        'Google Meet detection and attendee filtering'
+      );
       
       logger.info(
         {
@@ -2048,12 +2076,21 @@ function parseEventTemplateToIntent(
       intent.location = locationMatch[1].trim();
     }
     
-    // Extract attendees
-    const attendeesMatch = template.match(/\s*-\s*attendees:\s*(.+?)(?:\s*-\s*calendar:|$)/i);
-    if (attendeesMatch && attendeesMatch[1]) {
-      const attendeesStr = attendeesMatch[1].trim();
-      intent.attendees = attendeesStr.split(',').map(a => a.trim()).filter(a => a.length > 0);
-    }
+      // Extract attendees
+      const attendeesMatch = template.match(/\s*-\s*attendees:\s*(.+?)(?:\s*-\s*calendar:|$)/i);
+      if (attendeesMatch && attendeesMatch[1]) {
+        const attendeesStr = attendeesMatch[1].trim();
+        // Filter out "Google Meet" and similar phrases that are not actual attendees
+        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'meet', 'googlemeet'];
+        intent.attendees = attendeesStr.split(',')
+          .map(a => a.trim())
+          .filter(a => {
+            if (a.length === 0) return false;
+            const lower = a.toLowerCase();
+            // Filter out Google Meet related phrases
+            return !googleMeetKeywords.some(keyword => lower.includes(keyword));
+          });
+      }
     
     // Ensure we have at least a title
     if (!intent.title) {
