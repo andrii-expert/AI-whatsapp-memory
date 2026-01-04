@@ -1139,10 +1139,15 @@ async function processAIResponse(
       const isViewAnEvent = actionTemplate.toLowerCase().match(/^view\s+an\s+event:/i) ||
                             actionTemplate.toLowerCase().match(/^view\s+event:/i);
       
+      // Check for "Show details for event:" format (AI sometimes generates this)
+      const isShowDetailsForEvent = actionTemplate.toLowerCase().match(/^show\s+details?\s+for\s+event:/i) ||
+                                     actionTemplate.toLowerCase().match(/^show\s+event\s+details?:/i);
+      
       const isViewShowOperation = actionTemplate.toLowerCase().match(/^(view|show|get|see|details? of|overview of)\s+(?:event|events?|me\s+event|me\s+the\s+event)/i) ||
                                   actionTemplate.toLowerCase().match(/^(view|show|get|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
                                   (actionTemplate.toLowerCase().startsWith('view a file:') && originalUserText?.toLowerCase().includes('event')) ||
                                   isViewAnEvent ||
+                                  isShowDetailsForEvent ||
                                   isListEventsWithName;
       
       if (isViewShowOperation) {
@@ -1176,6 +1181,32 @@ async function processAIResponse(
               eventActionTemplate = `Show event details: ${userNumberMatch[1]}`;
             } else {
               eventActionTemplate = `Show event details: ${extractedValue}`;
+            }
+          } else if (originalUserText) {
+            // Extract from original user text
+            const userNumberMatch = originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                   originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i);
+            if (userNumberMatch && userNumberMatch[1]) {
+              eventActionTemplate = `Show event details: ${userNumberMatch[1]}`;
+            } else {
+              eventActionTemplate = `Show event details: ${originalUserText}`;
+            }
+          }
+        } else if (isShowDetailsForEvent) {
+          // Extract event name/number from "Show details for event: [name]" or "Show event details: [name]"
+          const showDetailsMatch = actionTemplate.match(/^Show\s+(?:details?\s+for\s+)?event\s+details?:\s*(.+?)(?:\s*-\s*(?:date|time|calendar):.*)?$/i);
+          if (showDetailsMatch && showDetailsMatch[1]) {
+            const extractedValue = showDetailsMatch[1].trim();
+            // If user said "show info on 1" or "send info on 1", use the number from user text instead of event name from AI
+            const userNumberMatch = originalUserText?.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                   originalUserText?.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i);
+            if (userNumberMatch && userNumberMatch[1]) {
+              eventActionTemplate = `Show event details: ${userNumberMatch[1]}`;
+            } else {
+              // Extract just the event name (before any "- date:" or "- time:" parts)
+              const eventNameParts = extractedValue.split(/\s*-\s*(?:date|time|calendar):/i);
+              const eventNameOnly = eventNameParts[0]?.trim() || extractedValue.trim();
+              eventActionTemplate = `Show event details: ${eventNameOnly}`;
             }
           } else if (originalUserText) {
             // Extract from original user text
