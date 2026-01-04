@@ -5990,7 +5990,9 @@ export class ActionExecutor {
         });
         
         let headerText = "Events:";
-        if (allToday) {
+        if (queryTimeframe === 'this_week') {
+          headerText = `📅 *Events This Week*`;
+        } else if (allToday) {
           headerText = `📅 *Today's Events:*`;
         } else if (allTomorrow) {
           headerText = `📅 *Tomorrow's Events:*`;
