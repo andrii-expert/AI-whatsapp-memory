@@ -479,10 +479,41 @@ export class CalendarService implements ICalendarService {
             end: createParams.end.toISOString(),
             attendees: createParams.attendees,
             attendeesCount: createParams.attendees?.length || 0,
+            attendeesType: Array.isArray(createParams.attendees) ? 'array' : typeof createParams.attendees,
+            attendeesArray: Array.isArray(createParams.attendees) ? createParams.attendees : undefined,
           },
         },
-        'Calendar createEvent parameters'
+        'Calendar createEvent parameters - VERIFYING ATTENDEES'
       );
+      
+      // Critical check: ensure attendees is an array
+      if (createParams.attendees && !Array.isArray(createParams.attendees)) {
+        logger.error(
+          {
+            userId,
+            attendees: createParams.attendees,
+            attendeesType: typeof createParams.attendees,
+          },
+          'CRITICAL ERROR: attendees is not an array!'
+        );
+        createParams.attendees = Array.isArray(createParams.attendees) ? createParams.attendees : [createParams.attendees].filter(Boolean);
+      }
+      
+      // Log each attendee individually
+      if (createParams.attendees && Array.isArray(createParams.attendees)) {
+        createParams.attendees.forEach((attendee, index) => {
+          logger.info(
+            {
+              userId,
+              attendeeIndex: index,
+              attendee: attendee,
+              attendeeType: typeof attendee,
+              attendeeLength: typeof attendee === 'string' ? attendee.length : 'N/A',
+            },
+            `Attendee ${index + 1} being sent to calendar provider`
+          );
+        });
+      }
       
       const createdEvent = await this.withTokenRefresh(
         calendarConnection.id,

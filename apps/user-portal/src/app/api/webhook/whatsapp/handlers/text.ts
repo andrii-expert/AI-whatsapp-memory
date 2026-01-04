@@ -1830,16 +1830,35 @@ async function handleEventOperation(
           
           const resolvedAttendees: string[] = [];
           
-          for (const attendee of intent.attendees) {
+          logger.info(
+            {
+              userId,
+              intentAttendeesArray: intent.attendees,
+              intentAttendeesCount: intent.attendees.length,
+              intentAttendeesTypes: intent.attendees.map(a => typeof a),
+            },
+            'Starting attendee resolution loop - ALL ATTENDEES TO PROCESS'
+          );
+          
+          for (let i = 0; i < intent.attendees.length; i++) {
+            const attendee = intent.attendees[i];
+            if (!attendee) {
+              logger.warn({ userId, attendeeIndex: i }, 'Skipping undefined attendee at index');
+              continue;
+            }
             const attendeeTrimmed = attendee.trim();
             
             logger.info(
               {
                 userId,
+                attendeeIndex: i,
+                totalAttendees: intent.attendees.length,
                 processingAttendee: attendeeTrimmed,
+                attendeeType: typeof attendee,
                 currentResolvedCount: resolvedAttendees.length,
+                currentResolvedEmails: resolvedAttendees,
               },
-              'Processing attendee for resolution'
+              `Processing attendee ${i + 1}/${intent.attendees.length} for resolution`
             );
             
             // Check if it's already a valid email address (use proper regex validation)
@@ -2081,6 +2100,17 @@ async function handleEventOperation(
             }
           }
           
+          logger.info(
+            {
+              userId,
+              totalProcessed: intent.attendees.length,
+              totalResolved: resolvedAttendees.length,
+              resolvedAttendees: resolvedAttendees,
+              allResolvedEmails: [...resolvedAttendees],
+            },
+            '✅ Attendee resolution loop completed - checking resolved attendees'
+          );
+          
           // Final validation: ensure all resolved attendees are valid email addresses
           const validEmails = resolvedAttendees.filter(email => {
             // Basic email validation
@@ -2112,6 +2142,7 @@ async function handleEventOperation(
                 validCount: validEmails.length,
                 filteredCount: resolvedAttendees.length - validEmails.length,
                 finalAttendees: intent.attendees,
+                finalAttendeesCount: intent.attendees.length,
               },
               'Attendee resolution and validation completed - attendees assigned to intent'
             );
@@ -2131,7 +2162,7 @@ async function handleEventOperation(
             );
           }
           
-          // Final check: warn if we lost attendees
+          // Final check: warn if we lost attendees - this is critical for debugging
           if (validEmails.length < originalAttendees.length) {
             const lostAttendees = originalAttendees.filter(orig => {
               // Check if this original attendee was resolved
@@ -2143,7 +2174,29 @@ async function handleEventOperation(
               return !wasResolved;
             });
             
-            logger.warn(
+            // For each lost attendee, try to find why it wasn't matched
+            const lostAttendeeAnalysis = lostAttendees.map(lost => {
+              const lostLower = lost.toLowerCase().trim();
+              const potentialMatches = friends.map(f => {
+                const friendNameLower = f.name.toLowerCase().trim();
+                return {
+                  friendName: f.name,
+                  friendEmail: f.email,
+                  exactMatch: friendNameLower === lostLower,
+                  firstWordMatch: friendNameLower.split(/\s+/)[0] === lostLower,
+                  wordMatch: friendNameLower.split(/\s+/).some(word => word === lostLower),
+                  startsWithMatch: friendNameLower.startsWith(lostLower) || lostLower.startsWith(friendNameLower),
+                  containsMatch: friendNameLower.includes(lostLower) || lostLower.includes(friendNameLower),
+                };
+              });
+              return {
+                lostAttendee: lost,
+                potentialMatches: potentialMatches.filter(m => m.exactMatch || m.firstWordMatch || m.wordMatch || m.startsWithMatch || m.containsMatch),
+                allPotentialMatches: potentialMatches,
+              };
+            });
+            
+            logger.error(
               {
                 userId,
                 originalAttendees,
@@ -2152,13 +2205,25 @@ async function handleEventOperation(
                 validCount: validEmails.length,
                 lostCount: originalAttendees.length - validEmails.length,
                 lostAttendees,
+                lostAttendeeAnalysis,
                 resolvedAttendees,
                 allFriendNames: friends.map(f => f.name),
-                allFriendEmails: friends.map(f => f.email).filter(Boolean),
+                allFriendEmails: friends.map(f => f.email).filter((e): e is string => !!e),
               },
-              'Some attendees were not resolved to valid emails - detailed analysis'
+              'CRITICAL: Some attendees were not resolved to valid emails - detailed analysis with potential matches'
             );
           }
+          
+          // Log final state before passing to calendar service
+          logger.info(
+            {
+              userId,
+              intentAttendees: intent.attendees,
+              intentAttendeesCount: intent.attendees?.length || 0,
+              intentAttendeesType: Array.isArray(intent.attendees) ? 'array' : typeof intent.attendees,
+            },
+            'Final intent.attendees before passing to calendar service'
+          );
         } catch (error) {
           logger.error(
             {
