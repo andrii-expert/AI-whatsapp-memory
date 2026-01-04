@@ -1144,12 +1144,18 @@ async function processAIResponse(
                                      actionTemplate.toLowerCase().match(/^show\s+event\s+details?:/i) ||
                                      actionTemplate.toLowerCase().startsWith('show details for event:');
       
+      // Check if user said "show me [number]" after listing events - this is always an event operation in event context
+      const isNumberBasedView = titleType === 'event' && 
+                                originalUserText && 
+                                originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i);
+      
       const isViewShowOperation = actionTemplate.toLowerCase().match(/^(view|show|get|see|details? of|overview of)\s+(?:event|events?|me\s+event|me\s+the\s+event)/i) ||
                                   actionTemplate.toLowerCase().match(/^(view|show|get|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
-                                  (actionTemplate.toLowerCase().startsWith('view a file:') && originalUserText?.toLowerCase().includes('event')) ||
+                                  (actionTemplate.toLowerCase().startsWith('view a file:') && (originalUserText?.toLowerCase().includes('event') || isNumberBasedView)) ||
                                   isViewAnEvent ||
                                   isShowDetailsForEvent ||
-                                  isListEventsWithName;
+                                  isListEventsWithName ||
+                                  isNumberBasedView;
       
       if (isViewShowOperation) {
         // Handle view/show event operations via ActionExecutor
@@ -1247,13 +1253,52 @@ async function processAIResponse(
             }
           }
         } else if (actionTemplate.toLowerCase().startsWith('view a file:')) {
-          // Extract event name from "View a file: [event name]"
-          const eventNameMatch = actionTemplate.match(/View a file:\s*(.+?)(?:\s*-\s*on folder:.*)?$/i);
-          if (eventNameMatch && eventNameMatch[1]) {
-            eventActionTemplate = `Show event details: ${eventNameMatch[1].trim()}`;
-          } else if (originalUserText) {
-            // Fallback: use original user text
-            eventActionTemplate = `Show event details: ${originalUserText}`;
+          // Extract event name/number from "View a file: [event name]"
+          // If user said "show me 1" or similar, prioritize the number from user text
+          const userNumberMatch = originalUserText?.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                 originalUserText?.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i);
+          
+          if (userNumberMatch && userNumberMatch[1]) {
+            // User specified a number - use it directly (this is the most important case)
+            eventActionTemplate = `Show event details: ${userNumberMatch[1]}`;
+            logger.info(
+              {
+                userId,
+                originalAction: actionTemplate,
+                convertedAction: eventActionTemplate,
+                extractedNumber: userNumberMatch[1],
+                originalUserText,
+                reason: 'user_specified_number_in_view_file_request'
+              },
+              '✅ Extracted number from user text for "View a file" request - PRIORITY'
+            );
+          } else {
+            // Extract event name from AI response
+            const eventNameMatch = actionTemplate.match(/View a file:\s*(.+?)(?:\s*-\s*on folder:.*)?$/i);
+            if (eventNameMatch && eventNameMatch[1]) {
+              eventActionTemplate = `Show event details: ${eventNameMatch[1].trim()}`;
+            } else if (originalUserText) {
+              // Fallback: use original user text
+              eventActionTemplate = `Show event details: ${originalUserText}`;
+            }
+          }
+        } else if (isNumberBasedView) {
+          // User said "show me 1" or similar - extract number directly
+          const userNumberMatch = originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                 originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i);
+          if (userNumberMatch && userNumberMatch[1]) {
+            eventActionTemplate = `Show event details: ${userNumberMatch[1]}`;
+            logger.info(
+              {
+                userId,
+                originalAction: actionTemplate,
+                convertedAction: eventActionTemplate,
+                extractedNumber: userNumberMatch[1],
+                originalUserText,
+                reason: 'number_based_view_in_event_context'
+              },
+              '✅ Extracted number from user text for number-based view request'
+            );
           }
         }
         
