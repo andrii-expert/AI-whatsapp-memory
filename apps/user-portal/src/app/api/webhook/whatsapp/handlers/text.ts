@@ -1,5 +1,5 @@
 import type { Database } from '@imaginecalendar/database/client';
-import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar, getWhatsAppCalendars } from '@imaginecalendar/database/queries';
+import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar, getWhatsAppCalendars, getUserAddresses } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
 import { WhatsappTextAnalysisService, IntentAnalysisService, type CalendarIntent, calendarIntentSchema } from '@imaginecalendar/ai-services';
@@ -1596,6 +1596,24 @@ async function handleEventOperation(
     try {
       intent = parseEventTemplateToIntent(actionTemplate, isCreate, isUpdate, isDelete);
       
+      // Check if user wants Google Meet (check original user text for keywords)
+      const userTextLower = originalUserText.toLowerCase();
+      const wantsGoogleMeet = 
+        userTextLower.includes('google meet') ||
+        userTextLower.includes('meet link') ||
+        userTextLower.includes('video call') ||
+        userTextLower.includes('video meeting') ||
+        userTextLower.includes('create meet') ||
+        userTextLower.includes('add meet') ||
+        (userTextLower.includes('meet') && (userTextLower.includes('link') || userTextLower.includes('url')));
+      
+      // If Google Meet is requested, add it to description if not already present
+      if (wantsGoogleMeet && isCreate && intent.description && !intent.description.toLowerCase().includes('google meet')) {
+        intent.description = (intent.description + ' (Google Meet requested)').trim();
+      } else if (wantsGoogleMeet && isCreate && !intent.description) {
+        intent.description = 'Google Meet requested';
+      }
+      
       logger.info(
         {
           userId,
@@ -1687,11 +1705,76 @@ async function handleEventOperation(
       throw new Error(`Calendar operation failed: ${calendarError instanceof Error ? calendarError.message : String(calendarError)}`);
     }
 
+    // Helper function to find matching address and generate Google Maps link
+    const getGoogleMapsLinkForLocation = async (location: string | undefined, userId: string): Promise<string | null> => {
+      if (!location) return null;
+      
+      try {
+        const addresses = await getUserAddresses(db, userId);
+        
+        // Try to find matching address by name or full address
+        const locationLower = location.toLowerCase().trim();
+        
+        for (const address of addresses) {
+          // Check if location matches address name
+          if (address.name.toLowerCase().trim() === locationLower) {
+            // Build Google Maps link from coordinates or address
+            if (address.latitude != null && address.longitude != null) {
+              return `https://www.google.com/maps?q=${address.latitude},${address.longitude}`;
+            } else {
+              // Build full address string
+              const addressParts = [
+                address.street,
+                address.city,
+                address.state,
+                address.zip,
+                address.country,
+              ].filter((part): part is string => typeof part === 'string' && part.trim() !== '');
+              
+              if (addressParts.length > 0) {
+                const fullAddress = addressParts.join(', ');
+                return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress)}`;
+              }
+            }
+          }
+          
+          // Check if location matches full address
+          const addressParts = [
+            address.street,
+            address.city,
+            address.state,
+            address.zip,
+            address.country,
+          ].filter((part): part is string => typeof part === 'string' && part.trim() !== '');
+          
+          if (addressParts.length > 0) {
+            const fullAddress = addressParts.join(', ').toLowerCase();
+            if (fullAddress === locationLower || locationLower.includes(fullAddress) || fullAddress.includes(locationLower)) {
+              if (address.latitude != null && address.longitude != null) {
+                return `https://www.google.com/maps?q=${address.latitude},${address.longitude}`;
+              } else {
+                return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressParts.join(', '))}`;
+              }
+            }
+          }
+        }
+        
+        // If no match found, create Google Maps link from location string
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+      } catch (error) {
+        logger.warn({ error, userId, location }, 'Failed to get Google Maps link for location');
+        // Fallback: create Google Maps link from location string
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+      }
+    };
+
     // Send response to user
     let responseMessage: string;
     if (result.success) {
       if (result.action === 'CREATE' && result.event) {
-        // Format time as 24-hour format (e.g., "15:00")
+        const fullEvent = result.event as any; // Access conferenceUrl and attendees if available
+        
+        // Format time as 24-hour format (e.g., "13:40")
         const eventTime = result.event.start.toLocaleTimeString('en-US', {
           hour: '2-digit',
           minute: '2-digit',
@@ -1699,18 +1782,54 @@ async function handleEventOperation(
           timeZone: calendarTimezone,
         });
         
-        // Format date as "Tue, Dec 9"
-        const eventDate = result.event.start.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
+        // Format date as "3 Jan" (day month) - manually format to ensure correct order
+        // toLocaleDateString with 'en-US' returns "Jan 3", so we need to reorder
+        const dateStr = result.event.start.toLocaleDateString('en-US', {
           day: 'numeric',
+          month: 'short',
           timeZone: calendarTimezone,
         });
+        // Split and reorder: "Jan 3" -> ["Jan", "3"] -> "3 Jan"
+        const dateParts = dateStr.split(' ');
+        const month = dateParts[0] || '';
+        const day = dateParts[1] || '';
+        const eventDate = `${day} ${month}`;
         
-        // New format: Title, date/time on one line, event name on next line (indented)
-        responseMessage = `✅ *Event Created Successfully*\n   ${eventDate}, ${eventTime}\n   ${result.event.title}`;
+        // New format matching the image
+        responseMessage = `✅ *New Event Created*\n\n`;
+        responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
+        responseMessage += `*Date:* ${eventDate}\n`;
+        responseMessage += `*Time:* ${eventTime}\n`;
+        
+        // Location with Google Maps link
         if (result.event.location) {
-          responseMessage += `\n   📍 ${result.event.location}`;
+          const mapsLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
+          if (mapsLink) {
+            responseMessage += `*Location:* ${mapsLink}\n`;
+          } else {
+            responseMessage += `*Location:* ${result.event.location}\n`;
+          }
+        }
+        
+        // Google Meet link (if available)
+        if (fullEvent.conferenceUrl) {
+          responseMessage += `*Link:* ${fullEvent.conferenceUrl}\n`;
+        }
+        
+        // Attendees
+        if (fullEvent.attendees && fullEvent.attendees.length > 0) {
+          const attendeeNames = fullEvent.attendees.map((attendee: string) => {
+            if (attendee.includes('@')) {
+              const namePart = attendee.split('@')[0];
+              if (namePart) {
+                return namePart.split('.').map((part: string) =>
+                  part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+                ).join(' ');
+              }
+            }
+            return attendee;
+          });
+          responseMessage += `*Invited:* ${attendeeNames.join(', ')}\n`;
         }
       } else if (result.action === 'UPDATE' && result.event) {
         responseMessage = `✅ *Event Updated Successfully*\n   ${result.event.title}`;

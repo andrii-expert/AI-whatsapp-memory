@@ -424,6 +424,17 @@ export class CalendarService implements ICalendarService {
         'Sending event to calendar provider with calendar timezone'
       );
       
+      // Check if user wants Google Meet (check description and location for keywords)
+      const wantsGoogleMeet = 
+        (intent.description?.toLowerCase().includes('google meet') ||
+         intent.description?.toLowerCase().includes('meet link') ||
+         intent.description?.toLowerCase().includes('video call') ||
+         intent.description?.toLowerCase().includes('video meeting') ||
+         intent.location?.toLowerCase().includes('google meet') ||
+         intent.location?.toLowerCase().includes('meet') ||
+         intent.location?.toLowerCase() === 'meet') &&
+        calendarConnection.provider === 'google'; // Only for Google Calendar
+
       const createParams = {
         calendarId: calendarConnection.calendarId || 'primary',
         title: intent.title!,
@@ -434,6 +445,7 @@ export class CalendarService implements ICalendarService {
         location: intent.location,
         attendees: intent.attendees,
         timeZone: calendarTimezone, // Use calendar's timezone
+        createGoogleMeet: wantsGoogleMeet || false,
       };
       
       logger.info(
@@ -467,6 +479,14 @@ export class CalendarService implements ICalendarService {
         htmlLink: createdEvent.htmlLink,
         webLink: createdEvent.webLink,
       };
+
+      // Add conferenceUrl and attendees if available
+      if (createdEvent.conferenceUrl) {
+        (event as any).conferenceUrl = createdEvent.conferenceUrl;
+      }
+      if (createdEvent.attendees && createdEvent.attendees.length > 0) {
+        (event as any).attendees = createdEvent.attendees;
+      }
 
       logger.info({ userId, eventId: event.id }, 'Calendar event created');
 
