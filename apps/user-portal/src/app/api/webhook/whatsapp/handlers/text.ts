@@ -1611,23 +1611,50 @@ async function handleEventOperation(
         actionTemplateLower.includes('meet link') ||
         (actionTemplateLower.includes('attendees:') && actionTemplateLower.includes('google meet'));
       
-      // Remove "Google Meet" from attendees if it was incorrectly added
+      // Remove "Google Meet" from attendees if it was incorrectly added (more aggressive filtering)
       if (intent.attendees && intent.attendees.length > 0) {
-        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'googlemeet', 'meet'];
+        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'googlemeet'];
         intent.attendees = intent.attendees.filter(attendee => {
           const lower = attendee.toLowerCase().trim();
-          // Filter out Google Meet keywords (but allow "meet" if it's part of a name like "Meeta")
-          if (lower === 'meet' || lower === 'google meet' || lower === 'googlemeet') {
+          
+          // Filter out exact matches
+          if (lower === 'meet' || lower === 'google meet' || lower === 'googlemeet' || 
+              lower === 'meet link' || lower === 'video call' || lower === 'video meeting') {
             return false;
           }
-          return !googleMeetKeywords.some(keyword => 
-            lower === keyword || lower.includes(keyword + ' ') || lower.includes(' ' + keyword)
-          );
+          
+          // Filter out if it contains Google Meet keywords as whole words (using word boundaries)
+          const hasGoogleMeetKeyword = googleMeetKeywords.some(keyword => {
+            // Check for exact match or as a whole word (with word boundaries)
+            const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
+            return regex.test(lower);
+          });
+          
+          // Also check for standalone "meet" (but allow names like "Meeta" or "Meetings")
+          if (lower === 'meet' || (lower.length <= 5 && lower.includes('meet'))) {
+            // Only filter if it's exactly "meet" or very short and contains "meet"
+            // This prevents filtering out names like "Meeta" or "Meetings"
+            if (lower === 'meet') {
+              return false;
+            }
+          }
+          
+          return !hasGoogleMeetKeyword;
         });
+        
         // If all attendees were filtered out, set to undefined
         if (intent.attendees.length === 0) {
           intent.attendees = undefined;
         }
+        
+        logger.info(
+          {
+            userId,
+            filteredAttendees: intent.attendees,
+            originalAttendeesCount: intent.attendees?.length || 0,
+          },
+          'Google Meet filtered from attendees'
+        );
       }
       
       // Resolve attendee names to email addresses (for friends and direct emails)
@@ -1680,29 +1707,61 @@ async function handleEventOperation(
                 'Resolved attendee name to friend email'
               );
             } else {
-              // If not found in friends, keep the original (might be a valid email or will fail later with clear error)
-              logger.warn(
-                {
-                  userId,
-                  attendeeName: attendeeTrimmed,
-                  availableFriends: friends.map(f => ({ name: f.name, email: f.email })),
-                },
-                'Could not resolve attendee name to email - keeping original'
-              );
-              // Still add it - the calendar service will validate it's an email
-              resolvedAttendees.push(attendeeTrimmed);
+              // If not found in friends, check if it's already a valid email
+              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+              if (emailRegex.test(attendeeTrimmed)) {
+                // It's already a valid email, use it
+                resolvedAttendees.push(attendeeTrimmed.toLowerCase());
+                logger.info(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                  },
+                  'Attendee is already a valid email address'
+                );
+              } else {
+                // Not a friend and not an email - skip it and warn
+                logger.warn(
+                  {
+                    userId,
+                    attendeeName: attendeeTrimmed,
+                    availableFriends: friends.map(f => ({ name: f.name, email: f.email })),
+                  },
+                  'Could not resolve attendee name to email - skipping (not a friend and not a valid email)'
+                );
+                // Don't add it - it will cause an error
+              }
             }
           }
           
-          intent.attendees = resolvedAttendees.length > 0 ? resolvedAttendees : undefined;
+          // Final validation: ensure all resolved attendees are valid email addresses
+          const validEmails = resolvedAttendees.filter(email => {
+            // Basic email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            const isValid = emailRegex.test(email);
+            if (!isValid) {
+              logger.warn(
+                {
+                  userId,
+                  invalidEmail: email,
+                },
+                'Invalid email address found in resolved attendees - filtering out'
+              );
+            }
+            return isValid;
+          });
+          
+          intent.attendees = validEmails.length > 0 ? validEmails : undefined;
           
           logger.info(
             {
               userId,
               originalAttendees,
               resolvedAttendees,
+              validEmails,
+              filteredCount: resolvedAttendees.length - validEmails.length,
             },
-            'Attendee resolution completed'
+            'Attendee resolution and validation completed'
           );
         } catch (error) {
           logger.error(
@@ -2174,14 +2233,24 @@ function parseEventTemplateToIntent(
       if (attendeesMatch && attendeesMatch[1]) {
         const attendeesStr = attendeesMatch[1].trim();
         // Filter out "Google Meet" and similar phrases that are not actual attendees
-        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'meet', 'googlemeet'];
+        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'googlemeet'];
         intent.attendees = attendeesStr.split(',')
           .map(a => a.trim())
           .filter(a => {
             if (a.length === 0) return false;
-            const lower = a.toLowerCase();
-            // Filter out Google Meet related phrases
-            return !googleMeetKeywords.some(keyword => lower.includes(keyword));
+            const lower = a.toLowerCase().trim();
+            // Filter out exact matches for Google Meet keywords
+            if (lower === 'meet' || lower === 'google meet' || lower === 'googlemeet' || 
+                lower === 'meet link' || lower === 'video call' || lower === 'video meeting') {
+              return false;
+            }
+            // Filter out if it contains Google Meet keywords as whole words
+            const hasGoogleMeetKeyword = googleMeetKeywords.some(keyword => {
+              // Check for exact match or as a whole word (with word boundaries)
+              const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
+              return regex.test(lower);
+            });
+            return !hasGoogleMeetKeyword;
           });
       }
     
