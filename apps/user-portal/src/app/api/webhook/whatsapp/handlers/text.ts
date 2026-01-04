@@ -1038,6 +1038,82 @@ async function processAIResponse(
     
     // Handle event operations (create, update, delete, view, show)
     if (titleType === 'event') {
+      // Check if AI misclassified an event request as an address request
+      // This happens when user says "send info on 3" but AI generates "Get address: [event name]"
+      const isGetAddress = actionTemplate.toLowerCase().startsWith('get address:');
+      if (isGetAddress && originalUserText) {
+        const userTextLower = originalUserText.toLowerCase();
+        // Check if user wants event info (not address info)
+        const wantsEventInfo = userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)/i) ||
+                              userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                              userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event/i) ||
+                              userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?[^"]+\s+event/i);
+        
+        if (wantsEventInfo) {
+          // Extract number from user text
+          const numberMatch = userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)/i) ||
+                            userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i);
+          
+          if (numberMatch && numberMatch[1]) {
+            // Convert to event details operation
+            const eventActionTemplate = `Show event details: ${numberMatch[1]}`;
+            
+            logger.info(
+              {
+                userId,
+                originalAction: actionTemplate,
+                convertedAction: eventActionTemplate,
+                originalUserText,
+                reason: 'misclassified_as_address_but_user_wants_event_info'
+              },
+              'Converting address operation to event details operation (in event handler)'
+            );
+            
+            // Route to event view operation
+            const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+            const parsed = executor.parseAction(eventActionTemplate);
+            if (parsed) {
+              parsed.resourceType = 'event';
+              const result = await executor.executeAction(parsed);
+              
+              if (result.success && result.message) {
+                await whatsappService.sendTextMessage(recipient, result.message);
+                
+                // Log outgoing message
+                try {
+                  const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                  if (whatsappNumber) {
+                    await logOutgoingWhatsAppMessage(db, {
+                      whatsappNumberId: whatsappNumber.id,
+                      userId,
+                      messageType: 'text',
+                      messageContent: result.message,
+                      isFreeMessage: true,
+                    });
+                  }
+                } catch (error) {
+                  logger.warn({ error, userId }, 'Failed to log outgoing message');
+                }
+              } else {
+                // If execution failed, send error message
+                await whatsappService.sendTextMessage(
+                  recipient,
+                  result.message || "I'm sorry, I couldn't retrieve the event details. Please try again."
+                );
+              }
+            } else {
+              logger.warn({ userId, eventActionTemplate }, 'Failed to parse event details action');
+              await whatsappService.sendTextMessage(
+                recipient,
+                "I'm sorry, I couldn't understand what event you want to view. Please try again."
+              );
+            }
+            
+            return; // Exit early, don't process as address operation
+          }
+        }
+      }
+      
       // Check if this is a view/show operation (should go to ActionExecutor)
       // Also check if "List events: [name/number]" is actually a request to show a specific event
       // This happens when user says "show me [event name] event" or "show me 2" but AI generates "List events: [name/number]"
