@@ -1747,6 +1747,28 @@ async function handleEventOperation(
       // Check if user wants Google Meet (check both original user text and action template for keywords)
       const userTextLower = originalUserText.toLowerCase();
       const actionTemplateLower = actionTemplate.toLowerCase();
+      
+      // Check if location is actually "Google Meet" - if so, clear location and request Google Meet
+      const locationLower = intent.location?.toLowerCase().trim() || '';
+      const isGoogleMeetLocation = 
+        locationLower === 'google meet' ||
+        locationLower === 'meet' ||
+        locationLower === 'googlemeet' ||
+        locationLower.includes('google meet') ||
+        locationLower.includes('meet link');
+      
+      if (isGoogleMeetLocation) {
+        logger.info(
+          {
+            userId,
+            originalLocation: intent.location,
+            reason: 'location_is_google_meet',
+          },
+          'Detected Google Meet in location field - clearing location and requesting Google Meet'
+        );
+        intent.location = undefined; // Clear the location
+      }
+      
       const wantsGoogleMeet = 
         userTextLower.includes('google meet') ||
         userTextLower.includes('meet link') ||
@@ -1757,7 +1779,8 @@ async function handleEventOperation(
         (userTextLower.includes('meet') && (userTextLower.includes('link') || userTextLower.includes('url'))) ||
         actionTemplateLower.includes('google meet') ||
         actionTemplateLower.includes('meet link') ||
-        (actionTemplateLower.includes('attendees:') && actionTemplateLower.includes('google meet'));
+        (actionTemplateLower.includes('attendees:') && actionTemplateLower.includes('google meet')) ||
+        isGoogleMeetLocation; // Also check if location was Google Meet
       
       // Remove "Google Meet" from attendees if it was incorrectly added (more aggressive filtering)
       if (intent.attendees && intent.attendees.length > 0) {
@@ -2669,13 +2692,23 @@ async function handleEventOperation(
         
         // Determine what to show in Location field:
         // - If location/address exists: show location name (not URL)
-        // - If no location OR Google Meet requested: show Google Meet link
+        // - If no location OR Google Meet requested: show "No location" with Google Meet button
         let locationLink: string | null = null;
         let buttonUrl: string | null = null;
         let buttonText: string = '';
         
-        if (result.event.location) {
-          // User provided location/address - show location name, button will have Google Maps link
+        // Check if location is actually "Google Meet" - filter it out
+        const eventLocation = result.event.location?.trim() || '';
+        const locationLower = eventLocation.toLowerCase();
+        const isGoogleMeetLocation = 
+          locationLower === 'google meet' ||
+          locationLower === 'meet' ||
+          locationLower === 'googlemeet' ||
+          locationLower.includes('google meet') ||
+          locationLower.includes('meet link');
+        
+        if (eventLocation && !isGoogleMeetLocation) {
+          // User provided actual location/address - show location name, button will have Google Maps link
           locationLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
           responseMessage += `*Location:* ${result.event.location}\n`;
           if (locationLink) {
@@ -2683,7 +2716,7 @@ async function handleEventOperation(
             buttonText = 'Open in Google Maps';
           }
         } else if (fullEvent.conferenceUrl) {
-          // No location but Google Meet exists - show "No location"
+          // No location (or location was Google Meet) but Google Meet exists - show "No location"
           responseMessage += `*Location:* No location\n`;
           buttonUrl = fullEvent.conferenceUrl;
           buttonText = 'Google Meet';
@@ -2804,13 +2837,23 @@ async function handleEventOperation(
         
         // Determine what to show in Location field:
         // - If location/address exists: show location name (not URL)
-        // - If no location OR Google Meet requested: show Google Meet link
+        // - If no location OR Google Meet requested: show "No location" with Google Meet button
         let locationLink: string | null = null;
         let buttonUrl: string | null = null;
         let buttonText: string = '';
         
-        if (result.event.location) {
-          // User provided location/address - show location name, button will have Google Maps link
+        // Check if location is actually "Google Meet" - filter it out
+        const eventLocation = result.event.location?.trim() || '';
+        const locationLower = eventLocation.toLowerCase();
+        const isGoogleMeetLocation = 
+          locationLower === 'google meet' ||
+          locationLower === 'meet' ||
+          locationLower === 'googlemeet' ||
+          locationLower.includes('google meet') ||
+          locationLower.includes('meet link');
+        
+        if (eventLocation && !isGoogleMeetLocation) {
+          // User provided actual location/address - show location name, button will have Google Maps link
           locationLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
           responseMessage += `*Location:* ${result.event.location}\n`;
           if (locationLink) {
@@ -2818,7 +2861,7 @@ async function handleEventOperation(
             buttonText = 'Open in Google Maps';
           }
         } else if (fullEvent.conferenceUrl) {
-          // No location but Google Meet exists - show "No location"
+          // No location (or location was Google Meet) but Google Meet exists - show "No location"
           responseMessage += `*Location:* No location\n`;
           buttonUrl = fullEvent.conferenceUrl;
           buttonText = 'Google Meet';
