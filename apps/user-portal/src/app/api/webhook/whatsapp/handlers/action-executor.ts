@@ -6262,12 +6262,12 @@ export class ActionExecutor {
           buttonUrl = mapsLink;
           buttonText = 'Open in Google Maps';
         }
-      } else if (fullEvent.conferenceUrl) {
-        // No location but Google Meet exists - show "No location"
-        messageBody += `*Location:* No location\n`;
-        buttonUrl = fullEvent.conferenceUrl;
-        buttonText = 'Google Meet';
-      }
+        } else if (fullEvent.conferenceUrl) {
+          // No location but Google Meet exists - show "No location"
+          messageBody += `*Location:* No location\n`;
+          buttonUrl = fullEvent.conferenceUrl;
+          buttonText = 'Google Meet';
+        }
 
       // Attendees
       if (attendeeNames.length > 0) {
