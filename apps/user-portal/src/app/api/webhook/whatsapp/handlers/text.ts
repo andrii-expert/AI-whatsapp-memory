@@ -447,14 +447,18 @@ async function processAIResponse(
       });
       
       const userWantsToView = !isTimeframe && (
-        // "show me 2" - number only
-        (userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i) && /^\d+$/.test(listEventValue)) ||
+        // "show me 2" or "send info on 3" - number only
+        (userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) && /^\d+$/.test(listEventValue)) ||
+        // "send info on [number]" - explicit pattern
+        userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
         // "show me event [name]" or "show me event- [name]" - explicit event keyword with name
-        userTextLower.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i) ||
+        userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i) ||
         // "show me [name] event" - name followed by event keyword
-        userTextLower.match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i) ||
+        userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?["']?([^"']+)\s+event["']?/i) ||
+        // "send info on [name]" - send info pattern with name
+        userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+["']?([^"']+)/i) ||
         // "show me [specific event name]" - but NOT if user text contains timeframe keywords
-        (hasEventKeyword && !hasTimeframeInUserText && userTextLower.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i))
+        (hasEventKeyword && !hasTimeframeInUserText && userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i))
       );
       
       // Also check if user text clearly indicates viewing a specific event, even if AI generated wrong action
@@ -1042,12 +1046,14 @@ async function processAIResponse(
       const listEventValue = listEventsMatch && listEventsMatch[1] ? listEventsMatch[1].trim() : '';
       
       // Check if user wants to view a specific event (not list all events)
-      // Pattern matches: "show me [name] event", "show event [name]", "view [name] event", "show me 2", etc.
-      const userWantsToView = originalUserText?.toLowerCase().match(/(?:show|view|get|see|details?|overview)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview)/i) ||
-                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?[^"]+\s+event/i) ||
-                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event\s+(?:of|for|details?|overview)/i) ||
-                              // Also match "show me [number]" - likely referring to a numbered item from a list
-                              (originalUserText?.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue));
+      // Pattern matches: "show me [name] event", "show event [name]", "view [name] event", "show me 2", "send info on 3", etc.
+      const userWantsToView = originalUserText?.toLowerCase().match(/(?:show|view|get|see|send|give|provide|details?|overview)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview|info|information)/i) ||
+                              originalUserText?.toLowerCase().match(/(?:show|view|get|see|send)\s+(?:me\s+)?[^"]+\s+event/i) ||
+                              originalUserText?.toLowerCase().match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event\s+(?:of|for|details?|overview)/i) ||
+                              originalUserText?.toLowerCase().match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)/i) ||
+                              // Also match "show me [number]" or "send info on [number]" - likely referring to a numbered item from a list
+                              (originalUserText?.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue)) ||
+                              (originalUserText?.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue));
       
       const isListEventsWithName = actionTemplate.toLowerCase().startsWith('list events:') && 
                                    hasEventNameInList &&
@@ -1087,8 +1093,9 @@ async function processAIResponse(
           const viewEventMatch = actionTemplate.match(/^View\s+(?:an\s+)?event:\s*(.+?)(?:\s*-\s*on folder:.*)?$/i);
           if (viewEventMatch && viewEventMatch[1]) {
             const extractedValue = viewEventMatch[1].trim();
-            // If user said "show me 2", use the number from user text instead of event name from AI
-            const userNumberMatch = originalUserText?.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
+            // If user said "show me 2" or "send info on 3", use the number from user text instead of event name from AI
+            const userNumberMatch = originalUserText?.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                   originalUserText?.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i);
             if (userNumberMatch && userNumberMatch[1]) {
               eventActionTemplate = `Show event details: ${userNumberMatch[1]}`;
             } else {
@@ -1096,7 +1103,8 @@ async function processAIResponse(
             }
           } else if (originalUserText) {
             // Extract from original user text
-            const userNumberMatch = originalUserText.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
+            const userNumberMatch = originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                   originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i);
             if (userNumberMatch && userNumberMatch[1]) {
               eventActionTemplate = `Show event details: ${userNumberMatch[1]}`;
             } else {
@@ -1360,6 +1368,70 @@ async function processAIResponse(
         }
       }
     } else if (titleType === 'address') {
+      // Check if AI misclassified an event request as an address request
+      // This happens when user says "send info on 3" but AI generates "Get address: [event name]"
+      const isGetAddress = actionTemplate.toLowerCase().startsWith('get address:');
+      if (isGetAddress && originalUserText) {
+        const userTextLower = originalUserText.toLowerCase();
+        // Check if user wants event info (not address info)
+        const wantsEventInfo = userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)/i) ||
+                              userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                              userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event/i) ||
+                              userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?[^"]+\s+event/i);
+        
+        if (wantsEventInfo) {
+          // Extract number from user text
+          const numberMatch = userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)/i) ||
+                            userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i);
+          
+          if (numberMatch && numberMatch[1]) {
+            // Convert to event details operation
+            const eventActionTemplate = `Show event details: ${numberMatch[1]}`;
+            
+            logger.info(
+              {
+                userId,
+                originalAction: actionTemplate,
+                convertedAction: eventActionTemplate,
+                originalUserText,
+                reason: 'misclassified_as_address_but_user_wants_event_info'
+              },
+              'Converting address operation to event details operation'
+            );
+            
+            // Route to event view operation
+            const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+            const parsed = executor.parseAction(eventActionTemplate);
+            if (parsed) {
+              parsed.resourceType = 'event';
+              const result = await executor.executeAction(parsed);
+              
+              if (result.success && result.message) {
+                await whatsappService.sendTextMessage(recipient, result.message);
+                
+                // Log outgoing message
+                try {
+                  const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                  if (whatsappNumber) {
+                    await logOutgoingWhatsAppMessage(db, {
+                      whatsappNumberId: whatsappNumber.id,
+                      userId,
+                      messageType: 'text',
+                      messageContent: result.message,
+                      isFreeMessage: true,
+                    });
+                  }
+                } catch (error) {
+                  logger.warn({ error, userId }, 'Failed to log outgoing message');
+                }
+              }
+            }
+            
+            return; // Exit early, don't process as address operation
+          }
+        }
+      }
+      
       // Handle address operations (create, update, delete, get, list)
       
       // Send AI response to user (for debugging/transparency)
