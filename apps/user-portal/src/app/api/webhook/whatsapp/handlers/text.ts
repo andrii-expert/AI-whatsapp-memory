@@ -2100,6 +2100,19 @@ async function handleEventOperation(
             }
           }
           
+          // Create a summary of what was resolved vs what wasn't
+          const resolutionSummary = originalAttendees.map(orig => {
+            const resolved = resolvedAttendees.find(resolvedEmail => {
+              const emailPrefix = resolvedEmail.split('@')[0];
+              return resolvedEmail.includes(orig.toLowerCase()) || (emailPrefix && orig.toLowerCase().includes(emailPrefix));
+            });
+            return {
+              original: orig,
+              resolved: resolved || null,
+              wasResolved: !!resolved,
+            };
+          });
+          
           logger.info(
             {
               userId,
@@ -2107,8 +2120,9 @@ async function handleEventOperation(
               totalResolved: resolvedAttendees.length,
               resolvedAttendees: resolvedAttendees,
               allResolvedEmails: [...resolvedAttendees],
+              resolutionSummary: resolutionSummary,
             },
-            '✅ Attendee resolution loop completed - checking resolved attendees'
+            '✅ Attendee resolution loop completed - SUMMARY: showing what was resolved vs what was not'
           );
           
           // Final validation: ensure all resolved attendees are valid email addresses
@@ -2313,7 +2327,17 @@ async function handleEventOperation(
     }
 
     // Execute the calendar operation
-    logger.info({ userId, intentAction: intent.action }, 'Executing calendar operation');
+    logger.info(
+      {
+        userId,
+        intentAction: intent.action,
+        intentAttendees: intent.attendees,
+        intentAttendeesCount: intent.attendees?.length || 0,
+        intentAttendeesType: Array.isArray(intent.attendees) ? 'array' : typeof intent.attendees,
+        intentAttendeesArray: Array.isArray(intent.attendees) ? intent.attendees : undefined,
+      },
+      '🚀 Executing calendar operation - FINAL INTENT STATE'
+    );
     
     // Get calendar timezone for formatting response
     let calendarTimezone = 'Africa/Johannesburg'; // Default fallback
@@ -2330,8 +2354,26 @@ async function handleEventOperation(
     let result;
     try {
       const calendarService = new CalendarService(db);
+      // Log one more time right before execute
+      logger.info(
+        {
+          userId,
+          intentAttendeesBeforeExecute: intent.attendees,
+          intentAttendeesCountBeforeExecute: intent.attendees?.length || 0,
+        },
+        '📤 About to call calendarService.execute with intent.attendees'
+      );
       result = await calendarService.execute(userId, intent);
-      logger.info({ userId, success: result.success, action: result.action }, 'Calendar operation executed');
+      logger.info(
+        {
+          userId,
+          success: result.success,
+          action: result.action,
+          resultEventAttendees: (result.event as any)?.attendees,
+          resultEventAttendeesCount: (result.event as any)?.attendees?.length || 0,
+        },
+        '✅ Calendar operation executed - checking result attendees'
+      );
     } catch (calendarError) {
       logger.error(
         {

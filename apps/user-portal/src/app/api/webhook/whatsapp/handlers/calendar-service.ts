@@ -113,10 +113,28 @@ export class CalendarService implements ICalendarService {
   async execute(userId: string, intent: CalendarIntent): Promise<CalendarOperationResult> {
     const action = intent.action;
 
-    logger.info({ userId, action }, 'Executing calendar operation');
+    logger.info(
+      {
+        userId,
+        action,
+        intentAttendees: intent.attendees,
+        intentAttendeesCount: intent.attendees?.length || 0,
+        intentAttendeesType: Array.isArray(intent.attendees) ? 'array' : typeof intent.attendees,
+        intentAttendeesArray: Array.isArray(intent.attendees) ? intent.attendees : undefined,
+      },
+      '📋 CalendarService.execute - received intent with attendees'
+    );
 
     switch (action) {
       case 'CREATE':
+        logger.info(
+          {
+            userId,
+            intentAttendeesBeforeCreate: intent.attendees,
+            intentAttendeesCountBeforeCreate: intent.attendees?.length || 0,
+          },
+          '📤 About to call this.create() with intent.attendees'
+        );
         return await this.create(userId, intent);
       case 'UPDATE':
         return await this.update(userId, intent);
@@ -541,9 +559,38 @@ export class CalendarService implements ICalendarService {
       }
       if (createdEvent.attendees && createdEvent.attendees.length > 0) {
         (event as any).attendees = createdEvent.attendees;
+        logger.info(
+          {
+            userId,
+            eventId: event.id,
+            attendeesFromProvider: createdEvent.attendees,
+            attendeesCountFromProvider: createdEvent.attendees.length,
+          },
+          '✅ Calendar event created - attendees returned from provider'
+        );
+      } else {
+        logger.warn(
+          {
+            userId,
+            eventId: event.id,
+            attendeesSentToProvider: createParams.attendees,
+            attendeesCountSentToProvider: createParams.attendees?.length || 0,
+            attendeesReturnedFromProvider: createdEvent.attendees,
+            attendeesCountReturnedFromProvider: createdEvent.attendees?.length || 0,
+          },
+          '⚠️ WARNING: No attendees returned from provider, but attendees were sent!'
+        );
       }
 
-      logger.info({ userId, eventId: event.id }, 'Calendar event created');
+      logger.info(
+        {
+          userId,
+          eventId: event.id,
+          eventAttendees: (event as any).attendees,
+          eventAttendeesCount: (event as any).attendees?.length || 0,
+        },
+        '📋 Calendar event created - final event object with attendees'
+      );
 
       return {
         success: true,
