@@ -1842,8 +1842,9 @@ async function handleEventOperation(
               'Processing attendee for resolution'
             );
             
-            // If it's already an email address, use it directly
-            if (attendeeTrimmed.includes('@') && attendeeTrimmed.includes('.')) {
+            // Check if it's already a valid email address (use proper regex validation)
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (emailRegex.test(attendeeTrimmed)) {
               const emailLower = attendeeTrimmed.toLowerCase();
               if (!resolvedAttendees.includes(emailLower)) {
                 resolvedAttendees.push(emailLower);
@@ -1985,7 +1986,7 @@ async function handleEventOperation(
                 );
               }
             } else {
-              // If not found in friends, check if it's already a valid email
+              // If not found in friends, check if it's already a valid email (double-check)
               const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
               if (emailRegex.test(attendeeTrimmed)) {
                 // It's already a valid email, use it
@@ -2012,18 +2013,62 @@ async function handleEventOperation(
                   );
                 }
               } else {
-                // Not a friend and not an email - skip it and warn
-                logger.warn(
-                  {
-                    userId,
-                    attendeeName: attendeeTrimmed,
-                    availableFriends: friends.map(f => ({ name: f.name, email: f.email })),
-                    allFriendNames: friends.map(f => f.name),
-                    allFriendEmails: friends.map(f => f.email).filter(Boolean),
-                  },
-                  'Could not resolve attendee name to email - skipping (not a friend and not a valid email)'
-                );
-                // Don't add it - it will cause an error
+                // Not a friend and not an email - try to find by partial name match more aggressively
+                // Try matching any part of the name (e.g., "Paul" should match "Paul Smith" even if not exact)
+                const partialMatch = friends.find(friend => {
+                  const friendNameLower = friend.name.toLowerCase().trim();
+                  const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+                  
+                  // Check if attendee is contained in friend name or vice versa
+                  if (friendNameLower.includes(attendeeLower) || attendeeLower.includes(friendNameLower)) {
+                    return true;
+                  }
+                  
+                  // Check if any word in friend name matches attendee
+                  const friendWords = friendNameLower.split(/\s+/);
+                  return friendWords.some(word => word === attendeeLower || attendeeLower === word);
+                });
+                
+                if (partialMatch && partialMatch.email) {
+                  const emailLower = partialMatch.email.toLowerCase();
+                  if (!resolvedAttendees.includes(emailLower)) {
+                    resolvedAttendees.push(emailLower);
+                    logger.info(
+                      {
+                        userId,
+                        attendeeName: attendeeTrimmed,
+                        friendName: partialMatch.name,
+                        resolvedEmail: partialMatch.email,
+                        resolvedCount: resolvedAttendees.length,
+                        matchType: 'aggressive_partial',
+                      },
+                      'Resolved attendee name to friend email using aggressive partial matching'
+                    );
+                  } else {
+                    logger.warn(
+                      {
+                        userId,
+                        attendeeName: attendeeTrimmed,
+                        friendName: partialMatch.name,
+                        resolvedEmail: partialMatch.email,
+                      },
+                      'Skipping duplicate email address (already in resolved list)'
+                    );
+                  }
+                } else {
+                  // Not a friend and not an email - skip it and warn
+                  logger.warn(
+                    {
+                      userId,
+                      attendeeName: attendeeTrimmed,
+                      availableFriends: friends.map(f => ({ name: f.name, email: f.email })),
+                      allFriendNames: friends.map(f => f.name),
+                      allFriendEmails: friends.map(f => f.email).filter(Boolean),
+                    },
+                    'Could not resolve attendee name to email - skipping (not a friend and not a valid email)'
+                  );
+                  // Don't add it - it will cause an error
+                }
               }
             }
           }
@@ -2823,38 +2868,36 @@ function parseEventTemplateToIntent(
       const attendeesMatch = template.match(/\s*-\s*attendees:\s*(.+?)(?:\s*-\s*calendar:|$)/i);
       if (attendeesMatch && attendeesMatch[1]) {
         const attendeesStr = attendeesMatch[1].trim();
+        logger.debug({ attendeesStrFromTemplate: attendeesStr }, 'Raw attendees string from template');
+
         // Filter out "Google Meet" and similar phrases that are not actual attendees
-        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'googlemeet'];
-        const parsedAttendees = attendeesStr.split(',')
+        const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'meet', 'googlemeet'];
+        
+        // Split by comma, but also handle "and" as a separator (e.g., "Paul and Liz" or "Paul, Liz and John")
+        // First, replace " and " with comma for easier parsing
+        const normalizedStr = attendeesStr.replace(/\s+and\s+/gi, ', ');
+        
+        intent.attendees = normalizedStr.split(',')
           .map(a => a.trim())
           .filter(a => {
             if (a.length === 0) return false;
             const lower = a.toLowerCase().trim();
             // Filter out exact matches for Google Meet keywords
-            if (lower === 'meet' || lower === 'google meet' || lower === 'googlemeet' || 
-                lower === 'meet link' || lower === 'video call' || lower === 'video meeting') {
+            if (googleMeetKeywords.includes(lower)) {
+              logger.debug({ filteredAttendee: a, reason: 'exact_keyword_match_in_parse' }, 'Filtered out attendee during parsing (exact Google Meet keyword)');
               return false;
             }
             // Filter out if it contains Google Meet keywords as whole words
             const hasGoogleMeetKeyword = googleMeetKeywords.some(keyword => {
-              // Check for exact match or as a whole word (with word boundaries)
               const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
               return regex.test(lower);
             });
+            if (hasGoogleMeetKeyword) {
+              logger.debug({ filteredAttendee: a, reason: 'whole_word_keyword_match_in_parse' }, 'Filtered out attendee during parsing (whole word Google Meet keyword)');
+            }
             return !hasGoogleMeetKeyword;
           });
-        
-        intent.attendees = parsedAttendees;
-        
-        logger.info(
-          {
-            template,
-            attendeesStr,
-            parsedAttendees,
-            parsedCount: parsedAttendees.length,
-          },
-          'Parsed attendees from template'
-        );
+        logger.debug({ parsedAttendeesAfterFilter: intent.attendees, parsedAttendeesCount: intent.attendees?.length || 0 }, 'Parsed attendees after Google Meet filter');
       }
     
     // Ensure we have at least a title
