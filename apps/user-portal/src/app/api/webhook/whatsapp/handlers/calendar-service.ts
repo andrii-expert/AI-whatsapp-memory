@@ -739,6 +739,14 @@ export class CalendarService implements ICalendarService {
         webLink: updatedEvent.webLink,
       };
 
+      // Add conferenceUrl and attendees if available
+      if (updatedEvent.conferenceUrl) {
+        (event as any).conferenceUrl = updatedEvent.conferenceUrl;
+      }
+      if (updatedEvent.attendees && updatedEvent.attendees.length > 0) {
+        (event as any).attendees = updatedEvent.attendees;
+      }
+
       logger.info({ userId, eventId: event.id }, 'Calendar event updated');
 
       return {
@@ -822,8 +830,25 @@ export class CalendarService implements ICalendarService {
         targetEvent = targetEvents[0]!;
       }
 
-      // Delete the event
+      // Fetch full event details before deleting (for response message)
       const provider = createCalendarProvider(calendarConnection.provider);
+      let fullEventDetails: any = null;
+      try {
+        fullEventDetails = await this.withTokenRefresh(
+          calendarConnection.id,
+          calendarConnection.accessToken!,
+          calendarConnection.refreshToken || null,
+          provider,
+          (token) => provider.getEvent(token, {
+            calendarId: calendarConnection.calendarId || 'primary',
+            eventId: targetEvent.id,
+          })
+        );
+      } catch (error) {
+        logger.warn({ error, userId, eventId: targetEvent.id }, 'Failed to fetch full event details before delete, using basic event info');
+      }
+
+      // Delete the event
       await this.withTokenRefresh(
         calendarConnection.id,
         calendarConnection.accessToken!,
@@ -835,13 +860,35 @@ export class CalendarService implements ICalendarService {
         })
       );
 
-      logger.info({ userId, eventId: targetEvent.id }, 'Calendar event deleted');
+      // Use full event details if available, otherwise use targetEvent
+      const eventToReturn = fullEventDetails || targetEvent;
+      const event: CalendarEvent = {
+        id: eventToReturn.id,
+        title: eventToReturn.title,
+        description: eventToReturn.description,
+        start: eventToReturn.start,
+        end: eventToReturn.end,
+        location: eventToReturn.location,
+        provider: calendarConnection.provider as 'google' | 'microsoft',
+        htmlLink: eventToReturn.htmlLink,
+        webLink: eventToReturn.webLink,
+      };
+
+      // Add conferenceUrl and attendees if available
+      if (eventToReturn.conferenceUrl) {
+        (event as any).conferenceUrl = eventToReturn.conferenceUrl;
+      }
+      if (eventToReturn.attendees && eventToReturn.attendees.length > 0) {
+        (event as any).attendees = eventToReturn.attendees;
+      }
+
+      logger.info({ userId, eventId: event.id }, 'Calendar event deleted');
 
       return {
         success: true,
         action: 'DELETE',
-        event: targetEvent,
-        message: `Event "${targetEvent.title}" deleted successfully`,
+        event,
+        message: `Event "${event.title}" deleted successfully`,
       };
     } catch (error) {
       logger.error({ error, userId }, 'Failed to delete calendar event');
