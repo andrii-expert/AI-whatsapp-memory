@@ -3039,14 +3039,24 @@ async function handleEventOperation(
     let result;
     try {
       const calendarService = new CalendarService(db);
-      // Log one more time right before execute
+      // Log intent values right before execute (especially for updates)
       logger.info(
         {
           userId,
+          intentAction: intent.action,
+          intentStartDate: intent.startDate,
+          intentStartTime: intent.startTime,
+          intentIsAllDay: intent.isAllDay,
+          intentTitle: intent.title,
+          intentTargetEventTitle: (intent as any).targetEventTitle,
           intentAttendeesBeforeExecute: intent.attendees,
           intentAttendeesCountBeforeExecute: intent.attendees?.length || 0,
+          hasStartDate: !!intent.startDate,
+          hasStartTime: !!intent.startTime,
+          dateType: typeof intent.startDate,
+          timeType: typeof intent.startTime,
         },
-        '📤 About to call calendarService.execute with intent.attendees'
+        '📤 About to call calendarService.execute - FULL INTENT VALUES'
       );
       result = await calendarService.execute(userId, intent);
       logger.info(
@@ -3944,10 +3954,10 @@ function parseEventTemplateToIntent(
                 userTextLower.match(/time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+(?:\s*(?:am|pm))?/i) ||
                 // Pattern: "time to 12:00 tomorrow" (date after time)
                 userTextLower.match(/time\s+to\s+[\d:]+(?:\s*(?:am|pm))?\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
-                // Pattern: "change [anything] time to tomorrow 12:00" - more flexible with .*?
-                userTextLower.match(/(?:change|update|move|reschedule)\s+[^t]*time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+(?:\s*(?:am|pm))?/i) ||
+                // Pattern: "change [anything] time to tomorrow 12:00" - use .*? to match any characters including 't'
+                userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+(?:\s*(?:am|pm))?/i) ||
                 // Pattern: "change [anything] time to 12:00 tomorrow"
-                userTextLower.match(/(?:change|update|move|reschedule)\s+[^t]*time\s+to\s+[\d:]+(?:\s*(?:am|pm))?\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
+                userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+[\d:]+(?:\s*(?:am|pm))?\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
                 // Fallback: any date keyword after "to" or "on"
                 userTextLower.match(/(?:to|on)\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
               
@@ -3978,6 +3988,21 @@ function parseEventTemplateToIntent(
               );
             }
           }
+          
+          // Final validation: Log the final intent values to help debug
+          logger.info(
+            {
+              changes,
+              originalUserText,
+              finalIntentStartDate: intent.startDate,
+              finalIntentStartTime: intent.startTime,
+              hasDate: !!intent.startDate,
+              hasTime: !!intent.startTime,
+              dateType: typeof intent.startDate,
+              timeType: typeof intent.startTime,
+            },
+            '📋 Final parsed intent values for update operation'
+          );
         }
         
         // Check if title is being updated
