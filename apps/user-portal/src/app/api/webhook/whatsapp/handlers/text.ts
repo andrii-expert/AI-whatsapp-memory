@@ -414,6 +414,15 @@ async function processAIResponse(
       const hasEventNameInList = listEventsMatch && listEventsMatch[1] && listEventsMatch[1].trim().length > 0;
       const listEventValue = listEventsMatch && listEventsMatch[1] ? listEventsMatch[1].trim() : '';
       
+      const userTextLower = originalUserText?.toLowerCase() || '';
+      
+      // CRITICAL: Check for number-based view requests FIRST (before timeframe check)
+      // If user says "show me 1" or "show info on 1", ALWAYS treat as view operation
+      // regardless of what the AI generated (even if it's "List events: all")
+      const isNumberBasedViewRequest = userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                       userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
+                                       userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
+      
       // Timeframe keywords that should NOT be converted to view/show (these are list operations)
       // Check for exact matches or if the value starts with a timeframe keyword
       const timeframeKeywords = ['today', 'tomorrow', 'this week', 'this month', 'next week', 'next month', 'all', 'upcoming'];
@@ -433,10 +442,10 @@ async function processAIResponse(
       });
       
       // Check if user wants to view a specific event (not list all events)
+      // CRITICAL: If user says a number, ALWAYS treat as view operation (even if AI generated timeframe)
       // Only convert if:
-      // 1. It's NOT a timeframe keyword
-      // 2. User explicitly says "show me [number]" or "show me event [name]" or "show me [name] event"
-      const userTextLower = originalUserText?.toLowerCase() || '';
+      // 1. User says a number (always view) OR
+      // 2. It's NOT a timeframe keyword AND user explicitly says "show me event [name]" or "show me [name] event"
       const hasEventKeyword = userTextLower.includes('event');
       // Check for timeframe keywords as whole words (not substrings)
       const hasTimeframeInUserText = timeframeKeywords.some(keyword => {
@@ -446,11 +455,7 @@ async function processAIResponse(
         return regex.test(userTextLower);
       });
       
-      const userWantsToView = !isTimeframe && (
-        // "show me 2" or "send info on 3" - number only
-        (userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) && /^\d+$/.test(listEventValue)) ||
-        // "send info on [number]" - explicit pattern
-        userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
+      const userWantsToView = isNumberBasedViewRequest || (!isTimeframe && (
         // "show me event [name]" or "show me event- [name]" - explicit event keyword with name
         userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i) ||
         // "show me [name] event" - name followed by event keyword
@@ -459,7 +464,7 @@ async function processAIResponse(
         userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+["']?([^"']+)/i) ||
         // "show me [specific event name]" - but NOT if user text contains timeframe keywords
         (hasEventKeyword && !hasTimeframeInUserText && userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event\s*[-]?\s*["']?([^"']+)/i))
-      );
+      ));
       
       // Also check if user text clearly indicates viewing a specific event, even if AI generated wrong action
       // This handles cases where AI generates "List events: today" but user said "show me event [name]"
@@ -478,14 +483,34 @@ async function processAIResponse(
         }
       }
       
-      const isListEventsWithName = (hasEventNameInList && userWantsToView && !isTimeframe) || (eventNameFromUserText !== null);
+      // CRITICAL: If user said a number, ALWAYS treat as view operation (even if AI generated timeframe)
+      const isListEventsWithName = isNumberBasedViewRequest || (hasEventNameInList && userWantsToView && !isTimeframe) || (eventNameFromUserText !== null);
       
       if (isListEventsWithName) {
         // Convert to show event details operation
         let eventActionTemplate = actionTemplate;
         
-        // Prefer event name from user text if available (more accurate than AI's interpretation)
-        if (eventNameFromUserText) {
+        // CRITICAL: If user said a number, extract it and use it directly
+        if (isNumberBasedViewRequest) {
+          const numberMatch = userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                             userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
+                             userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
+          if (numberMatch && numberMatch[1]) {
+            eventActionTemplate = `Show event details: ${numberMatch[1]}`;
+            logger.info(
+              {
+                userId,
+                originalAction: actionTemplate,
+                convertedAction: eventActionTemplate,
+                extractedNumber: numberMatch[1],
+                originalUserText,
+                reason: 'number_based_view_early_detection'
+              },
+              '✅ Early detection: Extracted number from user text for number-based view request'
+            );
+          }
+        } else if (eventNameFromUserText) {
+          // Prefer event name from user text if available (more accurate than AI's interpretation)
           eventActionTemplate = `Show event details: ${eventNameFromUserText}`;
         } else {
           const eventNameMatch = actionTemplate.match(/^List events:\s*(.+?)(?:\s*-\s*calendar:.*)?$/i);
