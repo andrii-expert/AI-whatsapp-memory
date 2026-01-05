@@ -314,6 +314,109 @@ async function processAIResponse(
     
     const actionTemplate = actionLines.join('\n');
     
+    // CRITICAL: Check if user wants to view an event by number, even if AI generated "normal" or wrong title
+    // This must happen BEFORE any other processing to catch cases where AI misclassifies
+    if (originalUserText) {
+      const userTextLower = originalUserText.toLowerCase();
+      
+      // Extract numbers from user text
+      const extractNumbers = (text: string): number[] => {
+        const numbers: number[] = [];
+        const numberMatches = text.match(/\d+/g);
+        if (numberMatches) {
+          numbers.push(...numberMatches.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0));
+        }
+        return numbers;
+      };
+      
+      const extractedNumbers = extractNumbers(userTextLower);
+      
+      // Check if user text indicates a number-based event view request
+      // Support patterns like "show meeting info for number 5", "show info for 4", "show me 1", etc.
+      // This works even if AI generated "Title: normal" instead of "Title: event"
+      // If user says "show meeting info for number 5" or similar, it's ALWAYS an event request
+      const pattern1 = /^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i;
+      const pattern2 = /^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i;
+      const pattern3 = /^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i;
+      const pattern4 = /^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i;
+      
+      const isNumberBasedEventViewRequest = extractedNumbers.length > 0 && (
+        pattern1.test(userTextLower) ||
+        pattern2.test(userTextLower) ||
+        pattern3.test(userTextLower) ||
+        pattern4.test(userTextLower)
+      );
+      
+      // Log for debugging
+      logger.info(
+        {
+          userId,
+          originalUserText,
+          userTextLower,
+          extractedNumbers,
+          extractedNumbersLength: extractedNumbers.length,
+          pattern1Match: pattern1.test(userTextLower),
+          pattern2Match: pattern2.test(userTextLower),
+          pattern3Match: pattern3.test(userTextLower),
+          pattern4Match: pattern4.test(userTextLower),
+          isNumberBasedEventViewRequest,
+        },
+        '🔍 Pre-title check: Testing number-based event view request detection'
+      );
+      
+      // If the pattern matches, it's definitely an event request (no need for additional context check)
+      // Patterns like "show meeting info for number 5" are unambiguous event requests
+      
+      if (isNumberBasedEventViewRequest && extractedNumbers.length > 0) {
+        // Extract the number and show event overview
+        const eventNumber = extractedNumbers[0]; // Use first number
+        const eventActionTemplate = `Show event details: ${eventNumber}`;
+        
+        logger.info(
+          {
+            userId,
+            originalTitleType: titleType,
+            originalAction: actionTemplate,
+            convertedAction: eventActionTemplate,
+            extractedNumber: eventNumber,
+            originalUserText,
+            reason: 'pre_title_check_number_based_event_view_detection'
+          },
+          '✅ Pre-title check: User wants to view event by number, routing to event overview (even if AI generated wrong title)'
+        );
+        
+        const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+        const parsed = executor.parseAction(eventActionTemplate);
+        if (parsed) {
+          parsed.resourceType = 'event';
+          const result = await executor.executeAction(parsed);
+          
+          if (result.success && result.message) {
+            await whatsappService.sendTextMessage(recipient, result.message);
+            
+            // Log outgoing message
+            try {
+              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+              if (whatsappNumber) {
+                await logOutgoingWhatsAppMessage(db, {
+                  whatsappNumberId: whatsappNumber.id,
+                  userId,
+                  messageType: 'text',
+                  messageContent: result.message,
+                  isFreeMessage: true,
+                });
+              }
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to log outgoing message');
+            }
+          } else if (!result.success && result.message) {
+            await whatsappService.sendTextMessage(recipient, result.message);
+          }
+        }
+        return; // Exit early, don't process further (even if AI said "normal")
+      }
+    }
+    
     // Special handling: If AI response is empty or doesn't contain expected action format,
     // but originalUserText is a simple "delete X,Y" command and titleType is shopping,
     // handle it directly
@@ -369,7 +472,82 @@ async function processAIResponse(
     );
 
     // Handle Normal conversation - send directly to user without workflow processing
+    // BUT: Check if it's actually an event view request that AI misclassified as "normal"
     if (titleType === 'normal') {
+      // Before sending "normal" response, check if user actually wants event info by number
+      // This prevents AI from sending error messages when user clearly wants event overview
+      if (originalUserText) {
+        const userTextLower = originalUserText.toLowerCase();
+        const extractNumbers = (text: string): number[] => {
+          const numbers: number[] = [];
+          const numberMatches = text.match(/\d+/g);
+          if (numberMatches) {
+            numbers.push(...numberMatches.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0));
+          }
+          return numbers;
+        };
+        
+        const extractedNumbers = extractNumbers(userTextLower);
+        
+        // Check if user text indicates a number-based event view request
+        // Patterns like "show meeting info for number 5" are unambiguous event requests
+        const isNumberBasedEventViewRequest = extractedNumbers.length > 0 && (
+          userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
+          userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+          userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
+          userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i)
+        );
+        
+        if (isNumberBasedEventViewRequest && extractedNumbers.length > 0) {
+          // User wants event info, but AI said "normal" - override and show event overview
+          const eventNumber = extractedNumbers[0];
+          const eventActionTemplate = `Show event details: ${eventNumber}`;
+          
+          logger.info(
+            {
+              userId,
+              originalTitleType: titleType,
+              originalAction: actionTemplate,
+              convertedAction: eventActionTemplate,
+              extractedNumber: eventNumber,
+              originalUserText,
+              reason: 'normal_title_override_for_event_view_request'
+            },
+            '✅ Overriding "normal" title: User wants to view event by number, routing to event overview'
+          );
+          
+          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+          const parsed = executor.parseAction(eventActionTemplate);
+          if (parsed) {
+            parsed.resourceType = 'event';
+            const result = await executor.executeAction(parsed);
+            
+            if (result.success && result.message) {
+              await whatsappService.sendTextMessage(recipient, result.message);
+              
+              // Log outgoing message
+              try {
+                const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                if (whatsappNumber) {
+                  await logOutgoingWhatsAppMessage(db, {
+                    whatsappNumberId: whatsappNumber.id,
+                    userId,
+                    messageType: 'text',
+                    messageContent: result.message,
+                    isFreeMessage: true,
+                  });
+                }
+              } catch (error) {
+                logger.warn({ error, userId }, 'Failed to log outgoing message');
+              }
+            } else if (!result.success && result.message) {
+              await whatsappService.sendTextMessage(recipient, result.message);
+            }
+          }
+          return; // Exit early, don't send AI's "normal" response
+        }
+      }
+      
       // For Normal conversations, the actionTemplate is the natural response
       // Send it to the user
       await whatsappService.sendTextMessage(recipient, actionTemplate);
