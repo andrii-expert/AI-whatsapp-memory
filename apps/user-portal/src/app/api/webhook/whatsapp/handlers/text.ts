@@ -417,11 +417,26 @@ async function processAIResponse(
       const userTextLower = originalUserText?.toLowerCase() || '';
       
       // CRITICAL: Check for number-based view requests FIRST (before timeframe check)
-      // If user says "show me 1" or "show info on 1", ALWAYS treat as view operation
+      // If user says "show me 1" or "show info on 1" or "show me 1, 2 and 3", ALWAYS treat as view operation
       // regardless of what the AI generated (even if it's "List events: all")
-      const isNumberBasedViewRequest = userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-                                       userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
-                                       userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
+      // Support both single number and multiple numbers (e.g., "1", "1, 2", "1, 2 and 3", "1,2,3")
+      // Extract all numbers from the request (handles "1", "1, 2", "1, 2 and 3", "1,2,3")
+      const extractNumbers = (text: string): number[] => {
+        const numbers: number[] = [];
+        // Match all numbers in the text (handles commas, "and", spaces)
+        const numberMatches = text.match(/\d+/g);
+        if (numberMatches) {
+          numbers.push(...numberMatches.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0));
+        }
+        return numbers;
+      };
+      
+      // Check if user text contains numbers after view keywords
+      const extractedNumbers = extractNumbers(userTextLower);
+      const hasViewKeywords = /^(?:show|view|get|see|send|give|provide)\s+(?:me\s+)?(?:info\s+(?:on|about|for)\s+)?/i.test(userTextLower);
+      const isNumberBasedViewRequest = hasViewKeywords && extractedNumbers.length > 0;
+      
+      const requestedNumbers = isNumberBasedViewRequest ? extractedNumbers : [];
       
       // Timeframe keywords that should NOT be converted to view/show (these are list operations)
       // Check for exact matches or if the value starts with a timeframe keyword
@@ -490,24 +505,81 @@ async function processAIResponse(
         // Convert to show event details operation
         let eventActionTemplate = actionTemplate;
         
-        // CRITICAL: If user said a number, extract it and use it directly
-        if (isNumberBasedViewRequest) {
-          const numberMatch = userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-                             userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
-                             userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
-          if (numberMatch && numberMatch[1]) {
-            eventActionTemplate = `Show event details: ${numberMatch[1]}`;
+        // CRITICAL: If user said a number (or multiple numbers), extract and handle them
+        if (isNumberBasedViewRequest && requestedNumbers.length > 0) {
+          // If multiple numbers, show each event overview in sequence
+          if (requestedNumbers.length > 1) {
             logger.info(
               {
                 userId,
                 originalAction: actionTemplate,
-                convertedAction: eventActionTemplate,
-                extractedNumber: numberMatch[1],
+                requestedNumbers,
                 originalUserText,
-                reason: 'number_based_view_early_detection'
+                reason: 'multiple_number_based_view_early_detection'
               },
-              '✅ Early detection: Extracted number from user text for number-based view request'
+              '✅ Early detection: Multiple numbers detected, will show event overviews for each'
             );
+            
+            // Get timezone for event operations
+            let eventTimezone = userTimezone || 'Africa/Johannesburg';
+            try {
+              const calendarConnection = await getPrimaryCalendar(db, userId);
+              if (calendarConnection) {
+                const calendarService = new CalendarService(db);
+                eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+              }
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
+            }
+            
+            // Show event overview for each requested number
+            for (const eventNumber of requestedNumbers) {
+              const eventActionTemplate = `Show event details: ${eventNumber}`;
+              const parsed = executor.parseAction(eventActionTemplate);
+              if (parsed) {
+                parsed.resourceType = 'event';
+                const result = await executor.executeAction(parsed, eventTimezone);
+                if (result.message.trim().length > 0) {
+                  await whatsappService.sendTextMessage(recipient, result.message);
+                  
+                  // Log outgoing message
+                  try {
+                    const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                    if (whatsappNumber) {
+                      await logOutgoingWhatsAppMessage(db, {
+                        whatsappNumberId: whatsappNumber.id,
+                        userId,
+                        messageType: 'text',
+                        messageContent: result.message,
+                        isFreeMessage: true,
+                      });
+                    }
+                  } catch (error) {
+                    logger.warn({ error, userId }, 'Failed to log outgoing message');
+                  }
+                }
+              }
+            }
+            return; // Exit early after handling multiple events
+          } else {
+            // Single number - use existing logic
+            const numberMatch = userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                               userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
+                               userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
+            if (numberMatch && numberMatch[1]) {
+              eventActionTemplate = `Show event details: ${numberMatch[1]}`;
+              logger.info(
+                {
+                  userId,
+                  originalAction: actionTemplate,
+                  convertedAction: eventActionTemplate,
+                  extractedNumber: numberMatch[1],
+                  originalUserText,
+                  reason: 'number_based_view_early_detection'
+                },
+                '✅ Early detection: Extracted number from user text for number-based view request'
+              );
+            }
           }
         } else if (eventNameFromUserText) {
           // Prefer event name from user text if available (more accurate than AI's interpretation)
