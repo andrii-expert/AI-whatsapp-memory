@@ -3890,8 +3890,40 @@ function parseEventTemplateToIntent(
                   || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
                 if (timeMatch && timeMatch[1]) {
                   intent.startTime = parseTime(timeMatch[1].trim());
+                  logger.info(
+                    {
+                      changes,
+                      extractedTime: timeMatch[1],
+                      parsedStartTime: intent.startTime,
+                    },
+                    '✅ Extracted time from "time to {time}" pattern'
+                  );
                 }
               }
+            }
+          }
+          
+          // Also check original user text for time if not found in changes
+          // This handles cases where AI only extracted date but missed time
+          if (!intent.startTime && originalUserText) {
+            const userTextLower = originalUserText.toLowerCase();
+            // Try to extract time from patterns like "time to tomorrow 12:00" or "time to 12:00 tomorrow"
+            const timeFromUserText = userTextLower.match(/time\s+to\s+(?:today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+([\d:]+(?:\s*(?:am|pm))?)/i) ||
+                                    userTextLower.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(?:today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
+                                    userTextLower.match(/(?:change|update|move|reschedule).*?time\s+to\s+(?:today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+([\d:]+(?:\s*(?:am|pm))?)/i) ||
+                                    userTextLower.match(/(?:change|update|move|reschedule).*?time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(?:today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
+            if (timeFromUserText && timeFromUserText[1]) {
+              intent.startTime = parseTime(timeFromUserText[1].trim());
+              logger.info(
+                {
+                  changes,
+                  originalUserText,
+                  extractedTime: timeFromUserText[1],
+                  parsedStartTime: intent.startTime,
+                  source: 'original_user_text',
+                },
+                '✅ Extracted time from original user text (AI missed it in changes)'
+              );
             }
           }
           
@@ -3906,14 +3938,16 @@ function parseEventTemplateToIntent(
               const userTextLower = originalUserText.toLowerCase();
               // Look for date keywords near time-related words
               // Try multiple patterns to catch "time to tomorrow 12:00" or "time to 12:00 tomorrow"
+              // Make patterns more flexible to handle event names between "change" and "time to"
               dateKeywordMatch = 
-                // Pattern: "time to tomorrow 12:00" (date before time)
-                userTextLower.match(/time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+/i) ||
+                // Pattern: "time to tomorrow 12:00" (date before time) - most direct
+                userTextLower.match(/time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+(?:\s*(?:am|pm))?/i) ||
                 // Pattern: "time to 12:00 tomorrow" (date after time)
-                userTextLower.match(/time\s+to\s+[\d:]+\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
-                // Pattern: "change X time to tomorrow 12:00" or "change X time to 12:00 tomorrow"
-                userTextLower.match(/(?:change|update|move|reschedule).*?time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+/i) ||
-                userTextLower.match(/(?:change|update|move|reschedule).*?time\s+to\s+[\d:]+\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
+                userTextLower.match(/time\s+to\s+[\d:]+(?:\s*(?:am|pm))?\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
+                // Pattern: "change [anything] time to tomorrow 12:00" - more flexible with .*?
+                userTextLower.match(/(?:change|update|move|reschedule)\s+[^t]*time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+(?:\s*(?:am|pm))?/i) ||
+                // Pattern: "change [anything] time to 12:00 tomorrow"
+                userTextLower.match(/(?:change|update|move|reschedule)\s+[^t]*time\s+to\s+[\d:]+(?:\s*(?:am|pm))?\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
                 // Fallback: any date keyword after "to" or "on"
                 userTextLower.match(/(?:to|on)\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
               
