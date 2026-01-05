@@ -1146,13 +1146,89 @@ async function processAIResponse(
     
     // Handle event operations (create, update, delete, view, show)
     if (titleType === 'event') {
+      // CRITICAL: First, check if user wants to view an event by number, regardless of what AI generated
+      // This catches cases like "show meeting info for number 5" even if AI generates unexpected responses
+      if (originalUserText) {
+        const userTextLower = originalUserText.toLowerCase();
+        // Extract numbers from user text
+        const extractNumbers = (text: string): number[] => {
+          const numbers: number[] = [];
+          const numberMatches = text.match(/\d+/g);
+          if (numberMatches) {
+            numbers.push(...numberMatches.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0));
+          }
+          return numbers;
+        };
+        
+        const extractedNumbers = extractNumbers(userTextLower);
+        
+        // Check if user text indicates a number-based view request
+        // Support patterns like "show meeting info for number 5", "show info for 4", "show me 1", etc.
+        const isNumberBasedViewRequest = extractedNumbers.length > 0 && (
+          userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
+          userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+          userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
+          userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i)
+        );
+        
+        if (isNumberBasedViewRequest && extractedNumbers.length > 0) {
+          // Extract the number and show event overview
+          const eventNumber = extractedNumbers[0]; // Use first number
+          const eventActionTemplate = `Show event details: ${eventNumber}`;
+          
+          logger.info(
+            {
+              userId,
+              originalAction: actionTemplate,
+              convertedAction: eventActionTemplate,
+              extractedNumber: eventNumber,
+              originalUserText,
+              reason: 'catch_all_number_based_view_detection'
+            },
+            '✅ Catch-all detection: User wants to view event by number, routing to event overview'
+          );
+          
+          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+          const parsed = executor.parseAction(eventActionTemplate);
+          if (parsed) {
+            parsed.resourceType = 'event';
+            const result = await executor.executeAction(parsed);
+            
+            if (result.success && result.message) {
+              await whatsappService.sendTextMessage(recipient, result.message);
+              
+              // Log outgoing message
+              try {
+                const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                if (whatsappNumber) {
+                  await logOutgoingWhatsAppMessage(db, {
+                    whatsappNumberId: whatsappNumber.id,
+                    userId,
+                    messageType: 'text',
+                    messageContent: result.message,
+                    isFreeMessage: true,
+                  });
+                }
+              } catch (error) {
+                logger.warn({ error, userId }, 'Failed to log outgoing message');
+              }
+            } else if (!result.success && result.message) {
+              await whatsappService.sendTextMessage(recipient, result.message);
+            }
+          }
+          return; // Exit early, don't process further
+        }
+      }
+      
       // Check if AI misclassified an event request as an address request
       // This happens when user says "send info on 3" but AI generates "Get address: [event name]"
       const isGetAddress = actionTemplate.toLowerCase().startsWith('get address:');
       if (isGetAddress && originalUserText) {
         const userTextLower = originalUserText.toLowerCase();
         // Check if user wants event info (not address info)
-        const wantsEventInfo = userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)/i) ||
+        // Support patterns like "show meeting info for number 5", "show info for 4", etc.
+        const wantsEventInfo = userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)/i) ||
+                              userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
                               userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
                               userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event/i) ||
                               userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?[^"]+\s+event/i);
