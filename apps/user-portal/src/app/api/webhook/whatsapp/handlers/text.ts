@@ -2290,7 +2290,7 @@ async function handleEventOperation(
     
     let intent;
     try {
-      intent = parseEventTemplateToIntent(actionTemplate, isCreate, isUpdate, isDelete, originalUserText);
+      intent = parseEventTemplateToIntent(actionTemplate, isCreate, isUpdate, isDelete);
       
       // Check if user wants Google Meet (check both original user text and action template for keywords)
       const userTextLower = originalUserText.toLowerCase();
@@ -3039,24 +3039,14 @@ async function handleEventOperation(
     let result;
     try {
       const calendarService = new CalendarService(db);
-      // Log intent values right before execute (especially for updates)
+      // Log one more time right before execute
       logger.info(
         {
           userId,
-          intentAction: intent.action,
-          intentStartDate: intent.startDate,
-          intentStartTime: intent.startTime,
-          intentIsAllDay: intent.isAllDay,
-          intentTitle: intent.title,
-          intentTargetEventTitle: (intent as any).targetEventTitle,
           intentAttendeesBeforeExecute: intent.attendees,
           intentAttendeesCountBeforeExecute: intent.attendees?.length || 0,
-          hasStartDate: !!intent.startDate,
-          hasStartTime: !!intent.startTime,
-          dateType: typeof intent.startDate,
-          timeType: typeof intent.startTime,
         },
-        '📤 About to call calendarService.execute - FULL INTENT VALUES'
+        '📤 About to call calendarService.execute with intent.attendees'
       );
       result = await calendarService.execute(userId, intent);
       logger.info(
@@ -3696,8 +3686,7 @@ function parseEventTemplateToIntent(
   template: string,
   isCreate: boolean,
   isUpdate: boolean,
-  isDelete: boolean,
-  originalUserText?: string
+  isDelete: boolean
 ): CalendarIntent {
   // Determine action
   let action: 'CREATE' | 'UPDATE' | 'DELETE' | 'QUERY';
@@ -3854,228 +3843,55 @@ function parseEventTemplateToIntent(
           }
           
           // Try to extract time separately if not already extracted
-          // Handle patterns like "time to 12:00 tomorrow", "time to tomorrow 12:00", or "time to 12:00 on tomorrow"
+          // Handle patterns like "time to 12:00 tomorrow" or "time to 12:00 on tomorrow"
           if (!intent.startTime) {
-            // First, try "time to {date} {time}" pattern (e.g., "time to tomorrow 12:00")
-            const timeWithDateBeforeMatch = changes.match(/time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
-            if (timeWithDateBeforeMatch && timeWithDateBeforeMatch[1] && timeWithDateBeforeMatch[2]) {
-              intent.startTime = parseTime(timeWithDateBeforeMatch[2].trim());
+            // First, try "time to {time} {date}" pattern (e.g., "time to 12:00 tomorrow", "time to 12:00 on tomorrow")
+            // This pattern matches: "time to" followed by time, then optional "on", then date keyword
+            const timeWithDateMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2}|.+?)(?:\s|$)/i);
+            if (timeWithDateMatch && timeWithDateMatch[1] && timeWithDateMatch[2]) {
+              intent.startTime = parseTime(timeWithDateMatch[1].trim());
               // Only set date if it wasn't already set
               if (!intent.startDate) {
-                intent.startDate = parseRelativeDate(timeWithDateBeforeMatch[1].trim());
+                intent.startDate = parseRelativeDate(timeWithDateMatch[2].trim());
               }
               logger.info(
                 {
                   changes,
-                  extractedTime: timeWithDateBeforeMatch[2],
-                  extractedDate: timeWithDateBeforeMatch[1],
+                  extractedTime: timeWithDateMatch[1],
+                  extractedDate: timeWithDateMatch[2],
                   parsedStartDate: intent.startDate,
                   parsedStartTime: intent.startTime,
                 },
-                '✅ Extracted time and date from "time to {date} {time}" pattern'
+                '✅ Extracted time and date from "time to {time} {date}" pattern'
               );
             } else {
-              // Try "time to {time} {date}" pattern (e.g., "time to 12:00 tomorrow", "time to 12:00 on tomorrow")
-              // This pattern matches: "time to" followed by time, then optional "on", then date keyword
-              const timeWithDateMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2}|.+?)(?:\s|$)/i);
-              if (timeWithDateMatch && timeWithDateMatch[1] && timeWithDateMatch[2]) {
-                intent.startTime = parseTime(timeWithDateMatch[1].trim());
-                // Only set date if it wasn't already set
-                if (!intent.startDate) {
-                  intent.startDate = parseRelativeDate(timeWithDateMatch[2].trim());
-                }
-                logger.info(
-                  {
-                    changes,
-                    extractedTime: timeWithDateMatch[1],
-                    extractedDate: timeWithDateMatch[2],
-                    parsedStartDate: intent.startDate,
-                    parsedStartTime: intent.startTime,
-                  },
-                  '✅ Extracted time and date from "time to {time} {date}" pattern'
-                );
-              } else {
-                // Try simple "time to {time}" pattern (e.g., "time to 12:00")
-                const timeMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i) 
-                  || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
-                if (timeMatch && timeMatch[1]) {
-                  intent.startTime = parseTime(timeMatch[1].trim());
-                  logger.info(
-                    {
-                      changes,
-                      extractedTime: timeMatch[1],
-                      parsedStartTime: intent.startTime,
-                    },
-                    '✅ Extracted time from "time to {time}" pattern'
-                  );
-                }
+              // Try simple "time to {time}" pattern (e.g., "time to 12:00")
+              const timeMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i) 
+                || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
+              if (timeMatch && timeMatch[1]) {
+                intent.startTime = parseTime(timeMatch[1].trim());
               }
             }
           }
           
-          // Also check original user text for time if not found in changes
-          // This handles cases where AI only extracted date but missed time
-          if (!intent.startTime && originalUserText) {
-            const userTextLower = originalUserText.toLowerCase();
-            // Try to extract time from patterns like "time to tomorrow 12:00" or "time to 12:00 tomorrow"
-            const timeFromUserText = userTextLower.match(/time\s+to\s+(?:today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+([\d:]+(?:\s*(?:am|pm))?)/i) ||
-                                    userTextLower.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(?:today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
-                                    userTextLower.match(/(?:change|update|move|reschedule).*?time\s+to\s+(?:today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+([\d:]+(?:\s*(?:am|pm))?)/i) ||
-                                    userTextLower.match(/(?:change|update|move|reschedule).*?time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(?:today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
-            if (timeFromUserText && timeFromUserText[1]) {
-              intent.startTime = parseTime(timeFromUserText[1].trim());
-              logger.info(
-                {
-                  changes,
-                  originalUserText,
-                  extractedTime: timeFromUserText[1],
-                  parsedStartTime: intent.startTime,
-                  source: 'original_user_text',
-                },
-                '✅ Extracted time from original user text (AI missed it in changes)'
-              );
-            }
-          }
-          
-          // If we have time but no date, try to extract it from changes string or original user text
-          // This handles cases where date appears elsewhere in the changes string or AI missed it
+          // If we have time but no date, and the changes contain a date keyword, try to extract it
+          // This handles cases where date appears elsewhere in the changes string
           if (intent.startTime && !intent.startDate) {
-            // First, check the changes string for date keywords
-            let dateKeywordMatch = changes.match(/(?:on\s+|to\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
-            
-            // Also check for date patterns like "6th Jan", "6 Jan", "Jan 6", etc.
-            if (!dateKeywordMatch) {
-              dateKeywordMatch = changes.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i) ||
-                                changes.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?/i);
-            }
-            
-            // If not found in changes, check original user text (AI might have missed it)
-            if (!dateKeywordMatch && originalUserText) {
-              const userTextLower = originalUserText.toLowerCase();
-              // Look for date keywords near time-related words
-              // Try multiple patterns to catch "time to tomorrow 12:00" or "time to 12:00 tomorrow"
-              // Make patterns more flexible to handle event names between "change" and "time to"
-              dateKeywordMatch = 
-                // Pattern: "time to tomorrow 12:00" (date before time) - most direct
-                userTextLower.match(/time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+(?:\s*(?:am|pm))?/i) ||
-                // Pattern: "time to 12:00 tomorrow" (date after time)
-                userTextLower.match(/time\s+to\s+[\d:]+(?:\s*(?:am|pm))?\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
-                // Pattern: "change [anything] time to tomorrow 12:00" - use .*? to match any characters including 't'
-                userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+(?:\s*(?:am|pm))?/i) ||
-                // Pattern: "change [anything] time to 12:00 tomorrow"
-                userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+[\d:]+(?:\s*(?:am|pm))?\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
-                // Pattern: "change [anything] time to 6th Jan 12:00" or "change [anything] time to 6 Jan 12:00"
-                userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+[\d:]+/i) ||
-                userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?\s+[\d:]+/i) ||
-                // Fallback: any date keyword after "to" or "on"
-                userTextLower.match(/(?:to|on)\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
-                // Fallback: date patterns like "6th Jan", "6 Jan", "Jan 6"
-                userTextLower.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i) ||
-                userTextLower.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?/i);
-              
-              if (dateKeywordMatch && dateKeywordMatch[1]) {
-                logger.info(
-                  {
-                    changes,
-                    originalUserText,
-                    extractedDate: dateKeywordMatch[1],
-                    fullMatch: dateKeywordMatch[0],
-                    source: 'original_user_text',
-                  },
-                  '✅ Found date keyword/pattern in original user text (AI missed it in changes)'
-                );
-              }
-            }
-            
+            // Look for date keywords that might have been missed (e.g., "tomorrow", "today", day names)
+            // Check the entire changes string for date keywords
+            const dateKeywordMatch = changes.match(/(?:on\s+|to\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
             if (dateKeywordMatch && dateKeywordMatch[1]) {
-              // Handle date patterns like "6th Jan" - need to reconstruct the date string
-              let dateStr = dateKeywordMatch[1].trim();
-              
-              // If it's a month name pattern (e.g., "6th Jan" or "Jan 6")
-              if (dateKeywordMatch[2] && /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(dateKeywordMatch[2])) {
-                // Pattern: "6th Jan" -> dateKeywordMatch[1] = "6", dateKeywordMatch[2] = "jan"
-                const day = parseInt(dateKeywordMatch[1], 10);
-                const monthName = dateKeywordMatch[2].substring(0, 3).toLowerCase();
-                const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-                const monthIndex = monthNames.indexOf(monthName);
-                if (monthIndex !== -1 && day >= 1 && day <= 31) {
-                  const now = new Date();
-                  const year = now.getFullYear();
-                  // Check if the date has passed this year, if so use next year
-                  const targetDate = new Date(year, monthIndex, day);
-                  const finalYear = targetDate < now ? year + 1 : year;
-                  dateStr = `${finalYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                  logger.info(
-                    {
-                      originalMatch: dateKeywordMatch[0],
-                      day,
-                      monthName,
-                      monthIndex,
-                      finalYear,
-                      constructedDate: dateStr,
-                    },
-                    '✅ Constructed date from "day month" pattern'
-                  );
-                } else {
-                  // Fall back to parseRelativeDate
-                  dateStr = dateKeywordMatch[0].trim();
-                }
-              } else if (dateKeywordMatch[2] && /^\d+/.test(dateKeywordMatch[2])) {
-                // Pattern: "Jan 6" -> dateKeywordMatch[1] = "jan", dateKeywordMatch[2] = "6"
-                const monthName = dateKeywordMatch[1].substring(0, 3).toLowerCase();
-                const day = parseInt(dateKeywordMatch[2], 10);
-                const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-                const monthIndex = monthNames.indexOf(monthName);
-                if (monthIndex !== -1 && day >= 1 && day <= 31) {
-                  const now = new Date();
-                  const year = now.getFullYear();
-                  const targetDate = new Date(year, monthIndex, day);
-                  const finalYear = targetDate < now ? year + 1 : year;
-                  dateStr = `${finalYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                  logger.info(
-                    {
-                      originalMatch: dateKeywordMatch[0],
-                      day,
-                      monthName,
-                      monthIndex,
-                      finalYear,
-                      constructedDate: dateStr,
-                    },
-                    '✅ Constructed date from "month day" pattern'
-                  );
-                } else {
-                  dateStr = dateKeywordMatch[0].trim();
-                }
-              }
-              
-              intent.startDate = parseRelativeDate(dateStr);
+              intent.startDate = parseRelativeDate(dateKeywordMatch[1].trim());
               logger.info(
                 {
                   changes,
-                  originalUserText,
                   extractedDate: dateKeywordMatch[1],
                   parsedStartDate: intent.startDate,
-                  source: dateKeywordMatch[0]?.includes(changes.toLowerCase()) ? 'changes_string' : 'original_user_text',
                 },
-                '✅ Extracted date keyword/pattern from changes string or original user text'
+                '✅ Extracted date keyword from changes string'
               );
             }
           }
-          
-          // Final validation: Log the final intent values to help debug
-          logger.info(
-            {
-              changes,
-              originalUserText,
-              finalIntentStartDate: intent.startDate,
-              finalIntentStartTime: intent.startTime,
-              hasDate: !!intent.startDate,
-              hasTime: !!intent.startTime,
-              dateType: typeof intent.startDate,
-              timeType: typeof intent.startTime,
-            },
-            '📋 Final parsed intent values for update operation'
-          );
         }
         
         // Check if title is being updated

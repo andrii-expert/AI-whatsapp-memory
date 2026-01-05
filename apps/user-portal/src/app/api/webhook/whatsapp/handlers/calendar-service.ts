@@ -692,89 +692,65 @@ export class CalendarService implements ICalendarService {
       logger.info({ userId, timezone: calendarTimezone, source: 'calendar' }, 'Using calendar timezone for event update');
       
       // Update dates if provided
-      // Also handle time-only updates (use current event's date if only time is provided)
-      if (intent.startDate || intent.startTime) {
-        // If only time is provided (no date), use the current event's date
-        let dateToUse = intent.startDate;
-        if (!dateToUse && intent.startTime) {
-          // Get the current event's date
-          const currentStart = new Date(targetEvent.start);
-          const year = currentStart.getFullYear();
-          const month = String(currentStart.getMonth() + 1).padStart(2, '0');
-          const day = String(currentStart.getDate()).padStart(2, '0');
-          dateToUse = `${year}-${month}-${day}`;
-          logger.info(
-            {
-              userId,
-              currentEventStart: targetEvent.start,
-              constructedDate: dateToUse,
-              reason: 'time_only_update_using_current_event_date',
-            },
-            'Time-only update: Using current event date'
-          );
-        }
-        
+      if (intent.startDate) {
         // Log the intent values before parsing
         logger.info(
           {
             userId,
             intentStartDate: intent.startDate,
             intentStartTime: intent.startTime,
-            dateToUse,
             intentIsAllDay: intent.isAllDay,
             calendarTimezone,
           },
           'Parsing start date/time for event update'
         );
         
-        if (dateToUse) {
-          updates.start = this.parseDateTime(dateToUse, intent.startTime, intent.isAllDay, calendarTimezone);
+        updates.start = this.parseDateTime(intent.startDate, intent.startTime, intent.isAllDay, calendarTimezone);
         
-          // Log the parsed result
+        // Log the parsed result
+        logger.info(
+          {
+            userId,
+            parsedStartUTC: updates.start.toISOString(),
+            parsedStartLocal: updates.start.toLocaleString('en-US', { timeZone: calendarTimezone }),
+            expectedLocalTime: intent.startTime ? `${intent.startDate} ${intent.startTime}` : intent.startDate,
+          },
+          'Parsed start date/time for update'
+        );
+        
+        // If start is updated, we must also update end to maintain a valid time range
+        // Use the new start date for calculating end
+        const newStartDate = updates.start;
+        
+        // If explicit end date/time/duration is provided, use it
+        if (intent.endDate || intent.endTime || intent.duration) {
+          updates.end = this.parseEndDateTime(
+            newStartDate,
+            intent.endDate,
+            intent.endTime,
+            intent.duration,
+            intent.isAllDay
+          );
+        } else {
+          // Calculate end based on the original event's duration
+          const originalStart = new Date(targetEvent.start);
+          const originalEnd = new Date(targetEvent.end);
+          const durationMs = originalEnd.getTime() - originalStart.getTime();
+          
+          // Apply the same duration to the new start time
+          updates.end = new Date(newStartDate.getTime() + durationMs);
+          
           logger.info(
             {
               userId,
-              parsedStartUTC: updates.start.toISOString(),
-              parsedStartLocal: updates.start.toLocaleString('en-US', { timeZone: calendarTimezone }),
-              expectedLocalTime: intent.startTime ? `${dateToUse} ${intent.startTime}` : dateToUse,
+              originalStart: originalStart.toISOString(),
+              originalEnd: originalEnd.toISOString(),
+              durationMs,
+              newStart: newStartDate.toISOString(),
+              newEnd: updates.end.toISOString(),
             },
-            'Parsed start date/time for update'
+            'Calculated end date based on original event duration'
           );
-        
-          // If start is updated, we must also update end to maintain a valid time range
-          // Use the new start date for calculating end
-          const newStartDate = updates.start;
-        
-          // If explicit end date/time/duration is provided, use it
-          if (intent.endDate || intent.endTime || intent.duration) {
-            updates.end = this.parseEndDateTime(
-              newStartDate,
-              intent.endDate,
-              intent.endTime,
-              intent.duration,
-              intent.isAllDay
-            );
-          } else {
-            // Calculate end based on the original event's duration
-            const originalStart = new Date(targetEvent.start);
-            const originalEnd = new Date(targetEvent.end);
-            const durationMs = originalEnd.getTime() - originalStart.getTime();
-          
-            // Apply the same duration to the new start time
-            updates.end = new Date(newStartDate.getTime() + durationMs);
-          
-            logger.info(
-              {
-                userId,
-                originalStart: originalStart.toISOString(),
-                originalEnd: originalEnd.toISOString(),
-                durationMs,
-                newStart: newStartDate.toISOString(),
-                newEnd: updates.end.toISOString(),
-              },
-              'Calculated end date based on original event duration'
-            );
-          }
         }
       } else if (intent.endDate || intent.endTime || intent.duration) {
         // Only end is being updated (start stays the same)
@@ -1732,4 +1708,3 @@ export class CalendarService implements ICalendarService {
     }
   }
 }
-
