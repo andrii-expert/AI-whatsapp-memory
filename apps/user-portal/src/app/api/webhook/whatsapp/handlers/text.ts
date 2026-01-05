@@ -432,8 +432,17 @@ async function processAIResponse(
       };
       
       // Check if user text contains numbers after view keywords
+      // Support patterns like:
+      // - "show me 1"
+      // - "show info on 1"
+      // - "show info for 4"
+      // - "show meeting info for 4"
+      // - "show meeting info for number 4"
+      // - "show info for number 4"
       const extractedNumbers = extractNumbers(userTextLower);
-      const hasViewKeywords = /^(?:show|view|get|see|send|give|provide)\s+(?:me\s+)?(?:info\s+(?:on|about|for)\s+)?/i.test(userTextLower);
+      const hasViewKeywords = /^(?:show|view|get|see|send|give|provide)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?/i.test(userTextLower) ||
+                              /^(?:show|view|get|see|send|give|provide)\s+(?:me\s+)?(?:info\s+(?:on|about|for)\s+)?/i.test(userTextLower) ||
+                              /^(?:show|view|get|see)\s+(?:me\s+)?(\d+)/i.test(userTextLower);
       const isNumberBasedViewRequest = hasViewKeywords && extractedNumbers.length > 0;
       
       const requestedNumbers = isNumberBasedViewRequest ? extractedNumbers : [];
@@ -563,8 +572,10 @@ async function processAIResponse(
             return; // Exit early after handling multiple events
           } else {
             // Single number - use existing logic
-            const numberMatch = userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-                               userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
+            // Support patterns like "show meeting info for 4", "show info for number 4", etc.
+            const numberMatch = userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
+                               userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                               userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
                                userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
             if (numberMatch && numberMatch[1]) {
               eventActionTemplate = `Show event details: ${numberMatch[1]}`;
@@ -1219,14 +1230,16 @@ async function processAIResponse(
       const listEventValue = listEventsMatch && listEventsMatch[1] ? listEventsMatch[1].trim() : '';
       
       // Check if user wants to view a specific event (not list all events)
-      // Pattern matches: "show me [name] event", "show event [name]", "view [name] event", "show me 2", "send info on 3", etc.
-      const userWantsToView = originalUserText?.toLowerCase().match(/(?:show|view|get|see|send|give|provide|details?|overview)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview|info|information)/i) ||
+      // Pattern matches: "show me [name] event", "show event [name]", "view [name] event", "show me 2", "send info on 3", "show meeting info for 4", etc.
+      const userWantsToView = originalUserText?.toLowerCase().match(/(?:show|view|get|see|send|give|provide|details?|overview)\s+(?:me\s+)?(?:the\s+)?(?:event|details?|overview|info|information|meeting)/i) ||
                               originalUserText?.toLowerCase().match(/(?:show|view|get|see|send)\s+(?:me\s+)?[^"]+\s+event/i) ||
                               originalUserText?.toLowerCase().match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event\s+(?:of|for|details?|overview)/i) ||
                               originalUserText?.toLowerCase().match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)/i) ||
-                              // Also match "show me [number]" or "send info on [number]" - likely referring to a numbered item from a list
+                              originalUserText?.toLowerCase().match(/(?:show|view|get|see)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)/i) ||
+                              // Also match "show me [number]" or "send info on [number]" or "show meeting info for [number]" - likely referring to a numbered item from a list
+                              (originalUserText?.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue)) ||
                               (originalUserText?.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue)) ||
-                              (originalUserText?.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue));
+                              (originalUserText?.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) && hasEventNameInList && /^\d+$/.test(listEventValue));
       
       const isListEventsWithName = actionTemplate.toLowerCase().startsWith('list events:') && 
                                    hasEventNameInList &&
@@ -1245,11 +1258,12 @@ async function processAIResponse(
       const userTextLower = originalUserText?.toLowerCase() || '';
       const actionTemplateLower = actionTemplate.toLowerCase();
       
-      // Detect number-based view requests (e.g., "show me 1", "show info on 1")
+      // Detect number-based view requests (e.g., "show me 1", "show info on 1", "show meeting info for 4", "show info for number 4")
       const isNumberBasedView = titleType === 'event' && 
                                 originalUserText && 
-                                (userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-                                 userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
+                                (userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
+                                 userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                 userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
                                  userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i));
       
       // Detect name-based view requests (e.g., "show me call with paul")
@@ -3575,11 +3589,53 @@ function parseEventTemplateToIntent(
           }
           
           // Try to extract time separately if not already extracted
+          // Handle patterns like "time to 12:00 tomorrow" or "time to 12:00 on tomorrow"
           if (!intent.startTime) {
-            const timeMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i) 
-              || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
-            if (timeMatch && timeMatch[1]) {
-              intent.startTime = parseTime(timeMatch[1].trim());
+            // First, try "time to {time} {date}" pattern (e.g., "time to 12:00 tomorrow", "time to 12:00 on tomorrow")
+            // This pattern matches: "time to" followed by time, then optional "on", then date keyword
+            const timeWithDateMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2}|.+?)(?:\s|$)/i);
+            if (timeWithDateMatch && timeWithDateMatch[1] && timeWithDateMatch[2]) {
+              intent.startTime = parseTime(timeWithDateMatch[1].trim());
+              // Only set date if it wasn't already set
+              if (!intent.startDate) {
+                intent.startDate = parseRelativeDate(timeWithDateMatch[2].trim());
+              }
+              logger.info(
+                {
+                  changes,
+                  extractedTime: timeWithDateMatch[1],
+                  extractedDate: timeWithDateMatch[2],
+                  parsedStartDate: intent.startDate,
+                  parsedStartTime: intent.startTime,
+                },
+                '✅ Extracted time and date from "time to {time} {date}" pattern'
+              );
+            } else {
+              // Try simple "time to {time}" pattern (e.g., "time to 12:00")
+              const timeMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i) 
+                || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
+              if (timeMatch && timeMatch[1]) {
+                intent.startTime = parseTime(timeMatch[1].trim());
+              }
+            }
+          }
+          
+          // If we have time but no date, and the changes contain a date keyword, try to extract it
+          // This handles cases where date appears elsewhere in the changes string
+          if (intent.startTime && !intent.startDate) {
+            // Look for date keywords that might have been missed (e.g., "tomorrow", "today", day names)
+            // Check the entire changes string for date keywords
+            const dateKeywordMatch = changes.match(/(?:on\s+|to\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
+            if (dateKeywordMatch && dateKeywordMatch[1]) {
+              intent.startDate = parseRelativeDate(dateKeywordMatch[1].trim());
+              logger.info(
+                {
+                  changes,
+                  extractedDate: dateKeywordMatch[1],
+                  parsedStartDate: intent.startDate,
+                },
+                '✅ Extracted date keyword from changes string'
+              );
             }
           }
         }
