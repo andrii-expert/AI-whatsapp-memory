@@ -1165,10 +1165,18 @@ async function processAIResponse(
                               !userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(?:today|tomorrow|this\s+week|this\s+month)/i);
       
       // If user said "show info on 1" or "show me 1" in event context, always treat as view operation
-      // This handles cases where AI generates "List events: tomorrow" but user wants to see event #1
+      // This handles cases where AI generates "List events: tomorrow" or "List events: all" but user wants to see event #1
+      // CRITICAL: In event context, ANY number-based request should be treated as a view operation
+      // regardless of what the AI generates (list, view file, etc.)
       const isNumberViewInEventContext = isNumberBasedView && 
                                          (actionTemplateLower.startsWith('list events:') || 
-                                          actionTemplateLower.startsWith('view a file:'));
+                                          actionTemplateLower.startsWith('view a file:') ||
+                                          actionTemplateLower.startsWith('list events: all') ||
+                                          actionTemplateLower.startsWith('list events:all'));
+      
+      // ALWAYS treat number-based views in event context as view operations
+      // This ensures "show me 1" works even if AI generates unexpected responses
+      const isNumberViewAlways = isNumberBasedView && titleType === 'event';
       
       // If user wants to view by name and AI generated a list, treat as view operation
       // User intent (view specific event by name) takes priority over AI's list response
@@ -1184,6 +1192,7 @@ async function processAIResponse(
                                   isListEventsWithName ||
                                   isNumberBasedView ||
                                   isNumberViewInEventContext ||
+                                  isNumberViewAlways || // ALWAYS treat number-based views as view operations in event context
                                   isNameBasedView ||
                                   isNameViewInEventContext;
       
@@ -1312,9 +1321,10 @@ async function processAIResponse(
               eventActionTemplate = `Show event details: ${originalUserText}`;
             }
           }
-        } else if (isNumberBasedView || isNumberViewInEventContext) {
+        } else if (isNumberBasedView || isNumberViewInEventContext || isNumberViewAlways) {
           // User said "show me 1" or "show info on 1" or similar - extract number directly
-          // This handles cases where AI generates "List events: tomorrow" but user wants to see event #1
+          // This handles cases where AI generates "List events: tomorrow", "List events: all", or any other response
+          // CRITICAL: Always extract the number from user text, regardless of AI response
           const userNumberMatch = originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
                                  originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
                                  originalUserText.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
@@ -1328,9 +1338,23 @@ async function processAIResponse(
                 extractedNumber: userNumberMatch[1],
                 originalUserText,
                 isNumberViewInEventContext: !!isNumberViewInEventContext,
-                reason: 'number_based_view_in_event_context'
+                isNumberViewAlways: !!isNumberViewAlways,
+                reason: 'number_based_view_in_event_context_always'
               },
-              '✅ Extracted number from user text for number-based view request'
+              '✅ Extracted number from user text for number-based view request (ALWAYS in event context)'
+            );
+          } else {
+            // Fallback: if we couldn't extract number, log warning but still try to route as view
+            logger.warn(
+              {
+                userId,
+                originalAction: actionTemplate,
+                originalUserText,
+                isNumberBasedView,
+                isNumberViewInEventContext,
+                isNumberViewAlways,
+              },
+              '⚠️ Number-based view detected but could not extract number from user text'
             );
           }
         } else if (isNameViewInEventContext) {
