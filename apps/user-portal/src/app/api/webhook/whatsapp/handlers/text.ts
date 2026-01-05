@@ -1145,25 +1145,47 @@ async function processAIResponse(
                                      actionTemplate.toLowerCase().startsWith('show details for event:');
       
       // Check if user said "show me [number]" or "show info on [number]" after listing events - this is always an event operation in event context
+      const userTextLower = originalUserText?.toLowerCase() || '';
+      const actionTemplateLower = actionTemplate.toLowerCase();
+      
+      // Detect number-based view requests (e.g., "show me 1", "show info on 1")
       const isNumberBasedView = titleType === 'event' && 
                                 originalUserText && 
-                                (originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-                                 originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i));
+                                (userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
+                                 userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
+                                 userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i));
+      
+      // Detect name-based view requests (e.g., "show me call with paul")
+      // Exclude list requests like "show me all events" or "show me events"
+      const isNameBasedView = titleType === 'event' &&
+                              originalUserText &&
+                              userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(.+?)(?:\s+event)?$/i) &&
+                              !userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(?:all|list|every)\s+/i) &&
+                              !userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(?:events?|event\s+list)/i) &&
+                              !userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(?:today|tomorrow|this\s+week|this\s+month)/i);
       
       // If user said "show info on 1" or "show me 1" in event context, always treat as view operation
       // This handles cases where AI generates "List events: tomorrow" but user wants to see event #1
       const isNumberViewInEventContext = isNumberBasedView && 
-                                         (actionTemplate.toLowerCase().startsWith('list events:') || 
-                                          actionTemplate.toLowerCase().startsWith('view a file:'));
+                                         (actionTemplateLower.startsWith('list events:') || 
+                                          actionTemplateLower.startsWith('view a file:'));
       
-      const isViewShowOperation = actionTemplate.toLowerCase().match(/^(view|show|get|see|details? of|overview of)\s+(?:event|events?|me\s+event|me\s+the\s+event)/i) ||
-                                  actionTemplate.toLowerCase().match(/^(view|show|get|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
-                                  (actionTemplate.toLowerCase().startsWith('view a file:') && (originalUserText?.toLowerCase().includes('event') || isNumberBasedView)) ||
+      // If user wants to view by name and AI generated a list, treat as view operation
+      // User intent (view specific event by name) takes priority over AI's list response
+      // This works even if AI generated "List events: tomorrow" - user wants a specific event
+      const isNameViewInEventContext = isNameBasedView &&
+                                       actionTemplateLower.startsWith('list events:');
+      
+      const isViewShowOperation = actionTemplateLower.match(/^(view|show|get|see|details? of|overview of)\s+(?:event|events?|me\s+event|me\s+the\s+event)/i) ||
+                                  actionTemplateLower.match(/^(view|show|get|see)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
+                                  (actionTemplateLower.startsWith('view a file:') && (originalUserText?.toLowerCase().includes('event') || isNumberBasedView)) ||
                                   isViewAnEvent ||
                                   isShowDetailsForEvent ||
                                   isListEventsWithName ||
                                   isNumberBasedView ||
-                                  isNumberViewInEventContext;
+                                  isNumberViewInEventContext ||
+                                  isNameBasedView ||
+                                  isNameViewInEventContext;
       
       if (isViewShowOperation) {
         // Handle view/show event operations via ActionExecutor
@@ -1294,7 +1316,8 @@ async function processAIResponse(
           // User said "show me 1" or "show info on 1" or similar - extract number directly
           // This handles cases where AI generates "List events: tomorrow" but user wants to see event #1
           const userNumberMatch = originalUserText.toLowerCase().match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-                                 originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i);
+                                 originalUserText.toLowerCase().match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(\d+)$/i) ||
+                                 originalUserText.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i);
           if (userNumberMatch && userNumberMatch[1]) {
             eventActionTemplate = `Show event details: ${userNumberMatch[1]}`;
             logger.info(
@@ -1309,6 +1332,28 @@ async function processAIResponse(
               },
               '✅ Extracted number from user text for number-based view request'
             );
+          }
+        } else if (isNameViewInEventContext) {
+          // User said "show me call with paul" or similar - extract event name from user text
+          // This handles cases where AI generates "List events: tomorrow" but user wants to see a specific event
+          const nameMatch = originalUserText.toLowerCase().match(/^(?:show|view|get|see)\s+(?:me\s+)?(.+?)(?:\s+event)?$/i);
+          if (nameMatch && nameMatch[1]) {
+            const eventName = nameMatch[1].trim();
+            // Filter out common list keywords and timeframes
+            if (!eventName.match(/^(?:all|list|every|today|tomorrow|this\s+week|this\s+month|events?|event\s+list)/i)) {
+              eventActionTemplate = `Show event details: ${eventName}`;
+              logger.info(
+                {
+                  userId,
+                  originalAction: actionTemplate,
+                  convertedAction: eventActionTemplate,
+                  extractedEventName: eventName,
+                  originalUserText,
+                  reason: 'name_based_view_in_event_context'
+                },
+                '✅ Extracted event name from user text for name-based view request'
+              );
+            }
           }
         }
         
