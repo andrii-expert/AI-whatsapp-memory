@@ -3943,6 +3943,12 @@ function parseEventTemplateToIntent(
             // First, check the changes string for date keywords
             let dateKeywordMatch = changes.match(/(?:on\s+|to\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
             
+            // Also check for date patterns like "6th Jan", "6 Jan", "Jan 6", etc.
+            if (!dateKeywordMatch) {
+              dateKeywordMatch = changes.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i) ||
+                                changes.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?/i);
+            }
+            
             // If not found in changes, check original user text (AI might have missed it)
             if (!dateKeywordMatch && originalUserText) {
               const userTextLower = originalUserText.toLowerCase();
@@ -3958,8 +3964,14 @@ function parseEventTemplateToIntent(
                 userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+[\d:]+(?:\s*(?:am|pm))?/i) ||
                 // Pattern: "change [anything] time to 12:00 tomorrow"
                 userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+[\d:]+(?:\s*(?:am|pm))?\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
+                // Pattern: "change [anything] time to 6th Jan 12:00" or "change [anything] time to 6 Jan 12:00"
+                userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+[\d:]+/i) ||
+                userTextLower.match(/(?:change|update|move|reschedule)\s+.*?time\s+to\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?\s+[\d:]+/i) ||
                 // Fallback: any date keyword after "to" or "on"
-                userTextLower.match(/(?:to|on)\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
+                userTextLower.match(/(?:to|on)\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i) ||
+                // Fallback: date patterns like "6th Jan", "6 Jan", "Jan 6"
+                userTextLower.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i) ||
+                userTextLower.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?/i);
               
               if (dateKeywordMatch && dateKeywordMatch[1]) {
                 logger.info(
@@ -3967,15 +3979,76 @@ function parseEventTemplateToIntent(
                     changes,
                     originalUserText,
                     extractedDate: dateKeywordMatch[1],
+                    fullMatch: dateKeywordMatch[0],
                     source: 'original_user_text',
                   },
-                  '✅ Found date keyword in original user text (AI missed it in changes)'
+                  '✅ Found date keyword/pattern in original user text (AI missed it in changes)'
                 );
               }
             }
             
             if (dateKeywordMatch && dateKeywordMatch[1]) {
-              intent.startDate = parseRelativeDate(dateKeywordMatch[1].trim());
+              // Handle date patterns like "6th Jan" - need to reconstruct the date string
+              let dateStr = dateKeywordMatch[1].trim();
+              
+              // If it's a month name pattern (e.g., "6th Jan" or "Jan 6")
+              if (dateKeywordMatch[2] && /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(dateKeywordMatch[2])) {
+                // Pattern: "6th Jan" -> dateKeywordMatch[1] = "6", dateKeywordMatch[2] = "jan"
+                const day = parseInt(dateKeywordMatch[1], 10);
+                const monthName = dateKeywordMatch[2].substring(0, 3).toLowerCase();
+                const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                const monthIndex = monthNames.indexOf(monthName);
+                if (monthIndex !== -1 && day >= 1 && day <= 31) {
+                  const now = new Date();
+                  const year = now.getFullYear();
+                  // Check if the date has passed this year, if so use next year
+                  const targetDate = new Date(year, monthIndex, day);
+                  const finalYear = targetDate < now ? year + 1 : year;
+                  dateStr = `${finalYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  logger.info(
+                    {
+                      originalMatch: dateKeywordMatch[0],
+                      day,
+                      monthName,
+                      monthIndex,
+                      finalYear,
+                      constructedDate: dateStr,
+                    },
+                    '✅ Constructed date from "day month" pattern'
+                  );
+                } else {
+                  // Fall back to parseRelativeDate
+                  dateStr = dateKeywordMatch[0].trim();
+                }
+              } else if (dateKeywordMatch[2] && /^\d+/.test(dateKeywordMatch[2])) {
+                // Pattern: "Jan 6" -> dateKeywordMatch[1] = "jan", dateKeywordMatch[2] = "6"
+                const monthName = dateKeywordMatch[1].substring(0, 3).toLowerCase();
+                const day = parseInt(dateKeywordMatch[2], 10);
+                const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                const monthIndex = monthNames.indexOf(monthName);
+                if (monthIndex !== -1 && day >= 1 && day <= 31) {
+                  const now = new Date();
+                  const year = now.getFullYear();
+                  const targetDate = new Date(year, monthIndex, day);
+                  const finalYear = targetDate < now ? year + 1 : year;
+                  dateStr = `${finalYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  logger.info(
+                    {
+                      originalMatch: dateKeywordMatch[0],
+                      day,
+                      monthName,
+                      monthIndex,
+                      finalYear,
+                      constructedDate: dateStr,
+                    },
+                    '✅ Constructed date from "month day" pattern'
+                  );
+                } else {
+                  dateStr = dateKeywordMatch[0].trim();
+                }
+              }
+              
+              intent.startDate = parseRelativeDate(dateStr);
               logger.info(
                 {
                   changes,
@@ -3984,7 +4057,7 @@ function parseEventTemplateToIntent(
                   parsedStartDate: intent.startDate,
                   source: dateKeywordMatch[0]?.includes(changes.toLowerCase()) ? 'changes_string' : 'original_user_text',
                 },
-                '✅ Extracted date keyword from changes string or original user text'
+                '✅ Extracted date keyword/pattern from changes string or original user text'
               );
             }
           }
