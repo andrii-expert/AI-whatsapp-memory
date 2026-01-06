@@ -1369,7 +1369,7 @@ export class CalendarService implements ICalendarService {
         success: true,
         action: 'DELETE',
         event,
-        message: `Event "${event.title}" deleted successfully`,
+        message: `⛔ Event "${event.title}" deleted successfully`,
       };
     } catch (error) {
       logger.error({ error, userId }, 'Failed to delete calendar event');

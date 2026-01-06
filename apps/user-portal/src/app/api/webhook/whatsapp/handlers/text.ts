@@ -2752,7 +2752,7 @@ async function handleEventOperation(
       if (successCount > 0 || failCount > 0) {
         let summaryMessage = '';
         if (successCount > 0) {
-          summaryMessage += `✅ *${successCount} event${successCount !== 1 ? 's' : ''} deleted*\n\n`;
+          summaryMessage += `⛔ *${successCount} event${successCount !== 1 ? 's' : ''} deleted*\n\n`;
         }
         if (failCount > 0) {
           summaryMessage += `❌ *${failCount} deletion${failCount !== 1 ? 's' : ''} failed*\n\n`;
@@ -4178,7 +4178,7 @@ async function handleSingleEventOperation(
         responseMessage = '';
       } else if (result.action === 'DELETE' && result.event) {
         // Simple delete message - only show event name
-        responseMessage = `✅ ${result.event.title || 'Untitled Event'} deleted`;
+        responseMessage = `⛔ ${result.event.title || 'Untitled Event'} deleted`;
         
         // Call callback if provided (for multiple deletions)
         if (onResult) {

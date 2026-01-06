@@ -2904,7 +2904,7 @@ export class ActionExecutor {
         await deleteUserFileFolder(this.db, fileFolderId, this.userId);
         return {
           success: true,
-          message: `✅ *File Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
+          message: `⛔ *File Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
         };
       } catch (error) {
         logger.error({ error, folderId: fileFolderId, userId: this.userId }, 'Failed to delete file folder');
@@ -2922,7 +2922,7 @@ export class ActionExecutor {
         await deleteUserFileFolder(this.db, fileFolderId, this.userId);
         return {
           success: true,
-          message: `✅ *File Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
+          message: `⛔ *File Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
         };
       } catch (error) {
         logger.error({ error, folderId: fileFolderId, userId: this.userId }, 'Failed to delete file folder');
@@ -2945,7 +2945,7 @@ export class ActionExecutor {
       await deleteFolder(this.db, folderId, this.userId);
       return {
         success: true,
-        message: `✅ *Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
+        message: `⛔ *Folder Deleted Successfully*\n   "${parsed.folderRoute}"`,
       };
     } catch (error) {
       logger.error({ error, folderId, userId: this.userId }, 'Failed to delete folder');
