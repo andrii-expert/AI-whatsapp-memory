@@ -1992,6 +1992,79 @@ async function processAIResponse(
         }
       }
     } else if (titleType === 'address') {
+      // Check if AI misclassified an event location update as an address update
+      // This happens when user says "edit location to paul office" but AI generates "Update an address: Paul - changes: location to Office"
+      const isUpdateAddress = actionTemplate.toLowerCase().startsWith('update an address:') || 
+                              actionTemplate.toLowerCase().startsWith('edit an address:');
+      if (isUpdateAddress && originalUserText) {
+        const userTextLower = originalUserText.toLowerCase();
+        // Check if user wants to update event location (not address location)
+        // Look for patterns like "edit location", "add location", "change location", etc.
+        const wantsEventLocationUpdate = userTextLower.match(/(?:edit|change|update|add|set)\s+location\s+(?:to|as|is|:|-)\s*(.+)/i) ||
+                                         userTextLower.match(/(?:edit|change|update|add|set)\s+(?:the\s+)?(?:event\s+)?location/i) ||
+                                         userTextLower.match(/location\s+(?:to|as|is|:|-)\s*(.+)/i) ||
+                                         (userTextLower.includes('location') && (userTextLower.includes('edit') || userTextLower.includes('add') || userTextLower.includes('change')));
+        
+        if (wantsEventLocationUpdate) {
+          // Extract location value - try multiple patterns
+          let locationValue = '';
+          const locationMatch1 = userTextLower.match(/(?:edit|change|update|add|set)\s+location\s+(?:to|as|is|:|-)\s*(.+)/i);
+          const locationMatch2 = userTextLower.match(/location\s+(?:to|as|is|:|-)\s*(.+)/i);
+          
+          if (locationMatch1 && locationMatch1[1]) {
+            locationValue = locationMatch1[1].trim();
+          } else if (locationMatch2 && locationMatch2[1]) {
+            locationValue = locationMatch2[1].trim();
+          } else {
+            // Try to extract from the action template - combine address name and location change
+            const addressMatch = actionTemplate.match(/(?:Update|Edit)\s+an\s+address:\s*(.+?)\s*-\s*changes:/i);
+            const changesMatch = actionTemplate.match(/changes:\s*(.+?)(?:\s*-\s*calendar:|$)/i);
+            if (addressMatch && changesMatch) {
+              // Combine address name and location change (e.g., "Paul" + "location to Office" = "paul office")
+              const addressName = addressMatch[1].trim();
+              const changes = changesMatch[1].trim();
+              const locationInChanges = changes.match(/location\s+to\s+(.+?)(?:\s|$)/i);
+              if (locationInChanges && locationInChanges[1]) {
+                locationValue = `${addressName} ${locationInChanges[1].trim()}`.trim();
+              }
+            }
+          }
+          
+          // Try to find a recent event to update (check last 30 days)
+          try {
+            const calendarService = new CalendarService(db);
+            const recentEvents = await calendarService.getRecentEvents(userId, { days: 30, limit: 10 });
+            
+            if (recentEvents.length > 0 && recentEvents[0]) {
+              // Use the most recent event
+              const targetEvent = recentEvents[0];
+              
+              logger.info(
+                {
+                  userId,
+                  originalAction: actionTemplate,
+                  targetEventTitle: targetEvent.title,
+                  locationValue,
+                  originalUserText,
+                  reason: 'misclassified_as_address_but_user_wants_event_location_update'
+                },
+                'Converting address update to event location update'
+              );
+              
+              // Convert to event update operation
+              const eventActionTemplate = `Update an event: ${targetEvent.title} - changes: location to ${locationValue}`;
+              
+              // Route to event update operation
+              await handleEventOperation(originalUserText, eventActionTemplate, recipient, userId, db, whatsappService);
+              
+              return; // Exit early, don't process as address operation
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to find recent event for location update');
+          }
+        }
+      }
+      
       // Check if AI misclassified an event request as an address request
       // This happens when user says "send info on 3" but AI generates "Get address: [event name]"
       const isGetAddress = actionTemplate.toLowerCase().startsWith('get address:');
@@ -2315,6 +2388,64 @@ async function handleEventOperation(
           'Detected Google Meet in location field - clearing location and requesting Google Meet'
         );
         intent.location = undefined; // Clear the location
+      }
+      
+      // Resolve location from saved addresses if it matches an address name
+      if (intent.location && intent.location.trim()) {
+        try {
+          const addresses = await getUserAddresses(db, userId);
+          const locationLower = intent.location.toLowerCase().trim();
+          
+          // Try to find matching address by name (exact match or contains)
+          for (const address of addresses) {
+            const addressNameLower = address.name.toLowerCase().trim();
+            
+            // Check for exact match or if location contains address name or vice versa
+            if (locationLower === addressNameLower || 
+                locationLower.includes(addressNameLower) || 
+                addressNameLower.includes(locationLower)) {
+              
+              // Build full address string from address components
+              const addressParts = [
+                address.street,
+                address.city,
+                address.state,
+                address.zip,
+                address.country,
+              ].filter((part): part is string => typeof part === 'string' && part.trim() !== '');
+              
+              if (addressParts.length > 0) {
+                const fullAddress = addressParts.join(', ');
+                logger.info(
+                  {
+                    userId,
+                    originalLocation: intent.location,
+                    resolvedLocation: fullAddress,
+                    addressName: address.name,
+                  },
+                  'Resolved location from saved address'
+                );
+                intent.location = fullAddress;
+                break; // Use first match
+              } else if (address.name) {
+                // If no address parts but we have a name, use the name
+                logger.info(
+                  {
+                    userId,
+                    originalLocation: intent.location,
+                    resolvedLocation: address.name,
+                    addressName: address.name,
+                  },
+                  'Resolved location to address name (no address parts)'
+                );
+                intent.location = address.name;
+                break;
+              }
+            }
+          }
+        } catch (error) {
+          logger.warn({ error, userId, location: intent.location }, 'Failed to resolve location from saved addresses');
+        }
       }
       
       const wantsGoogleMeet = 
@@ -3902,9 +4033,13 @@ function parseEventTemplateToIntent(
         }
         
         // Check if location/address is being updated
+        // Support patterns: "location to X", "add location X", "edit location to X", "location: X", "location - X"
         const locationMatch = changes.match(/location\s+to\s+(.+?)(?:\s|$)/i) 
           || changes.match(/address\s+to\s+(.+?)(?:\s|$)/i)
-          || changes.match(/place\s+to\s+(.+?)(?:\s|$)/i);
+          || changes.match(/place\s+to\s+(.+?)(?:\s|$)/i)
+          || changes.match(/(?:add|edit|set|change|update)\s+location\s+(?:to\s+)?(.+?)(?:\s|$)/i)
+          || changes.match(/location\s*[:=]\s*(.+?)(?:\s|$)/i)
+          || changes.match(/location\s*-\s*(.+?)(?:\s|$)/i);
         if (locationMatch && locationMatch[1]) {
           intent.location = locationMatch[1].trim();
         }
