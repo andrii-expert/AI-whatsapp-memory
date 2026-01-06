@@ -935,7 +935,13 @@ export class CalendarService implements ICalendarService {
       }
       
       // Clean up the updates object - remove undefined values to avoid issues
-      const cleanUpdates: any = {};
+      // Always include required fields: calendarId and eventId
+      const cleanUpdates: any = {
+        calendarId: updates.calendarId,
+        eventId: updates.eventId,
+      };
+      
+      // Add optional fields only if they are defined
       if (updates.title !== undefined) cleanUpdates.title = updates.title;
       if (updates.description !== undefined) cleanUpdates.description = updates.description;
       if (updates.location !== undefined) cleanUpdates.location = updates.location;
