@@ -10,6 +10,7 @@ import type { PlanRecord } from "@imaginecalendar/database/queries";
 import {
   createUser,
   getUserById,
+  getUserByEmail,
   getUserByPhone,
   updateUser,
   createSubscription,
