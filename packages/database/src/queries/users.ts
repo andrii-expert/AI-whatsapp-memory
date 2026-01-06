@@ -104,26 +104,51 @@ export async function createUser(
   return withMutationLogging(
     'createUser',
     { userId: data.id, email: data.email },
-    () => db.transaction(async (tx) => {
-      // Convert Date to string for the birthday field
-      const insertData = {
-        ...data,
-        birthday: data.birthday ? data.birthday.toISOString().split('T')[0] : undefined,
-      };
+    async () => {
+      try {
+        return await db.transaction(async (tx) => {
+          // Convert Date to string for the birthday field
+          const insertData = {
+            ...data,
+            birthday: data.birthday ? data.birthday.toISOString().split('T')[0] : undefined,
+          };
 
-      const [user] = await tx.insert(users).values(insertData).returning();
+          const [user] = await tx.insert(users).values(insertData).returning();
 
-      if (!user) {
-        throw new Error("Failed to create user");
+          if (!user) {
+            throw new Error("Failed to create user");
+          }
+
+          // Create default preferences
+          await tx.insert(userPreferences).values({
+            userId: user.id,
+          });
+
+          return user;
+        });
+      } catch (error: any) {
+        // Handle database constraint violations
+        if (error?.code === '23505') { // PostgreSQL unique violation
+          const constraint = error?.constraint || '';
+          
+          if (constraint.includes('email') || error?.message?.includes('email')) {
+            logger.error({ userId: data.id, email: data.email, error }, "Email already exists");
+            throw new Error("This email address is already registered. Please contact support if you believe this is an error.");
+          }
+          
+          if (constraint.includes('phone') || error?.message?.includes('phone')) {
+            logger.error({ userId: data.id, phone: data.phone, error }, "Phone already exists");
+            throw new Error("This phone number is already registered. Please use a different number.");
+          }
+          
+          logger.error({ userId: data.id, constraint, error }, "Database constraint violation");
+          throw new Error(`Registration failed: ${error?.message || 'A record with this information already exists'}`);
+        }
+        
+        // Re-throw other errors
+        throw error;
       }
-
-      // Create default preferences
-      await tx.insert(userPreferences).values({
-        userId: user.id,
-      });
-
-      return user;
-    })
+    }
   );
 }
 

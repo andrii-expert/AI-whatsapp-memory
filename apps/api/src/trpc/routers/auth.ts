@@ -241,7 +241,25 @@ export const authRouter = createTRPCRouter({
         });
       }
       
+      // Check if email is already taken by another user (if user doesn't exist yet)
       const existingUser = await getUserById(db, session.user.id);
+      
+      if (!existingUser) {
+        // Check if email is already in use by another user
+        const emailUser = await getUserByEmail(db, session.user.email || "");
+        if (emailUser && emailUser.id !== session.user.id) {
+          logger.warn({ 
+            userId: session.user.id, 
+            email: session.user.email, 
+            existingUserId: emailUser.id 
+          }, "Email already in use by another user");
+          
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'This email address is already registered to another account. Please contact support if you believe this is an error.',
+          });
+        }
+      }
       
       if (!existingUser) {
         // Create user if doesn't exist (JIT creation)
