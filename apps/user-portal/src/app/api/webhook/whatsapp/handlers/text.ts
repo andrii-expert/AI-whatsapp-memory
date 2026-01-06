@@ -2333,6 +2333,108 @@ async function handleEventOperation(
       'Handling event operation from text message'
     );
 
+    // Check if this is multiple delete operations (e.g., "Delete an event: aaaa\nDelete an event: aaa\nDelete an event: test")
+    const deleteLines = actionTemplate.split('\n').filter(line => 
+      line.trim().toLowerCase().startsWith('delete an event:')
+    );
+    
+    // If we have multiple delete lines, handle them separately
+    if (deleteLines.length > 1) {
+      logger.info(
+        {
+          userId,
+          deleteLinesCount: deleteLines.length,
+          deleteLines: deleteLines,
+        },
+        'Detected multiple event deletions, processing each separately'
+      );
+      
+      const results: string[] = [];
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const deleteLine of deleteLines) {
+        try {
+          // Process each deletion
+          await handleSingleEventOperation(originalUserText, deleteLine.trim(), recipient, userId, db, whatsappService, (result) => {
+            if (result.success) {
+              successCount++;
+              if (result.message) {
+                results.push(result.message);
+              }
+            } else {
+              failCount++;
+              if (result.message) {
+                results.push(result.message);
+              }
+            }
+          });
+        } catch (error) {
+          failCount++;
+          logger.error({ error, userId, deleteLine }, 'Failed to process individual event deletion');
+          results.push(`Failed to delete event: ${deleteLine.substring(0, 50)}`);
+        }
+      }
+      
+      // Send summary message
+      if (successCount > 0 || failCount > 0) {
+        let summaryMessage = '';
+        if (successCount > 0) {
+          summaryMessage += `✅ *${successCount} event${successCount !== 1 ? 's' : ''} deleted*\n\n`;
+        }
+        if (failCount > 0) {
+          summaryMessage += `❌ *${failCount} deletion${failCount !== 1 ? 's' : ''} failed*\n\n`;
+        }
+        if (results.length > 0) {
+          summaryMessage += results.join('\n');
+        }
+        
+        await whatsappService.sendTextMessage(recipient, summaryMessage.trim());
+        
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: summaryMessage.trim(),
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing message');
+        }
+      }
+      
+      return; // Exit after handling multiple deletions
+    }
+
+    // Single operation - process normally
+    await handleSingleEventOperation(originalUserText, actionTemplate, recipient, userId, db, whatsappService);
+  } catch (error) {
+    logger.error({ error, userId, originalText: originalUserText }, 'Failed to handle event operation');
+    await whatsappService.sendTextMessage(
+      recipient,
+      "❌ Error Processing Event Request\n\nCalendar operation failed. Please check the logs for more details or try again."
+    );
+  }
+}
+
+/**
+ * Handle a single event operation (create, update, delete)
+ */
+async function handleSingleEventOperation(
+  originalUserText: string,
+  actionTemplate: string,
+  recipient: string,
+  userId: string,
+  db: Database,
+  whatsappService: WhatsAppService,
+  onResult?: (result: { success: boolean; message?: string }) => void
+): Promise<void> {
+  try {
     // Determine operation type from action template
     const isCreate = actionTemplate.toLowerCase().startsWith('create an event:');
     const isUpdate = actionTemplate.toLowerCase().startsWith('update an event:');
@@ -2351,10 +2453,11 @@ async function handleEventOperation(
 
     if (!isCreate && !isUpdate && !isDelete) {
       logger.warn({ userId, actionTemplate }, 'Unknown event operation type');
-      await whatsappService.sendTextMessage(
-        recipient,
-        `I'm sorry, I couldn't understand what event operation you want to perform.\n\nAction template: ${actionTemplate.substring(0, 200)}\n\nPlease try again.`
-      );
+      const errorMessage = `I'm sorry, I couldn't understand what event operation you want to perform.\n\nAction template: ${actionTemplate.substring(0, 200)}\n\nPlease try again.`;
+      await whatsappService.sendTextMessage(recipient, errorMessage);
+      if (onResult) {
+        onResult({ success: false, message: errorMessage });
+      }
       return;
     }
 
@@ -2364,6 +2467,68 @@ async function handleEventOperation(
     let intent;
     try {
       intent = parseEventTemplateToIntent(actionTemplate, isCreate, isUpdate, isDelete);
+      
+      // Check if this is a number-based deletion (e.g., "Delete an event: 1")
+      if (isDelete && intent.targetEventTitle) {
+        const eventNumberMatch = intent.targetEventTitle.match(/^(\d+)$/);
+        if (eventNumberMatch && eventNumberMatch[1]) {
+          const eventNumber = parseInt(eventNumberMatch[1], 10);
+          logger.info(
+            {
+              userId,
+              eventNumber,
+              originalTargetEventTitle: intent.targetEventTitle,
+            },
+            'Detected number-based event deletion, checking list context'
+          );
+          
+          // Get list context from ActionExecutor to find the actual event
+          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+          const listContext = (executor as any).getListContext();
+          
+          if (listContext && listContext.type === 'event' && listContext.items.length > 0) {
+            const cachedEvent = listContext.items.find((item: any) => item.number === eventNumber);
+            if (cachedEvent && cachedEvent.name) {
+              logger.info(
+                {
+                  userId,
+                  eventNumber,
+                  cachedEventId: cachedEvent.id,
+                  cachedEventName: cachedEvent.name,
+                  cachedCalendarId: cachedEvent.calendarId,
+                },
+                'Found event in list context, updating intent with actual event name'
+              );
+              // Update intent with the actual event name from the list
+              intent.targetEventTitle = cachedEvent.name;
+              // Store calendarId if available for later use
+              if (cachedEvent.calendarId) {
+                (intent as any).calendarId = cachedEvent.calendarId;
+              }
+            } else {
+              logger.warn(
+                {
+                  userId,
+                  eventNumber,
+                  listContextType: listContext.type,
+                  itemsCount: listContext.items.length,
+                },
+                'Event number not found in list context'
+              );
+            }
+          } else {
+            logger.warn(
+              {
+                userId,
+                eventNumber,
+                hasListContext: !!listContext,
+                listContextType: listContext?.type,
+              },
+              'No event list context available for number-based deletion'
+            );
+          }
+        }
+      }
       
       // Check if user wants Google Meet (check both original user text and action template for keywords)
       const userTextLower = originalUserText.toLowerCase();
@@ -3201,7 +3366,16 @@ async function handleEventOperation(
         },
         'Failed to execute calendar operation'
       );
-      throw new Error(`Calendar operation failed: ${calendarError instanceof Error ? calendarError.message : String(calendarError)}`);
+      
+      const errorMessage = `Calendar operation failed: ${calendarError instanceof Error ? calendarError.message : String(calendarError)}. Please check the logs for more details or try again.`;
+      
+      // Call callback if provided (for multiple deletions)
+      if (onResult) {
+        onResult({ success: false, message: errorMessage });
+        return; // Don't send message here, let the caller handle it
+      }
+      
+      throw new Error(errorMessage);
     }
 
     // Helper function to send Google Maps and Google Meet buttons
@@ -3633,6 +3807,13 @@ async function handleEventOperation(
       } else if (result.action === 'DELETE' && result.event) {
         // Simple delete message - only show event name
         responseMessage = `✅ ${result.event.title || 'Untitled Event'} deleted`;
+        
+        // Call callback if provided (for multiple deletions)
+        if (onResult) {
+          onResult({ success: result.success, message: responseMessage });
+          return; // Don't send message here, let the caller handle it
+        }
+        // If no callback, continue to send message normally below
       } else if (result.action === 'QUERY' && result.events) {
         if (result.events.length === 0) {
           responseMessage = "📅 *You have no events scheduled.*";
