@@ -1006,31 +1006,74 @@ export class CalendarService implements ICalendarService {
         }
       }
       
+      // Final verification: Create a completely clean object with only allowed fields
+      // This ensures no accidental date fields slip through
+      const finalUpdates: any = {
+        calendarId: cleanUpdates.calendarId,
+        eventId: cleanUpdates.eventId,
+      };
+      
+      // Only include non-date fields
+      if (cleanUpdates.title !== undefined) finalUpdates.title = cleanUpdates.title;
+      if (cleanUpdates.description !== undefined) finalUpdates.description = cleanUpdates.description;
+      if (cleanUpdates.location !== undefined) finalUpdates.location = cleanUpdates.location;
+      if (cleanUpdates.attendees !== undefined) finalUpdates.attendees = cleanUpdates.attendees;
+      
+      // Only include date fields if we're updating dates
+      if (isUpdatingDates) {
+        if (cleanUpdates.start !== undefined) finalUpdates.start = cleanUpdates.start;
+        if (cleanUpdates.end !== undefined) finalUpdates.end = cleanUpdates.end;
+        if (cleanUpdates.allDay !== undefined) finalUpdates.allDay = cleanUpdates.allDay;
+        if (cleanUpdates.timeZone !== undefined) finalUpdates.timeZone = cleanUpdates.timeZone;
+      }
+      
       // Log the update parameters for debugging
       logger.info(
         {
           userId,
           isUpdatingDates,
-          cleanUpdatesKeys: Object.keys(cleanUpdates),
-          cleanUpdates: {
-            ...cleanUpdates,
-            start: cleanUpdates.start?.toISOString?.() || cleanUpdates.start,
-            end: cleanUpdates.end?.toISOString?.() || cleanUpdates.end,
+          finalUpdatesKeys: Object.keys(finalUpdates),
+          finalUpdates: {
+            ...finalUpdates,
+            start: finalUpdates.start?.toISOString?.() || finalUpdates.start,
+            end: finalUpdates.end?.toISOString?.() || finalUpdates.end,
           },
           originalEvent: {
             start: targetEvent.start,
             end: targetEvent.end,
           },
+          hasStart: 'start' in finalUpdates,
+          hasEnd: 'end' in finalUpdates,
+          hasAllDay: 'allDay' in finalUpdates,
+          hasTimeZone: 'timeZone' in finalUpdates,
         },
-        'Preparing event update parameters (cleaned and verified)'
+        'Preparing event update parameters (final verified)'
       );
+      
+      // Final check: if not updating dates, verify no date fields exist
+      if (!isUpdatingDates) {
+        const dateFields = ['start', 'end', 'allDay', 'timeZone'];
+        const foundDateFields = dateFields.filter(field => field in finalUpdates);
+        if (foundDateFields.length > 0) {
+          logger.error(
+            {
+              userId,
+              foundDateFields,
+              finalUpdatesKeys: Object.keys(finalUpdates),
+            },
+            'CRITICAL ERROR: Date fields found in finalUpdates when isUpdatingDates is false!'
+          );
+          // Remove any date fields that shouldn't be there
+          foundDateFields.forEach(field => delete finalUpdates[field]);
+        }
+      }
       
       const updatedEvent = await this.withTokenRefresh(
         calendarConnection.id,
         calendarConnection.accessToken!,
         calendarConnection.refreshToken || null,
         provider,
-        (token) => provider.updateEvent(token, cleanUpdates)
+        (token) => provider.updateEvent(token, finalUpdates)
       );
 
       const event: CalendarEvent = {
