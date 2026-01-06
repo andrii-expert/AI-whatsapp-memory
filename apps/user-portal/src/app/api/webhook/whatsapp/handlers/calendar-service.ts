@@ -829,6 +829,65 @@ export class CalendarService implements ICalendarService {
             'Calculated end date based on original event duration'
           );
         }
+      } else if (intent.startTime) {
+        // Only time is being updated (date stays the same)
+        // Use the original event's date and combine it with the new time
+        const originalStart = new Date(targetEvent.start);
+        
+        // Format the original date as YYYY-MM-DD in the calendar's timezone
+        // This ensures we get the correct local date even if the event is stored in UTC
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: calendarTimezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        const originalDateString = dateFormatter.format(originalStart);
+        
+        logger.info(
+          {
+            userId,
+            originalDateString,
+            newTime: intent.startTime,
+            originalStartISO: originalStart.toISOString(),
+            originalStartLocal: originalStart.toLocaleString('en-US', { timeZone: calendarTimezone }),
+            calendarTimezone,
+          },
+          'Updating only time, preserving original date'
+        );
+        
+        // Parse the new date/time combination (original date + new time)
+        updates.start = this.parseDateTime(originalDateString, intent.startTime, intent.isAllDay, calendarTimezone);
+        
+        // Log the parsed result
+        logger.info(
+          {
+            userId,
+            parsedStartUTC: updates.start.toISOString(),
+            parsedStartLocal: updates.start.toLocaleString('en-US', { timeZone: calendarTimezone }),
+            expectedLocalTime: `${originalDateString} ${intent.startTime}`,
+          },
+          'Parsed start date/time for time-only update'
+        );
+        
+        // Calculate end based on the original event's duration
+        const originalEnd = new Date(targetEvent.end);
+        const durationMs = originalEnd.getTime() - originalStart.getTime();
+        
+        // Apply the same duration to the new start time
+        updates.end = new Date(updates.start.getTime() + durationMs);
+        
+        logger.info(
+          {
+            userId,
+            originalStart: originalStart.toISOString(),
+            originalEnd: originalEnd.toISOString(),
+            durationMs,
+            newStart: updates.start.toISOString(),
+            newEnd: updates.end.toISOString(),
+          },
+          'Calculated end date based on original event duration (time-only update)'
+        );
       } else if (intent.endDate || intent.endTime || intent.duration) {
         // Only end is being updated (start stays the same)
         const startDate = new Date(targetEvent.start);
