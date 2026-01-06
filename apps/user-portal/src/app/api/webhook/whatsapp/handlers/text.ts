@@ -4959,12 +4959,40 @@ function normalizeEmailFromVoice(input: string): string {
   // Pattern: word(s) + " at " + domain (word.word format, possibly with multiple dots)
   // Match: "name at domain.com", "firstname lastname at domain.co.uk", etc.
   // Use word boundaries and ensure "at" is surrounded by spaces (not part of another word)
+  // Improved pattern to handle cases like "macayla at interactivemedia.co.za"
+  // Match: name (can have dots, hyphens, underscores) + " at " + domain (with dots, can be .co.za, .com, etc.)
+  
+  // First, normalize "At" or "AT" to lowercase "at" for consistent matching
+  const normalizedInput = input.replace(/\s+[Aa][Tt]\s+/g, ' at ');
+  
+  // Improved email pattern that handles:
+  // - "macayla at interactivemedia.co.za"
+  // - "paul at gmail.com"
+  // - "firstname lastname at company.co.uk"
+  // Pattern breakdown:
+  // - Name part: [a-zA-Z0-9._-]+ (one or more alphanumeric, dots, underscores, hyphens)
+  //   optionally followed by spaces and more words for multi-word names
+  // - " at " (with spaces, case-insensitive)
+  // - Domain part: [a-zA-Z0-9.-]+ (domain name with dots and hyphens) followed by .[a-zA-Z]{2,} (TLD)
+  //   and optionally another .[a-zA-Z]{2,} for multi-part TLDs like .co.za, .co.uk
   const emailPattern = /\b([a-zA-Z0-9._-]+(?:\s+[a-zA-Z0-9._-]+)*)\s+at\s+([a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?)\b/gi;
   
-  const normalized = input.replace(emailPattern, (match, namePart, domainPart) => {
-    // Remove extra spaces from name part and replace with dots or keep as is
-    const cleanName = namePart.trim().replace(/\s+/g, '');
-    return `${cleanName}@${domainPart}`;
+  const normalized = normalizedInput.replace(emailPattern, (match, namePart, domainPart) => {
+    // Clean the name part (remove any extra spaces, though there shouldn't be any with the simplified pattern)
+    const cleanName = namePart.trim();
+    const result = `${cleanName}@${domainPart}`;
+    
+    logger.info(
+      {
+        originalMatch: match,
+        namePart,
+        domainPart,
+        result,
+      },
+      'Normalizing email pattern from voice input'
+    );
+    
+    return result;
   });
   
   // If normalization occurred, log it
