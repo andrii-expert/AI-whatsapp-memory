@@ -3900,6 +3900,22 @@ function parseEventTemplateToIntent(
         if (titleMatch && titleMatch[1]) {
           intent.title = titleMatch[1].trim();
         }
+        
+        // Check if location/address is being updated
+        const locationMatch = changes.match(/location\s+to\s+(.+?)(?:\s|$)/i) 
+          || changes.match(/address\s+to\s+(.+?)(?:\s|$)/i)
+          || changes.match(/place\s+to\s+(.+?)(?:\s|$)/i);
+        if (locationMatch && locationMatch[1]) {
+          intent.location = locationMatch[1].trim();
+        }
+        
+        // Check if description is being updated
+        const descriptionMatch = changes.match(/description\s+to\s+(.+?)(?:\s|$)/i) 
+          || changes.match(/notes?\s+to\s+(.+?)(?:\s|$)/i)
+          || changes.match(/details?\s+to\s+(.+?)(?:\s|$)/i);
+        if (descriptionMatch && descriptionMatch[1]) {
+          intent.description = descriptionMatch[1].trim();
+        }
       }
     }
   } else if (isDelete) {

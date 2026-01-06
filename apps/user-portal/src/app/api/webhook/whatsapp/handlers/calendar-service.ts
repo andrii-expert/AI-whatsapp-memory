@@ -611,10 +611,76 @@ export class CalendarService implements ICalendarService {
     try {
       logger.info({ userId }, 'Updating calendar event');
 
-      const calendarConnection = await getPrimaryCalendar(this.db, userId);
+      // First, get the user's actual primary calendar
+      const userPrimaryCalendar = await getPrimaryCalendar(this.db, userId);
+      logger.info({ 
+        userId, 
+        hasPrimaryCalendar: !!userPrimaryCalendar,
+        primaryCalendarId: userPrimaryCalendar?.id,
+        primaryCalendarName: userPrimaryCalendar?.calendarName || userPrimaryCalendar?.email,
+        primaryIsActive: userPrimaryCalendar?.isActive
+      }, 'Retrieved user primary calendar');
 
+      // Get user's selected WhatsApp calendars
+      const whatsappCalendarIds = await getWhatsAppCalendars(this.db, userId);
+      logger.info({ userId, whatsappCalendarIds }, 'Retrieved WhatsApp calendar IDs');
+
+      // Determine which calendar to use (same logic as create):
+      // 1. If user has a primary calendar that is active, use it (regardless of WhatsApp selection)
+      // 2. If no primary calendar but WhatsApp calendars are selected, use the first active from WhatsApp selected
+      // 3. If neither, throw an error
+      let calendarConnection: any | undefined;
+      
+      // First priority: Use primary calendar if it exists and is active
+      if (userPrimaryCalendar && userPrimaryCalendar.isActive) {
+        calendarConnection = userPrimaryCalendar;
+        logger.info({ 
+          userId, 
+          reason: 'using_primary_calendar',
+          calendarId: calendarConnection.id,
+          calendarName: calendarConnection.calendarName || calendarConnection.email,
+          hasWhatsAppSelection: !!(whatsappCalendarIds && whatsappCalendarIds.length > 0)
+        }, 'Using primary calendar for event update');
+      } 
+      // Second priority: If no primary calendar, check WhatsApp selected calendars
+      else if (whatsappCalendarIds && whatsappCalendarIds.length > 0) {
+        // Get the selected calendar connections by provider calendar IDs
+        const calendarConnections = await getCalendarsByProviderCalendarIds(this.db, userId, whatsappCalendarIds);
+        logger.info({ userId, calendarConnectionsCount: calendarConnections.length, calendarConnections: calendarConnections.map(c => ({ id: c.id, calendarId: c.calendarId, isActive: c.isActive, provider: c.provider })) }, 'Retrieved calendar connections from WhatsApp selection');
+
+        if (calendarConnections.length === 0) {
+          throw new Error('Selected calendars not found. Please check your calendar connections.');
+        }
+
+        // Filter to only active calendars
+        const activeCalendarConnections = calendarConnections.filter(cal => cal.isActive);
+        logger.info({ userId, activeCalendarConnectionsCount: activeCalendarConnections.length }, 'Filtered to active calendars');
+
+        if (activeCalendarConnections.length === 0) {
+          throw new Error('None of the selected calendars are active. Please check your calendar connections and ensure at least one selected calendar is active.');
+        }
+
+        // Use the first active calendar from WhatsApp selected
+        calendarConnection = activeCalendarConnections[0];
+        logger.info({ 
+          userId, 
+          reason: 'using_first_active_from_whatsapp_selected',
+          calendarId: calendarConnection.id,
+          calendarName: calendarConnection.calendarName || calendarConnection.email
+        }, 'Using first active calendar from WhatsApp selected (no primary calendar)');
+      }
+      // No primary calendar and no WhatsApp selection - error
+      else {
+        throw new Error('No calendar available. Please set a primary calendar or select calendars for WhatsApp in your settings.');
+      }
+      
+      // Ensure we have a valid calendar connection
       if (!calendarConnection) {
-        throw new Error('No calendar connected');
+        throw new Error('No valid calendar found. Please check your calendar connections and ensure at least one calendar is active.');
+      }
+
+      if (!calendarConnection.isActive) {
+        throw new Error('Selected calendar is inactive. Please reconnect your calendar.');
       }
 
       // First, search for the event to update
@@ -686,6 +752,17 @@ export class CalendarService implements ICalendarService {
       if (intent.description) updates.description = intent.description;
       if (intent.location) updates.location = intent.location;
       if (intent.attendees) updates.attendees = intent.attendees;
+      
+      // Handle allDay flag - set it if explicitly provided, or infer from whether time is provided
+      if (intent.isAllDay !== undefined && intent.isAllDay !== null) {
+        updates.allDay = intent.isAllDay;
+      } else if (intent.startDate && (intent.startTime === undefined || intent.startTime === null)) {
+        // If date is provided but no time, it's likely an all-day event
+        updates.allDay = true;
+      } else if (intent.startDate && intent.startTime) {
+        // If both date and time are provided, it's a timed event
+        updates.allDay = false;
+      }
 
       // Get calendar's timezone (from calendar, not user preferences)
       const calendarTimezone = await this.getUserTimezone(userId, calendarConnection);
