@@ -742,6 +742,23 @@ export class CalendarService implements ICalendarService {
       // Build update parameters
       const provider = createCalendarProvider(calendarConnection.provider);
 
+      // Fetch full event details to get allDay property
+      let fullEventDetails: any = null;
+      try {
+        fullEventDetails = await this.withTokenRefresh(
+          calendarConnection.id,
+          calendarConnection.accessToken!,
+          calendarConnection.refreshToken || null,
+          provider,
+          (token) => provider.getEvent(token, {
+            calendarId: calendarConnection.calendarId || 'primary',
+            eventId: targetEvent.id,
+          })
+        );
+      } catch (error) {
+        logger.warn({ error, userId, eventId: targetEvent.id }, 'Failed to fetch full event details, will infer allDay from start/end times');
+      }
+
       const updates: any = {
         calendarId: calendarConnection.calendarId || 'primary',
         eventId: targetEvent.id,
@@ -772,11 +789,92 @@ export class CalendarService implements ICalendarService {
             intentStartTime: intent.startTime,
             intentIsAllDay: intent.isAllDay,
             calendarTimezone,
+            originalEventStart: targetEvent.start,
+            originalEventAllDay: fullEventDetails?.allDay,
           },
           'Parsing start date/time for event update'
         );
         
-        updates.start = this.parseDateTime(intent.startDate, intent.startTime, intent.isAllDay, calendarTimezone);
+        // CRITICAL: If only date is provided (no time), preserve the original event's time
+        // This handles cases like "change date to Jan 10th" where user wants to keep the same time
+        let timeToUse: string | undefined = intent.startTime;
+        let allDayToUse: boolean | undefined = intent.isAllDay;
+        
+        if (!intent.startTime && intent.isAllDay === undefined) {
+          // Only date provided, no time - preserve original event's time and allDay status
+          const originalStart = new Date(targetEvent.start);
+          
+          // Check if original event was all-day
+          // Try to get from full event details first, then infer from start/end times
+          let originalIsAllDay = false;
+          if (fullEventDetails && fullEventDetails.allDay !== undefined) {
+            originalIsAllDay = fullEventDetails.allDay;
+          } else {
+            // Infer from start/end times: if start is at midnight UTC and duration is 24 hours, it's likely all-day
+            const originalEnd = new Date(targetEvent.end);
+            const startUTC = originalStart.toISOString();
+            const endUTC = originalEnd.toISOString();
+            // Check if start is at midnight UTC (00:00:00.000Z)
+            const isStartMidnightUTC = startUTC.endsWith('T00:00:00.000Z');
+            // Check if duration is approximately 24 hours (all-day events are typically 24 hours)
+            const durationMs = originalEnd.getTime() - originalStart.getTime();
+            const durationHours = durationMs / (1000 * 60 * 60);
+            const is24Hours = Math.abs(durationHours - 24) < 0.1; // Allow small margin for rounding
+            originalIsAllDay = isStartMidnightUTC && is24Hours;
+            
+            logger.info(
+              {
+                userId,
+                startUTC,
+                endUTC,
+                durationHours,
+                isStartMidnightUTC,
+                is24Hours,
+                inferredAllDay: originalIsAllDay,
+              },
+              'Inferred allDay status from event times'
+            );
+          }
+          
+          if (!originalIsAllDay) {
+            // Original event had a time - extract it and preserve it
+            // Format the original time as HH:MM in the calendar's timezone
+            const timeFormatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: calendarTimezone,
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            });
+            const originalTimeString = timeFormatter.format(originalStart);
+            timeToUse = originalTimeString;
+            allDayToUse = false; // Keep it as a timed event
+            
+            logger.info(
+              {
+                userId,
+                originalDate: intent.startDate,
+                preservedTime: timeToUse,
+                originalEventAllDay: originalIsAllDay,
+                newAllDay: allDayToUse,
+              },
+              'Date-only update: Preserving original event time'
+            );
+          } else {
+            // Original event was all-day - keep it all-day
+            allDayToUse = true;
+            logger.info(
+              {
+                userId,
+                originalDate: intent.startDate,
+                originalEventAllDay: originalIsAllDay,
+                newAllDay: allDayToUse,
+              },
+              'Date-only update: Original event was all-day, keeping it all-day'
+            );
+          }
+        }
+        
+        updates.start = this.parseDateTime(intent.startDate, timeToUse, allDayToUse, calendarTimezone);
         
         // Log the parsed result
         logger.info(
@@ -784,7 +882,9 @@ export class CalendarService implements ICalendarService {
             userId,
             parsedStartUTC: updates.start.toISOString(),
             parsedStartLocal: updates.start.toLocaleString('en-US', { timeZone: calendarTimezone }),
-            expectedLocalTime: intent.startTime ? `${intent.startDate} ${intent.startTime}` : intent.startDate,
+            expectedLocalTime: timeToUse ? `${intent.startDate} ${timeToUse}` : intent.startDate,
+            usedTime: timeToUse,
+            usedAllDay: allDayToUse,
           },
           'Parsed start date/time for update'
         );
@@ -800,7 +900,7 @@ export class CalendarService implements ICalendarService {
             intent.endDate,
             intent.endTime,
             intent.duration,
-            intent.isAllDay
+            allDayToUse
           );
         } else {
           // Calculate end based on the original event's duration
@@ -900,10 +1000,42 @@ export class CalendarService implements ICalendarService {
       // This prevents issues when only updating location, title, etc.
       if (isUpdatingDates) {
         if (intent.isAllDay !== undefined && intent.isAllDay !== null) {
+          // Explicit allDay flag provided - use it
           updates.allDay = intent.isAllDay;
         } else if (intent.startDate && (intent.startTime === undefined || intent.startTime === null)) {
-          // If date is provided but no time, it's likely an all-day event
-          updates.allDay = true;
+          // Date-only update: preserve original event's allDay status
+          // We already handled this above by preserving the time and setting allDayToUse
+          // The allDay flag should already be set in updates.allDay from the date parsing logic above
+          // But if it wasn't set (shouldn't happen), use the value we determined
+          if (updates.allDay === undefined) {
+            // Get from full event details or infer
+            let originalIsAllDayValue = false;
+            if (fullEventDetails && fullEventDetails.allDay !== undefined) {
+              originalIsAllDayValue = fullEventDetails.allDay;
+            } else {
+              // Infer from start/end times
+              const originalStart = new Date(targetEvent.start);
+              const originalEnd = new Date(targetEvent.end);
+              const startUTC = originalStart.toISOString();
+              const isStartMidnightUTC = startUTC.endsWith('T00:00:00.000Z');
+              const durationMs = originalEnd.getTime() - originalStart.getTime();
+              const durationHours = durationMs / (1000 * 60 * 60);
+              const is24Hours = Math.abs(durationHours - 24) < 0.1;
+              originalIsAllDayValue = isStartMidnightUTC && is24Hours;
+            }
+            updates.allDay = originalIsAllDayValue;
+          }
+          
+          logger.info(
+            {
+              userId,
+              intentStartDate: intent.startDate,
+              intentStartTime: intent.startTime,
+              originalEventAllDay: fullEventDetails?.allDay,
+              setAllDay: updates.allDay,
+            },
+            'Date-only update: Preserving original event allDay status'
+          );
         } else if (intent.startDate && intent.startTime) {
           // If both date and time are provided, it's a timed event
           updates.allDay = false;
