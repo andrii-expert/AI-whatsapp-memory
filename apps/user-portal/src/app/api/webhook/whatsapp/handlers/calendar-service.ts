@@ -932,33 +932,43 @@ export class CalendarService implements ICalendarService {
       // Add timezone to updates if dates are being changed
       if (updates.start || updates.end) {
         updates.timeZone = calendarTimezone;
-        
-        // Log the update parameters for debugging
-        logger.info(
-          {
-            userId,
-            timezone: calendarTimezone,
-            updates: {
-              start: updates.start?.toISOString(),
-              end: updates.end?.toISOString(),
-              title: updates.title,
-              location: updates.location,
-            },
-            originalEvent: {
-              start: targetEvent.start,
-              end: targetEvent.end,
-            },
-          },
-          'Preparing event update parameters'
-        );
       }
+      
+      // Clean up the updates object - remove undefined values to avoid issues
+      const cleanUpdates: any = {};
+      if (updates.title !== undefined) cleanUpdates.title = updates.title;
+      if (updates.description !== undefined) cleanUpdates.description = updates.description;
+      if (updates.location !== undefined) cleanUpdates.location = updates.location;
+      if (updates.attendees !== undefined) cleanUpdates.attendees = updates.attendees;
+      if (updates.start !== undefined) cleanUpdates.start = updates.start;
+      if (updates.end !== undefined) cleanUpdates.end = updates.end;
+      if (updates.allDay !== undefined) cleanUpdates.allDay = updates.allDay;
+      if (updates.timeZone !== undefined) cleanUpdates.timeZone = updates.timeZone;
+      
+      // Log the update parameters for debugging
+      logger.info(
+        {
+          userId,
+          isUpdatingDates,
+          cleanUpdates: {
+            ...cleanUpdates,
+            start: cleanUpdates.start?.toISOString?.() || cleanUpdates.start,
+            end: cleanUpdates.end?.toISOString?.() || cleanUpdates.end,
+          },
+          originalEvent: {
+            start: targetEvent.start,
+            end: targetEvent.end,
+          },
+        },
+        'Preparing event update parameters (cleaned)'
+      );
       
       const updatedEvent = await this.withTokenRefresh(
         calendarConnection.id,
         calendarConnection.accessToken!,
         calendarConnection.refreshToken || null,
         provider,
-        (token) => provider.updateEvent(token, updates)
+        (token) => provider.updateEvent(token, cleanUpdates)
       );
 
       const event: CalendarEvent = {
