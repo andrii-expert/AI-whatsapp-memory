@@ -947,27 +947,28 @@ export class CalendarService implements ICalendarService {
       if (updates.location !== undefined && updates.location !== null) cleanUpdates.location = updates.location;
       if (updates.attendees !== undefined && updates.attendees !== null) cleanUpdates.attendees = updates.attendees;
       
-      // Only include start/end if they are valid Date objects
-      if (updates.start !== undefined && updates.start !== null) {
-        const startDate = updates.start instanceof Date ? updates.start : new Date(updates.start);
-        if (!isNaN(startDate.getTime())) {
-          cleanUpdates.start = startDate;
-        } else {
-          logger.warn({ userId, invalidStart: updates.start }, 'Skipping invalid start date in update');
-        }
-      }
-      
-      if (updates.end !== undefined && updates.end !== null) {
-        const endDate = updates.end instanceof Date ? updates.end : new Date(updates.end);
-        if (!isNaN(endDate.getTime())) {
-          cleanUpdates.end = endDate;
-        } else {
-          logger.warn({ userId, invalidEnd: updates.end }, 'Skipping invalid end date in update');
-        }
-      }
-      
-      // Only include allDay and timeZone if we're actually updating dates
+      // Only include start/end if we're actually updating dates AND they are valid Date objects
+      // This is critical - we must NOT include start/end when only updating location, title, etc.
       if (isUpdatingDates) {
+        if (updates.start !== undefined && updates.start !== null) {
+          const startDate = updates.start instanceof Date ? updates.start : new Date(updates.start);
+          if (!isNaN(startDate.getTime())) {
+            cleanUpdates.start = startDate;
+          } else {
+            logger.warn({ userId, invalidStart: updates.start }, 'Skipping invalid start date in update');
+          }
+        }
+        
+        if (updates.end !== undefined && updates.end !== null) {
+          const endDate = updates.end instanceof Date ? updates.end : new Date(updates.end);
+          if (!isNaN(endDate.getTime())) {
+            cleanUpdates.end = endDate;
+          } else {
+            logger.warn({ userId, invalidEnd: updates.end }, 'Skipping invalid end date in update');
+          }
+        }
+        
+        // Only include allDay and timeZone if we're actually updating dates
         if (updates.allDay !== undefined && updates.allDay !== null) cleanUpdates.allDay = updates.allDay;
         if (updates.timeZone !== undefined && updates.timeZone !== null) cleanUpdates.timeZone = updates.timeZone;
       }
@@ -1478,7 +1479,9 @@ export class CalendarService implements ICalendarService {
     // For UPDATE operations, we want to search more broadly first
     // Then filter based on the new date/time provided
     const now = new Date();
-    const searchWindowDays = 60; // Search within 60 days (past and future)
+    // Increase search window to 365 days (past and future) to find events from any time
+    // This ensures we can find events like "aaaa" from November even if it's now January
+    const searchWindowDays = 365;
     
     // Set a wider time range to find all matching events
     const timeMin = new Date(now);
