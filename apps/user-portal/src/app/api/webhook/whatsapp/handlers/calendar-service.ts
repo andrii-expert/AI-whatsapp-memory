@@ -913,8 +913,8 @@ export class CalendarService implements ICalendarService {
         }
       }
       
-      // Validate that end is after start
-      if (updates.start && updates.end) {
+      // Validate that end is after start (only if we're updating dates)
+      if (isUpdatingDates && updates.start && updates.end) {
         if (updates.end <= updates.start) {
           logger.warn(
             {
@@ -927,11 +927,6 @@ export class CalendarService implements ICalendarService {
           // If end is not after start, add 1 hour to end
           updates.end = new Date(updates.start.getTime() + 60 * 60 * 1000);
         }
-      }
-      
-      // Add timezone to updates if dates are being changed
-      if (updates.start || updates.end) {
-        updates.timeZone = calendarTimezone;
       }
       
       // Clean up the updates object - remove undefined values to avoid issues
@@ -947,9 +942,11 @@ export class CalendarService implements ICalendarService {
       if (updates.location !== undefined && updates.location !== null) cleanUpdates.location = updates.location;
       if (updates.attendees !== undefined && updates.attendees !== null) cleanUpdates.attendees = updates.attendees;
       
-      // Only include start/end if we're actually updating dates AND they are valid Date objects
-      // This is critical - we must NOT include start/end when only updating location, title, etc.
+      // CRITICAL: Only include start/end/allDay/timeZone if we're actually updating dates
+      // When only updating location, title, description, or attendees, we must NOT include any date fields
+      // This prevents Google Calendar API from throwing "Invalid start time" errors
       if (isUpdatingDates) {
+        // Validate and include start date
         if (updates.start !== undefined && updates.start !== null) {
           const startDate = updates.start instanceof Date ? updates.start : new Date(updates.start);
           if (!isNaN(startDate.getTime())) {
@@ -959,6 +956,7 @@ export class CalendarService implements ICalendarService {
           }
         }
         
+        // Validate and include end date
         if (updates.end !== undefined && updates.end !== null) {
           const endDate = updates.end instanceof Date ? updates.end : new Date(updates.end);
           if (!isNaN(endDate.getTime())) {
@@ -968,9 +966,44 @@ export class CalendarService implements ICalendarService {
           }
         }
         
-        // Only include allDay and timeZone if we're actually updating dates
+        // Include allDay and timeZone only when updating dates
         if (updates.allDay !== undefined && updates.allDay !== null) cleanUpdates.allDay = updates.allDay;
-        if (updates.timeZone !== undefined && updates.timeZone !== null) cleanUpdates.timeZone = updates.timeZone;
+        if (updates.timeZone !== undefined && updates.timeZone !== null) {
+          cleanUpdates.timeZone = updates.timeZone;
+        } else if (cleanUpdates.start || cleanUpdates.end) {
+          // If we have dates but no timezone set, use calendar timezone
+          cleanUpdates.timeZone = calendarTimezone;
+        }
+      }
+      
+      // Explicitly ensure start/end are NOT in cleanUpdates when not updating dates
+      // This is a safety check to prevent any accidental inclusion
+      if (!isUpdatingDates) {
+        delete cleanUpdates.start;
+        delete cleanUpdates.end;
+        delete cleanUpdates.allDay;
+        delete cleanUpdates.timeZone;
+      }
+      
+      // Final safety check: ensure no date fields are present when not updating dates
+      if (!isUpdatingDates) {
+        // Double-check that date fields are not accidentally included
+        if ('start' in cleanUpdates) {
+          logger.warn({ userId }, 'WARNING: start field found in cleanUpdates when isUpdatingDates is false - removing it');
+          delete cleanUpdates.start;
+        }
+        if ('end' in cleanUpdates) {
+          logger.warn({ userId }, 'WARNING: end field found in cleanUpdates when isUpdatingDates is false - removing it');
+          delete cleanUpdates.end;
+        }
+        if ('allDay' in cleanUpdates) {
+          logger.warn({ userId }, 'WARNING: allDay field found in cleanUpdates when isUpdatingDates is false - removing it');
+          delete cleanUpdates.allDay;
+        }
+        if ('timeZone' in cleanUpdates) {
+          logger.warn({ userId }, 'WARNING: timeZone field found in cleanUpdates when isUpdatingDates is false - removing it');
+          delete cleanUpdates.timeZone;
+        }
       }
       
       // Log the update parameters for debugging
@@ -978,6 +1011,7 @@ export class CalendarService implements ICalendarService {
         {
           userId,
           isUpdatingDates,
+          cleanUpdatesKeys: Object.keys(cleanUpdates),
           cleanUpdates: {
             ...cleanUpdates,
             start: cleanUpdates.start?.toISOString?.() || cleanUpdates.start,
@@ -988,7 +1022,7 @@ export class CalendarService implements ICalendarService {
             end: targetEvent.end,
           },
         },
-        'Preparing event update parameters (cleaned)'
+        'Preparing event update parameters (cleaned and verified)'
       );
       
       const updatedEvent = await this.withTokenRefresh(
