@@ -2807,28 +2807,43 @@ async function handleSingleEventOperation(
   onResult?: (result: { success: boolean; message?: string }) => void
 ): Promise<void> {
   try {
+    // Trim the action template to handle any leading/trailing whitespace
+    const trimmedTemplate = actionTemplate.trim();
+    
     // Determine operation type from action template
-    const isCreate = actionTemplate.toLowerCase().startsWith('create an event:');
-    const isUpdate = actionTemplate.toLowerCase().startsWith('update an event:');
-    const isDelete = actionTemplate.toLowerCase().startsWith('delete an event:');
-    const isShare = actionTemplate.toLowerCase().startsWith('share an event:');
+    const isCreate = trimmedTemplate.toLowerCase().startsWith('create an event:');
+    const isUpdate = trimmedTemplate.toLowerCase().startsWith('update an event:');
+    const isDelete = trimmedTemplate.toLowerCase().startsWith('delete an event:');
+    const isShare = trimmedTemplate.toLowerCase().startsWith('share an event:');
 
-    logger.info(
-      {
-        userId,
-        isCreate,
-        isUpdate,
-        isDelete,
-        isShare,
-        actionTemplate: actionTemplate.substring(0, 200),
-      },
-      'Event operation type detection'
-    );
+      logger.info(
+        {
+          userId,
+          isCreate,
+          isUpdate,
+          isDelete,
+          isShare,
+          actionTemplate: actionTemplate.substring(0, 200),
+          trimmedTemplate: trimmedTemplate.substring(0, 200),
+        },
+        'Event operation type detection'
+      );
 
     // Handle "Share an event" - convert to UPDATE operation with attendees
     if (isShare) {
+      logger.info(
+        {
+          userId,
+          actionTemplate,
+          templateLength: actionTemplate.length,
+          firstChars: actionTemplate.substring(0, 50),
+        },
+        'Detected "Share an event" template, attempting to parse'
+      );
+      
       // Parse: "Share an event: {title} - with: {person1, person2} - calendar: {calendar}"
-      const shareMatch = actionTemplate.match(/^Share an event:\s*(.+?)(?:\s*-\s*with:\s*(.+?))?(?:\s*-\s*calendar:\s*(.+?))?$/i);
+      // More flexible regex that handles variations - use trimmed template
+      const shareMatch = trimmedTemplate.match(/^Share an event:\s*(.+?)(?:\s*-\s*with:\s*(.+?))?(?:\s*-\s*calendar:\s*(.+?))?$/i);
       
       if (shareMatch && shareMatch[1]) {
         const eventTitle = shareMatch[1].trim();
@@ -2840,38 +2855,53 @@ async function handleSingleEventOperation(
             originalTemplate: actionTemplate,
             eventTitle,
             attendeesStr,
+            shareMatchGroups: shareMatch,
           },
-          'Converting "Share an event" to UPDATE operation with attendees'
+          'Successfully parsed "Share an event" template'
         );
+        
+        if (!attendeesStr) {
+          logger.warn({ userId, actionTemplate }, 'No attendees found in "Share an event" template');
+          const errorMessage = `I'm sorry, I couldn't find who to invite. Please specify the person(s) to invite.\n\nExample: "invite Drala to Call with Paul event"`;
+          await whatsappService.sendTextMessage(recipient, errorMessage);
+          if (onResult) {
+            onResult({ success: false, message: errorMessage });
+          }
+          return;
+        }
         
         // Convert to UPDATE operation format
         // Extract attendees and format them
-        let attendeesList = '';
-        if (attendeesStr) {
-          // Normalize "and" to comma for easier parsing
-          const normalizedAttendees = attendeesStr.replace(/\s+and\s+/gi, ', ');
-          attendeesList = normalizedAttendees;
-        }
+        // Normalize "and" to comma for easier parsing
+        const normalizedAttendees = attendeesStr.replace(/\s+and\s+/gi, ', ');
         
         // Create UPDATE template: "Update an event: {title} - changes: attendees to {attendees}"
-        const updateTemplate = attendeesList 
-          ? `Update an event: ${eventTitle} - changes: attendees to ${attendeesList} - calendar: ${shareMatch[3] || 'primary'}`
-          : `Update an event: ${eventTitle} - changes: attendees to ${attendeesStr} - calendar: ${shareMatch[3] || 'primary'}`;
+        const calendarStr = shareMatch[3] ? shareMatch[3].trim() : 'primary';
+        const updateTemplate = `Update an event: ${eventTitle} - changes: attendees to ${normalizedAttendees} - calendar: ${calendarStr}`;
         
         logger.info(
           {
             userId,
             originalTemplate: actionTemplate,
             convertedTemplate: updateTemplate,
+            eventTitle,
+            normalizedAttendees,
           },
-          'Converted "Share an event" to UPDATE template'
+          'Converted "Share an event" to UPDATE template, calling handleSingleEventOperation recursively'
         );
         
         // Recursively call handleSingleEventOperation with the converted template
         await handleSingleEventOperation(originalUserText, updateTemplate, recipient, userId, db, whatsappService, onResult);
         return;
       } else {
-        logger.warn({ userId, actionTemplate }, 'Failed to parse "Share an event" template');
+        logger.warn(
+          {
+            userId,
+            actionTemplate,
+            shareMatchResult: shareMatch,
+          },
+          'Failed to parse "Share an event" template - regex did not match'
+        );
         const errorMessage = `I'm sorry, I couldn't understand which event to share or who to invite.\n\nPlease try again with a format like: "invite [person] to [event name]" or "share [event name] with [person]".`;
         await whatsappService.sendTextMessage(recipient, errorMessage);
         if (onResult) {
@@ -2881,9 +2911,57 @@ async function handleSingleEventOperation(
       }
     }
 
-    if (!isCreate && !isUpdate && !isDelete) {
-      logger.warn({ userId, actionTemplate }, 'Unknown event operation type');
-      const errorMessage = `I'm sorry, I couldn't understand what event operation you want to perform.\n\nAction template: ${actionTemplate.substring(0, 200)}\n\nPlease try again.`;
+    // Fallback: Check if it's a "Share an event" that wasn't caught by the initial check
+    // This handles cases where there might be extra whitespace or formatting issues
+    if (!isCreate && !isUpdate && !isDelete && !isShare) {
+      const lowerTemplate = trimmedTemplate.toLowerCase();
+      if (lowerTemplate.includes('share an event') || lowerTemplate.includes('invite')) {
+        logger.info(
+          {
+            userId,
+            actionTemplate: trimmedTemplate,
+            detectedViaFallback: true,
+          },
+          'Detected "Share an event" via fallback check'
+        );
+        // Try to parse as share operation
+        const shareMatch = trimmedTemplate.match(/Share an event:\s*(.+?)(?:\s*-\s*with:\s*(.+?))?(?:\s*-\s*calendar:\s*(.+?))?/i);
+        if (shareMatch && shareMatch[1]) {
+          const eventTitle = shareMatch[1].trim();
+          const attendeesStr = shareMatch[2] ? shareMatch[2].trim() : '';
+          
+          if (attendeesStr) {
+            const normalizedAttendees = attendeesStr.replace(/\s+and\s+/gi, ', ');
+            const calendarStr = shareMatch[3] ? shareMatch[3].trim() : 'primary';
+            const updateTemplate = `Update an event: ${eventTitle} - changes: attendees to ${normalizedAttendees} - calendar: ${calendarStr}`;
+            
+            logger.info(
+              {
+                userId,
+                convertedTemplate: updateTemplate,
+              },
+              'Converted "Share an event" via fallback, calling handleSingleEventOperation'
+            );
+            
+            await handleSingleEventOperation(originalUserText, updateTemplate, recipient, userId, db, whatsappService, onResult);
+            return;
+          }
+        }
+      }
+      
+      logger.warn(
+        {
+          userId,
+          actionTemplate: trimmedTemplate,
+          isCreate,
+          isUpdate,
+          isDelete,
+          isShare,
+          lowerTemplate: lowerTemplate.substring(0, 100),
+        },
+        'Unknown event operation type'
+      );
+      const errorMessage = `I'm sorry, I couldn't understand what event operation you want to perform.\n\nAction template: ${trimmedTemplate.substring(0, 200)}\n\nPlease try again.`;
       await whatsappService.sendTextMessage(recipient, errorMessage);
       if (onResult) {
         onResult({ success: false, message: errorMessage });
