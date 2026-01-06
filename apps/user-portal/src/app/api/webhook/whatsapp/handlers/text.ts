@@ -3060,7 +3060,7 @@ async function handleSingleEventOperation(
           },
           'Detected Google Meet in location field - clearing location and requesting Google Meet'
         );
-        intent.location = undefined; // Clear the location
+        intent.location = ''; // Set to empty string to remove location (not undefined)
       }
       
       // Resolve location from saved addresses if it matches an address name
@@ -3121,7 +3121,15 @@ async function handleSingleEventOperation(
         }
       }
       
+      // Enhanced Google Meet detection - also check for "remove location and add google meet" pattern
+      const removeLocationAndAddMeet = 
+        (userTextLower.includes('remove location') && userTextLower.includes('add google meet')) ||
+        (userTextLower.includes('remove location') && userTextLower.includes('add meet')) ||
+        (userTextLower.includes('delete location') && userTextLower.includes('add google meet')) ||
+        (userTextLower.includes('clear location') && userTextLower.includes('add google meet'));
+      
       const wantsGoogleMeet = 
+        removeLocationAndAddMeet ||
         userTextLower.includes('google meet') ||
         userTextLower.includes('meet link') ||
         userTextLower.includes('video call') ||
@@ -3133,6 +3141,19 @@ async function handleSingleEventOperation(
         actionTemplateLower.includes('meet link') ||
         (actionTemplateLower.includes('attendees:') && actionTemplateLower.includes('google meet')) ||
         isGoogleMeetLocation; // Also check if location was Google Meet
+      
+      // If user wants to remove location and add Google Meet, ensure location is empty
+      if (removeLocationAndAddMeet && isUpdate) {
+        intent.location = ''; // Explicitly set to empty string
+        logger.info(
+          {
+            userId,
+            originalUserText,
+            reason: 'remove_location_and_add_google_meet',
+          },
+          'Detected "remove location and add google meet" - setting location to empty and requesting Google Meet'
+        );
+      }
       
       // Remove "Google Meet" from attendees if it was incorrectly added (more aggressive filtering)
       if (intent.attendees && intent.attendees.length > 0) {
@@ -3753,9 +3774,17 @@ async function handleSingleEventOperation(
       }
       
       // If Google Meet is requested, add it to description if not already present
+      // For CREATE operations, add to description
       if (wantsGoogleMeet && isCreate && intent.description && !intent.description.toLowerCase().includes('google meet')) {
         intent.description = (intent.description + ' (Google Meet requested)').trim();
       } else if (wantsGoogleMeet && isCreate && !intent.description) {
+        intent.description = 'Google Meet requested';
+      }
+      
+      // For UPDATE operations, also add to description so calendar service can detect it
+      if (wantsGoogleMeet && isUpdate && intent.description && !intent.description.toLowerCase().includes('google meet')) {
+        intent.description = (intent.description + ' (Google Meet requested)').trim();
+      } else if (wantsGoogleMeet && isUpdate && !intent.description) {
         intent.description = 'Google Meet requested';
       }
       
@@ -4080,7 +4109,10 @@ async function handleSingleEventOperation(
           locationLower.includes('google meet') ||
           locationLower.includes('meet link');
         
-        if (eventLocation && !isGoogleMeetLocation) {
+        // Check if location is empty string (explicitly removed) or just empty/undefined
+        const hasLocation = eventLocation && eventLocation.trim().length > 0 && !isGoogleMeetLocation;
+        
+        if (hasLocation) {
           // User provided actual location/address - show location name, button will have Google Maps link
           locationLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
           responseMessage += `*Location:* ${result.event.location}\n`;
@@ -4088,11 +4120,14 @@ async function handleSingleEventOperation(
             buttonUrl = locationLink;
             buttonText = 'Open in Google Maps';
           }
-        } else if (fullEvent.conferenceUrl) {
-          // No location (or location was Google Meet) but Google Meet exists - show "No location"
+        } else {
+          // No location (empty, undefined, or was Google Meet) - show "No location"
           responseMessage += `*Location:* No location\n`;
-          buttonUrl = fullEvent.conferenceUrl;
-          buttonText = 'Google Meet';
+          // If Google Meet exists, use it as the button
+          if (fullEvent.conferenceUrl) {
+            buttonUrl = fullEvent.conferenceUrl;
+            buttonText = 'Google Meet';
+          }
         }
         
         // Attendees
@@ -4225,7 +4260,10 @@ async function handleSingleEventOperation(
           locationLower.includes('google meet') ||
           locationLower.includes('meet link');
         
-        if (eventLocation && !isGoogleMeetLocation) {
+        // Check if location is empty string (explicitly removed) or just empty/undefined
+        const hasLocation = eventLocation && eventLocation.trim().length > 0 && !isGoogleMeetLocation;
+        
+        if (hasLocation) {
           // User provided actual location/address - show location name, button will have Google Maps link
           locationLink = await getGoogleMapsLinkForLocation(result.event.location, userId);
           responseMessage += `*Location:* ${result.event.location}\n`;
@@ -4233,11 +4271,14 @@ async function handleSingleEventOperation(
             buttonUrl = locationLink;
             buttonText = 'Open in Google Maps';
           }
-        } else if (fullEvent.conferenceUrl) {
-          // No location (or location was Google Meet) but Google Meet exists - show "No location"
+        } else {
+          // No location (empty, undefined, or was Google Meet) - show "No location"
           responseMessage += `*Location:* No location\n`;
-          buttonUrl = fullEvent.conferenceUrl;
-          buttonText = 'Google Meet';
+          // If Google Meet exists, use it as the button
+          if (fullEvent.conferenceUrl) {
+            buttonUrl = fullEvent.conferenceUrl;
+            buttonText = 'Google Meet';
+          }
         }
         
         // Attendees
@@ -4737,16 +4778,39 @@ function parseEventTemplateToIntent(
           intent.title = titleMatch[1].trim();
         }
         
+        // Check if location should be removed
+        // Support patterns: "remove location", "delete location", "clear location"
+        const removeLocationMatch = changes.match(/(?:remove|delete|clear)\s+location/i);
+        if (removeLocationMatch) {
+          intent.location = ''; // Set to empty string to remove location
+          logger.info(
+            {
+              changes,
+              reason: 'remove_location_detected',
+            },
+            'Detected location removal request - setting location to empty'
+          );
+        }
+        
         // Check if location/address is being updated
         // Support patterns: "location to X", "add location X", "edit location to X", "location: X", "location - X"
-        const locationMatch = changes.match(/location\s+to\s+(.+?)(?:\s|$)/i) 
-          || changes.match(/address\s+to\s+(.+?)(?:\s|$)/i)
-          || changes.match(/place\s+to\s+(.+?)(?:\s|$)/i)
-          || changes.match(/(?:add|edit|set|change|update)\s+location\s+(?:to\s+)?(.+?)(?:\s|$)/i)
-          || changes.match(/location\s*[:=]\s*(.+?)(?:\s|$)/i)
-          || changes.match(/location\s*-\s*(.+?)(?:\s|$)/i);
-        if (locationMatch && locationMatch[1]) {
-          intent.location = locationMatch[1].trim();
+        // Only match if location removal wasn't already detected
+        if (!removeLocationMatch) {
+          const locationMatch = changes.match(/location\s+to\s+(.+?)(?:\s|$)/i) 
+            || changes.match(/address\s+to\s+(.+?)(?:\s|$)/i)
+            || changes.match(/place\s+to\s+(.+?)(?:\s|$)/i)
+            || changes.match(/(?:add|edit|set|change|update)\s+location\s+(?:to\s+)?(.+?)(?:\s|$)/i)
+            || changes.match(/location\s*[:=]\s*(.+?)(?:\s|$)/i)
+            || changes.match(/location\s*-\s*(.+?)(?:\s|$)/i);
+          if (locationMatch && locationMatch[1]) {
+            const locationValue = locationMatch[1].trim();
+            // Check if the location value is empty (e.g., "location to " with nothing after)
+            if (locationValue === '') {
+              intent.location = ''; // Explicitly set to empty
+            } else {
+              intent.location = locationValue;
+            }
+          }
         }
         
         // Check if description is being updated

@@ -767,7 +767,64 @@ export class CalendarService implements ICalendarService {
       // Update fields that are provided
       if (intent.title) updates.title = intent.title;
       if (intent.description) updates.description = intent.description;
-      if (intent.location) updates.location = intent.location;
+      
+      // Handle location updates - check if location is being removed (empty string) or updated
+      let shouldCreateGoogleMeet = false;
+      if (intent.location !== undefined) {
+        // If location is empty string, it means user wants to remove location
+        if (intent.location === '') {
+          updates.location = ''; // Explicitly set to empty string to remove location
+          logger.info(
+            {
+              userId,
+              reason: 'location_removal_requested',
+            },
+            'Location removal detected - setting location to empty string'
+          );
+          // Check if Google Meet should be created when location is removed
+          // This handles "remove location and add google meet" pattern
+          const descriptionLower = intent.description?.toLowerCase() || '';
+          const wantsGoogleMeet = 
+            descriptionLower.includes('google meet') ||
+            descriptionLower.includes('meet link') ||
+            descriptionLower.includes('add google meet') ||
+            descriptionLower.includes('add meet');
+          
+          if (wantsGoogleMeet && calendarConnection.provider === 'google') {
+            shouldCreateGoogleMeet = true;
+            logger.info(
+              {
+                userId,
+                reason: 'google_meet_requested_with_location_removal',
+              },
+              'Google Meet requested when removing location'
+            );
+          }
+        } else {
+          updates.location = intent.location;
+        }
+      }
+      
+      // Also check if Google Meet is requested in description even if location is not being removed
+      if (!shouldCreateGoogleMeet && intent.description) {
+        const descriptionLower = intent.description.toLowerCase();
+        const wantsGoogleMeet = 
+          descriptionLower.includes('google meet') ||
+          descriptionLower.includes('meet link') ||
+          descriptionLower.includes('add google meet') ||
+          descriptionLower.includes('add meet');
+        
+        if (wantsGoogleMeet && calendarConnection.provider === 'google') {
+          shouldCreateGoogleMeet = true;
+          logger.info(
+            {
+              userId,
+              reason: 'google_meet_requested_in_description',
+            },
+            'Google Meet requested in description'
+          );
+        }
+      }
       if (intent.attendees) {
         // When updating attendees, merge with existing attendees to avoid removing existing ones
         // This handles "invite" functionality where we want to add attendees, not replace them
@@ -1222,6 +1279,20 @@ export class CalendarService implements ICalendarService {
       if (cleanUpdates.description !== undefined) finalUpdates.description = cleanUpdates.description;
       if (cleanUpdates.location !== undefined) finalUpdates.location = cleanUpdates.location;
       if (cleanUpdates.attendees !== undefined) finalUpdates.attendees = cleanUpdates.attendees;
+      
+      // Add Google Meet flag if requested
+      if (shouldCreateGoogleMeet) {
+        finalUpdates.createGoogleMeet = true;
+        logger.info(
+          {
+            userId,
+            eventId: targetEvent.id,
+            reason: 'google_meet_requested',
+            locationRemoved: updates.location === '',
+          },
+          'Adding createGoogleMeet flag to update request'
+        );
+      }
       
       // Only include date fields if we're updating dates
       if (isUpdatingDates) {
