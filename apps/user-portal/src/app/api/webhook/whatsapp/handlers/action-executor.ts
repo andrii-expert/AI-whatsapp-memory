@@ -2824,7 +2824,7 @@ export class ActionExecutor {
 
         return {
           success: true,
-          message: `✅ *File Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
+          message: `⚠️ *File Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
         };
       } catch (error) {
         logger.error({ error, folderId: fileFolderId, userId: this.userId }, 'Failed to update file folder');
@@ -2845,7 +2845,7 @@ export class ActionExecutor {
 
         return {
           success: true,
-          message: `✅ *File Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
+          message: `⚠️ *File Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
         };
       } catch (error) {
         logger.error({ error, folderId: fileFolderId, userId: this.userId }, 'Failed to update file folder');
@@ -2871,7 +2871,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
+        message: `⚠️ *Folder Renamed Successfully*\n   "${parsed.folderRoute}" to "${parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, folderId, userId: this.userId }, 'Failed to update folder');
@@ -3008,7 +3008,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✏️ *File updated:*\n"${parsed.newName === 'unspecified' ? parsed.taskName : parsed.newName}"`,
+        message: `⚠️ *File updated:*\n"${parsed.newName === 'unspecified' ? parsed.taskName : parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, fileId: file.id, userId: this.userId }, 'Failed to update file');
@@ -6669,7 +6669,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✏️ *Shopping Lists Folder Updated:*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
+        message: `⚠️ *Shopping Lists Folder Updated:*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to edit shopping list folder');
@@ -7450,7 +7450,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ Address "${name}" has been updated successfully!`,
+        message: `⚠️ Address "${name}" has been updated successfully!`,
       };
     } catch (error) {
       logger.error(
@@ -7784,7 +7784,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *Friend Updated*\nName: ${updated.name}`,
+        message: `⚠️ *Friend Updated*\nName: ${updated.name}`,
       };
     } catch (error) {
       logger.error({ error, userId: this.userId, friendName: parsed.taskName }, 'Failed to update friend');
@@ -7977,7 +7977,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✏️ *Friend Folder Updated*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
+        message: `⚠️ *Friend Folder Updated*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to update friend folder');

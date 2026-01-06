@@ -4055,7 +4055,7 @@ async function handleSingleEventOperation(
         const eventDate = `${day} ${month}`;
         
         // Build message text (all in one message with button) - matching CREATE style
-        responseMessage = `✅ *Event Updated*\n\n`;
+        responseMessage = `⚠️ *Event Updated*\n\n`;
         responseMessage += `*Title:* ${result.event.title || 'Untitled Event'}\n`;
         responseMessage += `*Date:* ${eventDate}\n`;
         responseMessage += `*Time:* ${eventTime}\n`;
