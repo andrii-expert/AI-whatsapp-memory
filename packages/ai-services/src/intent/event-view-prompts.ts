@@ -77,4 +77,5 @@ If it's not an event view request, set "isEventViewRequest" to false and "eventN
 If it's an event view request but no number is specified, set "isEventViewRequest" to true and "eventNumbers" to null.
 
 IMPORTANT: Only respond with valid JSON. Do not include any other text before or after the JSON.`;
+}
 
