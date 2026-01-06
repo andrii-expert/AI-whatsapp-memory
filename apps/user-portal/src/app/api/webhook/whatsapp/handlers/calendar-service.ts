@@ -941,15 +941,36 @@ export class CalendarService implements ICalendarService {
         eventId: updates.eventId,
       };
       
-      // Add optional fields only if they are defined
-      if (updates.title !== undefined) cleanUpdates.title = updates.title;
-      if (updates.description !== undefined) cleanUpdates.description = updates.description;
-      if (updates.location !== undefined) cleanUpdates.location = updates.location;
-      if (updates.attendees !== undefined) cleanUpdates.attendees = updates.attendees;
-      if (updates.start !== undefined) cleanUpdates.start = updates.start;
-      if (updates.end !== undefined) cleanUpdates.end = updates.end;
-      if (updates.allDay !== undefined) cleanUpdates.allDay = updates.allDay;
-      if (updates.timeZone !== undefined) cleanUpdates.timeZone = updates.timeZone;
+      // Add optional fields only if they are defined and valid
+      if (updates.title !== undefined && updates.title !== null) cleanUpdates.title = updates.title;
+      if (updates.description !== undefined && updates.description !== null) cleanUpdates.description = updates.description;
+      if (updates.location !== undefined && updates.location !== null) cleanUpdates.location = updates.location;
+      if (updates.attendees !== undefined && updates.attendees !== null) cleanUpdates.attendees = updates.attendees;
+      
+      // Only include start/end if they are valid Date objects
+      if (updates.start !== undefined && updates.start !== null) {
+        const startDate = updates.start instanceof Date ? updates.start : new Date(updates.start);
+        if (!isNaN(startDate.getTime())) {
+          cleanUpdates.start = startDate;
+        } else {
+          logger.warn({ userId, invalidStart: updates.start }, 'Skipping invalid start date in update');
+        }
+      }
+      
+      if (updates.end !== undefined && updates.end !== null) {
+        const endDate = updates.end instanceof Date ? updates.end : new Date(updates.end);
+        if (!isNaN(endDate.getTime())) {
+          cleanUpdates.end = endDate;
+        } else {
+          logger.warn({ userId, invalidEnd: updates.end }, 'Skipping invalid end date in update');
+        }
+      }
+      
+      // Only include allDay and timeZone if we're actually updating dates
+      if (isUpdatingDates) {
+        if (updates.allDay !== undefined && updates.allDay !== null) cleanUpdates.allDay = updates.allDay;
+        if (updates.timeZone !== undefined && updates.timeZone !== null) cleanUpdates.timeZone = updates.timeZone;
+      }
       
       // Log the update parameters for debugging
       logger.info(
