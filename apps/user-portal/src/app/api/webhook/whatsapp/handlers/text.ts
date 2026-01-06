@@ -2811,6 +2811,7 @@ async function handleSingleEventOperation(
     const isCreate = actionTemplate.toLowerCase().startsWith('create an event:');
     const isUpdate = actionTemplate.toLowerCase().startsWith('update an event:');
     const isDelete = actionTemplate.toLowerCase().startsWith('delete an event:');
+    const isShare = actionTemplate.toLowerCase().startsWith('share an event:');
 
     logger.info(
       {
@@ -2818,10 +2819,67 @@ async function handleSingleEventOperation(
         isCreate,
         isUpdate,
         isDelete,
+        isShare,
         actionTemplate: actionTemplate.substring(0, 200),
       },
       'Event operation type detection'
     );
+
+    // Handle "Share an event" - convert to UPDATE operation with attendees
+    if (isShare) {
+      // Parse: "Share an event: {title} - with: {person1, person2} - calendar: {calendar}"
+      const shareMatch = actionTemplate.match(/^Share an event:\s*(.+?)(?:\s*-\s*with:\s*(.+?))?(?:\s*-\s*calendar:\s*(.+?))?$/i);
+      
+      if (shareMatch && shareMatch[1]) {
+        const eventTitle = shareMatch[1].trim();
+        const attendeesStr = shareMatch[2] ? shareMatch[2].trim() : '';
+        
+        logger.info(
+          {
+            userId,
+            originalTemplate: actionTemplate,
+            eventTitle,
+            attendeesStr,
+          },
+          'Converting "Share an event" to UPDATE operation with attendees'
+        );
+        
+        // Convert to UPDATE operation format
+        // Extract attendees and format them
+        let attendeesList = '';
+        if (attendeesStr) {
+          // Normalize "and" to comma for easier parsing
+          const normalizedAttendees = attendeesStr.replace(/\s+and\s+/gi, ', ');
+          attendeesList = normalizedAttendees;
+        }
+        
+        // Create UPDATE template: "Update an event: {title} - changes: attendees to {attendees}"
+        const updateTemplate = attendeesList 
+          ? `Update an event: ${eventTitle} - changes: attendees to ${attendeesList} - calendar: ${shareMatch[3] || 'primary'}`
+          : `Update an event: ${eventTitle} - changes: attendees to ${attendeesStr} - calendar: ${shareMatch[3] || 'primary'}`;
+        
+        logger.info(
+          {
+            userId,
+            originalTemplate: actionTemplate,
+            convertedTemplate: updateTemplate,
+          },
+          'Converted "Share an event" to UPDATE template'
+        );
+        
+        // Recursively call handleSingleEventOperation with the converted template
+        await handleSingleEventOperation(originalUserText, updateTemplate, recipient, userId, db, whatsappService, onResult);
+        return;
+      } else {
+        logger.warn({ userId, actionTemplate }, 'Failed to parse "Share an event" template');
+        const errorMessage = `I'm sorry, I couldn't understand which event to share or who to invite.\n\nPlease try again with a format like: "invite [person] to [event name]" or "share [event name] with [person]".`;
+        await whatsappService.sendTextMessage(recipient, errorMessage);
+        if (onResult) {
+          onResult({ success: false, message: errorMessage });
+        }
+        return;
+      }
+    }
 
     if (!isCreate && !isUpdate && !isDelete) {
       logger.warn({ userId, actionTemplate }, 'Unknown event operation type');
@@ -3045,7 +3103,8 @@ async function handleSingleEventOperation(
       }
       
       // Resolve attendee names to email addresses (for friends and direct emails)
-      if (intent.attendees && intent.attendees.length > 0 && isCreate) {
+      // Support both CREATE and UPDATE operations for adding attendees
+      if (intent.attendees && intent.attendees.length > 0 && (isCreate || isUpdate)) {
         try {
           const originalAttendees = [...intent.attendees];
           logger.info(
@@ -4603,6 +4662,72 @@ function parseEventTemplateToIntent(
           || changes.match(/details?\s+to\s+(.+?)(?:\s|$)/i);
         if (descriptionMatch && descriptionMatch[1]) {
           intent.description = descriptionMatch[1].trim();
+        }
+        
+        // Check if attendees are being added/updated
+        // Support patterns: "attendees to X", "invite X", "add attendees X", "attendees: X"
+        const attendeesMatch = changes.match(/attendees?\s+to\s+(.+?)(?:\s|$)/i)
+          || changes.match(/invite\s+(.+?)(?:\s|$)/i)
+          || changes.match(/add\s+attendees?\s+(.+?)(?:\s|$)/i)
+          || changes.match(/attendees?\s*[:=]\s*(.+?)(?:\s|$)/i);
+        if (attendeesMatch && attendeesMatch[1]) {
+          const attendeesStr = attendeesMatch[1].trim();
+          logger.info(
+            {
+              attendeesStrFromTemplate: attendeesStr,
+              template: template,
+            },
+            '📋 Raw attendees string extracted from UPDATE template'
+          );
+
+          // Filter out "Google Meet" and similar phrases that are not actual attendees
+          const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'meet', 'googlemeet'];
+          
+          // Split by comma, but also handle "and" as a separator (e.g., "Paul and Liz" or "Paul, Liz and John")
+          // First, replace " and " with comma for easier parsing
+          const normalizedStr = attendeesStr.replace(/\s+and\s+/gi, ', ');
+          logger.info(
+            {
+              originalAttendeesStr: attendeesStr,
+              normalizedStr: normalizedStr,
+            },
+            '🔄 Normalized attendees string (replaced "and" with commas)'
+          );
+          
+          const splitAttendees = normalizedStr.split(',').map(a => a.trim()).filter(a => a.length > 0);
+          logger.info(
+            {
+              splitAttendees: splitAttendees,
+              splitCount: splitAttendees.length,
+            },
+            '📝 Split attendees by comma'
+          );
+          
+          intent.attendees = splitAttendees.filter(a => {
+              const lower = a.toLowerCase().trim();
+              // Filter out exact matches for Google Meet keywords
+              if (googleMeetKeywords.includes(lower)) {
+                logger.info({ filteredAttendee: a, reason: 'exact_keyword_match_in_parse' }, '❌ Filtered out attendee during parsing (exact Google Meet keyword)');
+                return false;
+              }
+              // Filter out if it contains Google Meet keywords as whole words
+              const hasGoogleMeetKeyword = googleMeetKeywords.some(keyword => {
+                const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
+                return regex.test(lower);
+              });
+              if (hasGoogleMeetKeyword) {
+                logger.info({ filteredAttendee: a, reason: 'whole_word_keyword_match_in_parse' }, '❌ Filtered out attendee during parsing (whole word Google Meet keyword)');
+              }
+              return !hasGoogleMeetKeyword;
+            });
+          logger.info(
+            {
+              parsedAttendeesAfterFilter: intent.attendees,
+              parsedAttendeesCount: intent.attendees?.length || 0,
+              allParsedAttendees: [...(intent.attendees || [])],
+            },
+            '✅ Parsed attendees after Google Meet filter - FINAL PARSED LIST (UPDATE)'
+          );
         }
       }
     }

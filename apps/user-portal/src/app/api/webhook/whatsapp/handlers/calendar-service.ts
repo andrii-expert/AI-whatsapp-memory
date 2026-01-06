@@ -768,7 +768,79 @@ export class CalendarService implements ICalendarService {
       if (intent.title) updates.title = intent.title;
       if (intent.description) updates.description = intent.description;
       if (intent.location) updates.location = intent.location;
-      if (intent.attendees) updates.attendees = intent.attendees;
+      if (intent.attendees) {
+        // When updating attendees, merge with existing attendees to avoid removing existing ones
+        // This handles "invite" functionality where we want to add attendees, not replace them
+        let mergedAttendees: string[] = [];
+        
+        // Get existing attendees from the full event details
+        if (fullEventDetails && fullEventDetails.attendees && Array.isArray(fullEventDetails.attendees)) {
+          // Extract email addresses from existing attendees (they may be objects or strings)
+          const existingAttendeeEmails = fullEventDetails.attendees
+            .map((a: any) => {
+              if (typeof a === 'string') return a;
+              if (a && typeof a === 'object' && a.email) return a.email;
+              return null;
+            })
+            .filter((email: string | null): email is string => email !== null && email.trim().length > 0);
+          
+          logger.info(
+            {
+              userId,
+              existingAttendees: existingAttendeeEmails,
+              newAttendees: intent.attendees,
+            },
+            'Merging new attendees with existing attendees'
+          );
+          
+          // Combine existing and new attendees, removing duplicates by email (case-insensitive)
+          const allAttendees = [...existingAttendeeEmails, ...intent.attendees];
+          const seenEmails = new Set<string>();
+          mergedAttendees = [];
+          
+          // First, add existing attendees (to preserve their order and case)
+          for (const email of existingAttendeeEmails) {
+            const normalized = email.toLowerCase().trim();
+            if (!seenEmails.has(normalized)) {
+              seenEmails.add(normalized);
+              mergedAttendees.push(email);
+            }
+          }
+          
+          // Then, add new attendees that aren't already in the list
+          for (const email of intent.attendees) {
+            const normalized = email.toLowerCase().trim();
+            if (!seenEmails.has(normalized)) {
+              seenEmails.add(normalized);
+              mergedAttendees.push(email);
+            }
+          }
+          
+          logger.info(
+            {
+              userId,
+              mergedAttendees,
+              mergedCount: mergedAttendees.length,
+              existingCount: existingAttendeeEmails.length,
+              newCount: intent.attendees.length,
+            },
+            'Merged attendees list (existing + new, deduplicated)'
+          );
+        } else {
+          // No existing attendees, just use the new ones
+          mergedAttendees = intent.attendees;
+          logger.info(
+            {
+              userId,
+              newAttendees: intent.attendees,
+              reason: 'No existing attendees found',
+            },
+            'Using only new attendees (no existing attendees to merge)'
+          );
+        }
+        
+        updates.attendees = mergedAttendees;
+      }
 
       // Get calendar's timezone (from calendar, not user preferences)
       const calendarTimezone = await this.getUserTimezone(userId, calendarConnection);
