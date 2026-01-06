@@ -752,24 +752,18 @@ export class CalendarService implements ICalendarService {
       if (intent.description) updates.description = intent.description;
       if (intent.location) updates.location = intent.location;
       if (intent.attendees) updates.attendees = intent.attendees;
-      
-      // Handle allDay flag - set it if explicitly provided, or infer from whether time is provided
-      if (intent.isAllDay !== undefined && intent.isAllDay !== null) {
-        updates.allDay = intent.isAllDay;
-      } else if (intent.startDate && (intent.startTime === undefined || intent.startTime === null)) {
-        // If date is provided but no time, it's likely an all-day event
-        updates.allDay = true;
-      } else if (intent.startDate && intent.startTime) {
-        // If both date and time are provided, it's a timed event
-        updates.allDay = false;
-      }
 
       // Get calendar's timezone (from calendar, not user preferences)
       const calendarTimezone = await this.getUserTimezone(userId, calendarConnection);
       logger.info({ userId, timezone: calendarTimezone, source: 'calendar' }, 'Using calendar timezone for event update');
       
+      // Track if we're updating dates (needed for allDay flag logic)
+      let isUpdatingDates = false;
+      
       // Update dates if provided
       if (intent.startDate) {
+        isUpdatingDates = true;
+        
         // Log the intent values before parsing
         logger.info(
           {
@@ -830,6 +824,7 @@ export class CalendarService implements ICalendarService {
           );
         }
       } else if (intent.startTime) {
+        isUpdatingDates = true;
         // Only time is being updated (date stays the same)
         // Use the original event's date and combine it with the new time
         const originalStart = new Date(targetEvent.start);
@@ -889,6 +884,7 @@ export class CalendarService implements ICalendarService {
           'Calculated end date based on original event duration (time-only update)'
         );
       } else if (intent.endDate || intent.endTime || intent.duration) {
+        isUpdatingDates = true;
         // Only end is being updated (start stays the same)
         const startDate = new Date(targetEvent.start);
         updates.end = this.parseEndDateTime(
@@ -898,6 +894,23 @@ export class CalendarService implements ICalendarService {
           intent.duration,
           intent.isAllDay
         );
+      }
+      
+      // Handle allDay flag - ONLY set it if we're updating dates
+      // This prevents issues when only updating location, title, etc.
+      if (isUpdatingDates) {
+        if (intent.isAllDay !== undefined && intent.isAllDay !== null) {
+          updates.allDay = intent.isAllDay;
+        } else if (intent.startDate && (intent.startTime === undefined || intent.startTime === null)) {
+          // If date is provided but no time, it's likely an all-day event
+          updates.allDay = true;
+        } else if (intent.startDate && intent.startTime) {
+          // If both date and time are provided, it's a timed event
+          updates.allDay = false;
+        } else if (intent.startTime) {
+          // If only time is provided (date preserved), it's a timed event
+          updates.allDay = false;
+        }
       }
       
       // Validate that end is after start
