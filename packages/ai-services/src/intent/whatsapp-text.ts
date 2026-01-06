@@ -7,6 +7,7 @@ import { buildWhatsappNotePrompt, type NotePromptOptions } from './note-prompts'
 import { buildWhatsappEventPrompt, type EventPromptOptions } from './event-prompts';
 import { buildWhatsappDocumentPrompt, type DocumentPromptOptions } from './document-prompts';
 import { buildMergedWhatsappPrompt, type MergedPromptOptions } from './merged-prompts';
+import { buildEventViewAnalysisPrompt, type EventViewPromptOptions } from './event-view-prompts';
 
 export type WhatsappTextIntent = 'task' | 'reminder' | 'note' | 'event' | 'document';
 
@@ -61,6 +62,41 @@ export class WhatsappTextAnalysisService {
   async analyzeDocument(text: string, options?: DocumentPromptOptions & { messageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }> }): Promise<string> {
     const prompt = buildWhatsappDocumentPrompt(text, options);
     return this.generate(prompt, 'document');
+  }
+
+  /**
+   * Analyze if user wants to view event details by number
+   * Returns JSON with isEventViewRequest and eventNumbers
+   */
+  async analyzeEventViewRequest(text: string, options?: EventViewPromptOptions): Promise<{ isEventViewRequest: boolean; eventNumbers: number[] | null; reasoning: string }> {
+    const prompt = buildEventViewAnalysisPrompt(text, options);
+    const response = await this.generate(prompt, 'event-view');
+    
+    try {
+      // Parse JSON response
+      const parsed = JSON.parse(response.trim());
+      return {
+        isEventViewRequest: parsed.isEventViewRequest === true,
+        eventNumbers: parsed.eventNumbers && Array.isArray(parsed.eventNumbers) 
+          ? parsed.eventNumbers.filter((n: any) => typeof n === 'number' && n > 0)
+          : null,
+        reasoning: parsed.reasoning || '',
+      };
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          response,
+        },
+        'Failed to parse event view analysis response'
+      );
+      // Fallback: return false if parsing fails
+      return {
+        isEventViewRequest: false,
+        eventNumbers: null,
+        reasoning: 'Failed to parse AI response',
+      };
+    }
   }
 
   private async generate(prompt: string, intent: string): Promise<string> {

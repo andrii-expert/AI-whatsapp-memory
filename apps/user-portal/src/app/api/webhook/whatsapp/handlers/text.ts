@@ -314,106 +314,172 @@ async function processAIResponse(
     
     const actionTemplate = actionLines.join('\n');
     
-    // CRITICAL: Check if user wants to view an event by number, even if AI generated "normal" or wrong title
+    // CRITICAL: Use AI to analyze if user wants to view an event by number
     // This must happen BEFORE any other processing to catch cases where AI misclassifies
     if (originalUserText) {
-      const userTextLower = originalUserText.toLowerCase();
-      
-      // Extract numbers from user text
-      const extractNumbers = (text: string): number[] => {
-        const numbers: number[] = [];
-        const numberMatches = text.match(/\d+/g);
-        if (numberMatches) {
-          numbers.push(...numberMatches.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0));
+      try {
+        // Get message history for context
+        let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+        try {
+          const history = await getRecentMessageHistory(db, userId, 10);
+          messageHistory = history
+            .filter(msg => msg.content && msg.content.trim().length > 0)
+            .slice(0, 10)
+            .map(msg => ({
+              direction: msg.direction,
+              content: msg.content,
+            }));
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
         }
-        return numbers;
-      };
-      
-      const extractedNumbers = extractNumbers(userTextLower);
-      
-      // Check if user text indicates a number-based event view request
-      // Support patterns like "show meeting info for number 5", "show info for 4", "show me 1", etc.
-      // This works even if AI generated "Title: normal" instead of "Title: event"
-      // If user says "show meeting info for number 5" or similar, it's ALWAYS an event request
-      const pattern1 = /^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i;
-      const pattern2 = /^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i;
-      const pattern3 = /^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i;
-      const pattern4 = /^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i;
-      
-      const isNumberBasedEventViewRequest = extractedNumbers.length > 0 && (
-        pattern1.test(userTextLower) ||
-        pattern2.test(userTextLower) ||
-        pattern3.test(userTextLower) ||
-        pattern4.test(userTextLower)
-      );
-      
-      // Log for debugging
-      logger.info(
-        {
-          userId,
-          originalUserText,
-          userTextLower,
-          extractedNumbers,
-          extractedNumbersLength: extractedNumbers.length,
-          pattern1Match: pattern1.test(userTextLower),
-          pattern2Match: pattern2.test(userTextLower),
-          pattern3Match: pattern3.test(userTextLower),
-          pattern4Match: pattern4.test(userTextLower),
-          isNumberBasedEventViewRequest,
-        },
-        '🔍 Pre-title check: Testing number-based event view request detection'
-      );
-      
-      // If the pattern matches, it's definitely an event request (no need for additional context check)
-      // Patterns like "show meeting info for number 5" are unambiguous event requests
-      
-      if (isNumberBasedEventViewRequest && extractedNumbers.length > 0) {
-        // Extract the number and show event overview
-        const eventNumber = extractedNumbers[0]; // Use first number
-        const eventActionTemplate = `Show event details: ${eventNumber}`;
-        
+
+        // Get user's calendar timezone
+        let eventViewTimezone = userTimezone || 'Africa/Johannesburg';
+        try {
+          const calendarConnection = await getPrimaryCalendar(db, userId);
+          if (calendarConnection) {
+            const calendarService = new CalendarService(db);
+            eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+        }
+
+        // Analyze with AI
+        const analyzer = new WhatsappTextAnalysisService();
+        const eventViewAnalysis = await analyzer.analyzeEventViewRequest(originalUserText, {
+          messageHistory,
+          currentDate: new Date(),
+          timezone: eventViewTimezone,
+        });
+
         logger.info(
           {
             userId,
-            originalTitleType: titleType,
-            originalAction: actionTemplate,
-            convertedAction: eventActionTemplate,
-            extractedNumber: eventNumber,
             originalUserText,
-            reason: 'pre_title_check_number_based_event_view_detection'
+            eventViewAnalysis,
           },
-          '✅ Pre-title check: User wants to view event by number, routing to event overview (even if AI generated wrong title)'
+          '🔍 AI Analysis: Event view request detection'
         );
-        
-        const executor = new ActionExecutor(db, userId, whatsappService, recipient);
-        const parsed = executor.parseAction(eventActionTemplate);
-        if (parsed) {
-          parsed.resourceType = 'event';
-          const result = await executor.executeAction(parsed);
+
+        // If AI detected an event view request with numbers, handle it
+        if (eventViewAnalysis.isEventViewRequest && eventViewAnalysis.eventNumbers && eventViewAnalysis.eventNumbers.length > 0) {
+          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
           
-          if (result.success && result.message) {
-            await whatsappService.sendTextMessage(recipient, result.message);
-            
-            // Log outgoing message
-            try {
-              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-              if (whatsappNumber) {
-                await logOutgoingWhatsAppMessage(db, {
-                  whatsappNumberId: whatsappNumber.id,
-                  userId,
-                  messageType: 'text',
-                  messageContent: result.message,
-                  isFreeMessage: true,
-                });
-              }
-            } catch (error) {
-              logger.warn({ error, userId }, 'Failed to log outgoing message');
+          // Get timezone for event operations
+          let eventTimezone = eventViewTimezone;
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              const calendarService = new CalendarService(db);
+              eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
             }
-          } else if (!result.success && result.message) {
-            await whatsappService.sendTextMessage(recipient, result.message);
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
           }
+
+          // Handle multiple event numbers
+          if (eventViewAnalysis.eventNumbers.length > 1) {
+            logger.info(
+              {
+                userId,
+                eventNumbers: eventViewAnalysis.eventNumbers,
+                originalUserText,
+                aiReasoning: eventViewAnalysis.reasoning,
+              },
+              '✅ AI detected multiple event view requests, showing each event overview'
+            );
+
+            // Show event overview for each requested number
+            for (const eventNumber of eventViewAnalysis.eventNumbers) {
+              const eventActionTemplate = `Show event details: ${eventNumber}`;
+              const parsed = executor.parseAction(eventActionTemplate);
+              if (parsed) {
+                parsed.resourceType = 'event';
+                const result = await executor.executeAction(parsed, eventTimezone);
+                if (result.success && result.message) {
+                  await whatsappService.sendTextMessage(recipient, result.message);
+                  
+                  // Log outgoing message
+                  try {
+                    const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                    if (whatsappNumber) {
+                      await logOutgoingWhatsAppMessage(db, {
+                        whatsappNumberId: whatsappNumber.id,
+                        userId,
+                        messageType: 'text',
+                        messageContent: result.message,
+                        isFreeMessage: true,
+                      });
+                    }
+                  } catch (error) {
+                    logger.warn({ error, userId }, 'Failed to log outgoing message');
+                  }
+                } else if (!result.success && result.message) {
+                  await whatsappService.sendTextMessage(recipient, result.message);
+                }
+              }
+            }
+          } else {
+            // Single event number
+            const eventNumber = eventViewAnalysis.eventNumbers[0]!;
+            const eventActionTemplate = `Show event details: ${eventNumber}`;
+            
+            logger.info(
+              {
+                userId,
+                originalTitleType: titleType,
+                originalAction: actionTemplate,
+                convertedAction: eventActionTemplate,
+                extractedNumber: eventNumber,
+                originalUserText,
+                aiReasoning: eventViewAnalysis.reasoning,
+                reason: 'ai_based_event_view_detection'
+              },
+              '✅ AI Analysis: User wants to view event by number, routing to event overview'
+            );
+            
+            const parsed = executor.parseAction(eventActionTemplate);
+            if (parsed) {
+              parsed.resourceType = 'event';
+              const result = await executor.executeAction(parsed, eventTimezone);
+              
+              if (result.success && result.message) {
+                await whatsappService.sendTextMessage(recipient, result.message);
+                
+                // Log outgoing message
+                try {
+                  const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                  if (whatsappNumber) {
+                    await logOutgoingWhatsAppMessage(db, {
+                      whatsappNumberId: whatsappNumber.id,
+                      userId,
+                      messageType: 'text',
+                      messageContent: result.message,
+                      isFreeMessage: true,
+                    });
+                  }
+                } catch (error) {
+                  logger.warn({ error, userId }, 'Failed to log outgoing message');
+                }
+              } else if (!result.success && result.message) {
+                await whatsappService.sendTextMessage(recipient, result.message);
+              }
+            }
+          }
+          return; // Exit early, don't process further (even if AI said "normal")
         }
-        return; // Exit early, don't process further (even if AI said "normal")
+      } catch (error) {
+        logger.error(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+            userId,
+            originalUserText,
+          },
+          'Failed to analyze event view request with AI, continuing with normal flow'
+        );
+        // Continue with normal processing if AI analysis fails
       }
     }
     
@@ -474,77 +540,173 @@ async function processAIResponse(
     // Handle Normal conversation - send directly to user without workflow processing
     // BUT: Check if it's actually an event view request that AI misclassified as "normal"
     if (titleType === 'normal') {
-      // Before sending "normal" response, check if user actually wants event info by number
+      // Before sending "normal" response, use AI to check if user actually wants event info by number
       // This prevents AI from sending error messages when user clearly wants event overview
       if (originalUserText) {
-        const userTextLower = originalUserText.toLowerCase();
-        const extractNumbers = (text: string): number[] => {
-          const numbers: number[] = [];
-          const numberMatches = text.match(/\d+/g);
-          if (numberMatches) {
-            numbers.push(...numberMatches.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0));
+        try {
+          // Get message history for context
+          let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+          try {
+            const history = await getRecentMessageHistory(db, userId, 10);
+            messageHistory = history
+              .filter(msg => msg.content && msg.content.trim().length > 0)
+              .slice(0, 10)
+              .map(msg => ({
+                direction: msg.direction,
+                content: msg.content,
+              }));
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
           }
-          return numbers;
-        };
-        
-        const extractedNumbers = extractNumbers(userTextLower);
-        
-        // Check if user text indicates a number-based event view request
-        // Patterns like "show meeting info for number 5" are unambiguous event requests
-        const isNumberBasedEventViewRequest = extractedNumbers.length > 0 && (
-          userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
-          userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-          userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
-          userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i)
-        );
-        
-        if (isNumberBasedEventViewRequest && extractedNumbers.length > 0) {
-          // User wants event info, but AI said "normal" - override and show event overview
-          const eventNumber = extractedNumbers[0];
-          const eventActionTemplate = `Show event details: ${eventNumber}`;
-          
+
+          // Get user's calendar timezone
+          let eventViewTimezone = userTimezone || 'Africa/Johannesburg';
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              const calendarService = new CalendarService(db);
+              eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+          }
+
+          // Analyze with AI
+          const analyzer = new WhatsappTextAnalysisService();
+          const eventViewAnalysis = await analyzer.analyzeEventViewRequest(originalUserText, {
+            messageHistory,
+            currentDate: new Date(),
+            timezone: eventViewTimezone,
+          });
+
           logger.info(
             {
               userId,
-              originalTitleType: titleType,
-              originalAction: actionTemplate,
-              convertedAction: eventActionTemplate,
-              extractedNumber: eventNumber,
               originalUserText,
-              reason: 'normal_title_override_for_event_view_request'
+              eventViewAnalysis,
+              titleType,
             },
-            '✅ Overriding "normal" title: User wants to view event by number, routing to event overview'
+            '🔍 AI Analysis: Checking if "normal" title is actually event view request'
           );
-          
-          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
-          const parsed = executor.parseAction(eventActionTemplate);
-          if (parsed) {
-            parsed.resourceType = 'event';
-            const result = await executor.executeAction(parsed);
+
+          // If AI detected an event view request with numbers, handle it
+          if (eventViewAnalysis.isEventViewRequest && eventViewAnalysis.eventNumbers && eventViewAnalysis.eventNumbers.length > 0) {
+            const executor = new ActionExecutor(db, userId, whatsappService, recipient);
             
-            if (result.success && result.message) {
-              await whatsappService.sendTextMessage(recipient, result.message);
-              
-              // Log outgoing message
-              try {
-                const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-                if (whatsappNumber) {
-                  await logOutgoingWhatsAppMessage(db, {
-                    whatsappNumberId: whatsappNumber.id,
-                    userId,
-                    messageType: 'text',
-                    messageContent: result.message,
-                    isFreeMessage: true,
-                  });
-                }
-              } catch (error) {
-                logger.warn({ error, userId }, 'Failed to log outgoing message');
+            // Get timezone for event operations
+            let eventTimezone = eventViewTimezone;
+            try {
+              const calendarConnection = await getPrimaryCalendar(db, userId);
+              if (calendarConnection) {
+                const calendarService = new CalendarService(db);
+                eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
               }
-            } else if (!result.success && result.message) {
-              await whatsappService.sendTextMessage(recipient, result.message);
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
             }
+
+            // Handle multiple event numbers
+            if (eventViewAnalysis.eventNumbers.length > 1) {
+              logger.info(
+                {
+                  userId,
+                  eventNumbers: eventViewAnalysis.eventNumbers,
+                  originalUserText,
+                  aiReasoning: eventViewAnalysis.reasoning,
+                },
+                '✅ AI detected multiple event view requests in "normal" title, showing each event overview'
+              );
+
+              // Show event overview for each requested number
+              for (const eventNumber of eventViewAnalysis.eventNumbers) {
+                const eventActionTemplate = `Show event details: ${eventNumber}`;
+                const parsed = executor.parseAction(eventActionTemplate);
+                if (parsed) {
+                  parsed.resourceType = 'event';
+                  const result = await executor.executeAction(parsed, eventTimezone);
+                  if (result.success && result.message) {
+                    await whatsappService.sendTextMessage(recipient, result.message);
+                    
+                    // Log outgoing message
+                    try {
+                      const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                      if (whatsappNumber) {
+                        await logOutgoingWhatsAppMessage(db, {
+                          whatsappNumberId: whatsappNumber.id,
+                          userId,
+                          messageType: 'text',
+                          messageContent: result.message,
+                          isFreeMessage: true,
+                        });
+                      }
+                    } catch (error) {
+                      logger.warn({ error, userId }, 'Failed to log outgoing message');
+                    }
+                  } else if (!result.success && result.message) {
+                    await whatsappService.sendTextMessage(recipient, result.message);
+                  }
+                }
+              }
+            } else {
+              // Single event number
+              const eventNumber = eventViewAnalysis.eventNumbers[0]!;
+              const eventActionTemplate = `Show event details: ${eventNumber}`;
+              
+              logger.info(
+                {
+                  userId,
+                  originalTitleType: titleType,
+                  originalAction: actionTemplate,
+                  convertedAction: eventActionTemplate,
+                  extractedNumber: eventNumber,
+                  originalUserText,
+                  aiReasoning: eventViewAnalysis.reasoning,
+                  reason: 'ai_override_normal_title_for_event_view_request'
+                },
+                '✅ AI Analysis: Overriding "normal" title - User wants to view event by number'
+              );
+              
+              const parsed = executor.parseAction(eventActionTemplate);
+              if (parsed) {
+                parsed.resourceType = 'event';
+                const result = await executor.executeAction(parsed, eventTimezone);
+                
+                if (result.success && result.message) {
+                  await whatsappService.sendTextMessage(recipient, result.message);
+                  
+                  // Log outgoing message
+                  try {
+                    const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                    if (whatsappNumber) {
+                      await logOutgoingWhatsAppMessage(db, {
+                        whatsappNumberId: whatsappNumber.id,
+                        userId,
+                        messageType: 'text',
+                        messageContent: result.message,
+                        isFreeMessage: true,
+                      });
+                    }
+                  } catch (error) {
+                    logger.warn({ error, userId }, 'Failed to log outgoing message');
+                  }
+                } else if (!result.success && result.message) {
+                  await whatsappService.sendTextMessage(recipient, result.message);
+                }
+              }
+            }
+            return; // Exit early, don't send AI's "normal" response
           }
-          return; // Exit early, don't send AI's "normal" response
+        } catch (error) {
+          logger.error(
+            {
+              error: error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+              userId,
+              originalUserText,
+            },
+            'Failed to analyze event view request with AI in normal title section, continuing with normal flow'
+          );
+          // Continue with normal processing if AI analysis fails
         }
       }
       
@@ -594,36 +756,77 @@ async function processAIResponse(
       
       const userTextLower = originalUserText?.toLowerCase() || '';
       
-      // CRITICAL: Check for number-based view requests FIRST (before timeframe check)
+      // CRITICAL: Use AI to check for number-based view requests FIRST (before timeframe check)
       // If user says "show me 1" or "show info on 1" or "show me 1, 2 and 3", ALWAYS treat as view operation
       // regardless of what the AI generated (even if it's "List events: all")
-      // Support both single number and multiple numbers (e.g., "1", "1, 2", "1, 2 and 3", "1,2,3")
-      // Extract all numbers from the request (handles "1", "1, 2", "1, 2 and 3", "1,2,3")
-      const extractNumbers = (text: string): number[] => {
-        const numbers: number[] = [];
-        // Match all numbers in the text (handles commas, "and", spaces)
-        const numberMatches = text.match(/\d+/g);
-        if (numberMatches) {
-          numbers.push(...numberMatches.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0));
+      let requestedNumbers: number[] = [];
+      let isNumberBasedViewRequest = false;
+      
+      if (originalUserText) {
+        try {
+          // Get message history for context
+          let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+          try {
+            const history = await getRecentMessageHistory(db, userId, 10);
+            messageHistory = history
+              .filter(msg => msg.content && msg.content.trim().length > 0)
+              .slice(0, 10)
+              .map(msg => ({
+                direction: msg.direction,
+                content: msg.content,
+              }));
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
+          }
+
+          // Get user's calendar timezone
+          let eventViewTimezone = userTimezone || 'Africa/Johannesburg';
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              const calendarService = new CalendarService(db);
+              eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+          }
+
+          // Analyze with AI
+          const analyzer = new WhatsappTextAnalysisService();
+          const eventViewAnalysis = await analyzer.analyzeEventViewRequest(originalUserText, {
+            messageHistory,
+            currentDate: new Date(),
+            timezone: eventViewTimezone,
+          });
+
+          logger.info(
+            {
+              userId,
+              originalUserText,
+              eventViewAnalysis,
+              actionTemplate,
+            },
+            '🔍 AI Analysis: Checking if "List events" is actually event view request'
+          );
+
+          // If AI detected an event view request with numbers, use those numbers
+          if (eventViewAnalysis.isEventViewRequest && eventViewAnalysis.eventNumbers && eventViewAnalysis.eventNumbers.length > 0) {
+            isNumberBasedViewRequest = true;
+            requestedNumbers = eventViewAnalysis.eventNumbers;
+          }
+        } catch (error) {
+          logger.error(
+            {
+              error: error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+              userId,
+              originalUserText,
+            },
+            'Failed to analyze event view request with AI in list events section, continuing with normal flow'
+          );
+          // Continue with normal processing if AI analysis fails
         }
-        return numbers;
-      };
-      
-      // Check if user text contains numbers after view keywords
-      // Support patterns like:
-      // - "show me 1"
-      // - "show info on 1"
-      // - "show info for 4"
-      // - "show meeting info for 4"
-      // - "show meeting info for number 4"
-      // - "show info for number 4"
-      const extractedNumbers = extractNumbers(userTextLower);
-      const hasViewKeywords = /^(?:show|view|get|see|send|give|provide)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?/i.test(userTextLower) ||
-                              /^(?:show|view|get|see|send|give|provide)\s+(?:me\s+)?(?:info\s+(?:on|about|for)\s+)?/i.test(userTextLower) ||
-                              /^(?:show|view|get|see)\s+(?:me\s+)?(\d+)/i.test(userTextLower);
-      const isNumberBasedViewRequest = hasViewKeywords && extractedNumbers.length > 0;
-      
-      const requestedNumbers = isNumberBasedViewRequest ? extractedNumbers : [];
+      }
       
       // Timeframe keywords that should NOT be converted to view/show (these are list operations)
       // Check for exact matches or if the value starts with a timeframe keyword
@@ -1338,63 +1541,170 @@ async function processAIResponse(
           return numbers;
         };
         
-        const extractedNumbers = extractNumbers(userTextLower);
-        
-        // Check if user text indicates a number-based view request
-        // Support patterns like "show meeting info for number 5", "show info for 4", "show me 1", etc.
-        const isNumberBasedViewRequest = extractedNumbers.length > 0 && (
-          userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
-          userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-          userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
-          userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i)
-        );
-        
-        if (isNumberBasedViewRequest && extractedNumbers.length > 0) {
-          // Extract the number and show event overview
-          const eventNumber = extractedNumbers[0]; // Use first number
-          const eventActionTemplate = `Show event details: ${eventNumber}`;
-          
+        // Use AI to analyze if this is an event view request
+        try {
+          // Get message history for context
+          let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+          try {
+            const history = await getRecentMessageHistory(db, userId, 10);
+            messageHistory = history
+              .filter(msg => msg.content && msg.content.trim().length > 0)
+              .slice(0, 10)
+              .map(msg => ({
+                direction: msg.direction,
+                content: msg.content,
+              }));
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
+          }
+
+          // Get user's calendar timezone
+          let eventViewTimezone = userTimezone || 'Africa/Johannesburg';
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              const calendarService = new CalendarService(db);
+              eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+          }
+
+          // Analyze with AI
+          const analyzer = new WhatsappTextAnalysisService();
+          const eventViewAnalysis = await analyzer.analyzeEventViewRequest(originalUserText, {
+            messageHistory,
+            currentDate: new Date(),
+            timezone: eventViewTimezone,
+          });
+
           logger.info(
             {
               userId,
-              originalAction: actionTemplate,
-              convertedAction: eventActionTemplate,
-              extractedNumber: eventNumber,
               originalUserText,
-              reason: 'catch_all_number_based_view_detection'
+              eventViewAnalysis,
+              actionTemplate,
             },
-            '✅ Catch-all detection: User wants to view event by number, routing to event overview'
+            '🔍 AI Analysis: Catch-all event view request detection'
           );
-          
-          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
-          const parsed = executor.parseAction(eventActionTemplate);
-          if (parsed) {
-            parsed.resourceType = 'event';
-            const result = await executor.executeAction(parsed);
+
+          // If AI detected an event view request with numbers, handle it
+          if (eventViewAnalysis.isEventViewRequest && eventViewAnalysis.eventNumbers && eventViewAnalysis.eventNumbers.length > 0) {
+            const executor = new ActionExecutor(db, userId, whatsappService, recipient);
             
-            if (result.success && result.message) {
-              await whatsappService.sendTextMessage(recipient, result.message);
-              
-              // Log outgoing message
-              try {
-                const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-                if (whatsappNumber) {
-                  await logOutgoingWhatsAppMessage(db, {
-                    whatsappNumberId: whatsappNumber.id,
-                    userId,
-                    messageType: 'text',
-                    messageContent: result.message,
-                    isFreeMessage: true,
-                  });
-                }
-              } catch (error) {
-                logger.warn({ error, userId }, 'Failed to log outgoing message');
+            // Get timezone for event operations
+            let eventTimezone = eventViewTimezone;
+            try {
+              const calendarConnection = await getPrimaryCalendar(db, userId);
+              if (calendarConnection) {
+                const calendarService = new CalendarService(db);
+                eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
               }
-            } else if (!result.success && result.message) {
-              await whatsappService.sendTextMessage(recipient, result.message);
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
             }
+
+            // Handle multiple event numbers
+            if (eventViewAnalysis.eventNumbers.length > 1) {
+              logger.info(
+                {
+                  userId,
+                  eventNumbers: eventViewAnalysis.eventNumbers,
+                  originalUserText,
+                  aiReasoning: eventViewAnalysis.reasoning,
+                },
+                '✅ AI detected multiple event view requests in catch-all, showing each event overview'
+              );
+
+              // Show event overview for each requested number
+              for (const eventNumber of eventViewAnalysis.eventNumbers) {
+                const eventActionTemplate = `Show event details: ${eventNumber}`;
+                const parsed = executor.parseAction(eventActionTemplate);
+                if (parsed) {
+                  parsed.resourceType = 'event';
+                  const result = await executor.executeAction(parsed, eventTimezone);
+                  if (result.success && result.message) {
+                    await whatsappService.sendTextMessage(recipient, result.message);
+                    
+                    // Log outgoing message
+                    try {
+                      const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                      if (whatsappNumber) {
+                        await logOutgoingWhatsAppMessage(db, {
+                          whatsappNumberId: whatsappNumber.id,
+                          userId,
+                          messageType: 'text',
+                          messageContent: result.message,
+                          isFreeMessage: true,
+                        });
+                      }
+                    } catch (error) {
+                      logger.warn({ error, userId }, 'Failed to log outgoing message');
+                    }
+                  } else if (!result.success && result.message) {
+                    await whatsappService.sendTextMessage(recipient, result.message);
+                  }
+                }
+              }
+            } else {
+              // Single event number
+              const eventNumber = eventViewAnalysis.eventNumbers[0]!;
+              const eventActionTemplate = `Show event details: ${eventNumber}`;
+              
+              logger.info(
+                {
+                  userId,
+                  originalAction: actionTemplate,
+                  convertedAction: eventActionTemplate,
+                  extractedNumber: eventNumber,
+                  originalUserText,
+                  aiReasoning: eventViewAnalysis.reasoning,
+                  reason: 'ai_catch_all_event_view_detection'
+                },
+                '✅ AI Analysis: Catch-all - User wants to view event by number'
+              );
+              
+              const parsed = executor.parseAction(eventActionTemplate);
+              if (parsed) {
+                parsed.resourceType = 'event';
+                const result = await executor.executeAction(parsed, eventTimezone);
+                
+                if (result.success && result.message) {
+                  await whatsappService.sendTextMessage(recipient, result.message);
+                  
+                  // Log outgoing message
+                  try {
+                    const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+                    if (whatsappNumber) {
+                      await logOutgoingWhatsAppMessage(db, {
+                        whatsappNumberId: whatsappNumber.id,
+                        userId,
+                        messageType: 'text',
+                        messageContent: result.message,
+                        isFreeMessage: true,
+                      });
+                    }
+                  } catch (error) {
+                    logger.warn({ error, userId }, 'Failed to log outgoing message');
+                  }
+                } else if (!result.success && result.message) {
+                  await whatsappService.sendTextMessage(recipient, result.message);
+                }
+              }
+            }
+            return; // Exit early, don't process further
           }
-          return; // Exit early, don't process further
+        } catch (error) {
+          logger.error(
+            {
+              error: error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+              userId,
+              originalUserText,
+            },
+            'Failed to analyze event view request with AI in catch-all section, continuing with normal flow'
+          );
+          // Continue with normal processing if AI analysis fails
         }
       }
       
@@ -1512,13 +1822,75 @@ async function processAIResponse(
       const userTextLower = originalUserText?.toLowerCase() || '';
       const actionTemplateLower = actionTemplate.toLowerCase();
       
-      // Detect number-based view requests (e.g., "show me 1", "show info on 1", "show meeting info for 4", "show info for number 4")
-      const isNumberBasedView = titleType === 'event' && 
-                                originalUserText && 
-                                (userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:meeting\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
-                                 userTextLower.match(/^(?:show|view|get|see|send)\s+(?:me\s+)?(?:info\s+on\s+)?(\d+)$/i) ||
-                                 userTextLower.match(/^(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+(?:number\s+)?(\d+)$/i) ||
-                                 userTextLower.match(/^(?:show|view|get|see)\s+(?:me\s+)?(\d+)$/i));
+      // Detect number-based view requests using AI (e.g., "show me 1", "show info on 1", "show meeting info for 4", "show info for number 4")
+      let isNumberBasedView = false;
+      let numberBasedViewNumbers: number[] = [];
+      
+      if (titleType === 'event' && originalUserText) {
+        try {
+          // Get message history for context
+          let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+          try {
+            const history = await getRecentMessageHistory(db, userId, 10);
+            messageHistory = history
+              .filter(msg => msg.content && msg.content.trim().length > 0)
+              .slice(0, 10)
+              .map(msg => ({
+                direction: msg.direction,
+                content: msg.content,
+              }));
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
+          }
+
+          // Get user's calendar timezone
+          let eventViewTimezone = userTimezone || 'Africa/Johannesburg';
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              const calendarService = new CalendarService(db);
+              eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+          }
+
+          // Analyze with AI
+          const analyzer = new WhatsappTextAnalysisService();
+          const eventViewAnalysis = await analyzer.analyzeEventViewRequest(originalUserText, {
+            messageHistory,
+            currentDate: new Date(),
+            timezone: eventViewTimezone,
+          });
+
+          logger.info(
+            {
+              userId,
+              originalUserText,
+              eventViewAnalysis,
+              actionTemplate,
+            },
+            '🔍 AI Analysis: Detecting number-based view requests in view/show operation section'
+          );
+
+          // If AI detected an event view request with numbers, use those
+          if (eventViewAnalysis.isEventViewRequest && eventViewAnalysis.eventNumbers && eventViewAnalysis.eventNumbers.length > 0) {
+            isNumberBasedView = true;
+            numberBasedViewNumbers = eventViewAnalysis.eventNumbers;
+          }
+        } catch (error) {
+          logger.error(
+            {
+              error: error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+              userId,
+              originalUserText,
+            },
+            'Failed to analyze event view request with AI in view/show section, continuing with normal flow'
+          );
+          // Continue with normal processing if AI analysis fails
+        }
+      }
       
       // Detect name-based view requests (e.g., "show me call with paul")
       // Exclude list requests like "show me all events" or "show me events"
