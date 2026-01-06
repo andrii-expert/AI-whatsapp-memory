@@ -3267,26 +3267,31 @@ async function handleSingleEventOperation(
               `🔄 Processing attendee ${i + 1}/${intent.attendees.length}: "${attendeeTrimmed}"`
             );
             
+            // Normalize email addresses from voice input (e.g., "paul at imaginesignage.com" -> "paul@imaginesignage.com")
+            const normalizedAttendee = normalizeEmailFromVoice(attendeeTrimmed);
+            
             // Check if it's already a valid email address (use proper regex validation)
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (emailRegex.test(attendeeTrimmed)) {
-              const emailLower = attendeeTrimmed.toLowerCase();
+            if (emailRegex.test(normalizedAttendee)) {
+              const emailLower = normalizedAttendee.toLowerCase();
               if (!resolvedAttendees.includes(emailLower)) {
                 resolvedAttendees.push(emailLower);
                 logger.info(
                   {
                     userId,
                     attendeeName: attendeeTrimmed,
+                    normalizedAttendee: normalizedAttendee,
                     resolvedEmail: emailLower,
                     resolvedCount: resolvedAttendees.length,
                   },
-                  'Attendee is already a valid email address'
+                  'Attendee is already a valid email address (possibly normalized from voice input)'
                 );
               } else {
                 logger.warn(
                   {
                     userId,
                     attendeeName: attendeeTrimmed,
+                    normalizedAttendee: normalizedAttendee,
                     resolvedEmail: emailLower,
                   },
                   'Skipping duplicate email address (already in resolved list)'
@@ -3294,6 +3299,9 @@ async function handleSingleEventOperation(
               }
               continue;
             }
+            
+            // Use normalized version for friend matching (but keep original for logging)
+            const attendeeForMatching = normalizedAttendee;
             
             // Try to find matching friend by name (case-insensitive, with priority matching)
             // IMPORTANT: Reset matchingFriend for each attendee - no shared state
@@ -3305,7 +3313,8 @@ async function handleSingleEventOperation(
                 userId,
                 attendeeIndex: i,
                 attendeeName: attendeeTrimmed,
-                attendeeLower: attendeeTrimmed.toLowerCase().trim(),
+                normalizedAttendee: normalizedAttendee,
+                attendeeLower: attendeeForMatching.toLowerCase().trim(),
                 friendsCount: friends.length,
                 friendNames: friends.map(f => f.name),
                 friendNamesLower: friends.map(f => f.name.toLowerCase().trim()),
@@ -3323,7 +3332,7 @@ async function handleSingleEventOperation(
             // First, try exact match
             matchingFriend = friends.find(friend => {
               const friendNameLower = friend.name.toLowerCase().trim();
-              const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+              const attendeeLower = attendeeForMatching.toLowerCase().trim();
               return friendNameLower === attendeeLower;
             });
             
@@ -3346,7 +3355,7 @@ async function handleSingleEventOperation(
             if (!matchingFriend) {
               matchingFriend = friends.find(friend => {
                 const friendNameLower = friend.name.toLowerCase().trim();
-                const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+                const attendeeLower = attendeeForMatching.toLowerCase().trim();
                 const friendWords = friendNameLower.split(/\s+/);
                 const firstWord = friendWords[0];
                 // Check if attendee matches the first word of friend's name
@@ -3372,7 +3381,7 @@ async function handleSingleEventOperation(
             if (!matchingFriend) {
               matchingFriend = friends.find(friend => {
                 const friendNameLower = friend.name.toLowerCase().trim();
-                const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+                const attendeeLower = attendeeForMatching.toLowerCase().trim();
                 const friendWords = friendNameLower.split(/\s+/);
                 // Check if any word in friend's name matches the attendee name
                 return friendWords.some(word => word === attendeeLower);
@@ -3397,7 +3406,7 @@ async function handleSingleEventOperation(
             if (!matchingFriend) {
               matchingFriend = friends.find(friend => {
                 const friendNameLower = friend.name.toLowerCase().trim();
-                const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+                const attendeeLower = attendeeForMatching.toLowerCase().trim();
                 // Match if friend name starts with attendee name or vice versa
                 return friendNameLower.startsWith(attendeeLower) || attendeeLower.startsWith(friendNameLower);
               });
@@ -3421,7 +3430,7 @@ async function handleSingleEventOperation(
             if (!matchingFriend) {
               matchingFriend = friends.find(friend => {
                 const friendNameLower = friend.name.toLowerCase().trim();
-                const attendeeLower = attendeeTrimmed.toLowerCase().trim();
+                const attendeeLower = attendeeForMatching.toLowerCase().trim();
                 
                 // Check if attendee is contained in friend name or vice versa
                 if (friendNameLower.includes(attendeeLower) || attendeeLower.includes(friendNameLower)) {
@@ -3511,10 +3520,12 @@ async function handleSingleEventOperation(
                 `❌ No friend match found for "${attendeeTrimmed}" - checking if it's an email`
               );
               // If not found in friends, check if it's already a valid email (double-check)
+              // Normalize again in case it wasn't normalized earlier
+              const doubleCheckNormalized = normalizeEmailFromVoice(attendeeTrimmed);
               const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-              if (emailRegex.test(attendeeTrimmed)) {
+              if (emailRegex.test(doubleCheckNormalized)) {
                 // It's already a valid email, use it
-                const emailLower = attendeeTrimmed.toLowerCase();
+                const emailLower = doubleCheckNormalized.toLowerCase();
                 if (!resolvedAttendees.includes(emailLower)) {
                   resolvedAttendees.push(emailLower);
                   logger.info(
@@ -4569,18 +4580,22 @@ function parseEventTemplateToIntent(
         // Filter out "Google Meet" and similar phrases that are not actual attendees
         const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'meet', 'googlemeet'];
         
+        // Normalize email addresses from voice input first (e.g., "paul at imaginesignage.com" -> "paul@imaginesignage.com")
+        const emailNormalizedStr = normalizeEmailFromVoice(attendeesStr);
+        
         // Split by comma, but also handle "and" as a separator (e.g., "Paul and Liz" or "Paul, Liz and John")
         // First, replace " and " with comma for easier parsing
-        const normalizedStr = attendeesStr.replace(/\s+and\s+/gi, ', ');
+        const normalizedStr = emailNormalizedStr.replace(/\s+and\s+/gi, ', ');
         logger.info(
           {
             originalAttendeesStr: attendeesStr,
+            emailNormalizedStr: emailNormalizedStr,
             normalizedStr: normalizedStr,
           },
-          '🔄 Normalized attendees string (replaced "and" with commas)'
+          '🔄 Normalized attendees string (normalized emails from voice input, replaced "and" with commas)'
         );
         
-        const splitAttendees = normalizedStr.split(',').map(a => a.trim()).filter(a => a.length > 0);
+        const splitAttendees = normalizedStr.split(',').map(a => normalizeEmailFromVoice(a.trim())).filter(a => a.length > 0);
         logger.info(
           {
             splitAttendees: splitAttendees,
@@ -4758,21 +4773,25 @@ function parseEventTemplateToIntent(
             '📋 Raw attendees string extracted from UPDATE template'
           );
 
+          // Normalize email addresses from voice input first (e.g., "paul at imaginesignage.com" -> "paul@imaginesignage.com")
+          const emailNormalizedStr = normalizeEmailFromVoice(attendeesStr);
+
           // Filter out "Google Meet" and similar phrases that are not actual attendees
           const googleMeetKeywords = ['google meet', 'meet link', 'video call', 'video meeting', 'meet', 'googlemeet'];
           
           // Split by comma, but also handle "and" as a separator (e.g., "Paul and Liz" or "Paul, Liz and John")
           // First, replace " and " with comma for easier parsing
-          const normalizedStr = attendeesStr.replace(/\s+and\s+/gi, ', ');
+          const normalizedStr = emailNormalizedStr.replace(/\s+and\s+/gi, ', ');
           logger.info(
             {
               originalAttendeesStr: attendeesStr,
+              emailNormalizedStr: emailNormalizedStr,
               normalizedStr: normalizedStr,
             },
-            '🔄 Normalized attendees string (replaced "and" with commas)'
+            '🔄 Normalized attendees string (normalized emails from voice input, replaced "and" with commas)'
           );
           
-          const splitAttendees = normalizedStr.split(',').map(a => a.trim()).filter(a => a.length > 0);
+          const splitAttendees = normalizedStr.split(',').map(a => normalizeEmailFromVoice(a.trim())).filter(a => a.length > 0);
           logger.info(
             {
               splitAttendees: splitAttendees,
@@ -4924,6 +4943,44 @@ function parseReminderTemplateToAction(
  * Parse relative date strings to YYYY-MM-DD format
  * Handles: today, tomorrow, day names (Friday, Monday), "next Monday", "15 March", "the 12th", etc.
  */
+/**
+ * Normalize email addresses from voice input
+ * Converts "name at domain.com" to "name@domain.com"
+ * Handles patterns like:
+ * - "paul at imaginesignage.com" -> "paul@imaginesignage.com"
+ * - "john at gmail.com" -> "john@gmail.com"
+ * - "name at domain.co.uk" -> "name@domain.co.uk"
+ */
+function normalizeEmailFromVoice(input: string): string {
+  if (!input || typeof input !== 'string') {
+    return input;
+  }
+  
+  // Pattern: word(s) + " at " + domain (word.word format, possibly with multiple dots)
+  // Match: "name at domain.com", "firstname lastname at domain.co.uk", etc.
+  // Use word boundaries and ensure "at" is surrounded by spaces (not part of another word)
+  const emailPattern = /\b([a-zA-Z0-9._-]+(?:\s+[a-zA-Z0-9._-]+)*)\s+at\s+([a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?)\b/gi;
+  
+  const normalized = input.replace(emailPattern, (match, namePart, domainPart) => {
+    // Remove extra spaces from name part and replace with dots or keep as is
+    const cleanName = namePart.trim().replace(/\s+/g, '');
+    return `${cleanName}@${domainPart}`;
+  });
+  
+  // If normalization occurred, log it
+  if (normalized !== input) {
+    logger.info(
+      {
+        original: input,
+        normalized: normalized,
+      },
+      'Normalized email address from voice input (converted "at" to "@")'
+    );
+  }
+  
+  return normalized;
+}
+
 function parseRelativeDate(dateStr: string): string {
   const trimmed = dateStr.trim();
   const lower = trimmed.toLowerCase();
