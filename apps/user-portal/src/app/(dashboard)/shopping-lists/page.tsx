@@ -2766,9 +2766,7 @@ export default function ShoppingListPage() {
           })()
         )}
           </div>
-          </div>
         </div>
-
         {/* Right Panel - Google Ads */}
         <div className="hidden xl:block space-y-4">
           <div className="sticky top-4">
@@ -2791,6 +2789,7 @@ export default function ShoppingListPage() {
               </div>
             </div>
           </div>
+        </div>
         </div>
       </div>
 
