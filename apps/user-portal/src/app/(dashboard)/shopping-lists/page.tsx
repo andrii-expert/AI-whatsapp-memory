@@ -2260,118 +2260,55 @@ export default function ShoppingListPage() {
         {/* Right Panel - Items */}
         <div className="space-y-4 w-full min-w-0">
 
-          {/* Folder breadcrumb, Shared with, and Add Item button */}
-          <div className="flex flex-col gap-3 mb-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4 flex-1 min-w-0">
-                {viewAllItems ? (
-                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                    <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
-                    <span className="font-bold text-gray-900">All Items</span>
-                  </div>
-                ) : viewAllShared ? (
-                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                    <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
-                    <span className="font-bold text-gray-900">All Shared</span>
-                  </div>
-                ) : selectedFolder && folderPath.length > 0 ? (
-                  <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                    <FolderClosed className="h-6 w-6 flex-shrink-0" />
-                    {folderPath.map((name, index) => (
-                      <span key={index} className="flex items-center gap-2">
-                        {index > 0 && <span className="text-gray-400">/</span>}
-                        <span
-                          className={cn(
-                            index === folderPath.length - 1
-                              ? "font-semibold text-gray-900"
-                              : "",
-                            "truncate"
-                          )}
-                        >
-                          {name}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex-1" />
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                {(() => {
-                  // Check if selected folder is shared and user has view permission only
-                  const isSharedFolder = selectedFolder?.isSharedWithMe || false;
-                  const folderPermission = selectedFolder?.sharePermission;
-                  const canAddToFolder = !isSharedFolder || folderPermission === "edit";
-                  const isDisabled = viewAllShared || (!selectedFolderId && !viewAllItems) || (selectedFolderId && !canAddToFolder);
-                  
-                  return (
-                    <Button
-                      onClick={() => setIsAddModalOpen(true)}
-                      variant="orange-primary"
-                      className="flex-shrink-0"
-                      disabled={isDisabled}
-                      title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : undefined}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Item
-                    </Button>
-                  );
-                })()}
-              </div>
+          {/* Header with list name and shared info */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {viewAllItems ? (
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5 text-gray-600" />
+                  <span className="font-bold text-gray-900 text-lg">All Items</span>
+                </div>
+              ) : viewAllShared ? (
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-gray-600" />
+                  <span className="font-bold text-gray-900 text-lg">All Shared</span>
+                </div>
+              ) : selectedFolder ? (
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5 text-gray-600" />
+                  <span className="font-bold text-gray-900 text-lg">{selectedFolder.name}</span>
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                </div>
+              ) : (
+                <div className="flex-1" />
+              )}
             </div>
             
-            {/* Shared with section */}
+            {/* Shared button and avatars */}
             {selectedFolder && folderShares.length > 0 && (
-              <div className="flex items-center gap-3 text-sm text-gray-600">
-                <span className="font-medium">Shared with</span>
-                <div className="flex items-center gap-1.5">
-                  {folderShares.map((share: any) => {
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-sm"
+                >
+                  Shared
+                </Button>
+                <div className="flex items-center gap-1">
+                  {folderShares.slice(0, 2).map((share: any, idx: number) => {
                     const sharedUser = share.sharedWithUser;
                     if (!sharedUser) return null;
-
-                    const isExpanded = expandedSharedUserId === sharedUser.id;
-                    const isOwner = share.isOwner || share.permission === 'owner';
-
                     return (
                       <div
                         key={share.id}
-                        className="relative flex items-center overflow-visible"
+                        className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                          getAvatarColor(sharedUser.id)
+                        )}
+                        style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                        title={getSharedUserDisplayName(sharedUser)}
                       >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExpandedSharedUserId(isExpanded ? null : sharedUser.id);
-                          }}
-                          className={cn(
-                            "z-50 h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-all duration-200 cursor-pointer relative",
-                            isExpanded ? "scale-110 shadow-md" : "hover:scale-110 hover:shadow-md",
-                            isOwner ? "ring-2 ring-yellow-400 ring-offset-1" : "",
-                            getAvatarColor(sharedUser.id)
-                          )}
-                          title={isOwner ? "Owner" : share.permission === 'edit' ? 'Can Edit' : 'View Only'}
-                        >
-                          {getUserInitials(sharedUser)}
-                          {isOwner && (
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full flex items-center justify-center">
-                              <span className="text-[8px] font-bold text-yellow-900">★</span>
-                            </div>
-                          )}
-                        </button>
-                        <span
-                          className={cn(
-                            "ml-2 whitespace-nowrap text-md font-semibold transition-all duration-300 ease-in-out",
-                            isOwner ? "text-yellow-700" : "text-gray-900",
-                            isExpanded
-                              ? "max-w-[200px] opacity-100 rounded-r-xl pl-8 pr-2 py-1 ml-[-22px]"
-                              : "max-w-0 overflow-hidden opacity-0 ml-0",
-                            isExpanded && isOwner ? "bg-yellow-50" : isExpanded ? "bg-gray-100" : ""
-                          )}
-                        >
-                          {getSharedUserDisplayName(sharedUser)}
-                          {isOwner && <span className="ml-1 text-xs">(Owner)</span>}
-                        </span>
+                        {getUserInitials(sharedUser)}
                       </div>
                     );
                   })}
@@ -2380,240 +2317,91 @@ export default function ShoppingListPage() {
             )}
           </div>
 
-          {/* Search Bar */}
-          <div className="mb-4 w-full justify-between flex gap-2">
-        <div className="relative flex-1">
-          <Input
-            placeholder={
-              searchScope === "all"
-                ? "Search items..."
-                : searchScope === "name"
-                ? "Search by name..."
-                : "Search by description..."
-            }
-            value={searchQuery}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setSearchQuery(e.target.value)
-            }
-            className="pr-10 h-11"
-          />
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        </div>
-        {/* Mobile: Dropdown Menu */}
-        <div className="sm:hidden w-full max-w-[100px]">
-          <Select
-            value={`${sortBy}-${sortOrder}`}
-            onValueChange={(value) => {
-              const [by, order] = value.split("-") as [
-                "date" | "alphabetical",
-                "asc" | "desc"
-              ];
-              setSortBy(by);
-              setSortOrder(order);
-            }}
-          >
-            <SelectTrigger className="w-full h-11">
-              <SelectValue>
-                <div className="flex items-center gap-2">
-                  {sortBy === "date" ? (
-                    <>
-                      <Calendar className="h-4 w-4" />
-                      {sortOrder === "asc" ? (
-                        <ArrowUp className="h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="h-3 w-3" />
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {sortOrder === "asc" ? (
-                        <>
-                          <SortAsc className="h-4 w-4" />
-                          <span className="text-sm">A-Z</span>
-                        </>
-                      ) : (
-                        <>
-                          <SortDesc className="h-4 w-4" />
-                          <span className="text-sm">Z-A</span>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="date-desc">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <ArrowDown className="h-3 w-3" />
-                </div>
-              </SelectItem>
-              <SelectItem value="date-asc">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <ArrowUp className="h-3 w-3" />
-                </div>
-              </SelectItem>
-              <SelectItem value="alphabetical-asc">
-                <div className="flex items-center gap-2">
-                  <SortAsc className="h-4 w-4" />
-                  <span>A-Z</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="alphabetical-desc">
-                <div className="flex items-center gap-2">
-                  <SortDesc className="h-4 w-4" />
-                  <span>Z-A</span>
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          </div>
-          </div>
-
-          {/* Filter and Sort Controls */}
-          <div className="flex flex-row w-full justify-between items-center sm:gap-3 mb-4">
-        {/* Filter Buttons and Delete All */}
-        <div className="flex w-full sm:w-auto justify-start gap-1.5 sm:gap-2 flex-wrap items-center">
-          <Button
-            variant={filterStatus === "all" ? "blue-primary" : "outline"}
-            size="sm"
-            onClick={() => setFilterStatus("all")}
-            className="relative"
-          >
-            All
-            {itemCounts.all > 0 && filterStatus !== "all" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
-                {itemCounts.all}
-              </span>
-            )}
-          </Button>
-          <Button
-            variant={filterStatus === "open" ? "blue-primary" : "outline"}
-            size="sm"
-            onClick={() => setFilterStatus("open")}
-            className="relative"
-          >
-            Open
-            {itemCounts.open > 0 && filterStatus !== "open" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
-                {itemCounts.open}
-              </span>
-            )}
-          </Button>
-          <Button
-            variant={
-              filterStatus === "completed" ? "blue-primary" : "outline"
-            }
-            size="sm"
-            onClick={() => setFilterStatus("completed")}
-            className="relative"
-          >
-            Completed
-            {itemCounts.completed > 0 && filterStatus !== "completed" && (
-              <span className="ml-2 text-xs bg-[hsl(var(--brand-orange))] text-white px-1.5 py-0.5 rounded-full font-semibold">
-                {itemCounts.completed}
-              </span>
-            )}
-          </Button>
-
-          {/* Delete All Button */}
-          {deletableItems.length > 0 &&
-            filterStatus === "completed" &&
-            !searchQuery && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDeleteAll}
-                className="bg-red-600 text-white border-red-600 hover:bg-red-700 hover:border-red-700"
-              >
-                Delete All
-              </Button>
-            )}
-        </div>
-
-        {/* Sort Controls - Dropdown on mobile, buttons on desktop */}
-        <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-          {/* Desktop: Sort Buttons */}
-          <div className="hidden sm:flex gap-2 flex-wrap">
-            {/* Date Sort */}
-            <div className="flex gap-0 border rounded-lg overflow-hidden">
-              <Button
-                variant={
-                  sortBy === "date" && sortOrder === "desc"
-                    ? "blue-primary"
-                    : "outline"
+          {/* Search and Sort Bar */}
+          <div className="mb-4 w-full flex gap-2">
+            <div className="relative flex-1">
+              <Input
+                placeholder="Search items..."
+                value={searchQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setSearchQuery(e.target.value)
                 }
-                size="sm"
-                onClick={() => {
-                  setSortBy("date");
-                  setSortOrder("desc");
-                }}
-                className="gap-1.5 rounded-none border-0 border-r"
-              >
-                <Calendar className="h-3.5 w-3.5" />
-                <ArrowDown className="h-3 w-3" />
-              </Button>
-              <Button
-                variant={
-                  sortBy === "date" && sortOrder === "asc"
-                    ? "blue-primary"
-                    : "outline"
-                }
-                size="sm"
-                onClick={() => {
-                  setSortBy("date");
-                  setSortOrder("asc");
-                }}
-                className="gap-1.5 rounded-none border-0"
-              >
-                <Calendar className="h-3.5 w-3.5" />
-                <ArrowUp className="h-3 w-3" />
-              </Button>
+                className="pr-10 h-11"
+              />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
+            <Select
+              value={`${sortBy}-${sortOrder}`}
+              onValueChange={(value) => {
+                const [by, order] = value.split("-") as [
+                  "date" | "alphabetical",
+                  "asc" | "desc"
+                ];
+                setSortBy(by);
+                setSortOrder(order);
+              }}
+            >
+              <SelectTrigger className="w-[140px] h-11">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                <SelectItem value="alphabetical-asc">A-Z</SelectItem>
+                <SelectItem value="alphabetical-desc">Z-A</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            {/* Alphabetical Sort */}
-            <div className="flex gap-0 border rounded-lg overflow-hidden">
-              <Button
-                variant={
-                  sortBy === "alphabetical" && sortOrder === "asc"
-                    ? "blue-primary"
-                    : "outline"
-                }
-                size="sm"
-                onClick={() => {
-                  setSortBy("alphabetical");
-                  setSortOrder("asc");
-                }}
-                className="gap-1.5 rounded-none border-0 border-r"
-              >
-                <SortAsc className="h-3.5 w-3.5" />
-                A-Z
-              </Button>
-              <Button
-                variant={
-                  sortBy === "alphabetical" && sortOrder === "desc"
-                    ? "blue-primary"
-                    : "outline"
-                }
-                size="sm"
-                onClick={() => {
-                  setSortBy("alphabetical");
-                  setSortOrder("desc");
-                }}
-                className="gap-1.5 rounded-none border-0"
-              >
-                <SortDesc className="h-3.5 w-3.5" />
-                Z-A
-              </Button>
-            </div>
-          </div>
-          </div>
+          {/* Filter Tabs */}
+          <div className="flex flex-row w-full justify-start items-center gap-2 mb-4">
+            <button
+              onClick={() => setFilterStatus("all")}
+              className={cn(
+                "px-4 py-2 rounded-full text-sm font-medium transition-colors",
+                filterStatus === "all"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilterStatus("open")}
+              className={cn(
+                "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
+                filterStatus === "open"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Open
+              {itemCounts.open > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                  {itemCounts.open}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setFilterStatus("completed")}
+              className={cn(
+                "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
+                filterStatus === "completed"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Closed
+              {itemCounts.completed > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                  {itemCounts.completed}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Items List */}
-          <div className="space-y-2">
+          <div className="space-y-0 relative pb-20">
         {filteredItems.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-400" />
@@ -2646,11 +2434,11 @@ export default function ShoppingListPage() {
             });
 
             return sortedCategories.map((category) => (
-              <div key={category} className="mb-6">
+              <div key={category} className="mb-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2">
                   {category}
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-0">
                   {groupedByCategory[category]?.map((item) => {
                     // Check if item is shared and what permission the user has
                     // Items inherit permission from their folder
@@ -2675,115 +2463,117 @@ export default function ShoppingListPage() {
                     // Otherwise, check if user has edit permission
                     const canEditItem = isFolderOwner || (!isSharedItem || finalPermission === "edit");
                     
+                    // Get user name for badge - use friend name if available, otherwise use display name
+                    const itemUserName = item.user 
+                      ? (() => {
+                          const friend = friendsList.find((f: any) => f.connectedUserId === item.user.id);
+                          return friend ? friend.name : getSharedUserDisplayName(item.user);
+                        })()
+                      : "You";
+                    
                     return (
                       <div
                         key={item.id}
-                        className={cn(
-                          "flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-all",
-                        )}
+                        className="flex items-center gap-3 py-3 px-2 hover:bg-gray-50 transition-colors"
                       >
-                {/* Checkbox */}
-                <button
-                  onClick={() => canEditItem && handleToggleItem(item.id)}
-                  disabled={!canEditItem}
-                  className={cn(
-                    "flex-shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors",
-                    !canEditItem && "opacity-50 cursor-not-allowed",
-                    item.status === "completed"
-                      ? "bg-[#036cea] border-[#036cea] text-white"
-                      : "border-gray-300 hover:border-[#036cea]"
-                  )}
-                  title={!canEditItem ? "View only - You cannot edit this item" : undefined}
-                >
-                  {item.status === "completed" && <Check className="h-4 w-4" />}
-                </button>
+                        {/* Checkbox */}
+                        <button
+                          onClick={() => canEditItem && handleToggleItem(item.id)}
+                          disabled={!canEditItem}
+                          className={cn(
+                            "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                            !canEditItem && "opacity-50 cursor-not-allowed",
+                            item.status === "completed"
+                              ? "bg-green-500 border-green-500 text-white"
+                              : "border-gray-300 hover:border-gray-400 bg-white"
+                          )}
+                          title={!canEditItem ? "View only - You cannot edit this item" : undefined}
+                        >
+                          {item.status === "completed" && <Check className="h-3 w-3" />}
+                        </button>
 
-                {/* Item Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div
-                      className={cn(
-                        "font-medium text-gray-700",
-                        item.status === "completed" && "line-through text-gray-400"
-                      )}
-                    >
-                      {item.name}
-                    </div>
-                    {item.description && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-xs font-medium">
-                        {item.description}
-                      </span>
-                    )}
-                    {isSharedItem && finalPermission === "view" && (
-                      <span title="View only" className="flex items-center">
-                        <Eye className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
-                      </span>
-                    )}
-                  </div>
-                  {/* Added by and date */}
-                  {(item.createdAt || item.user) && (
-                    <div className="mt-1 text-xs text-gray-400">
-                      <span>
-                        Added by: {item.user ? getUserDisplayName(item.user) : "Unknown"}
-                        {item.createdAt && ` on ${formatShoppingListDate(item.createdAt)}`}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                        {/* Item Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div
+                                className={cn(
+                                  "font-bold text-gray-900 text-base",
+                                  item.status === "completed" && "line-through text-gray-400"
+                                )}
+                              >
+                                {item.name}
+                              </div>
+                              {item.description && (
+                                <div className="mt-1 text-sm text-gray-500">
+                                  {item.description}
+                                </div>
+                              )}
+                            </div>
+                            {/* Badge with user name and date */}
+                            {item.createdAt && (
+                              <div className="flex-shrink-0">
+                                <span className="px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 whitespace-nowrap">
+                                  {itemUserName} • {formatShoppingListDate(item.createdAt)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
 
-                {/* Actions - Single Edit Icon with Dropdown */}
-                <div className="flex items-center">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={!canEditItem}
-                        className={cn(
-                          "h-8 w-8 text-gray-500 hover:text-gray-700",
-                          !canEditItem && "opacity-50 cursor-not-allowed"
-                        )}
-                        onClick={(e: React.MouseEvent) => {
-                          if (!canEditItem) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }
-                        }}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                      <DropdownMenuItem
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          if (canEditItem) {
-                            handleEditItem(item);
-                          }
-                        }}
-                        disabled={!canEditItem}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                        <span>Edit</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          if (canEditItem) {
-                            handleDeleteItem(item.id, item.name);
-                          }
-                        }}
-                        disabled={!canEditItem}
-                        className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        <span>Delete</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
+                        {/* Three dots menu */}
+                        <div className="flex items-center flex-shrink-0">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={!canEditItem}
+                                className={cn(
+                                  "h-8 w-8 text-gray-500 hover:text-gray-700",
+                                  !canEditItem && "opacity-50 cursor-not-allowed"
+                                )}
+                                onClick={(e: React.MouseEvent) => {
+                                  if (!canEditItem) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                  }
+                                }}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  if (canEditItem) {
+                                    handleEditItem(item);
+                                  }
+                                }}
+                                disabled={!canEditItem}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                                <span>Edit</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  if (canEditItem) {
+                                    handleDeleteItem(item.id, item.name);
+                                  }
+                                }}
+                                disabled={!canEditItem}
+                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
@@ -2792,6 +2582,28 @@ export default function ShoppingListPage() {
           })()
         )}
           </div>
+          
+          {/* Floating Action Button */}
+          {(() => {
+            const isSharedFolder = selectedFolder?.isSharedWithMe || false;
+            const folderPermission = selectedFolder?.sharePermission;
+            const canAddToFolder = !isSharedFolder || folderPermission === "edit";
+            const isDisabled = Boolean(viewAllShared || (!selectedFolderId && !viewAllItems) || (selectedFolderId && !canAddToFolder));
+            
+            return (
+              <button
+                onClick={() => !isDisabled && setIsAddModalOpen(true)}
+                disabled={!!isDisabled}
+                className={cn(
+                  "fixed bottom-6 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50",
+                  isDisabled && "opacity-50 cursor-not-allowed"
+                )}
+                title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : "Add Item"}
+              >
+                <Plus className="h-6 w-6" />
+              </button>
+            );
+          })()}
         </div>
         {/* Right Panel - Google Ads */}
         <div className="hidden xl:block space-y-4">
@@ -3025,7 +2837,7 @@ export default function ShoppingListPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Item</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{itemToDelete?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{itemToDelete?.name || 'this item'}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3042,7 +2854,7 @@ export default function ShoppingListPage() {
       </AlertDialog>
 
       {/* Share Modal */}
-      {shareResourceId && (
+      {shareResourceId && shareResourceName && (
         <ShareModal
           isOpen={isShareModalOpen}
           onClose={() => setIsShareModalOpen(false)}
@@ -3053,7 +2865,7 @@ export default function ShoppingListPage() {
       )}
 
       {/* Share Details Modal */}
-      {shareResourceId && (
+      {shareResourceId && shareResourceName && (
         <ShareDetailsModal
           isOpen={isShareDetailsModalOpen}
           onClose={() => setIsShareDetailsModalOpen(false)}
