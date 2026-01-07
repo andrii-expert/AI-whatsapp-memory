@@ -3073,14 +3073,6 @@ export default function ShoppingListPage() {
         <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Create New List</AlertDialogTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 sm:h-8 sm:w-8"
-              onClick={() => setIsCreateListModalOpen(false)}
-            >
-              <X className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
           </div>
           
           <form onSubmit={handleCreateFolder} className="space-y-4 sm:space-y-6 overflow-x-hidden">
@@ -3152,7 +3144,7 @@ export default function ShoppingListPage() {
                     e.stopPropagation();
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
-                  className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-2 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
@@ -3202,7 +3194,7 @@ export default function ShoppingListPage() {
                     e.stopPropagation();
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
-                  className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-3 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
@@ -3333,7 +3325,7 @@ export default function ShoppingListPage() {
                     e.stopPropagation();
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
-                  className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-2 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
@@ -3383,7 +3375,7 @@ export default function ShoppingListPage() {
                     e.stopPropagation();
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
-                  className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-3 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
