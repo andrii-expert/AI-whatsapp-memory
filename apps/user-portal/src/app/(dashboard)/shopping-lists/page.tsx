@@ -2265,7 +2265,12 @@ export default function ShoppingListPage() {
             <div className="flex items-center gap-2 flex-1 min-w-0">
               {viewAllItems ? (
                 <div className="flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5 text-gray-600" />
+                  <div 
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: "#FCE7F3" }}
+                  >
+                    <span className="text-lg">🎂</span>
+                  </div>
                   <span className="font-bold text-gray-900 text-lg">All Items</span>
                 </div>
               ) : viewAllShared ? (
@@ -2275,7 +2280,16 @@ export default function ShoppingListPage() {
                 </div>
               ) : selectedFolder ? (
                 <div className="flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5 text-gray-600" />
+                  <div 
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ 
+                      backgroundColor: selectedFolder.color 
+                        ? ICON_COLORS.find(c => c.name === selectedFolder.color)?.value || "#FCE7F3"
+                        : "#FCE7F3"
+                    }}
+                  >
+                    <span className="text-lg">{selectedFolder.icon || "🛒"}</span>
+                  </div>
                   <span className="font-bold text-gray-900 text-lg">{selectedFolder.name}</span>
                   <ChevronDown className="h-4 w-4 text-gray-400" />
                 </div>
@@ -2424,30 +2438,32 @@ export default function ShoppingListPage() {
             </p>
           </div>
         ) : (
-          (() => {
-            // Group items by category
-            const groupedByCategory = filteredItems.reduce((acc: Record<string, any[]>, item: any) => {
-              const category = item.category || "Uncategorized";
-              if (!acc[category]) {
-                acc[category] = [];
-              }
-              acc[category].push(item);
-              return acc;
-            }, {});
+          <>
+            {(() => {
+              // Group items by category
+              const groupedByCategory = filteredItems.reduce((acc: Record<string, any[]>, item: any) => {
+                const category = item.category || "Uncategorized";
+                if (!acc[category]) {
+                  acc[category] = [];
+                }
+                acc[category].push(item);
+                return acc;
+              }, {});
 
-            // Sort categories alphabetically, with "Uncategorized" at the end
-            const sortedCategories = Object.keys(groupedByCategory).sort((a, b) => {
-              if (a === "Uncategorized") return 1;
-              if (b === "Uncategorized") return -1;
-              return a.localeCompare(b);
-            });
+              // Sort categories alphabetically, with "Uncategorized" at the end
+              const sortedCategories = Object.keys(groupedByCategory).sort((a, b) => {
+                if (a === "Uncategorized") return 1;
+                if (b === "Uncategorized") return -1;
+                return a.localeCompare(b);
+              });
 
-            return sortedCategories.map((category) => (
+              return sortedCategories.map((category) => (
               <div key={category} className="mb-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2">
-                  {category}
-                </h3>
-                <div className="space-y-0">
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                  <h3 className="text-sm font-bold text-gray-900 px-4 py-3 border-b border-gray-100">
+                    {category}
+                  </h3>
+                  <div className="divide-y divide-gray-100">
                   {groupedByCategory[category]?.map((item) => {
                     // Check if item is shared and what permission the user has
                     // Items inherit permission from their folder
@@ -2480,10 +2496,12 @@ export default function ShoppingListPage() {
                         })()
                       : "You";
                     
+                    const isCurrentUser = itemUserName === "You";
+                    
                     return (
                       <div
                         key={item.id}
-                        className="flex items-center gap-3 py-3 px-2 hover:bg-gray-50 transition-colors"
+                        className="flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors"
                       >
                         {/* Checkbox */}
                         <button
@@ -2525,7 +2543,14 @@ export default function ShoppingListPage() {
                             {/* Badge with user name and date */}
                             {item.createdAt && (
                               <div className="flex-shrink-0">
-                                <span className="px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 whitespace-nowrap">
+                                <span 
+                                  className={cn(
+                                    "px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap",
+                                    isCurrentUser 
+                                      ? "bg-gray-100 text-gray-600"
+                                      : "bg-pink-100 text-pink-700"
+                                  )}
+                                >
                                   {itemUserName} • {formatShoppingListDate(item.createdAt)}
                                 </span>
                               </div>
@@ -2588,10 +2613,12 @@ export default function ShoppingListPage() {
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               </div>
-            ));
-          })()
+              ));
+            })()}
+          </>
         )}
           </div>
           
