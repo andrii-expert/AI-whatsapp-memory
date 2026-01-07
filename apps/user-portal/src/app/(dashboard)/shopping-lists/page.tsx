@@ -44,7 +44,6 @@ import {
   SheetTrigger,
 } from "@imaginecalendar/ui/sheet";
 import { useSearchParams } from "next/navigation";
-import Script from "next/script";
 
 // Shopping list icons - shopping-related emojis
 const SHOPPING_LIST_ICONS = [
@@ -2770,7 +2769,6 @@ export default function ShoppingListPage() {
                   data-full-width-responsive="true"
                 />
               </div>
-            </div>
           </div>
         </div>
       </div>
@@ -3367,7 +3365,6 @@ export default function ShoppingListPage() {
           </form>
         </AlertDialogContent>
       </AlertDialog>
-      </div>
     </>
   );
 }
