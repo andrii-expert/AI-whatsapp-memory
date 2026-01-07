@@ -1605,7 +1605,7 @@ export default function ShoppingListPage() {
                     : "bg-white border-gray-200 hover:bg-gray-50"
                 )}
               >
-                <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
                   <span className="text-xl">🎂</span>
                 </div>
                 <div className="flex-1 min-w-0">
