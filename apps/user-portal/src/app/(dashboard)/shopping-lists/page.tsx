@@ -3070,7 +3070,7 @@ export default function ShoppingListPage() {
 
       {/* Create New List Modal */}
       <AlertDialog open={isCreateListModalOpen} onOpenChange={setIsCreateListModalOpen}>
-        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden p-4 sm:p-6">
+        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Create New List</AlertDialogTitle>
             <Button
@@ -3083,7 +3083,7 @@ export default function ShoppingListPage() {
             </Button>
           </div>
           
-          <form onSubmit={handleCreateFolder} className="space-y-4 sm:space-y-6">
+          <form onSubmit={handleCreateFolder} className="space-y-4 sm:space-y-6 overflow-x-hidden">
             {/* List Name */}
             <div className="space-y-1.5 sm:space-y-2">
               <Label htmlFor="list-name" className="text-sm font-medium text-gray-900">
@@ -3139,22 +3139,27 @@ export default function ShoppingListPage() {
                 }
                 className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11 w-full"
               />
-              <div className="w-full overflow-hidden">
+              <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
                 <div 
                   ref={iconScrollRef}
                   onMouseDown={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
                   onTouchStart={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
-                  className="flex gap-2 sm:gap-2 overflow-x-scroll pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
-                    touchAction: 'pan-x',
+                    maxWidth: '100%',
+                    touchAction: 'pan-x pinch-zoom',
+                    overflowX: 'auto',
+                    overflowY: 'hidden',
                   }}
                 >
                   {filteredIcons.map((icon) => (
@@ -3184,22 +3189,27 @@ export default function ShoppingListPage() {
             {/* Icon Color */}
             <div className="space-y-1.5 sm:space-y-2">
               <Label className="text-sm font-medium text-gray-900">Icon Color</Label>
-              <div className="w-full overflow-hidden">
+              <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
                 <div 
                   ref={colorScrollRef}
                   onMouseDown={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
                   onTouchStart={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
-                  className="flex gap-2 sm:gap-3 overflow-x-scroll pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
-                    touchAction: 'pan-x',
+                    maxWidth: '100%',
+                    touchAction: 'pan-x pinch-zoom',
+                    overflowX: 'auto',
+                    overflowY: 'hidden',
                   }}
                 >
                   {ICON_COLORS.map((color) => (
@@ -3310,22 +3320,27 @@ export default function ShoppingListPage() {
                 }
                 className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11 w-full"
               />
-              <div className="w-full overflow-hidden">
+              <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
                 <div 
                   ref={iconScrollRef}
                   onMouseDown={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
                   onTouchStart={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
-                  className="flex gap-2 sm:gap-2 overflow-x-scroll pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
-                    touchAction: 'pan-x',
+                    maxWidth: '100%',
+                    touchAction: 'pan-x pinch-zoom',
+                    overflowX: 'auto',
+                    overflowY: 'hidden',
                   }}
                 >
                   {filteredIcons.map((icon) => (
@@ -3355,22 +3370,27 @@ export default function ShoppingListPage() {
             {/* Icon Color */}
             <div className="space-y-1.5 sm:space-y-2">
               <Label className="text-sm font-medium text-gray-900">Icon Color</Label>
-              <div className="w-full overflow-hidden">
+              <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
                 <div 
                   ref={colorScrollRef}
                   onMouseDown={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
                   onTouchStart={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
-                  className="flex gap-2 sm:gap-3 overflow-x-scroll pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
-                    touchAction: 'pan-x',
+                    maxWidth: '100%',
+                    touchAction: 'pan-x pinch-zoom',
+                    overflowX: 'auto',
+                    overflowY: 'hidden',
                   }}
                 >
                   {ICON_COLORS.map((color) => (
