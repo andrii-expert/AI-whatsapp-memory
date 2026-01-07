@@ -174,11 +174,16 @@ export default function ShoppingListPage() {
   const [isLoadingAISuggestion, setIsLoadingAISuggestion] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isCreateListModalOpen, setIsCreateListModalOpen] = useState(false);
+  const [isEditListModalOpen, setIsEditListModalOpen] = useState(false);
   const [selectedIcon, setSelectedIcon] = useState("🎂");
   const [selectedColor, setSelectedColor] = useState("pink");
   const [iconSearchQuery, setIconSearchQuery] = useState("");
   const [shareWithInput, setShareWithInput] = useState("");
   const [sharePermission, setSharePermission] = useState<"view" | "edit">("edit");
+  
+  // Refs for draggable scroll
+  const iconScrollRef = useRef<HTMLDivElement>(null);
+  const colorScrollRef = useRef<HTMLDivElement>(null);
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
   const hasRestoredFromSessionRef = useRef(false);
@@ -629,6 +634,12 @@ export default function ShoppingListPage() {
         queryClient.invalidateQueries();
         setEditingFolderId(null);
         setEditFolderName("");
+        setSelectedIcon("🎂");
+        setSelectedColor("pink");
+        setIconSearchQuery("");
+        setShareWithInput("");
+        setSharePermission("edit");
+        setIsEditListModalOpen(false);
         toast({
           title: "Success",
           description: "Folder updated successfully",
@@ -708,6 +719,41 @@ export default function ShoppingListPage() {
     );
   }, [iconSearchQuery]);
 
+  // Draggable scroll handler for icons and colors
+  const handleDragScroll = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement>) => {
+    if (!ref.current) return;
+    
+    const isTouch = 'touches' in e;
+    const clientX = isTouch ? e.touches[0]?.clientX : (e as React.MouseEvent).clientX;
+    const startX = clientX;
+    const scrollLeft = ref.current.scrollLeft;
+    let isDown = true;
+
+    const onMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      if (!isDown || !ref.current) return;
+      const moveIsTouch = 'touches' in moveEvent;
+      const moveClientX = moveIsTouch ? (moveEvent as TouchEvent).touches[0]?.clientX : (moveEvent as MouseEvent).clientX;
+      const x = moveClientX - startX;
+      ref.current.scrollLeft = scrollLeft - x;
+    };
+
+    const onMouseUp = () => {
+      isDown = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('touchmove', onMouseMove);
+      document.removeEventListener('touchend', onMouseUp);
+    };
+
+    if (isTouch) {
+      document.addEventListener('touchmove', onMouseMove, { passive: false });
+      document.addEventListener('touchend', onMouseUp);
+    } else {
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    }
+  };
+
   // Folder handlers
   const handleCreateFolder = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -737,10 +783,16 @@ export default function ShoppingListPage() {
 
   const handleSaveFolder = (folderId: string) => {
     if (!editFolderName.trim()) {
+      setIsEditListModalOpen(false);
       setEditingFolderId(null);
       return;
     }
-    updateFolderMutation.mutate({ id: folderId, name: editFolderName.trim() });
+    updateFolderMutation.mutate({ 
+      id: folderId, 
+      name: editFolderName.trim(),
+      icon: selectedIcon,
+      color: selectedColor,
+    });
   };
 
   const handleDeleteFolder = (folderId: string, folderName: string) => {
@@ -1368,7 +1420,7 @@ export default function ShoppingListPage() {
   }
 
   return (
-    <div className="w-full px-0 py-0 md:px-4 md:py-8 space-y-6">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
@@ -1785,8 +1837,8 @@ export default function ShoppingListPage() {
         </SheetContent>
       </Sheet>
 
-      {/* Main Content - Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 w-full">
+      {/* Main Content - Three Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
         {/* Desktop Left Panel - Lists Sidebar */}
         <div className="hidden lg:block space-y-4">
           <div className="space-y-4">
@@ -2676,6 +2728,29 @@ export default function ShoppingListPage() {
           })()
         )}
           </div>
+          </div>
+        </div>
+
+        {/* Right Panel - Google Ads */}
+        <div className="hidden xl:block space-y-4">
+          <div className="sticky top-4">
+            {/* Google Ads Container */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[600px] flex items-center justify-center">
+              <div className="text-center text-gray-500">
+                <div className="text-sm font-medium mb-2">Advertisement</div>
+                <div className="text-xs">300x600</div>
+                {/* Google Ads will be inserted here */}
+                <ins
+                  className="adsbygoogle"
+                  style={{ display: 'block' }}
+                  data-ad-client="ca-pub-XXXXXXXXXX"
+                  data-ad-slot="XXXXXXXXXX"
+                  data-ad-format="auto"
+                  data-full-width-responsive="true"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3021,14 +3096,24 @@ export default function ShoppingListPage() {
                 }
                 className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11"
               />
-              <div className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 -mx-1 px-1">
+              <div 
+                ref={iconScrollRef}
+                onMouseDown={(e) => handleDragScroll(e, iconScrollRef)}
+                onTouchStart={(e) => handleDragScroll(e, iconScrollRef)}
+                className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 -mx-1 px-1 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                style={{
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
                 {filteredIcons.map((icon) => (
                   <button
                     key={icon.emoji}
                     type="button"
                     onClick={() => setSelectedIcon(icon.emoji)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     className={cn(
-                      "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 transition-all",
+                      "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 transition-all select-none",
                       selectedIcon === icon.emoji
                         ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
                         : "hover:ring-2 hover:ring-gray-300"
@@ -3037,7 +3122,7 @@ export default function ShoppingListPage() {
                       backgroundColor: ICON_COLORS.find(c => c.name === selectedColor)?.value || "#FCE7F3"
                     }}
                   >
-                    <span className="text-xl sm:text-2xl">{icon.emoji}</span>
+                    <span className="text-xl sm:text-2xl pointer-events-none">{icon.emoji}</span>
                   </button>
                 ))}
               </div>
@@ -3046,14 +3131,24 @@ export default function ShoppingListPage() {
             {/* Icon Color */}
             <div className="space-y-1.5 sm:space-y-2">
               <Label className="text-sm font-medium text-gray-900">Icon Color</Label>
-              <div className="flex gap-2 sm:gap-3 flex-wrap">
+              <div 
+                ref={colorScrollRef}
+                onMouseDown={(e) => handleDragScroll(e, colorScrollRef)}
+                onTouchStart={(e) => handleDragScroll(e, colorScrollRef)}
+                className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                style={{
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
                 {ICON_COLORS.map((color) => (
                   <button
                     key={color.name}
                     type="button"
                     onClick={() => setSelectedColor(color.name)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     className={cn(
-                      "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all",
+                      "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all select-none",
                       selectedColor === color.name
                         ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
                         : "hover:ring-2 hover:ring-gray-300"
@@ -3080,6 +3175,163 @@ export default function ShoppingListPage() {
                 onClick={() => {
                   setIsCreateListModalOpen(false);
                   setNewFolderName("");
+                  setSelectedIcon("🎂");
+                  setSelectedColor("pink");
+                  setIconSearchQuery("");
+                  setShareWithInput("");
+                  setSharePermission("edit");
+                }}
+              >
+                Cancel
+              </Button>
+            </AlertDialogFooter>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit List Modal */}
+      <AlertDialog open={isEditListModalOpen} onOpenChange={setIsEditListModalOpen}>
+        <AlertDialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <div className="relative mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-6 w-6 sm:h-8 sm:w-8"
+              onClick={() => {
+                setIsEditListModalOpen(false);
+                setEditingFolderId(null);
+                setEditFolderName("");
+                setSelectedIcon("🎂");
+                setSelectedColor("pink");
+                setIconSearchQuery("");
+                setShareWithInput("");
+                setSharePermission("edit");
+              }}
+            >
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
+          </div>
+          <AlertDialogHeader className="pb-3 sm:pb-4">
+            <AlertDialogTitle className="text-lg sm:text-xl font-bold">Edit List</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm text-gray-500">
+              Update your shopping list details
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (editingFolderId) {
+              handleSaveFolder(editingFolderId);
+            }
+          }} className="space-y-4 sm:space-y-6">
+            {/* List Name */}
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="edit-list-name" className="text-sm font-medium text-gray-900">
+                List Name
+              </Label>
+              <Input
+                id="edit-list-name"
+                value={editFolderName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEditFolderName(e.target.value)
+                }
+                placeholder="Grocery"
+                className="bg-gray-50 h-10 sm:h-11"
+                autoFocus
+              />
+            </div>
+
+            {/* Select Icon */}
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-sm font-medium text-gray-900">Select Icon</Label>
+              <Input
+                placeholder="Search Icon..."
+                value={iconSearchQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setIconSearchQuery(e.target.value)
+                }
+                className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11"
+              />
+              <div 
+                ref={iconScrollRef}
+                onMouseDown={(e) => handleDragScroll(e, iconScrollRef)}
+                onTouchStart={(e) => handleDragScroll(e, iconScrollRef)}
+                className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 -mx-1 px-1 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                style={{
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
+                {filteredIcons.map((icon) => (
+                  <button
+                    key={icon.emoji}
+                    type="button"
+                    onClick={() => setSelectedIcon(icon.emoji)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className={cn(
+                      "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 transition-all select-none",
+                      selectedIcon === icon.emoji
+                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                        : "hover:ring-2 hover:ring-gray-300"
+                    )}
+                    style={{
+                      backgroundColor: ICON_COLORS.find(c => c.name === selectedColor)?.value || "#FCE7F3"
+                    }}
+                  >
+                    <span className="text-xl sm:text-2xl pointer-events-none">{icon.emoji}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Icon Color */}
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-sm font-medium text-gray-900">Icon Color</Label>
+              <div 
+                ref={colorScrollRef}
+                onMouseDown={(e) => handleDragScroll(e, colorScrollRef)}
+                onTouchStart={(e) => handleDragScroll(e, colorScrollRef)}
+                className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                style={{
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
+                {ICON_COLORS.map((color) => (
+                  <button
+                    key={color.name}
+                    type="button"
+                    onClick={() => setSelectedColor(color.name)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className={cn(
+                      "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all select-none",
+                      selectedColor === color.name
+                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                        : "hover:ring-2 hover:ring-gray-300"
+                    )}
+                    style={{ backgroundColor: color.value }}
+                    title={color.label}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+                disabled={!editFolderName.trim() || updateFolderMutation.isPending}
+              >
+                Update List
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
+                onClick={() => {
+                  setIsEditListModalOpen(false);
+                  setEditingFolderId(null);
+                  setEditFolderName("");
                   setSelectedIcon("🎂");
                   setSelectedColor("pink");
                   setIconSearchQuery("");
