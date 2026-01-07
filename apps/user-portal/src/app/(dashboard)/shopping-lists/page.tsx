@@ -1132,7 +1132,7 @@ export default function ShoppingListPage() {
     return filteredItems.filter((item) => item.status === "completed");
   }, [filteredItems]);
 
-  // Get AI category suggestion
+  // Get AI category suggestion for add modal
   const getAICategorySuggestion = async () => {
     if (!newItemName.trim()) {
       toast({
@@ -1195,6 +1195,69 @@ export default function ShoppingListPage() {
     }
   };
 
+  // Get AI category suggestion for edit modal
+  const getAICategorySuggestionForEdit = async () => {
+    if (!editItemName.trim()) {
+      toast({
+        title: "Item name required",
+        description: "Please enter an item name first",
+        variant: "error",
+      });
+      return;
+    }
+
+    setIsLoadingAISuggestion(true);
+    try {
+      console.log('Requesting AI category suggestion for edit:', {
+        itemName: editItemName.trim(),
+        description: editItemDescription.trim(),
+        folderId: selectedFolderId
+      });
+      
+      const queryOptions = trpc.shoppingList.suggestCategory.queryOptions({
+        itemName: editItemName.trim(),
+        description: editItemDescription.trim() || undefined,
+        folderId: selectedFolderId || undefined,
+      });
+      const result = await queryClient.fetchQuery(queryOptions);
+
+      console.log('AI category suggestion result:', result);
+
+      if (result && result.suggestedCategory) {
+        const suggestedCategory = result.suggestedCategory.trim();
+        if (suggestedCategory) {
+          setEditItemCategory(suggestedCategory);
+          console.log('Setting category to:', suggestedCategory);
+          toast({
+            title: "Category suggested",
+            description: `Suggested category: ${suggestedCategory}`,
+          });
+        } else {
+          toast({
+            title: "No suggestion",
+            description: "AI couldn't suggest a category for this item.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "No suggestion",
+          description: "AI couldn't suggest a category for this item.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('AI suggestion error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to get AI suggestion. Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setIsLoadingAISuggestion(false);
+    }
+  };
+
   const handleCreateItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
@@ -1223,6 +1286,7 @@ export default function ShoppingListPage() {
     setEditingItemId(item.id);
     setEditItemName(item.name);
     setEditItemDescription(item.description || "");
+    setEditItemCategory(item.category || "");
     setIsEditModalOpen(true);
   };
 
@@ -2835,65 +2899,138 @@ export default function ShoppingListPage() {
 
       {/* Edit Item Modal */}
       <AlertDialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Edit Item</AlertDialogTitle>
-            <AlertDialogDescription>Update the item details</AlertDialogDescription>
-          </AlertDialogHeader>
-          <form onSubmit={handleUpdateItem}>
-            <div className="space-y-4 py-4">
-              <div>
-                <Label htmlFor="edit-item-name">Item Name *</Label>
+        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Edit Item</AlertDialogTitle>
+              <AlertDialogDescription className="mt-1 text-sm text-gray-600">
+                Update the item details
+              </AlertDialogDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 sm:h-8 sm:w-8"
+              onClick={() => {
+                setIsEditModalOpen(false);
+                setEditingItemId(null);
+                setEditItemName("");
+                setEditItemDescription("");
+                setEditItemCategory("");
+              }}
+            >
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
+          </div>
+          <form onSubmit={handleUpdateItem} className="overflow-x-hidden">
+            <div className="space-y-4 sm:space-y-6">
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="edit-item-name" className="text-sm font-medium text-gray-900">Item Name</Label>
                 <Input
                   id="edit-item-name"
                   value={editItemName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemName(e.target.value)}
+                  className="bg-gray-50 h-10 sm:h-11 w-full"
                   autoFocus
                 />
               </div>
-              <div>
-                <Label htmlFor="edit-item-description">Description (Optional)</Label>
-                <Input
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="edit-item-description" className="text-sm font-medium text-gray-900">
+                  Description <span className="text-gray-500 font-normal">(optional)</span>
+                </Label>
+                <Textarea
                   id="edit-item-description"
                   value={editItemDescription}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemDescription(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditItemDescription(e.target.value)}
+                  placeholder="Write details..."
+                  className="min-h-[80px] sm:min-h-[100px] resize-none bg-gray-50 w-full"
                 />
               </div>
-              <div>
-                <Label htmlFor="edit-item-category">Category (Optional)</Label>
-                <div className="flex gap-2">
-                  <Select
-                    value={editItemCategory || undefined}
-                    onValueChange={(value) => {
-                      if (value === "__none__") {
-                        setEditItemCategory("");
-                      } else {
-                        setEditItemCategory(value);
-                      }
-                    }}
-                  >
-                    <SelectTrigger id="edit-item-category" className="flex-1">
-                      <SelectValue placeholder="Select a category (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">None</SelectItem>
-                      {existingCategories.map((category: string) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    value={editItemCategory}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemCategory(e.target.value)}
-                    placeholder="Or enter manually"
-                    className="flex-1"
-                  />
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="edit-item-category" className="text-sm font-medium text-gray-900">
+                  Category <span className="text-gray-500 font-normal">(optional)</span>
+                </Label>
+                <div className="space-y-2">
+                  {/* Category Tags - Draggable Slider */}
+                  {existingCategories.length > 0 && (
+                    <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
+                      <div 
+                        ref={categoryScrollRef}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDragScroll(e, categoryScrollRef as React.RefObject<HTMLDivElement | null>);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleDragScroll(e, categoryScrollRef as React.RefObject<HTMLDivElement | null>);
+                        }}
+                        onTouchMove={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="flex gap-2 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                        style={{
+                          WebkitOverflowScrolling: 'touch',
+                          width: '100%',
+                          maxWidth: '100%',
+                          touchAction: 'pan-x',
+                          overflowX: 'auto',
+                          overflowY: 'hidden',
+                        }}
+                      >
+                        {existingCategories.map((category: string) => (
+                          <button
+                            key={category}
+                            type="button"
+                            onClick={() => {
+                              setEditItemCategory(editItemCategory === category ? "" : category);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            className={cn(
+                              "px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap select-none",
+                              editItemCategory === category
+                                ? "border-2 border-gray-900 bg-white text-gray-900"
+                                : "border border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                            )}
+                          >
+                            {category}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Custom Category Input with AI Suggestion Button */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      id="edit-item-category"
+                      value={editItemCategory}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemCategory(e.target.value)}
+                      placeholder="Please specify..."
+                      className="flex-1 bg-gray-50 h-10 sm:h-11"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={getAICategorySuggestionForEdit}
+                      disabled={isLoadingAISuggestion || !editItemName.trim()}
+                      className="shrink-0 whitespace-nowrap h-10 sm:h-11"
+                    >
+                      {isLoadingAISuggestion ? "Analyzing..." : "AI Suggestion"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4 mt-4 sm:mt-6">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+                disabled={!editItemName.trim() || updateItemMutation.isPending}
+              >
+                Update Item
+              </Button>
               <AlertDialogCancel
                 onClick={() => {
                   setIsEditModalOpen(false);
@@ -2902,16 +3039,10 @@ export default function ShoppingListPage() {
                   setEditItemDescription("");
                   setEditItemCategory("");
                 }}
+                className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
               >
                 Cancel
               </AlertDialogCancel>
-              <Button
-                type="submit"
-                variant="orange-primary"
-                disabled={!editItemName.trim() || updateItemMutation.isPending}
-              >
-                Update Item
-              </Button>
             </AlertDialogFooter>
           </form>
         </AlertDialogContent>
