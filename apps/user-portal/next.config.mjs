@@ -12,6 +12,41 @@ const config = {
     ignoreBuildErrors: true,
   },
   devIndicators: false,
+  // Optimize build performance
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@imaginecalendar/ui'],
+  },
+  // Reduce memory usage during build
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Optimize client-side bundle
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            default: false,
+            vendors: false,
+            // Create separate chunk for large vendor libraries
+            vendor: {
+              name: 'vendor',
+              chunks: 'all',
+              test: /node_modules/,
+              priority: 20,
+            },
+            // Separate chunk for UI components
+            ui: {
+              name: 'ui',
+              chunks: 'all',
+              test: /[\\/]node_modules[\\/]@imaginecalendar[\\/]ui[\\/]/,
+              priority: 30,
+            },
+          },
+        },
+      };
+    }
+    return config;
+  },
   async headers() {
     return [
       {
