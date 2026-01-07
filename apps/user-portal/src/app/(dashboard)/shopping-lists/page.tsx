@@ -3064,7 +3064,7 @@ export default function ShoppingListPage() {
 
       {/* Create New List Modal */}
       <AlertDialog open={isCreateListModalOpen} onOpenChange={setIsCreateListModalOpen}>
-        <AlertDialogContent className="w-full max-w-none sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Create New List</AlertDialogTitle>
             <Button
@@ -3138,10 +3138,10 @@ export default function ShoppingListPage() {
                   ref={iconScrollRef}
                   onMouseDown={(e) => handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>)}
                   onTouchStart={(e) => handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>)}
-                  className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-2 overflow-x-scroll pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
-                    maxWidth: '100%',
+                    width: '100%',
                   }}
                 >
                   {filteredIcons.map((icon) => (
@@ -3176,10 +3176,10 @@ export default function ShoppingListPage() {
                   ref={colorScrollRef}
                   onMouseDown={(e) => handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>)}
                   onTouchStart={(e) => handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>)}
-                  className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-3 overflow-x-scroll pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
-                    maxWidth: '100%',
+                    width: '100%',
                   }}
                 >
                   {ICON_COLORS.map((color) => (
@@ -3234,7 +3234,7 @@ export default function ShoppingListPage() {
 
       {/* Edit List Modal */}
       <AlertDialog open={isEditListModalOpen} onOpenChange={setIsEditListModalOpen}>
-        <AlertDialogContent className="w-full max-w-none sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Edit List</AlertDialogTitle>
             <Button
@@ -3295,10 +3295,10 @@ export default function ShoppingListPage() {
                   ref={iconScrollRef}
                   onMouseDown={(e) => handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>)}
                   onTouchStart={(e) => handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>)}
-                  className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-2 overflow-x-scroll pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
-                    maxWidth: '100%',
+                    width: '100%',
                   }}
                 >
                   {filteredIcons.map((icon) => (
@@ -3333,10 +3333,10 @@ export default function ShoppingListPage() {
                   ref={colorScrollRef}
                   onMouseDown={(e) => handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>)}
                   onTouchStart={(e) => handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>)}
-                  className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex gap-2 sm:gap-3 overflow-x-scroll pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
-                    maxWidth: '100%',
+                    width: '100%',
                   }}
                 >
                   {ICON_COLORS.map((color) => (
