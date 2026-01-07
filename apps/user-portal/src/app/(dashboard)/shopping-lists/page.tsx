@@ -749,11 +749,13 @@ export default function ShoppingListPage() {
   }, [iconSearchQuery]);
 
   // Draggable scroll handler for icons and colors
-  const handleDragScroll = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement>) => {
+  const handleDragScroll = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement | null>) => {
     if (!ref.current) return;
     
     const isTouch = 'touches' in e;
     const clientX = isTouch ? e.touches[0]?.clientX : (e as React.MouseEvent).clientX;
+    if (clientX === undefined) return;
+    
     const startX = clientX;
     const scrollLeft = ref.current.scrollLeft;
     let isDown = true;
@@ -762,6 +764,7 @@ export default function ShoppingListPage() {
       if (!isDown || !ref.current) return;
       const moveIsTouch = 'touches' in moveEvent;
       const moveClientX = moveIsTouch ? (moveEvent as TouchEvent).touches[0]?.clientX : (moveEvent as MouseEvent).clientX;
+      if (moveClientX === undefined) return;
       const x = moveClientX - startX;
       ref.current.scrollLeft = scrollLeft - x;
     };
@@ -3061,23 +3064,18 @@ export default function ShoppingListPage() {
 
       {/* Create New List Modal */}
       <AlertDialog open={isCreateListModalOpen} onOpenChange={setIsCreateListModalOpen}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-          <div className="relative mb-2">
+        <AlertDialogContent className="w-full max-w-none sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Create New List</AlertDialogTitle>
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-0 top-0 h-6 w-6 sm:h-8 sm:w-8"
+              className="h-6 w-6 sm:h-8 sm:w-8"
               onClick={() => setIsCreateListModalOpen(false)}
             >
               <X className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
-          <AlertDialogHeader className="pb-3 sm:pb-4">
-            <AlertDialogTitle className="text-lg sm:text-xl font-bold">Create New List</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs sm:text-sm text-gray-500">
-              Add new item to your shopping list
-            </AlertDialogDescription>
-          </AlertDialogHeader>
           
           <form onSubmit={handleCreateFolder} className="space-y-4 sm:space-y-6">
             {/* List Name */}
@@ -3092,7 +3090,7 @@ export default function ShoppingListPage() {
                   setNewFolderName(e.target.value)
                 }
                 placeholder="Grocery"
-                className="bg-gray-50 h-10 sm:h-11"
+                className="bg-gray-50 h-10 sm:h-11 w-full"
                 autoFocus
               />
             </div>
@@ -3133,69 +3131,75 @@ export default function ShoppingListPage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setIconSearchQuery(e.target.value)
                 }
-                className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11"
+                className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11 w-full"
               />
-              <div 
-                ref={iconScrollRef}
-                onMouseDown={(e) => handleDragScroll(e, iconScrollRef)}
-                onTouchStart={(e) => handleDragScroll(e, iconScrollRef)}
-                className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 -mx-1 px-1 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-                style={{
-                  WebkitOverflowScrolling: 'touch',
-                }}
-              >
-                {filteredIcons.map((icon) => (
-                  <button
-                    key={icon.emoji}
-                    type="button"
-                    onClick={() => setSelectedIcon(icon.emoji)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className={cn(
-                      "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 transition-all select-none",
-                      selectedIcon === icon.emoji
-                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
-                        : "hover:ring-2 hover:ring-gray-300"
-                    )}
-                    style={{
-                      backgroundColor: ICON_COLORS.find(c => c.name === selectedColor)?.value || "#FCE7F3"
-                    }}
-                  >
-                    <span className="text-xl sm:text-2xl pointer-events-none">{icon.emoji}</span>
-                  </button>
-                ))}
+              <div className="w-full overflow-hidden">
+                <div 
+                  ref={iconScrollRef}
+                  onMouseDown={(e) => handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>)}
+                  onTouchStart={(e) => handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>)}
+                  className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  style={{
+                    WebkitOverflowScrolling: 'touch',
+                    maxWidth: '100%',
+                  }}
+                >
+                  {filteredIcons.map((icon) => (
+                    <button
+                      key={icon.emoji}
+                      type="button"
+                      onClick={() => setSelectedIcon(icon.emoji)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className={cn(
+                        "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 transition-all select-none",
+                        selectedIcon === icon.emoji
+                          ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                          : "hover:ring-2 hover:ring-gray-300"
+                      )}
+                      style={{
+                        backgroundColor: ICON_COLORS.find(c => c.name === selectedColor)?.value || "#FCE7F3"
+                      }}
+                    >
+                      <span className="text-xl sm:text-2xl pointer-events-none">{icon.emoji}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
             {/* Icon Color */}
             <div className="space-y-1.5 sm:space-y-2">
               <Label className="text-sm font-medium text-gray-900">Icon Color</Label>
-              <div 
-                ref={colorScrollRef}
-                onMouseDown={(e) => handleDragScroll(e, colorScrollRef)}
-                onTouchStart={(e) => handleDragScroll(e, colorScrollRef)}
-                className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-                style={{
-                  WebkitOverflowScrolling: 'touch',
-                }}
-              >
-                {ICON_COLORS.map((color) => (
-                  <button
-                    key={color.name}
-                    type="button"
-                    onClick={() => setSelectedColor(color.name)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className={cn(
-                      "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all select-none",
-                      selectedColor === color.name
-                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
-                        : "hover:ring-2 hover:ring-gray-300"
-                    )}
-                    style={{ backgroundColor: color.value }}
-                    title={color.label}
-                  />
-                ))}
+              <div className="w-full overflow-hidden">
+                <div 
+                  ref={colorScrollRef}
+                  onMouseDown={(e) => handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>)}
+                  onTouchStart={(e) => handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>)}
+                  className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  style={{
+                    WebkitOverflowScrolling: 'touch',
+                    maxWidth: '100%',
+                  }}
+                >
+                  {ICON_COLORS.map((color) => (
+                    <button
+                      key={color.name}
+                      type="button"
+                      onClick={() => setSelectedColor(color.name)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className={cn(
+                        "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all select-none",
+                        selectedColor === color.name
+                          ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                          : "hover:ring-2 hover:ring-gray-300"
+                      )}
+                      style={{ backgroundColor: color.value }}
+                      title={color.label}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -3230,12 +3234,13 @@ export default function ShoppingListPage() {
 
       {/* Edit List Modal */}
       <AlertDialog open={isEditListModalOpen} onOpenChange={setIsEditListModalOpen}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-          <div className="relative mb-2">
+        <AlertDialogContent className="w-full max-w-none sm:max-w-lg max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Edit List</AlertDialogTitle>
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-0 top-0 h-6 w-6 sm:h-8 sm:w-8"
+              className="h-6 w-6 sm:h-8 sm:w-8"
               onClick={() => {
                 setIsEditListModalOpen(false);
                 setEditingFolderId(null);
@@ -3250,12 +3255,6 @@ export default function ShoppingListPage() {
               <X className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </div>
-          <AlertDialogHeader className="pb-3 sm:pb-4">
-            <AlertDialogTitle className="text-lg sm:text-xl font-bold">Edit List</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs sm:text-sm text-gray-500">
-              Update your shopping list details
-            </AlertDialogDescription>
-          </AlertDialogHeader>
           
           <form onSubmit={(e) => {
             e.preventDefault();
@@ -3275,7 +3274,7 @@ export default function ShoppingListPage() {
                   setEditFolderName(e.target.value)
                 }
                 placeholder="Grocery"
-                className="bg-gray-50 h-10 sm:h-11"
+                className="bg-gray-50 h-10 sm:h-11 w-full"
                 autoFocus
               />
             </div>
@@ -3289,69 +3288,75 @@ export default function ShoppingListPage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setIconSearchQuery(e.target.value)
                 }
-                className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11"
+                className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11 w-full"
               />
-              <div 
-                ref={iconScrollRef}
-                onMouseDown={(e) => handleDragScroll(e, iconScrollRef)}
-                onTouchStart={(e) => handleDragScroll(e, iconScrollRef)}
-                className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 -mx-1 px-1 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-                style={{
-                  WebkitOverflowScrolling: 'touch',
-                }}
-              >
-                {filteredIcons.map((icon) => (
-                  <button
-                    key={icon.emoji}
-                    type="button"
-                    onClick={() => setSelectedIcon(icon.emoji)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className={cn(
-                      "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 transition-all select-none",
-                      selectedIcon === icon.emoji
-                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
-                        : "hover:ring-2 hover:ring-gray-300"
-                    )}
-                    style={{
-                      backgroundColor: ICON_COLORS.find(c => c.name === selectedColor)?.value || "#FCE7F3"
-                    }}
-                  >
-                    <span className="text-xl sm:text-2xl pointer-events-none">{icon.emoji}</span>
-                  </button>
-                ))}
+              <div className="w-full overflow-hidden">
+                <div 
+                  ref={iconScrollRef}
+                  onMouseDown={(e) => handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>)}
+                  onTouchStart={(e) => handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>)}
+                  className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  style={{
+                    WebkitOverflowScrolling: 'touch',
+                    maxWidth: '100%',
+                  }}
+                >
+                  {filteredIcons.map((icon) => (
+                    <button
+                      key={icon.emoji}
+                      type="button"
+                      onClick={() => setSelectedIcon(icon.emoji)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className={cn(
+                        "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 transition-all select-none",
+                        selectedIcon === icon.emoji
+                          ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                          : "hover:ring-2 hover:ring-gray-300"
+                      )}
+                      style={{
+                        backgroundColor: ICON_COLORS.find(c => c.name === selectedColor)?.value || "#FCE7F3"
+                      }}
+                    >
+                      <span className="text-xl sm:text-2xl pointer-events-none">{icon.emoji}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
             {/* Icon Color */}
             <div className="space-y-1.5 sm:space-y-2">
               <Label className="text-sm font-medium text-gray-900">Icon Color</Label>
-              <div 
-                ref={colorScrollRef}
-                onMouseDown={(e) => handleDragScroll(e, colorScrollRef)}
-                onTouchStart={(e) => handleDragScroll(e, colorScrollRef)}
-                className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-                style={{
-                  WebkitOverflowScrolling: 'touch',
-                }}
-              >
-                {ICON_COLORS.map((color) => (
-                  <button
-                    key={color.name}
-                    type="button"
-                    onClick={() => setSelectedColor(color.name)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    className={cn(
-                      "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all select-none",
-                      selectedColor === color.name
-                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
-                        : "hover:ring-2 hover:ring-gray-300"
-                    )}
-                    style={{ backgroundColor: color.value }}
-                    title={color.label}
-                  />
-                ))}
+              <div className="w-full overflow-hidden">
+                <div 
+                  ref={colorScrollRef}
+                  onMouseDown={(e) => handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>)}
+                  onTouchStart={(e) => handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>)}
+                  className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  style={{
+                    WebkitOverflowScrolling: 'touch',
+                    maxWidth: '100%',
+                  }}
+                >
+                  {ICON_COLORS.map((color) => (
+                    <button
+                      key={color.name}
+                      type="button"
+                      onClick={() => setSelectedColor(color.name)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      className={cn(
+                        "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all select-none",
+                        selectedColor === color.name
+                          ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                          : "hover:ring-2 hover:ring-gray-300"
+                      )}
+                      style={{ backgroundColor: color.value }}
+                      title={color.label}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 
