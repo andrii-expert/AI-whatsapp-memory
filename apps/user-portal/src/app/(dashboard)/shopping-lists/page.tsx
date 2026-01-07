@@ -44,6 +44,92 @@ import {
 } from "@imaginecalendar/ui/sheet";
 import { useSearchParams } from "next/navigation";
 
+// Shopping list icons - shopping-related emojis
+const SHOPPING_LIST_ICONS = [
+  { emoji: "🎂", name: "Birthday Cake" },
+  { emoji: "🛒", name: "Shopping Cart" },
+  { emoji: "🍎", name: "Apple" },
+  { emoji: "🥛", name: "Milk" },
+  { emoji: "🍞", name: "Bread" },
+  { emoji: "🥚", name: "Eggs" },
+  { emoji: "🥩", name: "Meat" },
+  { emoji: "🐟", name: "Fish" },
+  { emoji: "🥬", name: "Vegetables" },
+  { emoji: "🍌", name: "Banana" },
+  { emoji: "🍊", name: "Orange" },
+  { emoji: "🍇", name: "Grapes" },
+  { emoji: "🥑", name: "Avocado" },
+  { emoji: "🧀", name: "Cheese" },
+  { emoji: "🍕", name: "Pizza" },
+  { emoji: "🍔", name: "Burger" },
+  { emoji: "🌮", name: "Taco" },
+  { emoji: "🍝", name: "Pasta" },
+  { emoji: "🍰", name: "Cake" },
+  { emoji: "☕", name: "Coffee" },
+  { emoji: "🍵", name: "Tea" },
+  { emoji: "🥤", name: "Drink" },
+  { emoji: "🍪", name: "Cookie" },
+  { emoji: "🍫", name: "Chocolate" },
+  { emoji: "🍭", name: "Candy" },
+  { emoji: "🧁", name: "Cupcake" },
+  { emoji: "🍩", name: "Donut" },
+  { emoji: "🌽", name: "Corn" },
+  { emoji: "🥕", name: "Carrot" },
+  { emoji: "🥔", name: "Potato" },
+  { emoji: "🧄", name: "Garlic" },
+  { emoji: "🧅", name: "Onion" },
+  { emoji: "🍅", name: "Tomato" },
+  { emoji: "🥒", name: "Cucumber" },
+  { emoji: "🌶️", name: "Pepper" },
+  { emoji: "🥜", name: "Nuts" },
+  { emoji: "🍯", name: "Honey" },
+  { emoji: "🥖", name: "Baguette" },
+  { emoji: "🧈", name: "Butter" },
+  { emoji: "🥨", name: "Pretzel" },
+  { emoji: "🍤", name: "Shrimp" },
+  { emoji: "🦐", name: "Prawn" },
+  { emoji: "🦞", name: "Lobster" },
+  { emoji: "🦀", name: "Crab" },
+  { emoji: "🍗", name: "Chicken" },
+  { emoji: "🍖", name: "Meat Bone" },
+  { emoji: "🥓", name: "Bacon" },
+  { emoji: "🌭", name: "Hot Dog" },
+  { emoji: "🌯", name: "Burrito" },
+  { emoji: "🥙", name: "Stuffed Flatbread" },
+  { emoji: "🥗", name: "Salad" },
+  { emoji: "🍲", name: "Pot of Food" },
+  { emoji: "🍱", name: "Bento Box" },
+  { emoji: "🍘", name: "Rice Cracker" },
+  { emoji: "🍙", name: "Rice Ball" },
+  { emoji: "🍚", name: "Cooked Rice" },
+  { emoji: "🍛", name: "Curry Rice" },
+  { emoji: "🍜", name: "Steaming Bowl" },
+  { emoji: "🍠", name: "Roasted Sweet Potato" },
+  { emoji: "🍢", name: "Oden" },
+  { emoji: "🍣", name: "Sushi" },
+  { emoji: "🍤", name: "Fried Shrimp" },
+  { emoji: "🍥", name: "Fish Cake" },
+  { emoji: "🥮", name: "Moon Cake" },
+  { emoji: "🍡", name: "Dango" },
+  { emoji: "🥟", name: "Dumpling" },
+  { emoji: "🥠", name: "Fortune Cookie" },
+  { emoji: "🥡", name: "Takeout Box" },
+];
+
+// Icon colors
+const ICON_COLORS = [
+  { name: "pink", value: "#FCE7F3", label: "Pink" },
+  { name: "purple", value: "#F3E8FF", label: "Purple" },
+  { name: "blue", value: "#DBEAFE", label: "Blue" },
+  { name: "cyan", value: "#CFFAFE", label: "Cyan" },
+  { name: "green", value: "#D1FAE5", label: "Green" },
+  { name: "yellow", value: "#FEF3C7", label: "Yellow" },
+  { name: "orange", value: "#FED7AA", label: "Orange" },
+  { name: "red", value: "#FEE2E2", label: "Red" },
+  { name: "indigo", value: "#E0E7FF", label: "Indigo" },
+  { name: "teal", value: "#CCFBF1", label: "Teal" },
+];
+
 export default function ShoppingListPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -87,6 +173,12 @@ export default function ShoppingListPage() {
   const [isCategoryInputMode, setIsCategoryInputMode] = useState<"select" | "manual">("select");
   const [isLoadingAISuggestion, setIsLoadingAISuggestion] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isCreateListModalOpen, setIsCreateListModalOpen] = useState(false);
+  const [selectedIcon, setSelectedIcon] = useState("🎂");
+  const [selectedColor, setSelectedColor] = useState("pink");
+  const [iconSearchQuery, setIconSearchQuery] = useState("");
+  const [shareWithInput, setShareWithInput] = useState("");
+  const [sharePermission, setSharePermission] = useState<"view" | "edit">("edit");
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
   const hasRestoredFromSessionRef = useRef(false);
@@ -493,11 +585,29 @@ export default function ShoppingListPage() {
     trpc.shoppingList.folders.create.mutationOptions({
       onSuccess: (newFolder) => {
         queryClient.invalidateQueries();
-        setNewFolderName("");
         if (newFolder) {
           setSelectedFolderId(newFolder.id);
           setViewAllItems(false);
+          
+          // If share with input is provided, open share modal after creation
+          if (shareWithInput.trim()) {
+            // Open share modal with the newly created folder
+            setShareResourceType("shopping_list_folder");
+            setShareResourceId(newFolder.id);
+            setShareResourceName(newFolder.name);
+            setIsShareModalOpen(true);
+          }
         }
+        
+        // Reset form
+        setNewFolderName("");
+        setSelectedIcon("🎂");
+        setSelectedColor("pink");
+        setIconSearchQuery("");
+        setShareWithInput("");
+        setSharePermission("edit");
+        setIsCreateListModalOpen(false);
+        
         toast({
           title: "Success",
           description: "Folder created successfully",
@@ -589,11 +699,34 @@ export default function ShoppingListPage() {
     })
   );
 
+  // Filter icons based on search query
+  const filteredIcons = useMemo(() => {
+    if (!iconSearchQuery.trim()) return SHOPPING_LIST_ICONS;
+    const query = iconSearchQuery.toLowerCase();
+    return SHOPPING_LIST_ICONS.filter(
+      (icon) => icon.name.toLowerCase().includes(query) || icon.emoji.includes(query)
+    );
+  }, [iconSearchQuery]);
+
   // Folder handlers
-  const handleCreateFolder = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateFolder = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!newFolderName.trim()) return;
-    createFolderMutation.mutate({ name: newFolderName.trim() });
+    createFolderMutation.mutate({ 
+      name: newFolderName.trim(),
+      icon: selectedIcon,
+      color: selectedColor,
+    });
+  };
+
+  const handleOpenCreateListModal = () => {
+    setNewFolderName("Grocery"); // Pre-fill with "Grocery" as shown in image
+    setSelectedIcon("🎂");
+    setSelectedColor("pink");
+    setIconSearchQuery("");
+    setShareWithInput("");
+    setSharePermission("edit");
+    setIsCreateListModalOpen(true);
   };
 
 
@@ -1279,8 +1412,8 @@ export default function ShoppingListPage() {
         >
           <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="px-6 py-4 border-b flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">Folders</h2>
+            <div className="px-4 py-4 border-b flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">Your Lists</h2>
               <Button
                 variant="ghost"
                 size="icon"
@@ -1291,69 +1424,360 @@ export default function ShoppingListPage() {
               </Button>
             </div>
             
-            {/* Folders List */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-              {/* New Folder Input */}
-              <form onSubmit={handleCreateFolder} className="flex gap-2 mb-4">
-                <Input
-                  placeholder="New folder"
-                  value={newFolderName}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setNewFolderName(e.target.value)
-                  }
-                  className="flex-1"
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  variant="outline"
-                  disabled={createFolderMutation.isPending}
+            {/* Search Bar and Sort Dropdown */}
+            <div className="px-4 py-4 border-b">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="relative flex-1">
+                  <Input
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setSearchQuery(e.target.value)
+                    }
+                    className="pr-10"
+                  />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                </div>
+                <Select
+                  value={`${sortBy}-${sortOrder}`}
+                  onValueChange={(value) => {
+                    const [by, order] = value.split("-") as [
+                      "date" | "alphabetical",
+                      "asc" | "desc"
+                    ];
+                    setSortBy(by);
+                    setSortOrder(order);
+                  }}
                 >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </form>
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                    <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                    <SelectItem value="alphabetical-asc">A-Z</SelectItem>
+                    <SelectItem value="alphabetical-desc">Z-A</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Add New Button */}
+              <Button
+                onClick={handleOpenCreateListModal}
+                variant="outline"
+                size="sm"
+                className="w-full flex items-center gap-1.5"
+              >
+                <Plus className="h-4 w-4" />
+                Add New
+              </Button>
+            </div>
+            
+            {/* Lists */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
 
-              {/* All Items Button */}
-              <button
-                onClick={handleViewAllItems}
+              {/* All Items Card */}
+              <div
+                onClick={() => {
+                  handleViewAllItems();
+                  setIsMobileSidebarOpen(false);
+                }}
                 className={cn(
-                  "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                  "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
                   viewAllItems
-                    ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                    : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                    ? "bg-blue-50 border-blue-200"
+                    : "bg-white border-gray-200 hover:bg-gray-50"
                 )}
               >
-                <Folder className="h-4 w-4 flex-shrink-0" />
-                <span className="flex-1 text-left">All Items</span>
-                <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                  {allItems.filter((item: any) => !item.isSharedWithMe).length}
-                </span>
-              </button>
+                <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xl">🎂</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900 truncate">All Items</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                      {allItems.filter((item: any) => !item.isSharedWithMe && (item.status === "open" || !item.status)).length} out of {allItems.filter((item: any) => !item.isSharedWithMe).length} remaining
+                    </span>
+                  </div>
+                </div>
+              </div>
 
+              {/* Folder Cards */}
               {folders.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm">
                   <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p>No folders yet.</p>
-                  <p className="text-xs mt-1">Create a folder above to get started.</p>
+                  <p>No lists yet.</p>
+                  <p className="text-xs mt-1">Create a list to get started.</p>
                 </div>
               ) : (
-                <>
-                  <div className="h-px bg-gray-200 my-2" />
-                  {sortedFolders.map((folder) => renderFolder(folder))}
-                </>
+                sortedFolders.map((folder) => {
+                  const isSelected = selectedFolderId === folder.id && !viewAllItems;
+                  const { openItems, totalItems } = getFolderStats(folder.id, false);
+                  const remaining = totalItems - openItems;
+                  
+                  return (
+                    <div
+                      key={folder.id}
+                      onClick={() => {
+                        handleFolderSelect(folder.id);
+                        setIsMobileSidebarOpen(false);
+                      }}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                        isSelected
+                          ? "bg-blue-50 border-blue-200"
+                          : "bg-white border-gray-200 hover:bg-gray-50"
+                      )}
+                    >
+                      <div 
+                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ 
+                          backgroundColor: folder.color 
+                            ? ICON_COLORS.find(c => c.name === folder.color)?.value || "#FCE7F3"
+                            : "#FCE7F3"
+                        }}
+                      >
+                        <span className="text-xl">{folder.icon || "🎂"}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {totalItems > 0 && (
+                            <span className={cn(
+                              "text-xs px-2 py-0.5 rounded-full font-medium",
+                              remaining <= 2 ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
+                            )}>
+                              {remaining} out of {totalItems} remaining
+                            </span>
+                          )}
+                          {/* Show avatars for shared folders */}
+                          {(() => {
+                            const shareCount = getShareCount("shopping_list_folder", folder.id);
+                            if (shareCount > 0) {
+                              const shares = myShares.filter(
+                                (s: any) => s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
+                              );
+                              return (
+                                <div className="flex items-center gap-1 ml-auto">
+                                  {shares.slice(0, 2).map((share: any, idx: number) => {
+                                    const user = share.sharedWithUser;
+                                    if (!user) return null;
+                                    return (
+                                      <div
+                                        key={share.id}
+                                        className={cn(
+                                          "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                          getAvatarColor(user.id)
+                                        )}
+                                        style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                        title={getSharedUserDisplayName(user)}
+                                      >
+                                        {getUserInitials(user)}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                            }}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                          {(() => {
+                            const shareCount = getShareCount("shopping_list_folder", folder.id);
+                            const isShared = shareCount > 0;
+                            return (
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  if (isShared) {
+                                    openShareDetails("shopping_list_folder", folder.id, folder.name);
+                                  } else {
+                                    openShareModal("shopping_list_folder", folder.id, folder.name);
+                                  }
+                                }}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                {isShared ? (
+                                  <>
+                                    <Users className="h-4 w-4" />
+                                    <span>Shared</span>
+                                    <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                      {shareCount}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Share2 className="h-4 w-4" />
+                                    <span>Share</span>
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                            );
+                          })()}
+                          <DropdownMenuItem
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleEditFolder(folder.id, folder.name);
+                            }}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                            <span>Edit</span>
+                          </DropdownMenuItem>
+                          {folder.name.toLowerCase() !== "general" && (
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleDeleteFolder(folder.id, folder.name);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span>Delete</span>
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  );
+                })
               )}
 
               {/* Shared Section */}
               {sharedFolders.length > 0 && (
                 <>
                   <div className="h-px bg-gray-200 my-2" />
-                  <div className="px-2 py-2">
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5" />
-                      Shared with me
-                    </h3>
-                  </div>
-                  {sharedFolders.map((folder) => renderFolder(folder))}
+                  {sharedFolders.map((folder) => {
+                    const isSelected = selectedFolderId === folder.id && !viewAllItems;
+                    const { openItems, totalItems } = getFolderStats(folder.id, true);
+                    const remaining = totalItems - openItems;
+                    
+                    return (
+                      <div
+                        key={folder.id}
+                        onClick={() => {
+                          handleSharedFolderSelect(folder.id);
+                          setIsMobileSidebarOpen(false);
+                        }}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                          isSelected
+                            ? "bg-blue-50 border-blue-200"
+                            : "bg-white border-gray-200 hover:bg-gray-50"
+                        )}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xl">🎂</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            {totalItems > 0 && (
+                              <span className={cn(
+                                "text-xs px-2 py-0.5 rounded-full font-medium",
+                                remaining <= 2 ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
+                              )}>
+                                {remaining} out of {totalItems} remaining
+                              </span>
+                            )}
+                            {/* Show avatars for shared folders */}
+                            {(() => {
+                              const shares = myShares.filter(
+                                (s: any) => s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
+                              );
+                              if (shares.length > 0) {
+                                return (
+                                  <div className="flex items-center gap-1 ml-auto">
+                                    {shares.slice(0, 2).map((share: any, idx: number) => {
+                                      const user = share.sharedWithUser;
+                                      if (!user) return null;
+                                      return (
+                                        <div
+                                          key={share.id}
+                                          className={cn(
+                                            "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                            getAvatarColor(user.id)
+                                          )}
+                                          style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                          title={getSharedUserDisplayName(user)}
+                                        >
+                                          {getUserInitials(user)}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                              }}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                openShareDetails("shopping_list_folder", folder.id, folder.name);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <Users className="h-4 w-4" />
+                              <span>Shared</span>
+                            </DropdownMenuItem>
+                            {folder.sharePermission === "edit" && (
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  handleEditFolder(folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                                <span>Edit</span>
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleExitSharedFolder(folder.id, folder.name);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                            >
+                              <LogOut className="h-4 w-4" />
+                              <span>Exit</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    );
+                  })}
                 </>
               )}
             </div>
@@ -1363,74 +1787,354 @@ export default function ShoppingListPage() {
 
       {/* Main Content - Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 w-full">
-        {/* Desktop Left Panel - Folders */}
+        {/* Desktop Left Panel - Lists Sidebar */}
         <div className="hidden lg:block space-y-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Folders</h2>
+          <div className="space-y-4">
+            {/* Search Bar and Sort Dropdown */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="pr-10"
+                />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              </div>
+              <Select
+                value={`${sortBy}-${sortOrder}`}
+                onValueChange={(value) => {
+                  const [by, order] = value.split("-") as [
+                    "date" | "alphabetical",
+                    "asc" | "desc"
+                  ];
+                  setSortBy(by);
+                  setSortOrder(order);
+                }}
+              >
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                  <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                  <SelectItem value="alphabetical-asc">A-Z</SelectItem>
+                  <SelectItem value="alphabetical-desc">Z-A</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            {/* New Folder Input */}
-            <form onSubmit={handleCreateFolder} className="flex gap-2 mb-4">
-              <Input
-                placeholder="New folder"
-                value={newFolderName}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setNewFolderName(e.target.value)
-                }
-                className="flex-1"
-              />
+            {/* Your Lists Header */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">Your Lists</h2>
               <Button
-                type="submit"
-                size="icon"
+                onClick={handleOpenCreateListModal}
                 variant="outline"
-                disabled={createFolderMutation.isPending}
+                size="sm"
+                className="flex items-center gap-1.5"
               >
                 <Plus className="h-4 w-4" />
+                Add New
               </Button>
-            </form>
+            </div>
 
-            {/* Folders List */}
-            <div className="space-y-1">
-              {/* All Items Button */}
-              <button
+            {/* Lists */}
+            <div className="space-y-2">
+              {/* All Items Card */}
+              <div
                 onClick={handleViewAllItems}
                 className={cn(
-                  "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
+                  "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
                   viewAllItems
-                    ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                    : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                    ? "bg-blue-50 border-blue-200"
+                    : "bg-white border-gray-200 hover:bg-gray-50"
                 )}
               >
-                <Folder className="h-4 w-4 flex-shrink-0" />
-                <span className="flex-1 text-left">All Items</span>
-                <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                  {allItems.filter((item: any) => !item.isSharedWithMe).length}
-                </span>
-              </button>
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                  <span className="text-xl">🎂</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900 truncate">All Items</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                      {allItems.filter((item: any) => !item.isSharedWithMe && (item.status === "open" || !item.status)).length} out of {allItems.filter((item: any) => !item.isSharedWithMe).length} remaining
+                    </span>
+                  </div>
+                </div>
+              </div>
 
+              {/* Folder Cards */}
               {folders.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm">
                   <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p>No folders yet.</p>
-                  <p className="text-xs mt-1">Create a folder above to get started.</p>
+                  <p>No lists yet.</p>
+                  <p className="text-xs mt-1">Create a list to get started.</p>
                 </div>
               ) : (
-                <>
-                  <div className="h-px bg-gray-200 my-2" />
-                  {sortedFolders.map((folder) => renderFolder(folder))}
-                </>
+                sortedFolders.map((folder) => {
+                  const isSelected = selectedFolderId === folder.id && !viewAllItems;
+                  const { openItems, totalItems } = getFolderStats(folder.id, false);
+                  const remaining = totalItems - openItems;
+                  
+                  return (
+                    <div
+                      key={folder.id}
+                      onClick={() => handleFolderSelect(folder.id)}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                        isSelected
+                          ? "bg-blue-50 border-blue-200"
+                          : "bg-white border-gray-200 hover:bg-gray-50"
+                      )}
+                    >
+                      <div 
+                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ 
+                          backgroundColor: folder.color 
+                            ? ICON_COLORS.find(c => c.name === folder.color)?.value || "#FCE7F3"
+                            : "#FCE7F3"
+                        }}
+                      >
+                        <span className="text-xl">{folder.icon || "🎂"}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {totalItems > 0 && (
+                            <span className={cn(
+                              "text-xs px-2 py-0.5 rounded-full font-medium",
+                              remaining <= 2 ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
+                            )}>
+                              {remaining} out of {totalItems} remaining
+                            </span>
+                          )}
+                          {/* Show avatars for shared folders */}
+                          {(() => {
+                            const shareCount = getShareCount("shopping_list_folder", folder.id);
+                            if (shareCount > 0) {
+                              const shares = myShares.filter(
+                                (s: any) => s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
+                              );
+                              return (
+                                <div className="flex items-center gap-1 ml-auto">
+                                  {shares.slice(0, 2).map((share: any, idx: number) => {
+                                    const user = share.sharedWithUser;
+                                    if (!user) return null;
+                                    return (
+                                      <div
+                                        key={share.id}
+                                        className={cn(
+                                          "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                          getAvatarColor(user.id)
+                                        )}
+                                        style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                        title={getSharedUserDisplayName(user)}
+                                      >
+                                        {getUserInitials(user)}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                            }}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                          {(() => {
+                            const shareCount = getShareCount("shopping_list_folder", folder.id);
+                            const isShared = shareCount > 0;
+                            return (
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  if (isShared) {
+                                    openShareDetails("shopping_list_folder", folder.id, folder.name);
+                                  } else {
+                                    openShareModal("shopping_list_folder", folder.id, folder.name);
+                                  }
+                                }}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                {isShared ? (
+                                  <>
+                                    <Users className="h-4 w-4" />
+                                    <span>Shared</span>
+                                    <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                      {shareCount}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Share2 className="h-4 w-4" />
+                                    <span>Share</span>
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                            );
+                          })()}
+                          <DropdownMenuItem
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              handleEditFolder(folder.id, folder.name);
+                            }}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                            <span>Edit</span>
+                          </DropdownMenuItem>
+                          {folder.name.toLowerCase() !== "general" && (
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleDeleteFolder(folder.id, folder.name);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span>Delete</span>
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  );
+                })
               )}
 
               {/* Shared Section */}
               {sharedFolders.length > 0 && (
                 <>
                   <div className="h-px bg-gray-200 my-2" />
-                  <div className="px-2 py-2">
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5" />
-                      Shared with me
-                    </h3>
-                  </div>
-                  {sharedFolders.map((folder) => renderFolder(folder))}
+                  {sharedFolders.map((folder) => {
+                    const isSelected = selectedFolderId === folder.id && !viewAllItems;
+                    const { openItems, totalItems } = getFolderStats(folder.id, true);
+                    const remaining = totalItems - openItems;
+                    
+                    return (
+                      <div
+                        key={folder.id}
+                        onClick={() => handleSharedFolderSelect(folder.id)}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                          isSelected
+                            ? "bg-blue-50 border-blue-200"
+                            : "bg-white border-gray-200 hover:bg-gray-50"
+                        )}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xl">🎂</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            {totalItems > 0 && (
+                              <span className={cn(
+                                "text-xs px-2 py-0.5 rounded-full font-medium",
+                                remaining <= 2 ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
+                              )}>
+                                {remaining} out of {totalItems} remaining
+                              </span>
+                            )}
+                            {/* Show avatars for shared folders */}
+                            {(() => {
+                              const shares = myShares.filter(
+                                (s: any) => s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
+                              );
+                              if (shares.length > 0) {
+                                return (
+                                  <div className="flex items-center gap-1 ml-auto">
+                                    {shares.slice(0, 2).map((share: any, idx: number) => {
+                                      const user = share.sharedWithUser;
+                                      if (!user) return null;
+                                      return (
+                                        <div
+                                          key={share.id}
+                                          className={cn(
+                                            "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                            getAvatarColor(user.id)
+                                          )}
+                                          style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                          title={getSharedUserDisplayName(user)}
+                                        >
+                                          {getUserInitials(user)}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                              }}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                openShareDetails("shopping_list_folder", folder.id, folder.name);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <Users className="h-4 w-4" />
+                              <span>Shared</span>
+                            </DropdownMenuItem>
+                            {folder.sharePermission === "edit" && (
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  handleEditFolder(folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                                <span>Edit</span>
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                handleExitSharedFolder(folder.id, folder.name);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                            >
+                              <LogOut className="h-4 w-4" />
+                              <span>Exit</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    );
+                  })}
                 </>
               )}
             </div>
@@ -2238,6 +2942,155 @@ export default function ShoppingListPage() {
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create New List Modal */}
+      <AlertDialog open={isCreateListModalOpen} onOpenChange={setIsCreateListModalOpen}>
+        <AlertDialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+          <div className="relative mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-6 w-6 sm:h-8 sm:w-8"
+              onClick={() => setIsCreateListModalOpen(false)}
+            >
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
+          </div>
+          <AlertDialogHeader className="pb-3 sm:pb-4">
+            <AlertDialogTitle className="text-lg sm:text-xl font-bold">Create New List</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm text-gray-500">
+              Add new item to your shopping list
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <form onSubmit={handleCreateFolder} className="space-y-4 sm:space-y-6">
+            {/* List Name */}
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="list-name" className="text-sm font-medium text-gray-900">
+                List Name
+              </Label>
+              <Input
+                id="list-name"
+                value={newFolderName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setNewFolderName(e.target.value)
+                }
+                placeholder="Grocery"
+                className="bg-gray-50 h-10 sm:h-11"
+                autoFocus
+              />
+            </div>
+
+            {/* Share with */}
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="share-with" className="text-sm font-medium text-gray-900">
+                Share with
+              </Label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  id="share-with"
+                  value={shareWithInput}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setShareWithInput(e.target.value)
+                  }
+                  placeholder="Name or email..."
+                  className="flex-1 bg-gray-50 h-10 sm:h-11"
+                />
+                <Select value={sharePermission} onValueChange={(value: "view" | "edit") => setSharePermission(value)}>
+                  <SelectTrigger className="w-full sm:w-[120px] bg-gray-50 h-10 sm:h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="view">Can view</SelectItem>
+                    <SelectItem value="edit">Can edit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Select Icon */}
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-sm font-medium text-gray-900">Select Icon</Label>
+              <Input
+                placeholder="Search Icon..."
+                value={iconSearchQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setIconSearchQuery(e.target.value)
+                }
+                className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11"
+              />
+              <div className="flex gap-2 sm:gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 -mx-1 px-1">
+                {filteredIcons.map((icon) => (
+                  <button
+                    key={icon.emoji}
+                    type="button"
+                    onClick={() => setSelectedIcon(icon.emoji)}
+                    className={cn(
+                      "w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 transition-all",
+                      selectedIcon === icon.emoji
+                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                        : "hover:ring-2 hover:ring-gray-300"
+                    )}
+                    style={{
+                      backgroundColor: ICON_COLORS.find(c => c.name === selectedColor)?.value || "#FCE7F3"
+                    }}
+                  >
+                    <span className="text-xl sm:text-2xl">{icon.emoji}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Icon Color */}
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-sm font-medium text-gray-900">Icon Color</Label>
+              <div className="flex gap-2 sm:gap-3 flex-wrap">
+                {ICON_COLORS.map((color) => (
+                  <button
+                    key={color.name}
+                    type="button"
+                    onClick={() => setSelectedColor(color.name)}
+                    className={cn(
+                      "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all",
+                      selectedColor === color.name
+                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                        : "hover:ring-2 hover:ring-gray-300"
+                    )}
+                    style={{ backgroundColor: color.value }}
+                    title={color.label}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+                disabled={!newFolderName.trim() || createFolderMutation.isPending}
+              >
+                Create New List
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
+                onClick={() => {
+                  setIsCreateListModalOpen(false);
+                  setNewFolderName("");
+                  setSelectedIcon("🎂");
+                  setSelectedColor("pink");
+                  setIconSearchQuery("");
+                  setShareWithInput("");
+                  setSharePermission("edit");
+                }}
+              >
+                Cancel
+              </Button>
+            </AlertDialogFooter>
+          </form>
         </AlertDialogContent>
       </AlertDialog>
     </div>
