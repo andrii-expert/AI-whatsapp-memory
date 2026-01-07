@@ -752,40 +752,57 @@ export default function ShoppingListPage() {
   const handleDragScroll = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement | null>) => {
     if (!ref.current) return;
     
-    // Prevent default to stop page scrolling
-    e.preventDefault();
+    const isTouch = 'touches' in e;
+    
+    // For touch events, don't preventDefault on touchStart - only on touchMove
+    if (!isTouch) {
+      e.preventDefault();
+    }
     e.stopPropagation();
     
-    const isTouch = 'touches' in e;
     const clientX = isTouch ? e.touches[0]?.clientX : (e as React.MouseEvent).clientX;
     if (clientX === undefined) return;
     
     const startX = clientX;
     const scrollLeft = ref.current.scrollLeft;
     let isDown = true;
+    let hasMoved = false;
 
     const onMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
       if (!isDown || !ref.current) return;
-      // Prevent default to stop page scrolling
-      moveEvent.preventDefault();
+      
       const moveIsTouch = 'touches' in moveEvent;
       const moveClientX = moveIsTouch ? (moveEvent as TouchEvent).touches[0]?.clientX : (moveEvent as MouseEvent).clientX;
       if (moveClientX === undefined) return;
+      
+      // Mark that we've moved
+      if (!hasMoved) {
+        hasMoved = true;
+      }
+      
+      // Prevent default to stop page scrolling only after we start moving
+      if (hasMoved) {
+        moveEvent.preventDefault();
+      }
+      
       const x = moveClientX - startX;
       ref.current.scrollLeft = scrollLeft - x;
     };
 
     const onMouseUp = () => {
       isDown = false;
+      hasMoved = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('touchmove', onMouseMove);
       document.removeEventListener('touchend', onMouseUp);
+      document.removeEventListener('touchcancel', onMouseUp);
     };
 
     if (isTouch) {
       document.addEventListener('touchmove', onMouseMove, { passive: false });
-      document.addEventListener('touchend', onMouseUp);
+      document.addEventListener('touchend', onMouseUp, { passive: true });
+      document.addEventListener('touchcancel', onMouseUp, { passive: true });
     } else {
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
@@ -3140,16 +3157,18 @@ export default function ShoppingListPage() {
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
                   onTouchStart={(e) => {
-                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
+                  }}
+                  onTouchMove={(e) => {
+                    e.stopPropagation();
                   }}
                   className="flex gap-2 sm:gap-2 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
                     maxWidth: '100%',
-                    touchAction: 'pan-x pinch-zoom',
+                    touchAction: 'pan-x',
                     overflowX: 'auto',
                     overflowY: 'hidden',
                   }}
@@ -3190,16 +3209,18 @@ export default function ShoppingListPage() {
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
                   onTouchStart={(e) => {
-                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
+                  }}
+                  onTouchMove={(e) => {
+                    e.stopPropagation();
                   }}
                   className="flex gap-2 sm:gap-3 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
                     maxWidth: '100%',
-                    touchAction: 'pan-x pinch-zoom',
+                    touchAction: 'pan-x',
                     overflowX: 'auto',
                     overflowY: 'hidden',
                   }}
@@ -3321,16 +3342,18 @@ export default function ShoppingListPage() {
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
                   onTouchStart={(e) => {
-                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, iconScrollRef as React.RefObject<HTMLDivElement | null>);
+                  }}
+                  onTouchMove={(e) => {
+                    e.stopPropagation();
                   }}
                   className="flex gap-2 sm:gap-2 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
                     maxWidth: '100%',
-                    touchAction: 'pan-x pinch-zoom',
+                    touchAction: 'pan-x',
                     overflowX: 'auto',
                     overflowY: 'hidden',
                   }}
@@ -3371,16 +3394,18 @@ export default function ShoppingListPage() {
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
                   }}
                   onTouchStart={(e) => {
-                    e.preventDefault();
                     e.stopPropagation();
                     handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
+                  }}
+                  onTouchMove={(e) => {
+                    e.stopPropagation();
                   }}
                   className="flex gap-2 sm:gap-3 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     width: '100%',
                     maxWidth: '100%',
-                    touchAction: 'pan-x pinch-zoom',
+                    touchAction: 'pan-x',
                     overflowX: 'auto',
                     overflowY: 'hidden',
                   }}
