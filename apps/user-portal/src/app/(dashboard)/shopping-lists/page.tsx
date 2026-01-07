@@ -2512,15 +2512,18 @@ export default function ShoppingListPage() {
                     // Otherwise, check if user has edit permission
                     const canEditItem = isFolderOwner || (!isSharedItem || finalPermission === "edit");
                     
-                    // Get user name for badge - use friend name if available, otherwise use display name
-                    const itemUserName = item.user 
+                    // Check if item was created by current user
+                    const isCurrentUser = item.user?.id === userId || !item.user;
+                    
+                    // Get user name for badge - use "You" if current user, otherwise use friend name or display name
+                    const itemUserName = isCurrentUser
+                      ? "You"
+                      : item.user
                       ? (() => {
                           const friend = friendsList.find((f: any) => f.connectedUserId === item.user.id);
                           return friend ? friend.name : getSharedUserDisplayName(item.user);
                         })()
                       : "You";
-                    
-                    const isCurrentUser = itemUserName === "You";
                     
                     return (
                       <div
@@ -2571,7 +2574,7 @@ export default function ShoppingListPage() {
                                   className={cn(
                                     "px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap",
                                     isCurrentUser 
-                                      ? "bg-gray-100 text-gray-600"
+                                      ? "bg-gray-50 text-gray-700"
                                       : "bg-pink-100 text-pink-700"
                                   )}
                                 >
