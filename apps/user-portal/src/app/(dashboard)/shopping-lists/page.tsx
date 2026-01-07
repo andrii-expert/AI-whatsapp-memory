@@ -2793,7 +2793,6 @@ export default function ShoppingListPage() {
           </div>
         </div>
       </div>
-      </div>
 
       {/* Add Item Modal */}
       <AlertDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
