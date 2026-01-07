@@ -6,6 +6,7 @@ import Script from "next/script";
 import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye, LogOut } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
+import { Textarea } from "@imaginecalendar/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -2699,111 +2700,106 @@ export default function ShoppingListPage() {
 
       {/* Add Item Modal */}
       <AlertDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Add Item</AlertDialogTitle>
-            <AlertDialogDescription>Add a new item to your shopping list</AlertDialogDescription>
-          </AlertDialogHeader>
+        <AlertDialogContent className="sm:max-w-lg">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <AlertDialogTitle className="text-lg font-bold text-gray-900">Add Item</AlertDialogTitle>
+              <AlertDialogDescription className="mt-1 text-sm text-gray-600">
+                Add new item to your shopping list
+              </AlertDialogDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                setIsAddModalOpen(false);
+                setNewItemName("");
+                setNewItemDescription("");
+                setNewItemCategory("");
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
           <form onSubmit={handleCreateItem}>
-            <div className="space-y-4 py-4">
+            <div className="space-y-4">
               <div>
-                <Label htmlFor="item-name">Item Name *</Label>
+                <Label htmlFor="item-name" className="text-sm font-medium text-gray-900">Item Name</Label>
                 <Input
                   id="item-name"
                   value={newItemName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemName(e.target.value)}
-                  placeholder="e.g., Milk, Bread, Eggs"
+                  placeholder="Milk"
+                  className="mt-1.5"
                   autoFocus
                 />
               </div>
               <div>
-                <Label htmlFor="item-description">Description (Optional)</Label>
-                <Input
+                <Label htmlFor="item-description" className="text-sm font-medium text-gray-900">
+                  Description <span className="text-gray-500 font-normal">(optional)</span>
+                </Label>
+                <Textarea
                   id="item-description"
                   value={newItemDescription}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemDescription(e.target.value)}
-                  placeholder="e.g., 2% milk, whole wheat bread"
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewItemDescription(e.target.value)}
+                  placeholder="Write details..."
+                  className="mt-1.5 min-h-[80px] resize-none"
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label htmlFor="item-category">Category (Optional)</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={getAICategorySuggestion}
-                    disabled={isLoadingAISuggestion || !newItemName.trim()}
-                    className="text-xs"
-                  >
-                    {isLoadingAISuggestion ? "Analyzing..." : "Use AI Suggestion"}
-                  </Button>
-                </div>
-                <div className="flex gap-2">
-                  {isCategoryInputMode === "select" ? (
-                    <Select
-                      value={newItemCategory || undefined}
-                      onValueChange={(value) => {
-                        if (value === "__none__") {
-                          setNewItemCategory("");
-                        } else {
-                          setNewItemCategory(value);
-                        }
-                      }}
-                    >
-                      <SelectTrigger id="item-category" className="flex-1">
-                        <SelectValue placeholder="Select a category (optional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        {existingCategories.map((category: string) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      id="item-category"
-                      value={newItemCategory}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
-                      placeholder="Enter category name"
-                      className="flex-1"
-                    />
+                <Label htmlFor="item-category" className="text-sm font-medium text-gray-900">
+                  Category <span className="text-gray-500 font-normal">(optional)</span>
+                </Label>
+                <div className="mt-1.5 space-y-2">
+                  {/* Category Tags */}
+                  {existingCategories.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {existingCategories.slice(0, 10).map((category: string) => (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => {
+                            setNewItemCategory(newItemCategory === category ? "" : category);
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                            newItemCategory === category
+                              ? "border-2 border-gray-900 bg-white text-gray-900"
+                              : "border border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                          )}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
                   )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setIsCategoryInputMode(isCategoryInputMode === "select" ? "manual" : "select");
-                      if (isCategoryInputMode === "select") {
-                        setNewItemCategory("");
-                      }
-                    }}
-                    className="shrink-0"
-                  >
-                    {isCategoryInputMode === "select" ? "Manual" : "Select"}
-                  </Button>
+                  {/* Custom Category Input */}
+                  <Input
+                    id="item-category"
+                    value={newItemCategory}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
+                    placeholder="Please specify..."
+                    className="w-full"
+                  />
                 </div>
               </div>
             </div>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="mt-6 gap-2">
               <AlertDialogCancel
                 onClick={() => {
                   setIsAddModalOpen(false);
                   setNewItemName("");
                   setNewItemDescription("");
                   setNewItemCategory("");
-                  setIsCategoryInputMode("select");
                 }}
+                className="border-gray-300"
               >
                 Cancel
               </AlertDialogCancel>
               <Button
                 type="submit"
-                variant="orange-primary"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
                 disabled={!newItemName.trim() || createItemMutation.isPending}
               >
                 Add Item
