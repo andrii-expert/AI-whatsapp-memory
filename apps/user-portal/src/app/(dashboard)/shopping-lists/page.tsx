@@ -2660,7 +2660,7 @@ export default function ShoppingListPage() {
                 onClick={() => !isDisabled && setIsAddModalOpen(true)}
                 disabled={!!isDisabled}
                 className={cn(
-                  "lg:hidden fixed bottom-6 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50",
+                  "lg:hidden fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50",
                   isDisabled && "opacity-50 cursor-not-allowed"
                 )}
                 title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : "Add Item"}

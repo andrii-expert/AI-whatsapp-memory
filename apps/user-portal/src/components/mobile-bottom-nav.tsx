@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, ShoppingCart, CheckSquare, Bell, Users } from "lucide-react";
+import { LayoutDashboard, Calendar, ShoppingCart, Bell, Users } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
 
 const navigationItems = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Events", href: "/calendars", icon: Calendar },
   { name: "Shopping", href: "/shopping-lists", icon: ShoppingCart },
-  { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Friends", href: "/friends", icon: Users },
 ];
@@ -37,7 +37,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#036cea] md:hidden shadow-lg">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white md:hidden shadow-lg border-t border-gray-200">
       <div className="flex items-center justify-around h-16 px-1">
         {navigationItems.map((item) => {
           const isActive =
@@ -48,23 +48,21 @@ export function MobileBottomNav() {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center flex-1 h-full min-w-0 px-1 transition-all relative",
-                isActive && "mx-0.5"
+                "flex flex-col items-center justify-center flex-1 h-full min-w-0 px-1 transition-colors"
               )}
             >
-              <div
+              <item.icon
                 className={cn(
-                  "flex flex-col items-center justify-center w-full h-full rounded-lg transition-all",
-                  isActive && "bg-[#1f299b]"
+                  "h-5 w-5 mb-1 flex-shrink-0",
+                  isActive ? "text-blue-600" : "text-gray-400"
                 )}
-              >
-                <item.icon
-                  className="h-5 w-5 mb-0.5 flex-shrink-0 text-white"
-                />
-                <span className="text-xs font-medium whitespace-nowrap text-white text-center">
-                  {item.name}
-                </span>
-              </div>
+              />
+              <span className={cn(
+                "text-xs font-medium whitespace-nowrap text-center",
+                isActive ? "text-blue-600" : "text-gray-400"
+              )}>
+                {item.name}
+              </span>
             </Link>
           );
         })}
