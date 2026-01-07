@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
+import Script from "next/script";
 import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye, LogOut } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -43,6 +44,7 @@ import {
   SheetTrigger,
 } from "@imaginecalendar/ui/sheet";
 import { useSearchParams } from "next/navigation";
+import Script from "next/script";
 
 // Shopping list icons - shopping-related emojis
 const SHOPPING_LIST_ICONS = [
@@ -381,6 +383,17 @@ export default function ShoppingListPage() {
       }
     }
   }, [selectedFolderId, viewAllItems]);
+
+  // Initialize Google Ads after script loads
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).adsbygoogle) {
+      try {
+        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      } catch (e) {
+        console.error("Error initializing Google Ads:", e);
+      }
+    }
+  }, []);
 
   // Get selected folder
   const selectedFolder = useMemo(() => {
@@ -1420,8 +1433,16 @@ export default function ShoppingListPage() {
   }
 
   return (
-    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
-      {/* Breadcrumb Navigation */}
+    <>
+      {/* Google Ads Script */}
+      <Script
+        async
+        src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7722576468912568"
+        crossOrigin="anonymous"
+        strategy="lazyOnload"
+      />
+      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
+        {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
           <Link
@@ -2743,7 +2764,7 @@ export default function ShoppingListPage() {
                 <ins
                   className="adsbygoogle"
                   style={{ display: 'block' }}
-                  data-ad-client="ca-pub-XXXXXXXXXX"
+                  data-ad-client="ca-pub-7722576468912568"
                   data-ad-slot="XXXXXXXXXX"
                   data-ad-format="auto"
                   data-full-width-responsive="true"
@@ -2752,6 +2773,7 @@ export default function ShoppingListPage() {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Add Item Modal */}
@@ -3345,7 +3367,8 @@ export default function ShoppingListPage() {
           </form>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+      </div>
+    </>
   );
 }
 
