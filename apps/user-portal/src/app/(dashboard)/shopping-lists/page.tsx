@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import Script from "next/script";
-import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye, LogOut } from "lucide-react";
+import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye, LogOut, ArrowLeft } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Textarea } from "@imaginecalendar/ui/textarea";
@@ -190,6 +190,7 @@ export default function ShoppingListPage() {
   const foldersRef = useRef<any[]>([]);
   const hasRestoredFromSessionRef = useRef(false);
   const adContainerRef = useRef<HTMLDivElement>(null);
+  const mobileAdContainerRef = useRef<HTMLDivElement>(null);
 
   // Folder states
   const [newFolderName, setNewFolderName] = useState("");
@@ -387,12 +388,21 @@ export default function ShoppingListPage() {
 
   // Initialize Google Ads after script loads
   const initializeGoogleAds = () => {
-    if (typeof window !== "undefined" && (window as any).adsbygoogle && adContainerRef.current) {
+    if (typeof window !== "undefined" && (window as any).adsbygoogle) {
       try {
-        // Find the ins element within the ad container
-        const adElement = adContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
-        if (adElement && !adElement.dataset.adsbygoogleStatus) {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+        // Initialize desktop ad
+        if (adContainerRef.current) {
+          const adElement = adContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
+          if (adElement && !adElement.dataset.adsbygoogleStatus) {
+            ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+          }
+        }
+        // Initialize mobile ad
+        if (mobileAdContainerRef.current) {
+          const mobileAdElement = mobileAdContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
+          if (mobileAdElement && !mobileAdElement.dataset.adsbygoogleStatus) {
+            ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+          }
         }
       } catch (e) {
         console.error("Error initializing Google Ads:", e);
@@ -971,28 +981,31 @@ export default function ShoppingListPage() {
     setSelectedFolderId(folderId);
     setViewAllItems(false);
     setViewAllShared(false);
-    setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllItems = () => {
     setSelectedFolderId(null);
     setViewAllItems(true);
     setViewAllShared(false);
-    setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllShared = () => {
     setSelectedFolderId(null);
     setViewAllItems(false);
     setViewAllShared(true);
-    setIsMobileSidebarOpen(false);
   };
 
   const handleSharedFolderSelect = (folderId: string) => {
     setSelectedFolderId(folderId);
     setViewAllItems(false);
     setViewAllShared(false);
-    setIsMobileSidebarOpen(false);
+  };
+
+  // Function to go back to lists view (mobile only)
+  const handleBackToLists = () => {
+    setSelectedFolderId(null);
+    setViewAllItems(false);
+    setViewAllShared(false);
   };
 
 
@@ -1561,51 +1574,17 @@ export default function ShoppingListPage() {
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
           <span className="font-medium">Shopping Lists</span>
         </div>
-        {/* Mobile: Lists button */}
-        <div className="lg:hidden">
-          <Button
-            variant="outline"
-            onClick={() => setIsMobileSidebarOpen(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-          >
-            <Menu className="h-4 w-4" />
-            <span className="font-medium">Lists</span>
-          </Button>
-        </div>
       </div>
 
-      {/* Mobile Sidebar Overlay */}
-      {isMobileSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden mt-0"
-          style={{ margin: 0 }}
-          onClick={() => setIsMobileSidebarOpen(false)}
-        />
-      )}
 
-      {/* Mobile Sidebar */}
-      <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-        <SheetContent 
-          side="left" 
-          className="p-0 !left-0 !w-[300px] !max-w-[300px] overflow-y-auto"
-        >
-          <div className="flex flex-col h-full">
-            {/* Header */}
-            <div className="px-4 py-4 border-b flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Your Lists</h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsMobileSidebarOpen(false)}
-                className="h-8 w-8"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-            
-            {/* Search Bar and Sort Dropdown */}
-            <div className="px-4 py-4 border-b">
-              <div className="flex items-center gap-2 mb-4">
+      {/* Main Content - Three Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
+        {/* Mobile Lists View - Show when no folder is selected */}
+        {!selectedFolderId && !viewAllItems && !viewAllShared && (
+          <div className="lg:hidden space-y-4 w-full">
+            <div className="space-y-4">
+              {/* Search Bar and Sort Dropdown */}
+              <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Input
                     placeholder="Search..."
@@ -1639,220 +1618,63 @@ export default function ShoppingListPage() {
                   </SelectContent>
                 </Select>
               </div>
-              
-              {/* Add New Button */}
-              <Button
-                onClick={handleOpenCreateListModal}
-                variant="outline"
-                size="sm"
-                className="w-full flex items-center gap-1.5"
-              >
-                <Plus className="h-4 w-4" />
-                Add New
-              </Button>
-            </div>
-            
-            {/* Lists */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
 
-              {/* All Items Card */}
-              <div
-                onClick={() => {
-                  handleViewAllItems();
-                  setIsMobileSidebarOpen(false);
-                }}
-                className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
-                  viewAllItems
-                    ? "bg-blue-50 border-blue-200"
-                    : "bg-white border-gray-200 hover:bg-gray-50"
-                )}
-              >
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
-                  <span className="text-xl">🎂</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900 truncate">All Items</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                      {allItems.filter((item: any) => !item.isSharedWithMe && (item.status === "open" || !item.status)).length} out of {allItems.filter((item: any) => !item.isSharedWithMe).length} remaining
-                    </span>
-                  </div>
-                </div>
+              {/* Your Lists Header */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-900">Your Lists</h2>
+                <Button
+                  onClick={handleOpenCreateListModal}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add New
+                </Button>
               </div>
 
-              {/* Folder Cards */}
-              {folders.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
-                  <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p>No lists yet.</p>
-                  <p className="text-xs mt-1">Create a list to get started.</p>
-                </div>
-              ) : (
-                sortedFolders.map((folder) => {
-                  const isSelected = selectedFolderId === folder.id && !viewAllItems;
-                  const { openItems, totalItems } = getFolderStats(folder.id, false);
-                  const remaining = totalItems - openItems;
-                  
-                  return (
-                    <div
-                      key={folder.id}
-                      onClick={() => {
-                        handleFolderSelect(folder.id);
-                        setIsMobileSidebarOpen(false);
-                      }}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
-                        isSelected
-                          ? "bg-blue-50 border-blue-200"
-                          : "bg-white border-gray-200 hover:bg-gray-50"
-                      )}
-                    >
-                      <div 
-                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ 
-                          backgroundColor: folder.color 
-                            ? ICON_COLORS.find(c => c.name === folder.color)?.value || "#FCE7F3"
-                            : "#FCE7F3"
-                        }}
-                      >
-                        <span className="text-xl">{folder.icon || "🎂"}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-gray-900 truncate">{folder.name}</div>
-                        <div className="flex items-center gap-2 mt-1">
-                          {totalItems > 0 && (
-                            <span className={cn(
-                              "text-xs px-2 py-0.5 rounded-full font-medium",
-                              remaining <= 2 ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
-                            )}>
-                              {remaining} out of {totalItems} remaining
-                            </span>
-                          )}
-                          {/* Show avatars for shared folders */}
-                          {(() => {
-                            const shareCount = getShareCount("shopping_list_folder", folder.id);
-                            if (shareCount > 0) {
-                              const shares = myShares.filter(
-                                (s: any) => s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
-                              );
-                              return (
-                                <div className="flex items-center gap-1 ml-auto">
-                                  {shares.slice(0, 2).map((share: any, idx: number) => {
-                                    const user = share.sharedWithUser;
-                                    if (!user) return null;
-                                    return (
-                                      <div
-                                        key={share.id}
-                                        className={cn(
-                                          "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
-                                          getAvatarColor(user.id)
-                                        )}
-                                        style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
-                                        title={getSharedUserDisplayName(user)}
-                                      >
-                                        {getUserInitials(user)}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                            }}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                          {(() => {
-                            const shareCount = getShareCount("shopping_list_folder", folder.id);
-                            const isShared = shareCount > 0;
-                            return (
-                              <DropdownMenuItem
-                                onClick={(e: React.MouseEvent) => {
-                                  e.stopPropagation();
-                                  if (isShared) {
-                                    openShareDetails("shopping_list_folder", folder.id, folder.name);
-                                  } else {
-                                    openShareModal("shopping_list_folder", folder.id, folder.name);
-                                  }
-                                }}
-                                className="flex items-center gap-2 cursor-pointer"
-                              >
-                                {isShared ? (
-                                  <>
-                                    <Users className="h-4 w-4" />
-                                    <span>Shared</span>
-                                    <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                                      {shareCount}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Share2 className="h-4 w-4" />
-                                    <span>Share</span>
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                            );
-                          })()}
-                          <DropdownMenuItem
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleEditFolder(folder.id, folder.name);
-                            }}
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                            <span>Edit</span>
-                          </DropdownMenuItem>
-                          {folder.name.toLowerCase() !== "general" && (
-                            <DropdownMenuItem
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleDeleteFolder(folder.id, folder.name);
-                              }}
-                              className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              {/* Lists */}
+              <div className="space-y-2">
+                {/* All Items Card */}
+                <div
+                  onClick={handleViewAllItems}
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
+                    viewAllItems
+                      ? "bg-blue-50 border-blue-200"
+                      : "bg-white border-gray-200 hover:bg-gray-50"
+                  )}
+                >
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                    <span className="text-xl">🎂</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-gray-900 truncate">All Items</div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                        {allItems.filter((item: any) => !item.isSharedWithMe && (item.status === "open" || !item.status)).length} out of {allItems.filter((item: any) => !item.isSharedWithMe).length} remaining
+                      </span>
                     </div>
-                  );
-                })
-              )}
+                  </div>
+                </div>
 
-              {/* Shared Section */}
-              {sharedFolders.length > 0 && (
-                <>
-                  <div className="h-px bg-gray-200 my-2" />
-                  {sharedFolders.map((folder) => {
+                {/* Folder Cards */}
+                {folders.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p>No lists yet.</p>
+                    <p className="text-xs mt-1">Create a list to get started.</p>
+                  </div>
+                ) : (
+                  sortedFolders.map((folder) => {
                     const isSelected = selectedFolderId === folder.id && !viewAllItems;
-                    const { openItems, totalItems } = getFolderStats(folder.id, true);
+                    const { openItems, totalItems } = getFolderStats(folder.id, false);
                     const remaining = totalItems - openItems;
                     
                     return (
                       <div
                         key={folder.id}
-                        onClick={() => {
-                          handleSharedFolderSelect(folder.id);
-                          setIsMobileSidebarOpen(false);
-                        }}
+                        onClick={() => handleFolderSelect(folder.id)}
                         className={cn(
                           "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
                           isSelected
@@ -1860,8 +1682,15 @@ export default function ShoppingListPage() {
                             : "bg-white border-gray-200 hover:bg-gray-50"
                         )}
                       >
-                        <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xl">🎂</span>
+                        <div 
+                          className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ 
+                            backgroundColor: folder.color 
+                              ? ICON_COLORS.find(c => c.name === folder.color)?.value || "#FCE7F3"
+                              : "#FCE7F3"
+                          }}
+                        >
+                          <span className="text-xl">{folder.icon || "🎂"}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-gray-900 truncate">{folder.name}</div>
@@ -1876,10 +1705,11 @@ export default function ShoppingListPage() {
                             )}
                             {/* Show avatars for shared folders */}
                             {(() => {
-                              const shares = myShares.filter(
-                                (s: any) => s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
-                              );
-                              if (shares.length > 0) {
+                              const shareCount = getShareCount("shopping_list_folder", folder.id);
+                              if (shareCount > 0) {
+                                const shares = myShares.filter(
+                                  (s: any) => s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
+                                );
                                 return (
                                   <div className="flex items-center gap-1 ml-auto">
                                     {shares.slice(0, 2).map((share: any, idx: number) => {
@@ -1920,52 +1750,213 @@ export default function ShoppingListPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                            {(() => {
+                              const shareCount = getShareCount("shopping_list_folder", folder.id);
+                              const isShared = shareCount > 0;
+                              return (
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    if (isShared) {
+                                      openShareDetails("shopping_list_folder", folder.id, folder.name);
+                                    } else {
+                                      openShareModal("shopping_list_folder", folder.id, folder.name);
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  {isShared ? (
+                                    <>
+                                      <Users className="h-4 w-4" />
+                                      <span>Shared</span>
+                                      <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                        {shareCount}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Share2 className="h-4 w-4" />
+                                      <span>Share</span>
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                              );
+                            })()}
                             <DropdownMenuItem
                               onClick={(e: React.MouseEvent) => {
                                 e.stopPropagation();
-                                openShareDetails("shopping_list_folder", folder.id, folder.name);
+                                handleEditFolder(folder.id, folder.name);
                               }}
                               className="flex items-center gap-2 cursor-pointer"
                             >
-                              <Users className="h-4 w-4" />
-                              <span>Shared</span>
+                              <Edit2 className="h-4 w-4" />
+                              <span>Edit</span>
                             </DropdownMenuItem>
-                            {folder.sharePermission === "edit" && (
+                            {folder.name.toLowerCase() !== "general" && (
                               <DropdownMenuItem
                                 onClick={(e: React.MouseEvent) => {
                                   e.stopPropagation();
-                                  handleEditFolder(folder.id, folder.name);
+                                  handleDeleteFolder(folder.id, folder.name);
                                 }}
-                                className="flex items-center gap-2 cursor-pointer"
+                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
                               >
-                                <Edit2 className="h-4 w-4" />
-                                <span>Edit</span>
+                                <Trash2 className="h-4 w-4" />
+                                <span>Delete</span>
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleExitSharedFolder(folder.id, folder.name);
-                              }}
-                              className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
-                            >
-                              <LogOut className="h-4 w-4" />
-                              <span>Exit</span>
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
                     );
-                  })}
-                </>
-              )}
+                  })
+                )}
+
+                {/* Shared Section */}
+                {sharedFolders.length > 0 && (
+                  <>
+                    <div className="h-px bg-gray-200 my-2" />
+                    {sharedFolders.map((folder) => {
+                      const isSelected = selectedFolderId === folder.id && !viewAllItems;
+                      const { openItems, totalItems } = getFolderStats(folder.id, true);
+                      const remaining = totalItems - openItems;
+                      
+                      return (
+                        <div
+                          key={folder.id}
+                          onClick={() => handleSharedFolderSelect(folder.id)}
+                          className={cn(
+                            "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                            isSelected
+                              ? "bg-blue-50 border-blue-200"
+                              : "bg-white border-gray-200 hover:bg-gray-50"
+                          )}
+                        >
+                          <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                            <span className="text-xl">🎂</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {totalItems > 0 && (
+                                <span className={cn(
+                                  "text-xs px-2 py-0.5 rounded-full font-medium",
+                                  remaining <= 2 ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
+                                )}>
+                                  {remaining} out of {totalItems} remaining
+                                </span>
+                              )}
+                              {/* Show avatars for shared folders */}
+                              {(() => {
+                                const shares = myShares.filter(
+                                  (s: any) => s.resourceType === "shopping_list_folder" && s.resourceId === folder.id
+                                );
+                                if (shares.length > 0) {
+                                  return (
+                                    <div className="flex items-center gap-1 ml-auto">
+                                      {shares.slice(0, 2).map((share: any, idx: number) => {
+                                        const user = share.sharedWithUser;
+                                        if (!user) return null;
+                                        return (
+                                          <div
+                                            key={share.id}
+                                            className={cn(
+                                              "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                              getAvatarColor(user.id)
+                                            )}
+                                            style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                            title={getSharedUserDisplayName(user)}
+                                          >
+                                            {getUserInitials(user)}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                }}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  openShareDetails("shopping_list_folder", folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <Users className="h-4 w-4" />
+                                <span>Shared</span>
+                              </DropdownMenuItem>
+                              {folder.sharePermission === "edit" && (
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleEditFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  handleExitSharedFolder(folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                              >
+                                <LogOut className="h-4 w-4" />
+                                <span>Exit</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+
+              {/* Mobile Google Ad */}
+              <div className="lg:hidden mt-6">
+                <div ref={mobileAdContainerRef} className="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[250px] flex items-center justify-center">
+                  <div className="text-center text-gray-500 w-full">
+                    <div className="text-sm font-medium mb-2">Advertisement</div>
+                    {/* Google Ads will be inserted here */}
+                    <ins
+                      className="adsbygoogle"
+                      style={{ 
+                        display: 'block',
+                        width: '100%',
+                        height: '250px'
+                      }}
+                      data-ad-client="ca-pub-7722576468912568"
+                      data-ad-slot="XXXXXXXXXX"
+                      data-ad-format="auto"
+                      data-full-width-responsive="true"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        )}
 
-      {/* Main Content - Three Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
         {/* Desktop Left Panel - Lists Sidebar */}
         <div className="hidden lg:block space-y-4">
           <div className="space-y-4">
@@ -2321,11 +2312,23 @@ export default function ShoppingListPage() {
         </div>
 
         {/* Right Panel - Items */}
-        <div className="space-y-4 w-full min-w-0">
+        <div className={cn(
+          "space-y-4 w-full min-w-0",
+          (!selectedFolderId && !viewAllItems && !viewAllShared) ? "hidden lg:block" : "block"
+        )}>
 
           {/* Header with list name and shared info */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 flex-1 min-w-0">
+              {/* Mobile Back Button */}
+              {(selectedFolder || viewAllItems || viewAllShared) && (
+                <button
+                  onClick={handleBackToLists}
+                  className="lg:hidden h-10 w-10 flex-shrink-0 bg-white rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <ArrowLeft className="h-5 w-5 text-gray-800" />
+                </button>
+              )}
               {viewAllItems ? (
                 <div className="flex items-center gap-2">
                   <div 
@@ -2354,7 +2357,7 @@ export default function ShoppingListPage() {
                     <span className="text-lg">{selectedFolder.icon || "🛒"}</span>
                   </div>
                   <span className="font-bold text-gray-900 text-lg">{selectedFolder.name}</span>
-                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                  <ChevronDown className="h-4 w-4 text-gray-400 hidden lg:block" />
                 </div>
               ) : (
                 <div className="flex-1" />
@@ -2763,10 +2766,13 @@ export default function ShoppingListPage() {
       {/* Add Item Modal */}
       <AlertDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Add Item</AlertDialogTitle>
-              <AlertDialogDescription className="mt-1 text-sm text-gray-600">
+          <div className="relative mb-4">
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                Add Item
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
                 Add new item to your shopping list
               </AlertDialogDescription>
             </div>
@@ -2900,27 +2906,16 @@ export default function ShoppingListPage() {
       {/* Edit Item Modal */}
       <AlertDialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Edit Item</AlertDialogTitle>
-              <AlertDialogDescription className="mt-1 text-sm text-gray-600">
+          <div className="relative mb-4">
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                Edit Item
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
                 Update the item details
               </AlertDialogDescription>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 sm:h-8 sm:w-8"
-              onClick={() => {
-                setIsEditModalOpen(false);
-                setEditingItemId(null);
-                setEditItemName("");
-                setEditItemDescription("");
-                setEditItemCategory("");
-              }}
-            >
-              <X className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
           </div>
           <form onSubmit={handleUpdateItem} className="overflow-x-hidden">
             <div className="space-y-4 sm:space-y-6">
@@ -3116,9 +3111,18 @@ export default function ShoppingListPage() {
 
       {/* Create New List Modal */}
       <AlertDialog open={isCreateListModalOpen} onOpenChange={setIsCreateListModalOpen}>
-        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Create New List</AlertDialogTitle>
+        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <div className="relative mb-4">
+            
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                Create New List
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
+                Add new item to your shopping list
+              </AlertDialogDescription>
+            </div>
           </div>
           
           <form onSubmit={handleCreateFolder} className="space-y-4 sm:space-y-6 overflow-x-hidden">
