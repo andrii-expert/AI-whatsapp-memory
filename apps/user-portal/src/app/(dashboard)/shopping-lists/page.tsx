@@ -2298,37 +2298,61 @@ export default function ShoppingListPage() {
               )}
             </div>
             
-            {/* Shared button and avatars */}
-            {selectedFolder && folderShares.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-sm"
-                >
-                  Shared
-                </Button>
-                <div className="flex items-center gap-1">
-                  {folderShares.slice(0, 2).map((share: any, idx: number) => {
-                    const sharedUser = share.sharedWithUser;
-                    if (!sharedUser) return null;
-                    return (
-                      <div
-                        key={share.id}
-                        className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold",
-                          getAvatarColor(sharedUser.id)
-                        )}
-                        style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
-                        title={getSharedUserDisplayName(sharedUser)}
-                      >
-                        {getUserInitials(sharedUser)}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Shared button, avatars, and Add Item button (desktop) */}
+            <div className="flex items-center gap-2">
+              {selectedFolder && folderShares.length > 0 && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-sm"
+                  >
+                    Shared
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {folderShares.slice(0, 2).map((share: any, idx: number) => {
+                      const sharedUser = share.sharedWithUser;
+                      if (!sharedUser) return null;
+                      return (
+                        <div
+                          key={share.id}
+                          className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                            getAvatarColor(sharedUser.id)
+                          )}
+                          style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                          title={getSharedUserDisplayName(sharedUser)}
+                        >
+                          {getUserInitials(sharedUser)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {/* Desktop Add Item Button */}
+              {(() => {
+                const isSharedFolder = selectedFolder?.isSharedWithMe || false;
+                const folderPermission = selectedFolder?.sharePermission;
+                const canAddToFolder = !isSharedFolder || folderPermission === "edit";
+                const isDisabled = Boolean(viewAllShared || (!selectedFolderId && !viewAllItems) || (selectedFolderId && !canAddToFolder));
+                
+                return (
+                  <Button
+                    onClick={() => !isDisabled && setIsAddModalOpen(true)}
+                    disabled={!!isDisabled}
+                    className={cn(
+                      "hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white",
+                      isDisabled && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : "Add Item"}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Item
+                  </Button>
+                );
+              })()}
+            </div>
           </div>
 
           {/* Search and Sort Bar */}
@@ -2424,10 +2448,10 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Items List */}
-          <div className="space-y-0 relative pb-20">
+          <div className="space-y-4 relative pb-20">
         {filteredItems.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
-            <ShoppingCart className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+            <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
             <p className="text-lg font-medium">No items found</p>
             <p className="text-sm mt-1">
               {searchQuery
@@ -2622,7 +2646,7 @@ export default function ShoppingListPage() {
         )}
           </div>
           
-          {/* Floating Action Button */}
+          {/* Floating Action Button - Mobile Only */}
           {(() => {
             const isSharedFolder = selectedFolder?.isSharedWithMe || false;
             const folderPermission = selectedFolder?.sharePermission;
@@ -2634,7 +2658,7 @@ export default function ShoppingListPage() {
                 onClick={() => !isDisabled && setIsAddModalOpen(true)}
                 disabled={!!isDisabled}
                 className={cn(
-                  "fixed bottom-6 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50",
+                  "lg:hidden fixed bottom-6 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50",
                   isDisabled && "opacity-50 cursor-not-allowed"
                 )}
                 title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : "Add Item"}
