@@ -2361,8 +2361,11 @@ export default function ShoppingListPage() {
                 "px-4 py-2 rounded-full text-sm font-medium transition-colors",
                 filterStatus === "all"
                   ? "bg-gray-900 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
+                  : "text-gray-600 hover:bg-gray-50"
               )}
+              style={{
+                backgroundColor: filterStatus === "all" ? undefined : "#FAFAFA"
+              }}
             >
               All
             </button>
@@ -2372,8 +2375,11 @@ export default function ShoppingListPage() {
                 "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
                 filterStatus === "open"
                   ? "bg-gray-900 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
+                  : "text-gray-600 hover:bg-gray-50"
               )}
+              style={{
+                backgroundColor: filterStatus === "open" ? undefined : "#FAFAFA"
+              }}
             >
               Open
               {itemCounts.open > 0 && (
@@ -2388,8 +2394,11 @@ export default function ShoppingListPage() {
                 "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
                 filterStatus === "completed"
                   ? "bg-gray-900 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
+                  : "text-gray-600 hover:bg-gray-50"
               )}
+              style={{
+                backgroundColor: filterStatus === "completed" ? undefined : "#FAFAFA"
+              }}
             >
               Closed
               {itemCounts.completed > 0 && (
@@ -2485,8 +2494,11 @@ export default function ShoppingListPage() {
                             !canEditItem && "opacity-50 cursor-not-allowed",
                             item.status === "completed"
                               ? "bg-green-500 border-green-500 text-white"
-                              : "border-gray-300 hover:border-gray-400 bg-white"
+                              : "border-gray-300 hover:border-gray-400"
                           )}
+                          style={{
+                            backgroundColor: item.status === "completed" ? undefined : "#FAFAFA"
+                          }}
                           title={!canEditItem ? "View only - You cannot edit this item" : undefined}
                         >
                           {item.status === "completed" && <Check className="h-3 w-3" />}
