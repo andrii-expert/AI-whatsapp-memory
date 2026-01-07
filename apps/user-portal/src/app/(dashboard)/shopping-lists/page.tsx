@@ -172,7 +172,6 @@ export default function ShoppingListPage() {
   const [editItemDescription, setEditItemDescription] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
   const [editItemCategory, setEditItemCategory] = useState("");
-  const [isCategoryInputMode, setIsCategoryInputMode] = useState<"select" | "manual">("select");
   const [isLoadingAISuggestion, setIsLoadingAISuggestion] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isCreateListModalOpen, setIsCreateListModalOpen] = useState(false);
@@ -186,6 +185,7 @@ export default function ShoppingListPage() {
   // Refs for draggable scroll
   const iconScrollRef = useRef<HTMLDivElement>(null);
   const colorScrollRef = useRef<HTMLDivElement>(null);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
   const hasRestoredFromSessionRef = useRef(false);
@@ -502,7 +502,6 @@ export default function ShoppingListPage() {
         setNewItemName("");
         setNewItemDescription("");
         setNewItemCategory("");
-        setIsCategoryInputMode("select");
         setIsAddModalOpen(false);
         toast({
           title: "Item added",
@@ -1165,8 +1164,7 @@ export default function ShoppingListPage() {
         const suggestedCategory = result.suggestedCategory.trim();
         if (suggestedCategory) {
           setNewItemCategory(suggestedCategory);
-          setIsCategoryInputMode("manual");
-          console.log('Setting category to:', suggestedCategory, 'Mode:', "manual");
+          console.log('Setting category to:', suggestedCategory);
           toast({
             title: "Category suggested",
             description: `Suggested category: ${suggestedCategory}`,
@@ -2708,19 +2706,6 @@ export default function ShoppingListPage() {
                 Add new item to your shopping list
               </AlertDialogDescription>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => {
-                setIsAddModalOpen(false);
-                setNewItemName("");
-                setNewItemDescription("");
-                setNewItemCategory("");
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
           <form onSubmit={handleCreateItem}>
             <div className="space-y-4">
@@ -2731,7 +2716,7 @@ export default function ShoppingListPage() {
                   value={newItemName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemName(e.target.value)}
                   placeholder="Milk"
-                  className="mt-1.5"
+                  className="mt-1.5 bg-gray-50"
                   autoFocus
                 />
               </div>
@@ -2744,7 +2729,7 @@ export default function ShoppingListPage() {
                   value={newItemDescription}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewItemDescription(e.target.value)}
                   placeholder="Write details..."
-                  className="mt-1.5 min-h-[80px] resize-none"
+                  className="mt-1.5 min-h-[80px] resize-none bg-gray-50"
                 />
               </div>
               <div>
@@ -2752,36 +2737,75 @@ export default function ShoppingListPage() {
                   Category <span className="text-gray-500 font-normal">(optional)</span>
                 </Label>
                 <div className="mt-1.5 space-y-2">
-                  {/* Category Tags */}
+                  {/* Category Tags - Draggable Slider */}
                   {existingCategories.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {existingCategories.slice(0, 10).map((category: string) => (
-                        <button
-                          key={category}
-                          type="button"
-                          onClick={() => {
-                            setNewItemCategory(newItemCategory === category ? "" : category);
-                          }}
-                          className={cn(
-                            "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                            newItemCategory === category
-                              ? "border-2 border-gray-900 bg-white text-gray-900"
-                              : "border border-gray-300 bg-white text-gray-700 hover:border-gray-400"
-                          )}
-                        >
-                          {category}
-                        </button>
-                      ))}
+                    <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
+                      <div 
+                        ref={categoryScrollRef}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDragScroll(e, categoryScrollRef as React.RefObject<HTMLDivElement | null>);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleDragScroll(e, categoryScrollRef as React.RefObject<HTMLDivElement | null>);
+                        }}
+                        onTouchMove={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="flex gap-2 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                        style={{
+                          WebkitOverflowScrolling: 'touch',
+                          width: '100%',
+                          maxWidth: '100%',
+                          touchAction: 'pan-x',
+                          overflowX: 'auto',
+                          overflowY: 'hidden',
+                        }}
+                      >
+                        {existingCategories.map((category: string) => (
+                          <button
+                            key={category}
+                            type="button"
+                            onClick={() => {
+                              setNewItemCategory(newItemCategory === category ? "" : category);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            className={cn(
+                              "px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap select-none",
+                              newItemCategory === category
+                                ? "border-2 border-gray-900 bg-white text-gray-900"
+                                : "border border-gray-300 bg-white text-gray-700 hover:border-gray-400"
+                            )}
+                          >
+                            {category}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
-                  {/* Custom Category Input */}
-                  <Input
-                    id="item-category"
-                    value={newItemCategory}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
-                    placeholder="Please specify..."
-                    className="w-full"
-                  />
+                  {/* Custom Category Input with AI Suggestion Button */}
+                  <div className="flex gap-2">
+                    <Input
+                      id="item-category"
+                      value={newItemCategory}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
+                      placeholder="Please specify..."
+                      className="flex-1 bg-gray-50"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={getAICategorySuggestion}
+                      disabled={isLoadingAISuggestion || !newItemName.trim()}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      {isLoadingAISuggestion ? "Analyzing..." : "AI Suggestion"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
