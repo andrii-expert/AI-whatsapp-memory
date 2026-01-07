@@ -188,6 +188,7 @@ export default function ShoppingListPage() {
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
   const hasRestoredFromSessionRef = useRef(false);
+  const adContainerRef = useRef<HTMLDivElement>(null);
 
   // Folder states
   const [newFolderName, setNewFolderName] = useState("");
@@ -384,14 +385,30 @@ export default function ShoppingListPage() {
   }, [selectedFolderId, viewAllItems]);
 
   // Initialize Google Ads after script loads
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).adsbygoogle) {
+  const initializeGoogleAds = () => {
+    if (typeof window !== "undefined" && (window as any).adsbygoogle && adContainerRef.current) {
       try {
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+        // Find the ins element within the ad container
+        const adElement = adContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
+        if (adElement && !adElement.dataset.adsbygoogleStatus) {
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+        }
       } catch (e) {
         console.error("Error initializing Google Ads:", e);
       }
     }
+  };
+
+  // Fallback: Try to initialize ads if script already loaded
+  useEffect(() => {
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      if (typeof window !== "undefined" && (window as any).adsbygoogle) {
+        initializeGoogleAds();
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
   // Get selected folder
@@ -1439,6 +1456,7 @@ export default function ShoppingListPage() {
         src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7722576468912568"
         crossOrigin="anonymous"
         strategy="lazyOnload"
+        onLoad={initializeGoogleAds}
       />
       <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
         {/* Breadcrumb Navigation */}
@@ -2755,20 +2773,23 @@ export default function ShoppingListPage() {
         <div className="hidden xl:block space-y-4">
           <div className="sticky top-4">
             {/* Google Ads Container */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[600px] flex items-center justify-center">
-              <div className="text-center text-gray-500">
+            <div ref={adContainerRef} className="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[600px] flex items-center justify-center">
+              <div className="text-center text-gray-500 w-full">
                 <div className="text-sm font-medium mb-2">Advertisement</div>
-                <div className="text-xs">300x600</div>
                 {/* Google Ads will be inserted here */}
                 <ins
                   className="adsbygoogle"
-                  style={{ display: 'block' }}
+                  style={{ 
+                    display: 'block',
+                    width: '300px',
+                    height: '600px'
+                  }}
                   data-ad-client="ca-pub-7722576468912568"
                   data-ad-slot="XXXXXXXXXX"
-                  data-ad-format="auto"
-                  data-full-width-responsive="true"
+                  data-ad-format="rectangle"
                 />
               </div>
+            </div>
           </div>
         </div>
       </div>
