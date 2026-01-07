@@ -2698,29 +2698,42 @@ export default function ShoppingListPage() {
 
       {/* Add Item Modal */}
       <AlertDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <AlertDialogContent className="sm:max-w-lg">
+        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <AlertDialogTitle className="text-lg font-bold text-gray-900">Add Item</AlertDialogTitle>
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Add Item</AlertDialogTitle>
               <AlertDialogDescription className="mt-1 text-sm text-gray-600">
                 Add new item to your shopping list
               </AlertDialogDescription>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 sm:h-8 sm:w-8"
+              onClick={() => {
+                setIsAddModalOpen(false);
+                setNewItemName("");
+                setNewItemDescription("");
+                setNewItemCategory("");
+              }}
+            >
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+            </Button>
           </div>
-          <form onSubmit={handleCreateItem}>
-            <div className="space-y-4">
-              <div>
+          <form onSubmit={handleCreateItem} className="overflow-x-hidden">
+            <div className="space-y-4 sm:space-y-6">
+              <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="item-name" className="text-sm font-medium text-gray-900">Item Name</Label>
                 <Input
                   id="item-name"
                   value={newItemName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemName(e.target.value)}
                   placeholder="Milk"
-                  className="mt-1.5 bg-gray-50"
+                  className="bg-gray-50 h-10 sm:h-11 w-full"
                   autoFocus
                 />
               </div>
-              <div>
+              <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="item-description" className="text-sm font-medium text-gray-900">
                   Description <span className="text-gray-500 font-normal">(optional)</span>
                 </Label>
@@ -2729,14 +2742,14 @@ export default function ShoppingListPage() {
                   value={newItemDescription}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewItemDescription(e.target.value)}
                   placeholder="Write details..."
-                  className="mt-1.5 min-h-[80px] resize-none bg-gray-50"
+                  className="min-h-[80px] sm:min-h-[100px] resize-none bg-gray-50 w-full"
                 />
               </div>
-              <div>
+              <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="item-category" className="text-sm font-medium text-gray-900">
                   Category <span className="text-gray-500 font-normal">(optional)</span>
                 </Label>
-                <div className="mt-1.5 space-y-2">
+                <div className="space-y-2">
                   {/* Category Tags - Draggable Slider */}
                   {existingCategories.length > 0 && (
                     <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
@@ -2787,13 +2800,13 @@ export default function ShoppingListPage() {
                     </div>
                   )}
                   {/* Custom Category Input with AI Suggestion Button */}
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       id="item-category"
                       value={newItemCategory}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
                       placeholder="Please specify..."
-                      className="flex-1 bg-gray-50"
+                      className="flex-1 bg-gray-50 h-10 sm:h-11"
                     />
                     <Button
                       type="button"
@@ -2801,7 +2814,7 @@ export default function ShoppingListPage() {
                       size="sm"
                       onClick={getAICategorySuggestion}
                       disabled={isLoadingAISuggestion || !newItemName.trim()}
-                      className="shrink-0 whitespace-nowrap"
+                      className="shrink-0 whitespace-nowrap h-10 sm:h-11"
                     >
                       {isLoadingAISuggestion ? "Analyzing..." : "AI Suggestion"}
                     </Button>
@@ -2809,7 +2822,14 @@ export default function ShoppingListPage() {
                 </div>
               </div>
             </div>
-            <AlertDialogFooter className="mt-6 gap-2">
+            <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4 mt-4 sm:mt-6">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+                disabled={!newItemName.trim() || createItemMutation.isPending}
+              >
+                Add Item
+              </Button>
               <AlertDialogCancel
                 onClick={() => {
                   setIsAddModalOpen(false);
@@ -2817,17 +2837,10 @@ export default function ShoppingListPage() {
                   setNewItemDescription("");
                   setNewItemCategory("");
                 }}
-                className="border-gray-300"
+                className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
               >
                 Cancel
               </AlertDialogCancel>
-              <Button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={!newItemName.trim() || createItemMutation.isPending}
-              >
-                Add Item
-              </Button>
             </AlertDialogFooter>
           </form>
         </AlertDialogContent>
