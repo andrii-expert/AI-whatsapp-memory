@@ -569,9 +569,9 @@ export default function FriendsPage() {
   const isLoading = isLoadingFolders || isLoadingAddresses;
 
   return (
-    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-0 md:space-y-6">
       {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm justify-between">
+      <div className="hidden lg:flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
           <Link
             href="/dashboard"
@@ -583,7 +583,6 @@ export default function FriendsPage() {
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
           <span className="font-medium">My Friends</span>
         </div>
-
       </div>
 
       {/* Main Content - Two Column Layout */}
@@ -1380,186 +1379,203 @@ export default function FriendsPage() {
 
       {/* Add/Edit Friend Modal */}
       <AlertDialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
-        <AlertDialogContent className="max-w-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>{addressModalMode === "add" ? "Add Friend" : "Edit Friend"}</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div>
-                <p className="mb-4">
-                  {addressModalMode === "add"
-                    ? "Create a new friend entry. You can optionally connect it to a user account."
-                    : "Update the friend details."}
-                </p>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="address-name">Friend Name *</Label>
-                    <Input
-                      id="address-name"
-                      value={addressModalName}
-                      onChange={(e) => setAddressModalName(e.target.value)}
-                      placeholder="e.g., John Doe, Company Name"
-                    />
-                  </div>
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <div className="relative mb-4">
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                {addressModalMode === "add" ? "Add Friend" : "Edit Friend"}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
+                {addressModalMode === "add"
+                  ? "Create a new friend entry. You can optionally connect it to a user account."
+                  : "Update the friend details."}
+              </AlertDialogDescription>
+            </div>
+          </div>
+          
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (addressModalMode === "add") {
+              handleCreateAddress();
+            } else {
+              handleUpdateAddress();
+            }
+          }} className="space-y-4 sm:space-y-6 overflow-x-hidden">
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="address-name" className="text-sm font-medium text-gray-900">Friend Name *</Label>
+              <Input
+                id="address-name"
+                value={addressModalName}
+                onChange={(e) => setAddressModalName(e.target.value)}
+                placeholder="e.g., John Doe, Company Name"
+                className="bg-gray-50 h-10 sm:h-11 w-full"
+              />
+            </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="address-folder">Folder</Label>
-                    <Select
-                      value={addressModalFolderId || "uncategorized"}
-                      onValueChange={(value) => setAddressModalFolderId(value === "uncategorized" ? null : value)}
-                    >
-                      <SelectTrigger id="address-folder">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                        {folders.map((folder: any) => (
-                          <SelectItem key={folder.id} value={folder.id}>
-                            {folder.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="address-folder" className="text-sm font-medium text-gray-900">Folder</Label>
+              <Select
+                value={addressModalFolderId || "uncategorized"}
+                onValueChange={(value) => setAddressModalFolderId(value === "uncategorized" ? null : value)}
+              >
+                <SelectTrigger id="address-folder" className="bg-gray-50 h-10 sm:h-11 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                  {folders.map((folder: any) => (
+                    <SelectItem key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                  <div className="space-y-2">
-                    <Label>Connect to User (Optional)</Label>
-                    {addressModalConnectedUser ? (
-                      <div className="border rounded-lg p-3 flex items-center justify-between">
-                        <div>
-                          <div className="font-medium">
-                            {addressModalConnectedUser.firstName || addressModalConnectedUser.name || "User"}
-                          </div>
-                          {addressModalConnectedUser.email && (
-                            <div className="text-sm text-muted-foreground">{addressModalConnectedUser.email}</div>
-                          )}
-                          {addressModalConnectedUser.phone && (
-                            <div className="text-sm text-muted-foreground">{addressModalConnectedUser.phone}</div>
-                          )}
-                        </div>
-                        <Button variant="ghost" size="icon" onClick={handleRemoveConnectedUser}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Search by email or phone number..."
-                            value={userSearchTerm}
-                            onChange={(e) => {
-                              setUserSearchTerm(e.target.value);
-                              if (e.target.value.length >= 2) {
-                                handleSearchUsers(e.target.value);
-                              } else {
-                                setUserSearchResults([]);
-                              }
-                            }}
-                            className="pl-10"
-                          />
-                        </div>
-                        {isSearchingUsers && (
-                          <div className="flex items-center justify-center py-4">
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                          </div>
-                        )}
-                        {userSearchResults.length > 0 && (
-                          <div className="border rounded-lg max-h-48 overflow-y-auto">
-                            {userSearchResults.map((user) => (
-                              <div
-                                key={user.id}
-                                className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0"
-                                onClick={() => handleSelectUser(user)}
-                              >
-                                <div className="font-medium">
-                                  {user.firstName || user.name || "User"}
-                                </div>
-                                {user.email && (
-                                  <div className="text-sm text-muted-foreground">{user.email}</div>
-                                )}
-                                {user.phone && (
-                                  <div className="text-sm text-muted-foreground">{user.phone}</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {userSearchTerm.length >= 2 && !isSearchingUsers && userSearchResults.length === 0 && (
-                          <div className="text-sm text-muted-foreground text-center py-4">
-                            No users found
-                          </div>
-                        )}
-                      </div>
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-sm font-medium text-gray-900">Connect to User <span className="text-gray-500 font-normal">(optional)</span></Label>
+              {addressModalConnectedUser ? (
+                <div className="border border-gray-200 rounded-lg p-3 flex items-center justify-between bg-gray-50">
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      {addressModalConnectedUser.firstName || addressModalConnectedUser.name || "User"}
+                    </div>
+                    {addressModalConnectedUser.email && (
+                      <div className="text-sm text-gray-500 mt-1">{addressModalConnectedUser.email}</div>
+                    )}
+                    {addressModalConnectedUser.phone && (
+                      <div className="text-sm text-gray-500 mt-1">{addressModalConnectedUser.phone}</div>
                     )}
                   </div>
+                  <Button variant="ghost" size="icon" onClick={handleRemoveConnectedUser} className="h-8 w-8">
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setIsAddressModalOpen(false);
-              resetAddressModal();
-            }}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (addressModalMode === "add") {
-                  handleCreateAddress();
-                } else {
-                  handleUpdateAddress();
-                }
-              }}
-              disabled={!addressModalName.trim() || createAddressMutation.isPending || updateAddressMutation.isPending}
-            >
-              {addressModalMode === "add" ? "Create" : "Update"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+              ) : (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search by email or phone number..."
+                      value={userSearchTerm}
+                      onChange={(e) => {
+                        setUserSearchTerm(e.target.value);
+                        if (e.target.value.length >= 2) {
+                          handleSearchUsers(e.target.value);
+                        } else {
+                          setUserSearchResults([]);
+                        }
+                      }}
+                      className="pl-10 bg-gray-50 h-10 sm:h-11 w-full"
+                    />
+                  </div>
+                  {isSearchingUsers && (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                    </div>
+                  )}
+                  {userSearchResults.length > 0 && (
+                    <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto bg-white">
+                      {userSearchResults.map((user) => (
+                        <div
+                          key={user.id}
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                          onClick={() => handleSelectUser(user)}
+                        >
+                          <div className="font-medium text-gray-900">
+                            {user.firstName || user.name || "User"}
+                          </div>
+                          {user.email && (
+                            <div className="text-sm text-gray-500 mt-1">{user.email}</div>
+                          )}
+                          {user.phone && (
+                            <div className="text-sm text-gray-500 mt-1">{user.phone}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {userSearchTerm.length >= 2 && !isSearchingUsers && userSearchResults.length === 0 && (
+                    <div className="text-sm text-gray-500 text-center py-4">
+                      No users found
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+                disabled={!addressModalName.trim() || createAddressMutation.isPending || updateAddressMutation.isPending}
+              >
+                {addressModalMode === "add" ? "Add Friend" : "Update Friend"}
+              </Button>
+              <AlertDialogCancel
+                onClick={() => {
+                  setIsAddressModalOpen(false);
+                  resetAddressModal();
+                }}
+                className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
+              >
+                Cancel
+              </AlertDialogCancel>
+            </AlertDialogFooter>
+          </form>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* View Address Modal */}
       <AlertDialog open={isViewAddressModalOpen} onOpenChange={setIsViewAddressModalOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{viewAddressData?.name}</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-4">
-                {viewAddressData?.connectedUser && (
-                  <div className="space-y-2">
-                    <Label>Connected User</Label>
-                    <div className="border rounded-lg p-3">
-                      <div className="font-medium">
-                        {viewAddressData.connectedUser.firstName || viewAddressData.connectedUser.name || "User"}
-                      </div>
-                      {viewAddressData.connectedUser.email && (
-                        <div className="text-sm text-muted-foreground mt-1">
-                          <Mail className="h-3 w-3 inline mr-1" />
-                          {viewAddressData.connectedUser.email}
-                        </div>
-                      )}
-                      {viewAddressData.connectedUser.phone && (
-                        <div className="text-sm text-muted-foreground mt-1">
-                          <Phone className="h-3 w-3 inline mr-1" />
-                          {viewAddressData.connectedUser.phone}
-                        </div>
-                      )}
-                    </div>
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <div className="relative mb-4">
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                {viewAddressData?.name}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
+                Friend details
+              </AlertDialogDescription>
+            </div>
+          </div>
+          
+          <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
+            {viewAddressData?.connectedUser && (
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label className="text-sm font-medium text-gray-900">Connected User</Label>
+                <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="font-medium text-gray-900">
+                    {viewAddressData.connectedUser.firstName || viewAddressData.connectedUser.name || "User"}
                   </div>
-                )}
-                {viewAddressData?.folderId && (
-                  <div className="space-y-2">
-                    <Label>Folder</Label>
-                    <div className="text-sm">
-                      {allFolders.find((f: any) => f.id === viewAddressData.folderId)?.name || "Unknown"}
+                  {viewAddressData.connectedUser.email && (
+                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                      <Mail className="h-3 w-3" />
+                      {viewAddressData.connectedUser.email}
                     </div>
-                  </div>
-                )}
+                  )}
+                  {viewAddressData.connectedUser.phone && (
+                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                      <Phone className="h-3 w-3" />
+                      {viewAddressData.connectedUser.phone}
+                    </div>
+                  )}
+                </div>
               </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            )}
+            {viewAddressData?.folderId && (
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label className="text-sm font-medium text-gray-900">Folder</Label>
+                <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  {allFolders.find((f: any) => f.id === viewAddressData.folderId)?.name || "Unknown"}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
             {!viewAddressData?.isSharedWithMe && (
               <>
                 <Button
@@ -1568,7 +1584,7 @@ export default function FriendsPage() {
                     setIsViewAddressModalOpen(false);
                     if (viewAddressData) openEditAddressModal(viewAddressData);
                   }}
-                  className="w-full sm:w-auto"
+                  className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
                 >
                   Edit
                 </Button>
@@ -1579,14 +1595,16 @@ export default function FriendsPage() {
                       openShareModal("address", viewAddressData.id, viewAddressData.name);
                     }
                   }}
-                  className="w-full sm:w-auto"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
                 >
-                  <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </Button>
               </>
             )}
-            <AlertDialogCancel onClick={() => setIsViewAddressModalOpen(false)} className="w-full sm:w-auto">
+            <AlertDialogCancel 
+              onClick={() => setIsViewAddressModalOpen(false)}
+              className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
+            >
               Close
             </AlertDialogCancel>
           </AlertDialogFooter>
@@ -1595,42 +1613,50 @@ export default function FriendsPage() {
 
       {/* Delete Address Confirmation Dialog */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Friend?</AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg p-4 sm:p-6">
+          <div className="relative mb-4">
+            <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+              Delete Friend?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-gray-500">
               Are you sure you want to delete "{itemToDelete?.name}"? This action cannot be undone.
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </div>
+          <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
             <AlertDialogAction
               onClick={handleDeleteAddress}
-              className="bg-red-600 hover:bg-red-700"
+              className="w-full bg-red-600 hover:bg-red-700 text-white h-10 sm:h-11 text-sm sm:text-base"
             >
               Delete
             </AlertDialogAction>
+            <AlertDialogCancel className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base">
+              Cancel
+            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Delete Folder Confirmation Dialog */}
       <AlertDialog open={isDeleteFolderDialogOpen} onOpenChange={setIsDeleteFolderDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Folder?</AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg p-4 sm:p-6">
+          <div className="relative mb-4">
+            <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+              Delete Folder?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-gray-500">
               Are you sure you want to delete "{folderToDelete?.name}"? All addresses in this folder will be moved to Uncategorized. This action cannot be undone.
             </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </div>
+          <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
             <AlertDialogAction
               onClick={confirmDeleteFolder}
-              className="bg-red-600 hover:bg-red-700"
+              className="w-full bg-red-600 hover:bg-red-700 text-white h-10 sm:h-11 text-sm sm:text-base"
             >
               Delete
             </AlertDialogAction>
+            <AlertDialogCancel className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base">
+              Cancel
+            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
