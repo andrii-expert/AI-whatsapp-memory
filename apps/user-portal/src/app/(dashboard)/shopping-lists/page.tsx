@@ -6,7 +6,6 @@ import Script from "next/script";
 import { Home, ChevronLeft, Plus, Search, Edit2, Trash2, Check, ShoppingCart, X, Share2, Users, Calendar, ArrowUp, ArrowDown, SortAsc, SortDesc, Bell, StickyNote, Folder, FolderClosed, ChevronDown, ChevronRight, Menu, MoreVertical, Eye, LogOut, ArrowLeft } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
-import { Textarea } from "@imaginecalendar/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -2595,12 +2594,12 @@ export default function ShoppingListPage() {
                 <Label htmlFor="item-description" className="text-sm font-medium text-gray-900">
                   Description <span className="text-gray-500 font-normal">(optional)</span>
                 </Label>
-                <Textarea
+                <Input
                   id="item-description"
                   value={newItemDescription}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewItemDescription(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemDescription(e.target.value)}
                   placeholder="Write details..."
-                  className="min-h-[80px] sm:min-h-[100px] resize-none bg-gray-50 w-full"
+                  className="bg-gray-50 h-10 sm:h-11 w-full"
                 />
               </div>
             </div>
@@ -2657,12 +2656,12 @@ export default function ShoppingListPage() {
                 <Label htmlFor="edit-item-description" className="text-sm font-medium text-gray-900">
                   Description <span className="text-gray-500 font-normal">(optional)</span>
                 </Label>
-                <Textarea
+                <Input
                   id="edit-item-description"
                   value={editItemDescription}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditItemDescription(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemDescription(e.target.value)}
                   placeholder="Write details..."
-                  className="min-h-[80px] sm:min-h-[100px] resize-none bg-gray-50 w-full"
+                  className="bg-gray-50 h-10 sm:h-11 w-full"
                 />
               </div>
             </div>
