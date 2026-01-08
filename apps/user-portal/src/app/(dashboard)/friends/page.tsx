@@ -70,12 +70,11 @@ export default function FriendsPage() {
 
   // State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [viewAllAddresses, setViewAllAddresses] = useState(true);
+  const [viewAllAddresses, setViewAllAddresses] = useState(false);
   const [viewAllShared, setViewAllShared] = useState(false);
   const [sortBy, setSortBy] = useState<"date" | "alphabetical" | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc" | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Address modal states
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
@@ -395,21 +394,24 @@ export default function FriendsPage() {
     setSelectedFolderId(folderId);
     setViewAllAddresses(false);
     setViewAllShared(false);
-    setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllAddresses = () => {
     setSelectedFolderId(null);
     setViewAllAddresses(true);
     setViewAllShared(false);
-    setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllShared = () => {
     setSelectedFolderId(null);
     setViewAllAddresses(false);
     setViewAllShared(true);
-    setIsMobileSidebarOpen(false);
+  };
+
+  const handleBackToFolders = () => {
+    setSelectedFolderId(null);
+    setViewAllAddresses(false);
+    setViewAllShared(false);
   };
 
   // Get share count for a resource
@@ -581,296 +583,258 @@ export default function FriendsPage() {
           <span className="font-medium">My Friends</span>
         </div>
 
-        <Button
-          onClick={() => openAddAddressModal()}
-          variant="orange-primary"
-          className="flex-shrink-0 lg:hidden"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Friend
-        </Button>
-      </div>
-
-      {/* Mobile Sidebar Overlay */}
-      {isMobileSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden mt-0"
-          style={{ margin: 0 }}
-          onClick={() => setIsMobileSidebarOpen(false)}
-        />
-      )}
-
-      {/* Mobile Sidebar */}
-      <div
-        className={cn(
-          "fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto m-0",
-          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-        style={{ margin: 0 }}
-      >
-        <div className="p-4">
-          {/* Close Button */}
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900">Your Friends</h2>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => {
-                  handleOpenCreateFolderModal();
-                  setIsMobileSidebarOpen(false);
-                }}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-1.5"
-              >
-                <Plus className="h-4 w-4" />
-                Add New
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsMobileSidebarOpen(false)}
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Search Bar */}
-          <div className="relative mb-4">
-            <Input
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setSearchQuery(e.target.value)
-              }
-              className="pr-10"
-            />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          </div>
-
-          {/* Folders List */}
-          <div className="space-y-2">
-            {/* All Friends Card */}
-            <div
-              onClick={handleViewAllAddresses}
-              className={cn(
-                "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer",
-                viewAllAddresses
-                  ? "bg-blue-50 border-blue-200"
-                  : "bg-white border-gray-200 hover:bg-gray-50"
-              )}
-            >
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
-                <Users className="h-6 w-6 text-gray-700" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-gray-900 truncate">All Friends</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                    {allAddressesCount} friends
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Folder Cards */}
-            {folders
-              .filter((folder: any) => {
-                // Filter folders based on search query
-                if (!searchQuery.trim()) return true;
-                return folder.name.toLowerCase().includes(searchQuery.toLowerCase());
-              })
-              .length === 0 ? (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p>No folders yet.</p>
-                <p className="text-xs mt-1">Create a folder to get started.</p>
-              </div>
-            ) : (
-              folders
-                .filter((folder: any) => {
-                  // Filter folders based on search query
-                  if (!searchQuery.trim()) return true;
-                  return folder.name.toLowerCase().includes(searchQuery.toLowerCase());
-                })
-                .map((folder: any) => {
-                  const isSelected = selectedFolderId === folder.id && !viewAllAddresses;
-                  const shareCount = getShareCount("address_folder", folder.id);
-                  const isShared = shareCount > 0;
-                  
-                  return (
-                    <div
-                      key={folder.id}
-                      onClick={() => handleFolderSelect(folder.id)}
-                      className={cn(
-                        "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
-                        isSelected
-                          ? "bg-blue-50 border-blue-200"
-                          : "bg-white border-gray-200 hover:bg-gray-50"
-                      )}
-                    >
-                      <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
-                        <FolderClosed className="h-6 w-6 text-gray-700" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-gray-900 truncate">{folder.name}</div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                            {getFolderAddressCount(folder.id)} friends
-                          </span>
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                            }}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
-                          {(() => {
-                            return (
-                              <DropdownMenuItem
-                                onClick={(e: React.MouseEvent) => {
-                                  e.stopPropagation();
-                                  if (isShared) {
-                                    openShareDetailsModal("address_folder", folder.id, folder.name);
-                                  } else {
-                                    openShareModal("address_folder", folder.id, folder.name);
-                                  }
-                                }}
-                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                              >
-                                {isShared ? (
-                                  <>
-                                    <Users className="h-4 w-4" />
-                                    <span>Shared</span>
-                                    <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                                      {shareCount}
-                                    </span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Share2 className="h-4 w-4" />
-                                    <span>Share</span>
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                            );
-                          })()}
-                          <DropdownMenuItem
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleEditFolder(folder.id, folder.name);
-                            }}
-                            className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                            <span>Edit</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              handleDeleteFolder(folder.id, folder.name);
-                            }}
-                            className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            <span>Delete</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  );
-                })
-            )}
-
-            {/* Shared Section */}
-            {sharedFolders.length > 0 && (
-              <>
-                <div className="h-px bg-gray-200 my-2" />
-                {sharedFolders.map((folder: any) => {
-                  const isSelected = selectedFolderId === folder.id && !viewAllAddresses;
-                  
-                  return (
-                    <div
-                      key={folder.id}
-                      onClick={() => handleFolderSelect(folder.id)}
-                      className={cn(
-                        "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
-                        isSelected
-                          ? "bg-blue-50 border-blue-200"
-                          : "bg-white border-gray-200 hover:bg-gray-50"
-                      )}
-                    >
-                      <div className="w-12 h-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
-                        <FolderClosed className="h-6 w-6 text-gray-700" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-gray-900 truncate">{folder.name}</div>
-                        <div className="flex items-center gap-2 mt-1">
-                          {folder.addresses && folder.addresses.length > 0 && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                              {folder.addresses.length} friends
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                            }}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
-                          <DropdownMenuItem
-                            onClick={(e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              openShareDetailsModal("address_folder", folder.id, folder.name);
-                            }}
-                            className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                          >
-                            <Users className="h-4 w-4" />
-                            <span>Shared</span>
-                          </DropdownMenuItem>
-                          {folder.sharePermission === "edit" && (
-                            <DropdownMenuItem
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                handleEditFolder(folder.id, folder.name);
-                              }}
-                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                              <span>Edit</span>
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  );
-                })}
-              </>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Main Content - Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 w-full">
+        {/* Mobile Folders View - Show when no folder is selected */}
+        {!selectedFolderId && !viewAllAddresses && !viewAllShared && (
+          <div className="lg:hidden space-y-4 w-full">
+            <div className="space-y-4">
+              {/* Your Friends Header */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-900">Your Friends</h2>
+                <Button
+                  onClick={handleOpenCreateFolderModal}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add New
+                </Button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Input
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="pr-10"
+                />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              </div>
+
+              {/* Folders List */}
+              <div className="space-y-2">
+                {/* All Friends Card */}
+                <div
+                  onClick={handleViewAllAddresses}
+                  className={cn(
+                    "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer",
+                    viewAllAddresses
+                      ? "bg-blue-50 border-blue-200"
+                      : "bg-white border-gray-200 hover:bg-gray-50"
+                  )}
+                >
+                  <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                    <Users className="h-6 w-6 text-gray-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-gray-900 truncate">All Friends</div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                        {allAddressesCount} friends
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Folder Cards */}
+                {folders.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p>No folders yet.</p>
+                    <p className="text-xs mt-1">Create a folder to get started.</p>
+                  </div>
+                ) : (
+                  folders
+                    .filter((folder: any) => {
+                      // Filter folders based on search query
+                      if (!searchQuery.trim()) return true;
+                      return folder.name.toLowerCase().includes(searchQuery.toLowerCase());
+                    })
+                    .map((folder: any) => {
+                      const isSelected = selectedFolderId === folder.id && !viewAllAddresses;
+                      const shareCount = getShareCount("address_folder", folder.id);
+                      const isShared = shareCount > 0;
+                      
+                      return (
+                        <div
+                          key={folder.id}
+                          onClick={() => handleFolderSelect(folder.id)}
+                          className={cn(
+                            "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
+                            isSelected
+                              ? "bg-blue-50 border-blue-200"
+                              : "bg-white border-gray-200 hover:bg-gray-50"
+                          )}
+                        >
+                          <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                            <FolderClosed className="h-6 w-6 text-gray-700" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                {getFolderAddressCount(folder.id)} friends
+                              </span>
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                }}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                              {(() => {
+                                return (
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      if (isShared) {
+                                        openShareDetailsModal("address_folder", folder.id, folder.name);
+                                      } else {
+                                        openShareModal("address_folder", folder.id, folder.name);
+                                      }
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                  >
+                                    {isShared ? (
+                                      <>
+                                        <Users className="h-4 w-4" />
+                                        <span>Shared</span>
+                                        <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                          {shareCount}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Share2 className="h-4 w-4" />
+                                        <span>Share</span>
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                );
+                              })()}
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  handleEditFolder(folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                                <span>Edit</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  handleDeleteFolder(folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })
+                )}
+
+                {/* Shared Section */}
+                {sharedFolders.length > 0 && (
+                  <>
+                    <div className="h-px bg-gray-200 my-2" />
+                    {sharedFolders.map((folder: any) => {
+                      const isSelected = selectedFolderId === folder.id && !viewAllAddresses;
+                      
+                      return (
+                        <div
+                          key={folder.id}
+                          onClick={() => handleFolderSelect(folder.id)}
+                          className={cn(
+                            "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
+                            isSelected
+                              ? "bg-blue-50 border-blue-200"
+                              : "bg-white border-gray-200 hover:bg-gray-50"
+                          )}
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                            <FolderClosed className="h-6 w-6 text-gray-700" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {folder.addresses && folder.addresses.length > 0 && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                  {folder.addresses.length} friends
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                }}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  openShareDetailsModal("address_folder", folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                              >
+                                <Users className="h-4 w-4" />
+                                <span>Shared</span>
+                              </DropdownMenuItem>
+                              {folder.sharePermission === "edit" && (
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleEditFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Desktop Left Panel - Folders */}
         {/* Desktop Left Panel - Folders */}
         <div className="hidden lg:block space-y-4">
           <div className="space-y-4">
@@ -1117,12 +1081,24 @@ export default function FriendsPage() {
           </div>
 
         {/* Right Panel - Friends */}
-        <div className="space-y-4">
+        <div className={cn(
+          "space-y-4 w-full min-w-0",
+          (!selectedFolderId && !viewAllAddresses && !viewAllShared) ? "hidden lg:block" : "block"
+        )}>
           <div>
             {/* Header with folder name and actions */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {/* Mobile Back Button */}
+                  {(selectedFolder || viewAllAddresses || viewAllShared) && (
+                    <button
+                      onClick={handleBackToFolders}
+                      className="lg:hidden h-10 w-10 flex-shrink-0 bg-white rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <ArrowLeft className="h-5 w-5 text-gray-800" />
+                    </button>
+                  )}
                   {viewAllAddresses ? (
                     <div className="flex items-center gap-2">
                       <div 
