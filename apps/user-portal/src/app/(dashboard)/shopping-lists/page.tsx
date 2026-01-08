@@ -2565,7 +2565,7 @@ export default function ShoppingListPage() {
 
       {/* Add Item Modal */}
       <AlertDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
           <div className="relative mb-4">
             {/* Centered Title and Subtitle */}
             <div className="text-center">
@@ -2587,7 +2587,6 @@ export default function ShoppingListPage() {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemName(e.target.value)}
                   placeholder="Milk"
                   className="bg-gray-50 h-10 sm:h-11 w-full"
-                  autoFocus
                 />
               </div>
               <div className="space-y-1.5 sm:space-y-2">
@@ -2628,7 +2627,7 @@ export default function ShoppingListPage() {
 
       {/* Edit Item Modal */}
       <AlertDialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
           <div className="relative mb-4">
             {/* Centered Title and Subtitle */}
             <div className="text-center">
@@ -2649,7 +2648,6 @@ export default function ShoppingListPage() {
                   value={editItemName}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemName(e.target.value)}
                   className="bg-gray-50 h-10 sm:h-11 w-full"
-                  autoFocus
                 />
               </div>
               <div className="space-y-1.5 sm:space-y-2">
@@ -2757,7 +2755,7 @@ export default function ShoppingListPage() {
 
       {/* Create New List Modal */}
       <AlertDialog open={isCreateListModalOpen} onOpenChange={setIsCreateListModalOpen}>
-        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <div className="relative">
             
             {/* Centered Title and Subtitle */}
@@ -2956,7 +2954,7 @@ export default function ShoppingListPage() {
 
       {/* Edit List Modal */}
       <AlertDialog open={isEditListModalOpen} onOpenChange={setIsEditListModalOpen}>
-        <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden p-4 sm:p-6">
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Edit List</AlertDialogTitle>
             <Button
