@@ -2274,7 +2274,7 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex flex-row w-full justify-between items-center gap-2 mb-4 bg-[#FCFCFC]">
+          <div className="flex flex-row w-full justify-between items-center gap-2 mb-4">
             <div className="flex flex-row items-center gap-2">
               <button
                 onClick={() => setFilterStatus("all")}
@@ -2343,7 +2343,7 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Items List */}
-          <div className="space-y-4 relative pb-20 bg-[#FCFCFC]">
+          <div className="space-y-4 relative pb-20">
         {filteredItems.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
