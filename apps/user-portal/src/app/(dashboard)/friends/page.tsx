@@ -72,8 +72,8 @@ export default function FriendsPage() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [viewAllAddresses, setViewAllAddresses] = useState(true);
   const [viewAllShared, setViewAllShared] = useState(false);
-  const [sortBy, setSortBy] = useState<"date" | "alphabetical">("alphabetical");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState<"date" | "alphabetical" | undefined>(undefined);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc" | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -194,13 +194,13 @@ export default function FriendsPage() {
     }
 
     // Apply sorting
-    if (sortBy === "alphabetical") {
+    if (sortBy === "alphabetical" && sortOrder) {
       addresses.sort((a: any, b: any) => {
         const aName = a.name.toLowerCase();
         const bName = b.name.toLowerCase();
         return sortOrder === "asc" ? aName.localeCompare(bName) : bName.localeCompare(aName);
       });
-    } else {
+    } else if (sortBy === "date" && sortOrder) {
       addresses.sort((a: any, b: any) => {
         const aDate = new Date(a.createdAt).getTime();
         const bDate = new Date(b.createdAt).getTime();
@@ -1172,76 +1172,103 @@ export default function FriendsPage() {
         {/* Right Panel - Friends */}
         <div className="space-y-4">
           <div>
-            {/* Desktop - Folder breadcrumb and Add button */}
-            <div className="flex items-center justify-between mb-4 gap-4">
-              {viewAllAddresses ? (
-                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                  <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
-                  <span className="font-bold text-gray-900">All Friends</span>
+            {/* Header with folder name and actions */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex-1 min-w-0">
+                  {viewAllAddresses ? (
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: "#FCE7F3" }}
+                      >
+                        <Users className="h-5 w-5 text-gray-700" />
+                      </div>
+                      <span className="font-bold text-gray-900 text-lg">All Friends</span>
+                    </div>
+                  ) : viewAllShared ? (
+                    <div className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-gray-600" />
+                      <span className="font-bold text-gray-900 text-lg">All Shared</span>
+                    </div>
+                  ) : selectedFolder && sharedFolders.find((f: any) => f.id === selectedFolderId) ? (
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: "#FCE7F3" }}
+                      >
+                        <FolderClosed className="h-5 w-5 text-gray-700" />
+                      </div>
+                      <span className="font-bold text-gray-900 text-lg">
+                        {sharedFolders.find((f: any) => f.id === selectedFolderId)?.name}
+                      </span>
+                    </div>
+                  ) : selectedFolder ? (
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: "#FCE7F3" }}
+                      >
+                        <FolderClosed className="h-5 w-5 text-gray-700" />
+                      </div>
+                      <span className="font-bold text-gray-900 text-lg">{selectedFolder.name}</span>
+                    </div>
+                  ) : (
+                    <div className="flex-1" />
+                  )}
                 </div>
-              ) : viewAllShared ? (
-                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                  <Users className="h-6 w-6 flex-shrink-0 text-purple-600" />
-                  <span className="font-bold text-gray-900">All Shared</span>
+                
+                {/* Shared button and Add Friend button (desktop) */}
+                <div className="flex items-center gap-2">
+                  {selectedFolder && (() => {
+                    const shareCount = getShareCount("address_folder", selectedFolder.id);
+                    const folderShares = myShares.filter(
+                      (s: any) => s.resourceType === "address_folder" && s.resourceId === selectedFolder.id
+                    );
+                    if (shareCount > 0) {
+                      return (
+                        <button
+                          onClick={() => openShareDetailsModal("address_folder", selectedFolder.id, selectedFolder.name)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+                          title="View who this folder is shared with"
+                        >
+                          <span className="text-sm font-medium text-gray-700">Shared</span>
+                          <div className="flex items-center gap-1">
+                            {folderShares.slice(0, 2).map((share: any, idx: number) => {
+                              const sharedUser = share.sharedWithUser;
+                              if (!sharedUser) return null;
+                              // For friends page, we might not have getUserInitials/getAvatarColor, so we'll use a simple approach
+                              return (
+                                <div
+                                  key={share.id}
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold bg-blue-500"
+                                  style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                  title={sharedUser.name || sharedUser.email || "User"}
+                                >
+                                  {(sharedUser.name || sharedUser.email || "U").charAt(0).toUpperCase()}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </button>
+                      );
+                    }
+                    return null;
+                  })()}
+                  {/* Desktop Add Friend Button */}
+                  <Button
+                    onClick={() => openAddAddressModal(selectedFolderId)}
+                    className="hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Friend
+                  </Button>
                 </div>
-              ) : selectedFolder && sharedFolders.find((f: any) => f.id === selectedFolderId) ? (
-                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                  <FolderClosed className="h-6 w-6 flex-shrink-0 text-purple-600" />
-                  <span className="font-bold text-gray-900">
-                    {sharedFolders.find((f: any) => f.id === selectedFolderId)?.name}
-                  </span>
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                    <Users className="h-3 w-3" />
-                    Shared
-                  </span>
-                  <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
-                    {filteredAddresses.length}
-                  </span>
-                </div>
-              ) : selectedFolder ? (
-                <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
-                  <FolderClosed className="h-6 w-6 flex-shrink-0" />
-                  <span className="font-bold text-gray-900">{selectedFolder.name}</span>
-                  <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-1 rounded-full font-semibold">
-                    {getFolderAddressCount(selectedFolder.id)}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex-1" />
-              )}
-
-              {/* Add Button - enabled for all folders */}
-              <Button
-                onClick={() => openAddAddressModal(selectedFolderId)}
-                variant="orange-primary"
-                className="flex-shrink-0 hidden lg:flex"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Friend
-              </Button>
-              {/* Mobile - Folder Menu and Add Button */}
-              <div className="lg:hidden flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsMobileSidebarOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-                >
-                  <Menu className="h-4 w-4" />
-                  <span className="font-medium">Folders</span>
-                </Button>
-                <Button
-                  onClick={() => openAddAddressModal(selectedFolderId)}
-                  variant="orange-primary"
-                  className="flex-shrink-0"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
               </div>
             </div>
 
-            {/* Search Bar */}
-            <div className="mb-4 w-full justify-between flex gap-2">
+            {/* Search and Sort Bar */}
+            <div className="mb-4 w-full flex gap-2">
               <div className="relative flex-1">
                 <Input
                   placeholder="Search friends..."
@@ -1251,118 +1278,156 @@ export default function FriendsPage() {
                   }
                   className="pr-10 h-11"
                 />
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               </div>
-              {/* Sort Controls */}
-              <div className="flex gap-2">
-                <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                  <SelectTrigger className="w-[140px] h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alphabetical">Alphabetical</SelectItem>
-                    <SelectItem value="date">Date</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                  className="h-11 w-11"
-                >
-                  {sortOrder === "asc" ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
-                </Button>
-              </div>
+              <Select
+                value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
+                onValueChange={(value) => {
+                  const [by, order] = value.split("-") as [
+                    "date" | "alphabetical",
+                    "asc" | "desc"
+                  ];
+                  setSortBy(by);
+                  setSortOrder(order);
+                }}
+              >
+                <SelectTrigger className="w-[140px] h-11">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alphabetical-asc">A-Z</SelectItem>
+                  <SelectItem value="alphabetical-desc">Z-A</SelectItem>
+                  <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                  <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Friends List */}
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredAddresses.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">
-                  {searchQuery ? "No friends found matching your search." : "No friends yet."}
-                </p>
-                {!searchQuery && (
-                  <Button onClick={() => openAddAddressModal()} className="mt-4">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Your First Friend
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredAddresses.map((address: any) => (
-                  <div
-                    key={address.id}
-                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold text-lg">{address.name}</h3>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openViewAddressModal(address)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View
-                          </DropdownMenuItem>
-                          {!address.isSharedWithMe && (
-                            <>
-                              <DropdownMenuItem onClick={() => openEditAddressModal(address)}>
-                                <Edit3 className="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openShareModal("address", address.id, address.name)}>
-                                <Share2 className="h-4 w-4 mr-2" />
-                                Share
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setItemToDelete({ type: "address", id: address.id, name: address.name });
-                                  setDeleteConfirmOpen(true);
-                                }}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    {address.connectedUser && (
-                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                        {address.connectedUser.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-3 w-3" />
-                            <span>{address.connectedUser.email}</span>
+            <div className="space-y-4 relative pb-20">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredAddresses.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Users className="h-12 w-12 mx-auto text-gray-400" />
+                  <p className="text-lg font-medium">No friends found</p>
+                  <p className="text-sm mt-1">
+                    {searchQuery
+                      ? "Try adjusting your search"
+                      : "Add your first friend to get started"}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
+                  <div>
+                    {filteredAddresses.map((address: any, index) => (
+                      <div key={address.id}>
+                        <div className="flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors">
+                          {/* Friend Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-gray-900 text-base">
+                                  {address.name}
+                                </div>
+                                {address.connectedUser && (
+                                  <div className="mt-1 space-y-0.5">
+                                    {address.connectedUser.email && (
+                                      <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                        <Mail className="h-3 w-3" />
+                                        <span>{address.connectedUser.email}</span>
+                                      </div>
+                                    )}
+                                    {address.connectedUser.phone && (
+                                      <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                        <Phone className="h-3 w-3" />
+                                        <span>{address.connectedUser.phone}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                {address.isSharedWithMe && (
+                                  <div className="mt-1">
+                                    <span className="text-xs text-gray-500">Shared with you</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        {address.connectedUser.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-3 w-3" />
-                            <span>{address.connectedUser.phone}</span>
+                          {/* Three dots menu */}
+                          <div className="flex items-center flex-shrink-0">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                                >
+                                  <MoreVertical className="h-5 w-5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    openViewAddressModal(address);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  <span>View</span>
+                                </DropdownMenuItem>
+                                {!address.isSharedWithMe && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        openEditAddressModal(address);
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      <Edit3 className="h-4 w-4" />
+                                      <span>Edit</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        openShareModal("address", address.id, address.name);
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      <Share2 className="h-4 w-4" />
+                                      <span>Share</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        setItemToDelete({ type: "address", id: address.id, name: address.name });
+                                        setDeleteConfirmOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      <span>Delete</span>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
+                        </div>
+                        {/* Divider - 90% width, only show if not last item */}
+                        {index < filteredAddresses.length - 1 && (
+                          <div className="w-[90%] mx-auto h-px bg-gray-100" />
                         )}
                       </div>
-                    )}
-                    {address.isSharedWithMe && (
-                      <div className="mt-2">
-                        <span className="text-xs text-muted-foreground">Shared with you</span>
-                      </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
