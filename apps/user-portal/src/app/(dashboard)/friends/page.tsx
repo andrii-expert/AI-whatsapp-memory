@@ -113,6 +113,7 @@ export default function FriendsPage() {
   const [editFolderName, setEditFolderName] = useState("");
   const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleteFolderDialogOpen, setIsDeleteFolderDialogOpen] = useState(false);
+  const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
 
   // Delete confirmation states
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -218,6 +219,7 @@ export default function FriendsPage() {
         queryClient.invalidateQueries();
         toast({ title: "Folder created", variant: "default" });
         setNewFolderName("");
+        setIsCreateFolderModalOpen(false);
       },
       onError: (error) => {
         toast({
@@ -356,11 +358,12 @@ export default function FriendsPage() {
   const handleCreateFolder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
-    createFolderMutation.mutate({ name: newFolderName.trim() }, {
-      onSuccess: () => {
-        setNewFolderName("");
-      }
-    });
+    createFolderMutation.mutate({ name: newFolderName.trim() });
+  };
+
+  const handleOpenCreateFolderModal = () => {
+    setNewFolderName("");
+    setIsCreateFolderModalOpen(true);
   };
 
   const handleEditFolder = (folderId: string, currentName: string) => {
@@ -608,36 +611,29 @@ export default function FriendsPage() {
         <div className="p-4">
           {/* Close Button */}
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Folders</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsMobileSidebarOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
+            <h2 className="text-lg font-bold text-gray-900">Your Friends</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => {
+                  handleOpenCreateFolderModal();
+                  setIsMobileSidebarOpen(false);
+                }}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5"
+              >
+                <Plus className="h-4 w-4" />
+                Add New
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMobileSidebarOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
-
-          {/* New Folder Input */}
-          <form onSubmit={handleCreateFolder} className="flex gap-2 mb-4">
-            <Input
-              id="mobile-new-folder-input"
-              placeholder="New folder"
-              value={newFolderName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setNewFolderName(e.target.value)
-              }
-              className="flex-1"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              variant="outline"
-              disabled={createFolderMutation.isPending || !newFolderName.trim()}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </form>
 
           {/* Search Bar */}
           <div className="relative mb-4">
@@ -882,18 +878,7 @@ export default function FriendsPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">Your Friends</h2>
               <Button
-                onClick={() => {
-                  const input = document.getElementById("new-folder-input") as HTMLInputElement;
-                  if (input) {
-                    input.focus();
-                  } else {
-                    // Fallback: create folder with prompt
-                    const name = prompt("Enter folder name:");
-                    if (name?.trim()) {
-                      createFolderMutation.mutate({ name: name.trim() });
-                    }
-                  }
-                }}
+                onClick={handleOpenCreateFolderModal}
                 variant="outline"
                 size="sm"
                 className="flex items-center gap-1.5"
@@ -902,27 +887,6 @@ export default function FriendsPage() {
                 Add New
               </Button>
             </div>
-
-            {/* New Folder Input */}
-            <form onSubmit={handleCreateFolder} className="flex gap-2">
-              <Input
-                id="new-folder-input"
-                placeholder="New folder"
-                value={newFolderName}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setNewFolderName(e.target.value)
-                }
-                className="flex-1"
-              />
-              <Button
-                type="submit"
-                size="icon"
-                variant="outline"
-                disabled={createFolderMutation.isPending || !newFolderName.trim()}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </form>
 
             {/* Search Bar */}
             <div className="relative">
@@ -1689,6 +1653,61 @@ export default function FriendsPage() {
         resourceId={shareResourceId || ""}
         resourceName={shareResourceName}
       />
+
+      {/* Create New Folder Modal */}
+      <AlertDialog open={isCreateFolderModalOpen} onOpenChange={setIsCreateFolderModalOpen}>
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden overflow-x-hidden p-4 sm:p-6">
+          <div className="relative mb-4">
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                Create New Folder
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
+                Organize your friends better
+              </AlertDialogDescription>
+            </div>
+          </div>
+          
+          <form onSubmit={handleCreateFolder} className="overflow-x-hidden">
+            <div className="space-y-4 sm:space-y-6">
+              {/* Folder Name */}
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="folder-name" className="text-sm font-medium text-gray-900">
+                  Folder Name
+                </Label>
+                <Input
+                  id="folder-name"
+                  value={newFolderName}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setNewFolderName(e.target.value)
+                  }
+                  placeholder="e.g., Family, Work"
+                  className="bg-gray-50 h-10 sm:h-11 w-full"
+                />
+              </div>
+            </div>
+            <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4 mt-4 sm:mt-6">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+                disabled={!newFolderName.trim() || createFolderMutation.isPending}
+              >
+                Create Folder
+              </Button>
+              <AlertDialogCancel
+                onClick={() => {
+                  setIsCreateFolderModalOpen(false);
+                  setNewFolderName("");
+                }}
+                className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
+              >
+                Cancel
+              </AlertDialogCancel>
+            </AlertDialogFooter>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );
