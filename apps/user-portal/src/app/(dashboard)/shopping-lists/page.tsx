@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@imaginecalendar/ui/select";
+import { Icons } from "@imaginecalendar/ui/icons";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
@@ -1465,7 +1466,7 @@ export default function ShoppingListPage() {
               {/* Search Bar */}
               <div className="relative">
                 <Input
-                  placeholder="Search lists..."
+                  placeholder="Search..."
                   value={searchQuery}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setSearchQuery(e.target.value)
@@ -1481,14 +1482,14 @@ export default function ShoppingListPage() {
                 <div
                   onClick={handleViewAllItems}
                   className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
+                    "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer",
                     viewAllItems
                       ? "bg-blue-50 border-blue-200"
                       : "bg-white border-gray-200 hover:bg-gray-50"
                   )}
                 >
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
-                    <span className="text-xl">🎂</span>
+                  <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                    <span className="text-2xl">🎂</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-gray-900 truncate">All Items</div>
@@ -1518,21 +1519,21 @@ export default function ShoppingListPage() {
                         key={folder.id}
                         onClick={() => handleFolderSelect(folder.id)}
                         className={cn(
-                          "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                          "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
                           isSelected
                             ? "bg-blue-50 border-blue-200"
                             : "bg-white border-gray-200 hover:bg-gray-50"
                         )}
                       >
                         <div 
-                          className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                          className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                           style={{ 
                             backgroundColor: folder.color 
                               ? ICON_COLORS.find(c => c.name === folder.color)?.value || "#FCE7F3"
                               : "#FCE7F3"
                           }}
                         >
-                          <span className="text-xl">{folder.icon || "🎂"}</span>
+                          <span className="text-2xl">{folder.icon || "🎂"}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-gray-900 truncate">{folder.name}</div>
@@ -1667,14 +1668,14 @@ export default function ShoppingListPage() {
                           key={folder.id}
                           onClick={() => handleSharedFolderSelect(folder.id)}
                           className={cn(
-                            "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                            "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
                             isSelected
                               ? "bg-blue-50 border-blue-200"
                               : "bg-white border-gray-200 hover:bg-gray-50"
                           )}
                         >
-                          <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xl">🎂</span>
+                          <div className="w-12 h-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                            <span className="text-2xl">🎂</span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-gray-900 truncate">{folder.name}</div>
@@ -1819,7 +1820,7 @@ export default function ShoppingListPage() {
             {/* Search Bar */}
             <div className="relative">
               <Input
-                placeholder="Search lists..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setSearchQuery(e.target.value)
@@ -1835,14 +1836,14 @@ export default function ShoppingListPage() {
               <div
                 onClick={handleViewAllItems}
                 className={cn(
-                  "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer",
+                  "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer",
                   viewAllItems
                     ? "bg-blue-50 border-blue-200"
                     : "bg-white border-gray-200 hover:bg-gray-50"
                 )}
               >
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
-                  <span className="text-xl">🎂</span>
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                  <span className="text-2xl">🎂</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-gray-900 truncate">All Items</div>
@@ -1872,21 +1873,21 @@ export default function ShoppingListPage() {
                       key={folder.id}
                       onClick={() => handleFolderSelect(folder.id)}
                       className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                        "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
                         isSelected
                           ? "bg-blue-50 border-blue-200"
                           : "bg-white border-gray-200 hover:bg-gray-50"
                       )}
                     >
                       <div 
-                        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                        className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                         style={{ 
                           backgroundColor: folder.color 
                             ? ICON_COLORS.find(c => c.name === folder.color)?.value || "#FCE7F3"
                             : "#FCE7F3"
                         }}
                       >
-                        <span className="text-xl">{folder.icon || "🎂"}</span>
+                        <span className="text-2xl">{folder.icon || "🎂"}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-gray-900 truncate">{folder.name}</div>
@@ -2021,14 +2022,14 @@ export default function ShoppingListPage() {
                         key={folder.id}
                         onClick={() => handleSharedFolderSelect(folder.id)}
                         className={cn(
-                          "flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer group",
+                          "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
                           isSelected
                             ? "bg-blue-50 border-blue-200"
                             : "bg-white border-gray-200 hover:bg-gray-50"
                         )}
                       >
-                        <div className="w-10 h-10 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-xl">🎂</span>
+                        <div className="w-12 h-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-2xl">🎂</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-gray-900 truncate">{folder.name}</div>
@@ -2273,7 +2274,7 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex flex-row w-full justify-between items-center gap-2 mb-4">
+          <div className="flex flex-row w-full justify-between items-center gap-2 mb-4 bg-[#FCFCFC]">
             <div className="flex flex-row items-center gap-2">
               <button
                 onClick={() => setFilterStatus("all")}
@@ -2342,7 +2343,7 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Items List */}
-          <div className="space-y-4 relative pb-20">
+          <div className="space-y-4 relative pb-20 bg-[#FCFCFC]">
         {filteredItems.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
@@ -2573,7 +2574,7 @@ export default function ShoppingListPage() {
                 Add Item
               </AlertDialogTitle>
               <AlertDialogDescription className="text-sm text-gray-500">
-                Add new item to your shopping list
+              Organise your shopping better
               </AlertDialogDescription>
             </div>
           </div>
@@ -2758,7 +2759,7 @@ export default function ShoppingListPage() {
       {/* Create New List Modal */}
       <AlertDialog open={isCreateListModalOpen} onOpenChange={setIsCreateListModalOpen}>
         <AlertDialogContent className="!w-[95vw] !max-w-[95vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
-          <div className="relative mb-4">
+          <div className="relative">
             
             {/* Centered Title and Subtitle */}
             <div className="text-center">
@@ -2766,7 +2767,7 @@ export default function ShoppingListPage() {
                 Create New List
               </AlertDialogTitle>
               <AlertDialogDescription className="text-sm text-gray-500">
-                Add new item to your shopping list
+              Organise your shopping better
               </AlertDialogDescription>
             </div>
           </div>
@@ -2794,7 +2795,7 @@ export default function ShoppingListPage() {
               <Label htmlFor="share-with" className="text-sm font-medium text-gray-900">
                 Share with
               </Label>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex items-center w-full border border-gray-200 rounded-lg bg-gray-50 overflow-hidden">
                 <Input
                   id="share-with"
                   value={shareWithInput}
@@ -2802,10 +2803,10 @@ export default function ShoppingListPage() {
                     setShareWithInput(e.target.value)
                   }
                   placeholder="Name or email..."
-                  className="flex-1 bg-gray-50 h-10 sm:h-11"
+                  className="flex-1 border-0 rounded-l-lg rounded-r-none focus-visible:ring-0 focus-visible:ring-offset-0 h-10 sm:h-11 bg-transparent text-gray-700 placeholder:text-gray-500"
                 />
                 <Select value={sharePermission} onValueChange={(value: "view" | "edit") => setSharePermission(value)}>
-                  <SelectTrigger className="w-full sm:w-[120px] bg-gray-50 h-10 sm:h-11">
+                  <SelectTrigger className="w-[100px] border border-gray-200 m-1 rounded-lg focus:ring-0 focus:ring-offset-0 h-8 sm:h-10 bg-white shadow-none text-gray-700 hover:bg-gray-50" customIcon={Icons.DropdownArrow}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
