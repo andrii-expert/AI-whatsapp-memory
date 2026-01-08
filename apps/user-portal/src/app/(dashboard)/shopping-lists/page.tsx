@@ -170,9 +170,6 @@ export default function ShoppingListPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [editItemDescription, setEditItemDescription] = useState("");
-  const [newItemCategory, setNewItemCategory] = useState("");
-  const [editItemCategory, setEditItemCategory] = useState("");
-  const [isLoadingAISuggestion, setIsLoadingAISuggestion] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isCreateListModalOpen, setIsCreateListModalOpen] = useState(false);
   const [isEditListModalOpen, setIsEditListModalOpen] = useState(false);
@@ -185,7 +182,6 @@ export default function ShoppingListPage() {
   // Refs for draggable scroll
   const iconScrollRef = useRef<HTMLDivElement>(null);
   const colorScrollRef = useRef<HTMLDivElement>(null);
-  const categoryScrollRef = useRef<HTMLDivElement>(null);
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
   const hasRestoredFromSessionRef = useRef(false);
@@ -215,12 +211,6 @@ export default function ShoppingListPage() {
     trpc.shoppingList.list.queryOptions({})
   );
   
-  // Get existing categories in the selected folder
-  const { data: existingCategories = [] } = useQuery(
-    trpc.shoppingList.getCategories.queryOptions({
-      folderId: selectedFolderId || undefined,
-    })
-  );
   const { data: myShares = [], isLoading: isLoadingShares } = useQuery(
     trpc.taskSharing.getMyShares.queryOptions()
   );
@@ -508,10 +498,8 @@ export default function ShoppingListPage() {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey({}) });
         queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
-        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.getCategories.queryKey() });
         setNewItemName("");
         setNewItemDescription("");
-        setNewItemCategory("");
         setIsAddModalOpen(false);
         toast({
           title: "Item added",
@@ -534,11 +522,9 @@ export default function ShoppingListPage() {
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.list.queryKey({}) });
         queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getSharedWithMe.queryKey() });
         queryClient.invalidateQueries({ queryKey: trpc.shoppingList.folders.list.queryKey() });
-        queryClient.invalidateQueries({ queryKey: trpc.shoppingList.getCategories.queryKey() });
         setEditingItemId(null);
         setEditItemName("");
         setEditItemDescription("");
-        setEditItemCategory("");
         setIsEditModalOpen(false);
         toast({
           title: "Item updated",
@@ -1143,131 +1129,6 @@ export default function ShoppingListPage() {
     return filteredItems.filter((item) => item.status === "completed");
   }, [filteredItems]);
 
-  // Get AI category suggestion for add modal
-  const getAICategorySuggestion = async () => {
-    if (!newItemName.trim()) {
-      toast({
-        title: "Item name required",
-        description: "Please enter an item name first",
-        variant: "error",
-      });
-      return;
-    }
-
-    setIsLoadingAISuggestion(true);
-    try {
-      console.log('Requesting AI category suggestion for:', {
-        itemName: newItemName.trim(),
-        description: newItemDescription.trim(),
-        folderId: selectedFolderId
-      });
-      
-      const queryOptions = trpc.shoppingList.suggestCategory.queryOptions({
-        itemName: newItemName.trim(),
-        description: newItemDescription.trim() || undefined,
-        folderId: selectedFolderId || undefined,
-      });
-      const result = await queryClient.fetchQuery(queryOptions);
-
-      console.log('AI category suggestion result:', result);
-
-      if (result && result.suggestedCategory) {
-        const suggestedCategory = result.suggestedCategory.trim();
-        if (suggestedCategory) {
-          setNewItemCategory(suggestedCategory);
-          console.log('Setting category to:', suggestedCategory);
-          toast({
-            title: "Category suggested",
-            description: `Suggested category: ${suggestedCategory}`,
-          });
-        } else {
-          toast({
-            title: "No suggestion",
-            description: "AI couldn't suggest a category for this item.",
-            variant: "destructive",
-          });
-        }
-      } else {
-        toast({
-          title: "No suggestion",
-          description: "AI couldn't suggest a category for this item.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('AI suggestion error:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to get AI suggestion. Please try again.",
-        variant: "error",
-      });
-    } finally {
-      setIsLoadingAISuggestion(false);
-    }
-  };
-
-  // Get AI category suggestion for edit modal
-  const getAICategorySuggestionForEdit = async () => {
-    if (!editItemName.trim()) {
-      toast({
-        title: "Item name required",
-        description: "Please enter an item name first",
-        variant: "error",
-      });
-      return;
-    }
-
-    setIsLoadingAISuggestion(true);
-    try {
-      console.log('Requesting AI category suggestion for edit:', {
-        itemName: editItemName.trim(),
-        description: editItemDescription.trim(),
-        folderId: selectedFolderId
-      });
-      
-      const queryOptions = trpc.shoppingList.suggestCategory.queryOptions({
-        itemName: editItemName.trim(),
-        description: editItemDescription.trim() || undefined,
-        folderId: selectedFolderId || undefined,
-      });
-      const result = await queryClient.fetchQuery(queryOptions);
-
-      console.log('AI category suggestion result:', result);
-
-      if (result && result.suggestedCategory) {
-        const suggestedCategory = result.suggestedCategory.trim();
-        if (suggestedCategory) {
-          setEditItemCategory(suggestedCategory);
-          console.log('Setting category to:', suggestedCategory);
-          toast({
-            title: "Category suggested",
-            description: `Suggested category: ${suggestedCategory}`,
-          });
-        } else {
-          toast({
-            title: "No suggestion",
-            description: "AI couldn't suggest a category for this item.",
-            variant: "destructive",
-          });
-        }
-      } else {
-        toast({
-          title: "No suggestion",
-          description: "AI couldn't suggest a category for this item.",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('AI suggestion error:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to get AI suggestion. Please try again.",
-        variant: "error",
-      });
-    } finally {
-      setIsLoadingAISuggestion(false);
-    }
-  };
 
   const handleCreateItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1277,7 +1138,6 @@ export default function ShoppingListPage() {
       folderId: selectedFolderId || undefined,
       name: newItemName.trim(),
       description: newItemDescription.trim() || undefined,
-      category: newItemCategory.trim() || undefined,
     });
   };
 
@@ -1289,7 +1149,6 @@ export default function ShoppingListPage() {
       id: editingItemId,
       name: editItemName.trim(),
       description: editItemDescription.trim() || undefined,
-      category: editItemCategory.trim() || null,
     });
   };
 
@@ -1297,7 +1156,6 @@ export default function ShoppingListPage() {
     setEditingItemId(item.id);
     setEditItemName(item.name);
     setEditItemDescription(item.description || "");
-    setEditItemCategory(item.category || "");
     setIsEditModalOpen(true);
   };
 
@@ -2535,33 +2393,9 @@ export default function ShoppingListPage() {
             </p>
           </div>
         ) : (
-          <>
-            {(() => {
-              // Group items by category
-              const groupedByCategory = filteredItems.reduce((acc: Record<string, any[]>, item: any) => {
-                const category = item.category || "Uncategorized";
-                if (!acc[category]) {
-                  acc[category] = [];
-                }
-                acc[category].push(item);
-                return acc;
-              }, {});
-
-              // Sort categories alphabetically, with "Uncategorized" at the end
-              const sortedCategories = Object.keys(groupedByCategory).sort((a, b) => {
-                if (a === "Uncategorized") return 1;
-                if (b === "Uncategorized") return -1;
-                return a.localeCompare(b);
-              });
-
-              return sortedCategories.map((category) => (
-              <div key={category} className="mb-4">
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
-                  <h3 className="text-sm font-bold text-gray-900 px-4 py-3 border-b border-gray-100">
-                    {category}
-                  </h3>
-                  <div className="divide-y divide-gray-100">
-                  {groupedByCategory[category]?.map((item) => {
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
+            <div className="divide-y divide-gray-100">
+              {filteredItems.map((item) => {
                     // Check if item is shared and what permission the user has
                     // Items inherit permission from their folder
                     const isSharedItem = (item as any).isSharedWithMe || false;
@@ -2712,13 +2546,9 @@ export default function ShoppingListPage() {
                         </div>
                       </div>
                     );
-                  })}
-                  </div>
-                </div>
-              </div>
-              ));
-            })()}
-          </>
+              })}
+            </div>
+          </div>
         )}
           </div>
           
@@ -2809,70 +2639,6 @@ export default function ShoppingListPage() {
                   className="min-h-[80px] sm:min-h-[100px] resize-none bg-gray-50 w-full"
                 />
               </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label htmlFor="item-category" className="text-sm font-medium text-gray-900">
-                  Category <span className="text-gray-500 font-normal">(optional)</span>
-                </Label>
-                <div className="space-y-2">
-                  {/* Category Tags - Draggable Slider */}
-                  {existingCategories.length > 0 && (
-                    <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
-                      <div 
-                        ref={categoryScrollRef}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleDragScroll(e, categoryScrollRef as React.RefObject<HTMLDivElement | null>);
-                        }}
-                        onTouchStart={(e) => {
-                          e.stopPropagation();
-                          handleDragScroll(e, categoryScrollRef as React.RefObject<HTMLDivElement | null>);
-                        }}
-                        onTouchMove={(e) => {
-                          e.stopPropagation();
-                        }}
-                        className="flex gap-2 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-                        style={{
-                          WebkitOverflowScrolling: 'touch',
-                          width: '100%',
-                          maxWidth: '100%',
-                          touchAction: 'pan-x',
-                          overflowX: 'auto',
-                          overflowY: 'hidden',
-                        }}
-                      >
-                        {existingCategories.map((category: string) => (
-                          <button
-                            key={category}
-                            type="button"
-                            onClick={() => {
-                              setNewItemCategory(newItemCategory === category ? "" : category);
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onTouchStart={(e) => e.stopPropagation()}
-                            className={cn(
-                              "px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap select-none",
-                              newItemCategory === category
-                                ? "border-2 border-gray-900 bg-white text-gray-900"
-                                : "border border-gray-300 bg-white text-gray-700 hover:border-gray-400"
-                            )}
-                          >
-                            {category}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {/* Custom Category Input */}
-                  <Input
-                    id="item-category"
-                    value={newItemCategory}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
-                    placeholder="Please specify..."
-                    className="bg-gray-50 h-10 sm:h-11"
-                  />
-                </div>
-              </div>
             </div>
             <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4 mt-4 sm:mt-6">
               <Button
@@ -2887,7 +2653,6 @@ export default function ShoppingListPage() {
                   setIsAddModalOpen(false);
                   setNewItemName("");
                   setNewItemDescription("");
-                  setNewItemCategory("");
                 }}
                 className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
               >
@@ -2936,82 +2701,6 @@ export default function ShoppingListPage() {
                   className="min-h-[80px] sm:min-h-[100px] resize-none bg-gray-50 w-full"
                 />
               </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label htmlFor="edit-item-category" className="text-sm font-medium text-gray-900">
-                  Category <span className="text-gray-500 font-normal">(optional)</span>
-                </Label>
-                <div className="space-y-2">
-                  {/* Category Tags - Draggable Slider */}
-                  {existingCategories.length > 0 && (
-                    <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
-                      <div 
-                        ref={categoryScrollRef}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleDragScroll(e, categoryScrollRef as React.RefObject<HTMLDivElement | null>);
-                        }}
-                        onTouchStart={(e) => {
-                          e.stopPropagation();
-                          handleDragScroll(e, categoryScrollRef as React.RefObject<HTMLDivElement | null>);
-                        }}
-                        onTouchMove={(e) => {
-                          e.stopPropagation();
-                        }}
-                        className="flex gap-2 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-                        style={{
-                          WebkitOverflowScrolling: 'touch',
-                          width: '100%',
-                          maxWidth: '100%',
-                          touchAction: 'pan-x',
-                          overflowX: 'auto',
-                          overflowY: 'hidden',
-                        }}
-                      >
-                        {existingCategories.map((category: string) => (
-                          <button
-                            key={category}
-                            type="button"
-                            onClick={() => {
-                              setEditItemCategory(editItemCategory === category ? "" : category);
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onTouchStart={(e) => e.stopPropagation()}
-                            className={cn(
-                              "px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap select-none",
-                              editItemCategory === category
-                                ? "border-2 border-gray-900 bg-white text-gray-900"
-                                : "border border-gray-300 bg-white text-gray-700 hover:border-gray-400"
-                            )}
-                          >
-                            {category}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {/* Custom Category Input with AI Suggestion Button */}
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Input
-                      id="edit-item-category"
-                      value={editItemCategory}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemCategory(e.target.value)}
-                      placeholder="Please specify..."
-                      className="flex-1 bg-gray-50 h-10 sm:h-11"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={getAICategorySuggestionForEdit}
-                      disabled={isLoadingAISuggestion || !editItemName.trim()}
-                      className="shrink-0 whitespace-nowrap h-10 sm:h-11"
-                    >
-                      {isLoadingAISuggestion ? "Analyzing..." : "AI Suggestion"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
             </div>
             <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4 mt-4 sm:mt-6">
               <Button
@@ -3027,7 +2716,6 @@ export default function ShoppingListPage() {
                   setEditingItemId(null);
                   setEditItemName("");
                   setEditItemDescription("");
-                  setEditItemCategory("");
                 }}
                 className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
               >
