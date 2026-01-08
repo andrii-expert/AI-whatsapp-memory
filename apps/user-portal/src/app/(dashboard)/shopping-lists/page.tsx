@@ -893,7 +893,7 @@ export default function ShoppingListPage() {
     }
   };
 
-  // Format date for shopping list items: "16 Dec, 2025"
+  // Format date for shopping list items: "24 Dec"
   const formatShoppingListDate = (dateTimeStr: string | Date | null | undefined) => {
     if (!dateTimeStr) return "";
     const date = new Date(dateTimeStr);
@@ -904,17 +904,15 @@ export default function ShoppingListPage() {
     // Use Intl.DateTimeFormat to format date in user's timezone
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
-      year: "numeric",
       month: "short",
       day: "numeric",
     });
     
     const parts = formatter.formatToParts(date);
-    const year = parts.find(p => p.type === "year")?.value || "";
     const month = parts.find(p => p.type === "month")?.value || "";
     const day = parts.find(p => p.type === "day")?.value || "";
     
-    return `${day} ${month}, ${year}`;
+    return `${day} ${month}`;
   };
 
   // Get user display name (first name + first letter of last name)
