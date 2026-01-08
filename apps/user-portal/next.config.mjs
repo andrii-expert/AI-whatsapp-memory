@@ -12,18 +12,22 @@ const config = {
     ignoreBuildErrors: true,
   },
   devIndicators: false,
+  // Disable source maps in production to reduce memory usage during build
+  productionBrowserSourceMaps: false,
   // Optimize build performance
   experimental: {
     optimizePackageImports: ['lucide-react', '@imaginecalendar/ui'],
   },
   // Reduce memory usage during build
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, dev }) => {
     if (!isServer) {
       // Optimize client-side bundle
       config.optimization = {
         ...config.optimization,
         splitChunks: {
           chunks: 'all',
+          maxInitialRequests: 25,
+          minSize: 20000,
           cacheGroups: {
             default: false,
             vendors: false,
@@ -31,8 +35,9 @@ const config = {
             vendor: {
               name: 'vendor',
               chunks: 'all',
-              test: /node_modules/,
+              test: /[\\/]node_modules[\\/]/,
               priority: 20,
+              reuseExistingChunk: true,
             },
             // Separate chunk for UI components
             ui: {
@@ -40,11 +45,38 @@ const config = {
               chunks: 'all',
               test: /[\\/]node_modules[\\/]@imaginecalendar[\\/]ui[\\/]/,
               priority: 30,
+              reuseExistingChunk: true,
+            },
+            // Separate chunk for large libraries
+            react: {
+              name: 'react',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/,
+              chunks: 'all',
+              priority: 40,
+              reuseExistingChunk: true,
+            },
+            // Separate chunk for date libraries
+            date: {
+              name: 'date',
+              test: /[\\/]node_modules[\\/]date-fns[\\/]/,
+              chunks: 'all',
+              priority: 25,
+              reuseExistingChunk: true,
             },
           },
         },
       };
     }
+    
+    // Reduce memory usage during build
+    if (!dev) {
+      config.optimization = {
+        ...config.optimization,
+        moduleIds: 'deterministic',
+        runtimeChunk: 'single',
+      };
+    }
+    
     return config;
   },
   async headers() {
@@ -76,4 +108,11 @@ export default withSentryConfig(config, {
 
   // Tree-shake Sentry logger statements to reduce bundle size
   disableLogger: true,
+  
+  // Disable source maps during build to reduce memory usage
+  hideSourceMaps: true,
+  
+  // Reduce memory usage during build
+  disableServerWebpackPlugin: false,
+  disableClientWebpackPlugin: false,
 });

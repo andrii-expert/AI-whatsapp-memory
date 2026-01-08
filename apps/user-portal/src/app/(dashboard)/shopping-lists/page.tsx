@@ -1562,7 +1562,7 @@ export default function ShoppingListPage() {
       />
       <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
         {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm justify-between">
+      <div className="hidden lg:flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
           <Link
             href="/dashboard"
@@ -2368,31 +2368,27 @@ export default function ShoppingListPage() {
             <div className="flex items-center gap-2">
               {selectedFolder && folderShares.length > 0 && (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-sm"
-                  >
-                    Shared
-                  </Button>
-                  <div className="flex items-center gap-1">
-                    {folderShares.slice(0, 2).map((share: any, idx: number) => {
-                      const sharedUser = share.sharedWithUser;
-                      if (!sharedUser) return null;
-                      return (
-                        <div
-                          key={share.id}
-                          className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold",
-                            getAvatarColor(sharedUser.id)
-                          )}
-                          style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
-                          title={getSharedUserDisplayName(sharedUser)}
-                        >
-                          {getUserInitials(sharedUser)}
-                        </div>
-                      );
-                    })}
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white">
+                    <span className="text-sm font-medium text-gray-700">Shared</span>
+                    <div className="flex items-center gap-1">
+                      {folderShares.slice(0, 2).map((share: any, idx: number) => {
+                        const sharedUser = share.sharedWithUser;
+                        if (!sharedUser) return null;
+                        return (
+                          <div
+                            key={share.id}
+                            className={cn(
+                              "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                              getAvatarColor(sharedUser.id)
+                            )}
+                            style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                            title={getSharedUserDisplayName(sharedUser)}
+                          >
+                            {getUserInitials(sharedUser)}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>
               )}
@@ -2458,59 +2454,72 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex flex-row w-full justify-start items-center gap-2 mb-4">
-            <button
-              onClick={() => setFilterStatus("all")}
-              className={cn(
-                "px-4 py-2 rounded-full text-sm font-medium transition-colors",
-                filterStatus === "all"
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
-              )}
-              style={{
-                backgroundColor: filterStatus === "all" ? undefined : "#FAFAFA"
-              }}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setFilterStatus("open")}
-              className={cn(
-                "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
-                filterStatus === "open"
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
-              )}
-              style={{
-                backgroundColor: filterStatus === "open" ? undefined : "#FAFAFA"
-              }}
-            >
-              Open
-              {itemCounts.open > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
-                  {itemCounts.open}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setFilterStatus("completed")}
-              className={cn(
-                "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
-                filterStatus === "completed"
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
-              )}
-              style={{
-                backgroundColor: filterStatus === "completed" ? undefined : "#FAFAFA"
-              }}
-            >
-              Closed
-              {itemCounts.completed > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                  {itemCounts.completed}
-                </span>
-              )}
-            </button>
+          <div className="flex flex-row w-full justify-between items-center gap-2 mb-4">
+            <div className="flex flex-row items-center gap-2">
+              <button
+                onClick={() => setFilterStatus("all")}
+                className={cn(
+                  "px-4 py-2 rounded-full text-sm font-medium transition-colors",
+                  filterStatus === "all"
+                    ? "bg-gray-900 text-white"
+                    : "text-gray-600 hover:bg-gray-50"
+                )}
+                style={{
+                  backgroundColor: filterStatus === "all" ? undefined : "#FAFAFA"
+                }}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilterStatus("open")}
+                className={cn(
+                  "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
+                  filterStatus === "open"
+                    ? "bg-gray-900 text-white"
+                    : "text-gray-600 hover:bg-gray-50"
+                )}
+                style={{
+                  backgroundColor: filterStatus === "open" ? undefined : "#FAFAFA"
+                }}
+              >
+                Open
+                {itemCounts.open > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                    {itemCounts.open}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setFilterStatus("completed")}
+                className={cn(
+                  "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
+                  filterStatus === "completed"
+                    ? "bg-gray-900 text-white"
+                    : "text-gray-600 hover:bg-gray-50"
+                )}
+                style={{
+                  backgroundColor: filterStatus === "completed" ? undefined : "#FAFAFA"
+                }}
+              >
+                Closed
+                {itemCounts.completed > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                    {itemCounts.completed}
+                  </span>
+                )}
+              </button>
+            </div>
+            {filterStatus === "completed" && deletableItems.length > 0 && (
+              <Button
+                onClick={handleDeleteAll}
+                variant="outline"
+                size="sm"
+                className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400"
+              >
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                Delete All
+              </Button>
+            )}
           </div>
 
           {/* Items List */}
@@ -2523,7 +2532,7 @@ export default function ShoppingListPage() {
               {searchQuery
                 ? "Try adjusting your search"
                 : filterStatus === "completed"
-                ? "No completed items"
+                ? "No closed items"
                 : "Add your first item to get started"}
             </p>
           </div>
@@ -2549,7 +2558,7 @@ export default function ShoppingListPage() {
 
               return sortedCategories.map((category) => (
               <div key={category} className="mb-4">
-                <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                   <h3 className="text-sm font-bold text-gray-900 px-4 py-3 border-b border-gray-100">
                     {category}
                   </h3>
@@ -2638,7 +2647,7 @@ export default function ShoppingListPage() {
                               <div className="flex-shrink-0">
                                 <span 
                                   className={cn(
-                                    "px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap",
+                                    "px-2 py-1 rounded-md text-[10px] font-medium whitespace-nowrap",
                                     isCurrentUser 
                                       ? "bg-gray-50 text-gray-700"
                                       : "bg-pink-100 text-pink-700"
@@ -2670,7 +2679,7 @@ export default function ShoppingListPage() {
                                   }
                                 }}
                               >
-                                <MoreVertical className="h-4 w-4" />
+                                <MoreVertical className="h-5 w-5" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
