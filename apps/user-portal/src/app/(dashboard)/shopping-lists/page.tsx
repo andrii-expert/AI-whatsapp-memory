@@ -2187,7 +2187,11 @@ export default function ShoppingListPage() {
             <div className="flex items-center gap-2">
               {selectedFolder && folderShares.length > 0 && (
                 <>
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white">
+                  <button
+                    onClick={() => openShareDetails("shopping_list_folder", selectedFolder.id, selectedFolder.name)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+                    title="View who this list is shared with"
+                  >
                     <span className="text-sm font-medium text-gray-700">Shared</span>
                     <div className="flex items-center gap-1">
                       {folderShares.slice(0, 2).map((share: any, idx: number) => {
@@ -2208,7 +2212,7 @@ export default function ShoppingListPage() {
                         );
                       })}
                     </div>
-                  </div>
+                  </button>
                 </>
               )}
               {/* Desktop Add Item Button */}
@@ -2437,79 +2441,21 @@ export default function ShoppingListPage() {
                                   </div>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                {/* Badge with user name and date */}
-                                {item.createdAt && (
-                                  <div className="flex-shrink-0">
-                                    <span 
-                                      className={cn(
-                                        "px-2 py-1 rounded-md text-[10px] font-medium whitespace-nowrap",
-                                        isCurrentUser 
-                                          ? "bg-gray-50 text-gray-700"
-                                          : "bg-pink-100 text-pink-700"
-                                      )}
-                                    >
-                                      {itemUserName} • {formatShoppingListDate(item.createdAt)}
-                                    </span>
-                                  </div>
-                                )}
-                                {/* Shared badge - clickable to open share details */}
-                                {(() => {
-                                  // Show badge if item is in a shared folder
-                                  if (selectedFolder && (selectedFolder as any).isSharedWithMe) {
-                                    return (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openShareDetails(
-                                            "shopping_list_folder",
-                                            selectedFolder.id,
-                                            selectedFolder.name
-                                          );
-                                        }}
-                                        className="flex items-center gap-1 px-2 py-1 rounded-md bg-purple-100 text-purple-700 text-[10px] font-medium hover:bg-purple-200 transition-colors"
-                                        title="View who shared this list with you"
-                                      >
-                                        <Users className="h-3 w-3" />
-                                        <span>
-                                          {(selectedFolder as any).sharePermission === "view"
-                                            ? "View Only"
-                                            : "Can Edit"}
-                                        </span>
-                                      </button>
-                                    );
-                                  }
-                                  // Show badge if item itself is shared (from sharedViaFolder)
-                                  if (isSharedItem && (item as any).folderId) {
-                                    // Find the folder this item belongs to
-                                    const itemFolder = sharedFolders.find((f: any) => f.id === (item as any).folderId);
-                                    if (itemFolder) {
-                                      return (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openShareDetails(
-                                              "shopping_list_folder",
-                                              itemFolder.id,
-                                              itemFolder.name
-                                            );
-                                          }}
-                                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-purple-100 text-purple-700 text-[10px] font-medium hover:bg-purple-200 transition-colors"
-                                          title="View who shared this list with you"
-                                        >
-                                          <Users className="h-3 w-3" />
-                                          <span>
-                                            {itemFolder.sharePermission === "view"
-                                              ? "View Only"
-                                              : "Can Edit"}
-                                          </span>
-                                        </button>
-                                      );
-                                    }
-                                  }
-                                  return null;
-                                })()}
-                              </div>
+                              {/* Badge with user name and date */}
+                              {item.createdAt && (
+                                <div className="flex-shrink-0">
+                                  <span 
+                                    className={cn(
+                                      "px-2 py-1 rounded-md text-[10px] font-medium whitespace-nowrap",
+                                      isCurrentUser 
+                                        ? "bg-gray-50 text-gray-700"
+                                        : "bg-pink-100 text-pink-700"
+                                    )}
+                                  >
+                                    {itemUserName} • {formatShoppingListDate(item.createdAt)}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
