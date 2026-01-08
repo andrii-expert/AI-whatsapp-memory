@@ -55,8 +55,6 @@ import {
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
 import { useToast } from "@imaginecalendar/ui/use-toast";
-import { usePlanLimits } from "@/hooks/use-plan-limits";
-import { UpgradePrompt } from "@/components/upgrade-prompt";
 import Link from "next/link";
 import { Home, ChevronLeft, Clock } from "lucide-react";
 
@@ -848,8 +846,6 @@ function UserTimeDisplay({ timezone }: { timezone: string | null | undefined }) 
 export default function RemindersPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { limits, isLoading: isLoadingLimits } = usePlanLimits();
-  const hasRemindersAccess = limits.hasReminders;
   const { toast } = useToast();
 
   // Fetch user data to get timezone
@@ -1293,51 +1289,6 @@ export default function RemindersPage() {
       // Error handling is done in the mutation
     }
   }, [reminders, toast, toggleActiveMutation]);
-
-  if (isLoadingLimits) {
-    return (
-      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-            <p className="mt-4 text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!hasRemindersAccess) {
-    return (
-      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
-        {/* Breadcrumb Navigation */}
-        <div className="flex items-center gap-2 text-sm">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Home className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">Reminders</span>
-        </div>
-
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-primary">Reminders</h1>
-          <p className="text-muted-foreground mt-2">
-            Set and manage your reminders
-          </p>
-        </div>
-
-        <UpgradePrompt
-          feature="WhatsApp Reminders"
-          requiredTier="silver"
-          variant="card"
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">

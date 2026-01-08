@@ -6,76 +6,14 @@ import {
   updateReminder,
   deleteReminder,
   toggleReminderActive,
-  getUserSubscription,
-  getPlanById,
-  getPlanLimits,
-  getPlanTier,
-  getUpgradeMessage,
 } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-// Middleware to check if user has reminders access
-const remindersAccessProcedure = protectedProcedure.use(async (opts) => {
-  const { session, db } = opts.ctx;
-
-  // Get user's subscription
-  const subscription = await getUserSubscription(db, session.user.id);
-  
-  if (!subscription) {
-    logger.warn(
-      { userId: session.user.id },
-      "User attempted to access reminders without a subscription"
-    );
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Reminders feature requires an active subscription. Please upgrade to Gold plan.",
-    });
-  }
-
-  // Get the plan details
-  const plan = await getPlanById(db, subscription.plan);
-  
-  if (!plan) {
-    logger.error(
-      { userId: session.user.id, planId: subscription.plan },
-      "Plan not found for user subscription"
-    );
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Unable to verify subscription plan",
-    });
-  }
-
-  // Check if the plan has reminders access
-  const planLimits = getPlanLimits(plan.metadata as Record<string, unknown> | null);
-  const currentTier = getPlanTier(plan.metadata as Record<string, unknown> | null);
-  
-  if (!planLimits.hasReminders) {
-    const upgradeMessage = getUpgradeMessage('reminders', currentTier);
-    logger.warn(
-      { userId: session.user.id, plan: subscription.plan, tier: currentTier },
-      "User attempted to access reminders without proper plan"
-    );
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: upgradeMessage,
-    });
-  }
-
-  logger.info(
-    { userId: session.user.id, plan: subscription.plan, tier: currentTier },
-    "Reminders access granted"
-  );
-
-  return opts.next({
-    ctx: {
-      session,
-      db,
-    },
-  });
-});
+// Middleware to check if user has reminders access - REMOVED LIMITATION
+// All users now have access to reminders
+const remindersAccessProcedure = protectedProcedure;
 
 // Reminder schemas
 const frequencyEnum = z.enum(["daily", "hourly", "minutely", "once", "weekly", "monthly", "yearly"]);
