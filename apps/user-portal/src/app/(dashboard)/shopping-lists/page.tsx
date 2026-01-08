@@ -284,7 +284,16 @@ export default function ShoppingListPage() {
   // Sort folders to show "General" at the top
   const sortedFolders = useMemo(() => {
     // Only show top-level folders (no subfolders)
-    const topLevelFolders = folders.filter((folder: any) => !folder.parentId);
+    let topLevelFolders = folders.filter((folder: any) => !folder.parentId);
+    
+    // Filter by search query if provided
+    if (searchQuery.trim() && !selectedFolderId && !viewAllItems && !viewAllShared) {
+      const query = searchQuery.toLowerCase();
+      topLevelFolders = topLevelFolders.filter((folder: any) =>
+        folder.name.toLowerCase().includes(query)
+      );
+    }
+    
     return [...topLevelFolders].sort((a, b) => {
       const aIsGeneral = a.name.toLowerCase() === "general";
       const bIsGeneral = b.name.toLowerCase() === "general";
@@ -294,7 +303,7 @@ export default function ShoppingListPage() {
       
       return 0;
     });
-  }, [folders]);
+  }, [folders, searchQuery, selectedFolderId, viewAllItems, viewAllShared]);
 
   // Calculate folder stats (open/total items)
   const getFolderStats = useMemo(() => {
@@ -1428,7 +1437,7 @@ export default function ShoppingListPage() {
             Dashboard
           </Link>
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">Shopping Lists</span>
+          <span className="font-medium">Your Shopping Lists</span>
         </div>
       </div>
 
@@ -1439,45 +1448,9 @@ export default function ShoppingListPage() {
         {!selectedFolderId && !viewAllItems && !viewAllShared && (
           <div className="lg:hidden space-y-4 w-full">
             <div className="space-y-4">
-              {/* Search Bar and Sort Dropdown */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    placeholder="Search..."
-                    value={searchQuery}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setSearchQuery(e.target.value)
-                    }
-                    className="pr-10"
-                  />
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                </div>
-                <Select
-                  value={`${sortBy}-${sortOrder}`}
-                  onValueChange={(value) => {
-                    const [by, order] = value.split("-") as [
-                      "date" | "alphabetical",
-                      "asc" | "desc"
-                    ];
-                    setSortBy(by);
-                    setSortOrder(order);
-                  }}
-                >
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="date-desc">Date (Newest)</SelectItem>
-                    <SelectItem value="date-asc">Date (Oldest)</SelectItem>
-                    <SelectItem value="alphabetical-asc">A-Z</SelectItem>
-                    <SelectItem value="alphabetical-desc">Z-A</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Your Lists Header */}
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-900">Your Lists</h2>
+                <h2 className="text-lg font-bold text-gray-900">Your Shopping Lists</h2>
                 <Button
                   onClick={handleOpenCreateListModal}
                   variant="outline"
@@ -1487,6 +1460,19 @@ export default function ShoppingListPage() {
                   <Plus className="h-4 w-4" />
                   Add New
                 </Button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Input
+                  placeholder="Search lists..."
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="pr-10"
+                />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               </div>
 
               {/* Lists */}
@@ -1816,45 +1802,9 @@ export default function ShoppingListPage() {
         {/* Desktop Left Panel - Lists Sidebar */}
         <div className="hidden lg:block space-y-4">
           <div className="space-y-4">
-            {/* Search Bar and Sort Dropdown */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Input
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSearchQuery(e.target.value)
-                  }
-                  className="pr-10"
-                />
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
-              <Select
-                value={`${sortBy}-${sortOrder}`}
-                onValueChange={(value) => {
-                  const [by, order] = value.split("-") as [
-                    "date" | "alphabetical",
-                    "asc" | "desc"
-                  ];
-                  setSortBy(by);
-                  setSortOrder(order);
-                }}
-              >
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="date-desc">Date (Newest)</SelectItem>
-                  <SelectItem value="date-asc">Date (Oldest)</SelectItem>
-                  <SelectItem value="alphabetical-asc">A-Z</SelectItem>
-                  <SelectItem value="alphabetical-desc">Z-A</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Your Lists Header */}
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Your Lists</h2>
+              <h2 className="text-lg font-bold text-gray-900">Your Shopping Lists</h2>
               <Button
                 onClick={handleOpenCreateListModal}
                 variant="outline"
@@ -1864,6 +1814,19 @@ export default function ShoppingListPage() {
                 <Plus className="h-4 w-4" />
                 Add New
               </Button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+              <Input
+                placeholder="Search lists..."
+                value={searchQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setSearchQuery(e.target.value)
+                }
+                className="pr-10"
+              />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
 
             {/* Lists */}
@@ -2462,7 +2425,7 @@ export default function ShoppingListPage() {
                             <div className="flex-1 min-w-0">
                               <div
                                 className={cn(
-                                  "font-bold text-gray-900 text-base",
+                                  "font-semibold text-gray-900 text-base",
                                   item.status === "completed" && "line-through text-gray-400"
                                 )}
                               >
