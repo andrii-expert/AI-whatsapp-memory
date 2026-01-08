@@ -1741,7 +1741,7 @@ export default function ShoppingListPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                               onClick={(e: React.MouseEvent) => {
                                 e.stopPropagation();
                               }}
@@ -2259,7 +2259,7 @@ export default function ShoppingListPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                               onClick={(e: React.MouseEvent) => {
                                 e.stopPropagation();
                               }}
