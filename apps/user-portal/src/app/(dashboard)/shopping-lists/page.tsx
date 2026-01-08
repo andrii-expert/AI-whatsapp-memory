@@ -1558,7 +1558,7 @@ export default function ShoppingListPage() {
         strategy="lazyOnload"
         onLoad={initializeGoogleAds}
       />
-      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
+      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-0 md:space-y-6">
         {/* Breadcrumb Navigation */}
       <div className="hidden lg:flex items-center gap-2 text-sm justify-between">
         <div className="flex items-center justify-center gap-2">
