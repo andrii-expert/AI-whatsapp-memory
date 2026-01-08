@@ -1353,6 +1353,28 @@ export default function FriendsPage() {
               )}
             </div>
           </div>
+          
+          {/* Floating Action Button - Mobile Only */}
+          {(() => {
+            const isSharedFolder = selectedFolder?.isSharedWithMe || false;
+            const folderPermission = selectedFolder?.sharePermission;
+            const canAddToFolder = !isSharedFolder || folderPermission === "edit";
+            const isDisabled = Boolean(viewAllShared || (!selectedFolderId && !viewAllAddresses) || (selectedFolderId && !canAddToFolder));
+            
+            return (
+              <button
+                onClick={() => !isDisabled && openAddAddressModal(selectedFolderId)}
+                disabled={!!isDisabled}
+                className={cn(
+                  "lg:hidden fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50",
+                  isDisabled && "opacity-50 cursor-not-allowed"
+                )}
+                title={selectedFolderId && !canAddToFolder ? "View only - You cannot add friends to this folder" : "Add Friend"}
+              >
+                <Plus className="h-6 w-6" />
+              </button>
+            );
+          })()}
         </div>
       </div>
 
