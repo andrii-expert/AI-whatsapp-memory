@@ -387,6 +387,55 @@ export default function FriendsPage() {
     setIsShareDetailsModalOpen(true);
   };
 
+  // Get initials for friend avatar
+  const getFriendInitials = (name: string) => {
+    if (!name) return "U";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  // Get avatar color based on name/id
+  const getAvatarColor = (identifier: string) => {
+    if (!identifier) return "bg-green-100";
+    
+    const colors = [
+      "bg-green-100",      // light green
+      "bg-pink-100",       // light pink
+      "bg-yellow-100",     // light beige/yellow
+      "bg-purple-100",     // light purple
+      "bg-blue-100",       // light blue
+      "bg-orange-100",     // light orange
+      "bg-teal-100",       // light teal
+    ];
+    
+    const hash = identifier.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
+  };
+
+  const getAvatarTextColor = (bgColor: string) => {
+    if (bgColor.includes("yellow") || bgColor.includes("orange")) {
+      return "text-yellow-800";
+    }
+    if (bgColor.includes("green")) {
+      return "text-green-800";
+    }
+    if (bgColor.includes("pink")) {
+      return "text-pink-800";
+    }
+    if (bgColor.includes("purple")) {
+      return "text-purple-800";
+    }
+    if (bgColor.includes("blue")) {
+      return "text-blue-800";
+    }
+    if (bgColor.includes("teal")) {
+      return "text-teal-800";
+    }
+    return "text-gray-800";
+  };
 
   const isLoading = isLoadingAddresses;
 
@@ -474,110 +523,120 @@ export default function FriendsPage() {
               </p>
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               <div>
-                {filteredAddresses.map((address: any, index) => (
-                  <div key={address.id}>
-                    <div className="flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors">
-                      {/* Friend Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-gray-900 text-base">
-                              {address.name}
-                            </div>
-                            {address.connectedUser && (
-                              <div className="mt-1 space-y-0.5">
-                                {address.connectedUser.email && (
-                                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                                    <Mail className="h-3 w-3" />
-                                    <span>{address.connectedUser.email}</span>
-                                  </div>
-                                )}
-                                {address.connectedUser.phone && (
-                                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                                    <Phone className="h-3 w-3" />
-                                    <span>{address.connectedUser.phone}</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {address.isSharedWithMe && (
-                              <div className="mt-1">
-                                <span className="text-xs text-gray-500">Shared with you</span>
-                              </div>
-                            )}
+                {filteredAddresses.map((address: any, index) => {
+                  const avatarBgColor = getAvatarColor(address.id || address.name);
+                  const avatarTextColor = getAvatarTextColor(avatarBgColor);
+                  const initials = getFriendInitials(address.name);
+                  
+                  return (
+                    <div key={address.id}>
+                      <div className="flex items-center gap-4 py-4 px-4 hover:bg-gray-50 transition-colors">
+                        {/* Avatar */}
+                        <div className={`w-12 h-12 rounded-full ${avatarBgColor} flex items-center justify-center flex-shrink-0`}>
+                          <span className={`text-sm font-semibold ${avatarTextColor}`}>
+                            {initials}
+                          </span>
+                        </div>
+                        
+                        {/* Friend Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-gray-900 text-base mb-1">
+                            {address.name}
                           </div>
+                          {address.connectedUser && (
+                            <div className="space-y-1">
+                              {address.connectedUser.email && (
+                                <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                  <Mail className="h-3.5 w-3.5" />
+                                  <span>{address.connectedUser.email}</span>
+                                </div>
+                              )}
+                              {address.connectedUser.phone && (
+                                <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                  <Phone className="h-3.5 w-3.5" />
+                                  <span>{address.connectedUser.phone}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {!address.connectedUser && (
+                            <div className="text-sm text-gray-400 italic">
+                              No contact information
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Three dots menu */}
+                        <div className="flex items-center flex-shrink-0">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                              >
+                                <MoreVertical className="h-5 w-5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  openViewAddressModal(address);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                              >
+                                <Eye className="h-4 w-4" />
+                                <span>View</span>
+                              </DropdownMenuItem>
+                              {!address.isSharedWithMe && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      openEditAddressModal(address);
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                    <span>Edit</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      openShareModal("address", address.id, address.name);
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                  >
+                                    <Share2 className="h-4 w-4" />
+                                    <span>Share</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      setItemToDelete({ id: address.id, name: address.name });
+                                      setDeleteConfirmOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    <span>Delete</span>
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
-                      {/* Three dots menu */}
-                      <div className="flex items-center flex-shrink-0">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-gray-500 hover:text-gray-700"
-                            >
-                              <MoreVertical className="h-5 w-5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
-                            <DropdownMenuItem
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                openViewAddressModal(address);
-                              }}
-                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                            >
-                              <Eye className="h-4 w-4" />
-                              <span>View</span>
-                            </DropdownMenuItem>
-                            {!address.isSharedWithMe && (
-                              <>
-                                <DropdownMenuItem
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation();
-                                    openEditAddressModal(address);
-                                  }}
-                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                                >
-                                  <Edit3 className="h-4 w-4" />
-                                  <span>Edit</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation();
-                                    openShareModal("address", address.id, address.name);
-                                  }}
-                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                                >
-                                  <Share2 className="h-4 w-4" />
-                                  <span>Share</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation();
-                                    setItemToDelete({ id: address.id, name: address.name });
-                                    setDeleteConfirmOpen(true);
-                                  }}
-                                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  <span>Delete</span>
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                      {/* Divider - only show if not last item */}
+                      {index < filteredAddresses.length - 1 && (
+                        <div className="h-px bg-gray-200" />
+                      )}
                     </div>
-                    {/* Divider - 90% width, only show if not last item */}
-                    {index < filteredAddresses.length - 1 && (
-                      <div className="w-[90%] mx-auto h-px bg-gray-100" />
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
