@@ -157,8 +157,8 @@ export default function ShoppingListPage() {
   });
   const [viewAllShared, setViewAllShared] = useState(false); // View all shared items
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("all");
-  const [sortBy, setSortBy] = useState<"date" | "alphabetical">("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortBy, setSortBy] = useState<"date" | "alphabetical" | undefined>(undefined);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc" | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchScope, setSearchScope] = useState<"all" | "name" | "description">("all");
   const [newItemName, setNewItemName] = useState("");
@@ -1078,12 +1078,12 @@ export default function ShoppingListPage() {
     }
 
     // Sort items
-    if (sortBy === "alphabetical") {
+    if (sortBy === "alphabetical" && sortOrder) {
       items = [...items].sort((a, b) => {
         const comparison = a.name.localeCompare(b.name);
         return sortOrder === "asc" ? comparison : -comparison;
       });
-    } else if (sortBy === "date") {
+    } else if (sortBy === "date" && sortOrder) {
       items = [...items].sort((a, b) => {
         // Items without dates always go to the end
         if (!a.createdAt && !b.createdAt) return 0;
@@ -2250,7 +2250,7 @@ export default function ShoppingListPage() {
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
             <Select
-              value={`${sortBy}-${sortOrder}`}
+              value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
               onValueChange={(value) => {
                 const [by, order] = value.split("-") as [
                   "date" | "alphabetical",
@@ -2356,7 +2356,7 @@ export default function ShoppingListPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
+          <div className="w-[90%] mx-auto bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
             <div className="divide-y divide-gray-100">
               {filteredItems.map((item) => {
                     // Check if item is shared and what permission the user has
