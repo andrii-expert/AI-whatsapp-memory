@@ -2556,7 +2556,7 @@ export default function ShoppingListPage() {
 
               return sortedCategories.map((category) => (
               <div key={category} className="mb-4">
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
                   <h3 className="text-sm font-bold text-gray-900 px-4 py-3 border-b border-gray-100">
                     {category}
                   </h3>
