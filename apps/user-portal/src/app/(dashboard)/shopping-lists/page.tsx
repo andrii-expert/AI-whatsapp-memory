@@ -2863,26 +2863,14 @@ export default function ShoppingListPage() {
                       </div>
                     </div>
                   )}
-                  {/* Custom Category Input with AI Suggestion Button */}
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Input
-                      id="item-category"
-                      value={newItemCategory}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
-                      placeholder="Please specify..."
-                      className="flex-1 bg-gray-50 h-10 sm:h-11"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={getAICategorySuggestion}
-                      disabled={isLoadingAISuggestion || !newItemName.trim()}
-                      className="shrink-0 whitespace-nowrap h-10 sm:h-11"
-                    >
-                      {isLoadingAISuggestion ? "Analyzing..." : "AI Suggestion"}
-                    </Button>
-                  </div>
+                  {/* Custom Category Input */}
+                  <Input
+                    id="item-category"
+                    value={newItemCategory}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemCategory(e.target.value)}
+                    placeholder="Please specify..."
+                    className="bg-gray-50 h-10 sm:h-11"
+                  />
                 </div>
               </div>
             </div>
