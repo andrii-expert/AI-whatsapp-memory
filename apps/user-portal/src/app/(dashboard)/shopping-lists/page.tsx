@@ -1436,7 +1436,7 @@ export default function ShoppingListPage() {
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
                 {isOwner && (() => {
                   const shareCount = getShareCount("shopping_list_folder", folder.id);
                   const isShared = shareCount > 0;
@@ -1450,7 +1450,7 @@ export default function ShoppingListPage() {
                           openShareModal("shopping_list_folder", folder.id, folder.name);
                         }
                       }}
-                      className="flex items-center gap-2 cursor-pointer"
+                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                     >
                       {isShared ? (
                         <>
@@ -1477,7 +1477,7 @@ export default function ShoppingListPage() {
                       // Handle exiting the shared folder
                       handleExitSharedFolder(folder.id, folder.name);
                     }}
-                    className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                    className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50 rounded-md px-2 py-1.5"
                   >
                     <LogOut className="h-4 w-4" />
                     <span>Exit</span>
@@ -1490,7 +1490,7 @@ export default function ShoppingListPage() {
                           e.stopPropagation();
                           handleEditFolder(folder.id, folder.name);
                         }}
-                        className="flex items-center gap-2 cursor-pointer"
+                        className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                       >
                         <Edit2 className="h-4 w-4" />
                         <span>Edit</span>
@@ -1502,7 +1502,7 @@ export default function ShoppingListPage() {
                           e.stopPropagation();
                           handleDeleteFolder(folder.id, folder.name);
                         }}
-                        className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                        className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
                       >
                         <Trash2 className="h-4 w-4" />
                         <span>Delete</span>
@@ -1747,7 +1747,7 @@ export default function ShoppingListPage() {
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                          <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
                             {(() => {
                               const shareCount = getShareCount("shopping_list_folder", folder.id);
                               const isShared = shareCount > 0;
@@ -1761,7 +1761,7 @@ export default function ShoppingListPage() {
                                       openShareModal("shopping_list_folder", folder.id, folder.name);
                                     }
                                   }}
-                                  className="flex items-center gap-2 cursor-pointer"
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                                 >
                                   {isShared ? (
                                     <>
@@ -1785,7 +1785,7 @@ export default function ShoppingListPage() {
                                 e.stopPropagation();
                                 handleEditFolder(folder.id, folder.name);
                               }}
-                              className="flex items-center gap-2 cursor-pointer"
+                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                             >
                               <Edit2 className="h-4 w-4" />
                               <span>Edit</span>
@@ -1796,7 +1796,7 @@ export default function ShoppingListPage() {
                                   e.stopPropagation();
                                   handleDeleteFolder(folder.id, folder.name);
                                 }}
-                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
                               >
                                 <Trash2 className="h-4 w-4" />
                                 <span>Delete</span>
@@ -1888,13 +1888,13 @@ export default function ShoppingListPage() {
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
                               <DropdownMenuItem
                                 onClick={(e: React.MouseEvent) => {
                                   e.stopPropagation();
                                   openShareDetails("shopping_list_folder", folder.id, folder.name);
                                 }}
-                                className="flex items-center gap-2 cursor-pointer"
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                               >
                                 <Users className="h-4 w-4" />
                                 <span>Shared</span>
@@ -1905,7 +1905,7 @@ export default function ShoppingListPage() {
                                     e.stopPropagation();
                                     handleEditFolder(folder.id, folder.name);
                                   }}
-                                  className="flex items-center gap-2 cursor-pointer"
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                                 >
                                   <Edit2 className="h-4 w-4" />
                                   <span>Edit</span>
@@ -1916,7 +1916,7 @@ export default function ShoppingListPage() {
                                   e.stopPropagation();
                                   handleExitSharedFolder(folder.id, folder.name);
                                 }}
-                                className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                                className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50 rounded-md px-2 py-1.5"
                               >
                                 <LogOut className="h-4 w-4" />
                                 <span>Exit</span>
@@ -2124,7 +2124,7 @@ export default function ShoppingListPage() {
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                        <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
                           {(() => {
                             const shareCount = getShareCount("shopping_list_folder", folder.id);
                             const isShared = shareCount > 0;
@@ -2138,7 +2138,7 @@ export default function ShoppingListPage() {
                                     openShareModal("shopping_list_folder", folder.id, folder.name);
                                   }
                                 }}
-                                className="flex items-center gap-2 cursor-pointer"
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                               >
                                 {isShared ? (
                                   <>
@@ -2162,7 +2162,7 @@ export default function ShoppingListPage() {
                               e.stopPropagation();
                               handleEditFolder(folder.id, folder.name);
                             }}
-                            className="flex items-center gap-2 cursor-pointer"
+                            className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                           >
                             <Edit2 className="h-4 w-4" />
                             <span>Edit</span>
@@ -2173,7 +2173,7 @@ export default function ShoppingListPage() {
                                 e.stopPropagation();
                                 handleDeleteFolder(folder.id, folder.name);
                               }}
-                              className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                              className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
                             >
                               <Trash2 className="h-4 w-4" />
                               <span>Delete</span>
@@ -2265,13 +2265,13 @@ export default function ShoppingListPage() {
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                          <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
                             <DropdownMenuItem
                               onClick={(e: React.MouseEvent) => {
                                 e.stopPropagation();
                                 openShareDetails("shopping_list_folder", folder.id, folder.name);
                               }}
-                              className="flex items-center gap-2 cursor-pointer"
+                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                             >
                               <Users className="h-4 w-4" />
                               <span>Shared</span>
@@ -2282,7 +2282,7 @@ export default function ShoppingListPage() {
                                   e.stopPropagation();
                                   handleEditFolder(folder.id, folder.name);
                                 }}
-                                className="flex items-center gap-2 cursor-pointer"
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                               >
                                 <Edit2 className="h-4 w-4" />
                                 <span>Edit</span>
@@ -2293,7 +2293,7 @@ export default function ShoppingListPage() {
                                 e.stopPropagation();
                                 handleExitSharedFolder(folder.id, folder.name);
                               }}
-                              className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50"
+                              className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50 rounded-md px-2 py-1.5"
                             >
                               <LogOut className="h-4 w-4" />
                               <span>Exit</span>
@@ -2680,7 +2680,7 @@ export default function ShoppingListPage() {
                                 <MoreVertical className="h-5 w-5" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
                               <DropdownMenuItem
                                 onClick={(e: React.MouseEvent) => {
                                   e.stopPropagation();
@@ -2689,7 +2689,7 @@ export default function ShoppingListPage() {
                                   }
                                 }}
                                 disabled={!canEditItem}
-                                className="flex items-center gap-2 cursor-pointer"
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                               >
                                 <Edit2 className="h-4 w-4" />
                                 <span>Edit</span>
@@ -2702,7 +2702,7 @@ export default function ShoppingListPage() {
                                   }
                                 }}
                                 disabled={!canEditItem}
-                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
                               >
                                 <Trash2 className="h-4 w-4" />
                                 <span>Delete</span>
