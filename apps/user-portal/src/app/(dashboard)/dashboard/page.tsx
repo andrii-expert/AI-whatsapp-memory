@@ -635,13 +635,13 @@ export default function DashboardPage() {
       if (!r.active) return false;
       return true;
     });
-    return filterItems(filtered).length;
-  }, [reminders, searchQuery]);
+    return filtered.length;
+  }, [reminders]);
   
   const totalPendingTasks = useMemo(() => {
     const filtered = allCombinedTasks.filter((t) => t.status === "open");
-    return filterItems(filtered).length;
-  }, [allCombinedTasks, searchQuery]);
+    return filtered.length;
+  }, [allCombinedTasks]);
 
   const totalShoppingListItems = useMemo(() => {
     const filtered = allShoppingListItems.filter((item) => item.status === "open");
