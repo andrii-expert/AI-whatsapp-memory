@@ -295,7 +295,7 @@ function getWelcomeEmailTemplate(fullName: string): string {
     .cta-button {
       display: inline-block;
       background: #446DE1;
-      color: #ffffff;
+      color: #ffffff !important;
       text-decoration: none;
       text-color: #ffffff;
       padding: 16px 40px;
