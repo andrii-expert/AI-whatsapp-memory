@@ -633,7 +633,7 @@ export default function FriendsPage() {
                         {/* Friend Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 justify-between">
-                            <div className="font-bold text-gray-900 text-[15px]">
+                            <div className="font-bold text-gray-900 text-[15px] flex gap-2">
                               {address.name}
                               {/* Pending badge - show if email exists but no connectedUserId */}
                               {address.email && !address.connectedUserId && (
