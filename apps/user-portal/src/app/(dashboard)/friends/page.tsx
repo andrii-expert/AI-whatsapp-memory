@@ -553,7 +553,7 @@ export default function FriendsPage() {
               className="hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Plus className="h-4 w-4" />
-              Add Friend
+              Add Contact
             </Button>
           </div>
         </div>
@@ -757,12 +757,12 @@ export default function FriendsPage() {
             {/* Centered Title and Subtitle */}
             <div className="text-center">
               <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
-                {addressModalMode === "add" ? "Add Friend" : "Edit Friend"}
+                {addressModalMode === "add" ? "Add Contact" : "Edit Contact"}
               </AlertDialogTitle>
               <AlertDialogDescription className="text-sm text-gray-500">
                 {addressModalMode === "add"
-                  ? "Create a new friend entry. You can optionally connect it to a user account."
-                  : "Update the friend details."}
+                  ? "Does your contact already have CrackOn? Search below and add them."
+                  : "Update the contact details."}
               </AlertDialogDescription>
             </div>
           </div>
@@ -864,7 +864,7 @@ export default function FriendsPage() {
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
                 disabled={!addressModalName.trim() || createAddressMutation.isPending || updateAddressMutation.isPending}
               >
-                {addressModalMode === "add" ? "Add Friend" : "Update Friend"}
+                {addressModalMode === "add" ? "Add Contact" : "Update Contact"}
               </Button>
               <AlertDialogCancel
                 onClick={() => {
