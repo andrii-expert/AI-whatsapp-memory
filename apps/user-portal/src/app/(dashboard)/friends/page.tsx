@@ -1032,17 +1032,6 @@ export default function FriendsPage() {
                       placeholder="email"
                       className="bg-gray-50 h-10 sm:h-11 w-full"
                     />
-                    {inviteFriends.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveInvite(index)}
-                        className="h-10 w-10 text-gray-400 hover:text-red-600"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
                   </div>
                 </div>
               </div>
