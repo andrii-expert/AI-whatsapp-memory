@@ -783,8 +783,9 @@ function getSubscriptionEmailTemplate({
     }
     .cta-button {
       display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #ffffff;
+      background: #446DE1;
+      color: #ffffff !important;
+      text-color: #ffffff;
       text-decoration: none;
       padding: 16px 40px;
       border-radius: 8px;
@@ -1214,7 +1215,7 @@ function getShareNotificationEmailTemplate({
     }
     .cta-button {
       display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #446DE1;
       color: #ffffff;
       text-decoration: none;
       padding: 16px 40px;
@@ -1523,8 +1524,9 @@ function getInviteEmailTemplate(friendName: string, inviterName: string, signupU
     }
     .cta-button {
       display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #ffffff;
+      background: #446DE1;
+      color: #ffffff !important;
+      text-color: #ffffff;
       text-decoration: none;
       padding: 14px 32px;
       border-radius: 8px;
