@@ -11,9 +11,11 @@ import {
   deleteFriendFolder,
   searchUsersByEmailOrPhoneForFriends,
 } from "@imaginecalendar/database/queries";
+import { getUserByEmail, getUserById } from "@imaginecalendar/database/queries";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { sendInviteEmail } from "@api/utils/email";
 
 // Helper to transform empty strings to null for optional UUID fields
 // Handles: empty string -> null, valid UUID -> pass through, null/undefined -> pass through
@@ -199,5 +201,97 @@ export const friendsRouter = createTRPCRouter({
     .input(z.object({ searchTerm: z.string().min(1) }))
     .query(async ({ ctx: { db, session }, input }) => {
       return searchUsersByEmailOrPhoneForFriends(db, input.searchTerm, session.user.id);
+    }),
+
+  // Invite friends
+  invite: protectedProcedure
+    .input(
+      z.object({
+        friends: z.array(
+          z.object({
+            name: z.string().min(1, "Name is required"),
+            email: z.string().email("Invalid email format"),
+          })
+        ).min(1, "At least one friend is required"),
+      })
+    )
+    .mutation(async ({ ctx: { db, session }, input }) => {
+      logger.info({ userId: session.user.id, friendCount: input.friends.length }, "Inviting friends");
+
+      // Get inviter's name
+      const inviter = await getUserById(db, session.user.id);
+      const inviterName = inviter?.firstName && inviter?.lastName
+        ? `${inviter.firstName} ${inviter.lastName}`
+        : inviter?.name || "Someone";
+
+      // Check which emails are already registered
+      const existingEmails: string[] = [];
+      for (const friend of input.friends) {
+        const existingUser = await getUserByEmail(db, friend.email.toLowerCase());
+        if (existingUser) {
+          existingEmails.push(friend.email);
+        }
+      }
+
+      // If any emails are already registered, throw error
+      if (existingEmails.length > 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `The following email${existingEmails.length > 1 ? "s are" : " is"} already registered: ${existingEmails.join(", ")}. Please remove ${existingEmails.length > 1 ? "them" : "it"} from the list.`,
+        });
+      }
+
+      // Send invite emails to all friends
+      const emailResults = await Promise.allSettled(
+        input.friends.map((friend) =>
+          sendInviteEmail({
+            to: friend.email.toLowerCase(),
+            friendName: friend.name,
+            inviterName,
+          })
+        )
+      );
+
+      // Log any failures
+      emailResults.forEach((result, index) => {
+        if (result.status === "rejected") {
+          logger.error(
+            {
+              userId: session.user.id,
+              email: input.friends[index]?.email,
+              error: result.reason,
+            },
+            "Failed to send invite email"
+          );
+        }
+      });
+
+      // Check if all emails failed
+      const failedCount = emailResults.filter((r) => r.status === "rejected").length;
+      if (failedCount === input.friends.length) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to send invite emails. Please try again later.",
+        });
+      }
+
+      // If some succeeded, return success with warning
+      if (failedCount > 0) {
+        logger.warn(
+          {
+            userId: session.user.id,
+            total: input.friends.length,
+            failed: failedCount,
+          },
+          "Some invite emails failed to send"
+        );
+      }
+
+      logger.info({ userId: session.user.id, sent: input.friends.length - failedCount }, "Invite emails sent");
+      return {
+        success: true,
+        sent: input.friends.length - failedCount,
+        total: input.friends.length,
+      };
     }),
 });

@@ -112,6 +112,10 @@ export default function FriendsPage() {
   const [shareResourceId, setShareResourceId] = useState<string | null>(null);
   const [shareResourceName, setShareResourceName] = useState("");
 
+  // Invite modal states
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteFriends, setInviteFriends] = useState<Array<{ name: string; email: string }>>([{ name: "", email: "" }]);
+
   // Fetch friends
   const { data: allAddresses = [], isLoading: isLoadingAddresses } = useQuery(
     trpc.friends.list.queryOptions()
@@ -387,6 +391,73 @@ export default function FriendsPage() {
     setIsShareDetailsModalOpen(true);
   };
 
+  // Invite modal handlers
+  const handleAddMoreInvite = () => {
+    setInviteFriends([...inviteFriends, { name: "", email: "" }]);
+  };
+
+  const handleRemoveInvite = (index: number) => {
+    if (inviteFriends.length > 1) {
+      setInviteFriends(inviteFriends.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleInviteFriendChange = (index: number, field: "name" | "email", value: string) => {
+    const updated = [...inviteFriends];
+    updated[index] = { ...updated[index], [field]: value };
+    setInviteFriends(updated);
+  };
+
+  const inviteMutation = useMutation(
+    trpc.friends.invite.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        toast({ title: "Invites sent successfully", variant: "default" });
+        setIsInviteModalOpen(false);
+        setInviteFriends([{ name: "", email: "" }]);
+      },
+      onError: (error) => {
+        toast({
+          title: "Invite failed",
+          description: error.message || "Could not send invites",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
+  const handleSendInvites = () => {
+    // Validate all entries
+    const validFriends = inviteFriends.filter(f => f.name.trim() && f.email.trim());
+    if (validFriends.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one friend with name and email",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate email formats
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalidEmails = validFriends.filter(f => !emailRegex.test(f.email.trim()));
+    if (invalidEmails.length > 0) {
+      toast({
+        title: "Invalid emails",
+        description: `Please check the email format for: ${invalidEmails.map(f => f.email).join(", ")}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    inviteMutation.mutate({
+      friends: validFriends.map(f => ({
+        name: f.name.trim(),
+        email: f.email.trim().toLowerCase(),
+      })),
+    });
+  };
+
   // Get initials for friend avatar
   const getFriendInitials = (name: string) => {
     if (!name) return "U";
@@ -461,13 +532,23 @@ export default function FriendsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">Your Friends</h2>
-          <Button
-            onClick={openAddAddressModal}
-            className="hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            <Plus className="h-4 w-4" />
-            Add Friend
-          </Button>
+          <div className="hidden lg:flex items-center gap-2">
+            <Button
+              onClick={() => setIsInviteModalOpen(true)}
+              variant="outline"
+              className="flex items-center gap-2 border-gray-300"
+            >
+              <UserPlus className="h-4 w-4" />
+              Invite
+            </Button>
+            <Button
+              onClick={openAddAddressModal}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Plus className="h-4 w-4" />
+              Add Friend
+            </Button>
+          </div>
         </div>
 
         {/* Search and Sort Bar */}
@@ -900,6 +981,106 @@ export default function FriendsPage() {
         resourceId={shareResourceId || ""}
         resourceName={shareResourceName}
       />
+
+      {/* Invite Friends Modal */}
+      <AlertDialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <div className="relative mb-4">
+            {/* Close button */}
+            <button
+              onClick={() => setIsInviteModalOpen(false)}
+              className="absolute right-0 top-0 h-6 w-6 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                Invite Friends
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
+                Invite friends to access and collaborate.
+              </AlertDialogDescription>
+            </div>
+          </div>
+          
+          <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
+            {inviteFriends.map((friend, index) => (
+              <div key={index} className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor={`friend-name-${index}`} className="text-sm font-medium text-gray-900">
+                    Friend Name
+                  </Label>
+                  <Input
+                    id={`friend-name-${index}`}
+                    value={friend.name}
+                    onChange={(e) => handleInviteFriendChange(index, "name", e.target.value)}
+                    placeholder="Name"
+                    className="bg-gray-50 h-10 sm:h-11 w-full"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor={`friend-email-${index}`} className="text-sm font-medium text-gray-900">
+                    Email Address
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id={`friend-email-${index}`}
+                      type="email"
+                      value={friend.email}
+                      onChange={(e) => handleInviteFriendChange(index, "email", e.target.value)}
+                      placeholder="email"
+                      className="bg-gray-50 h-10 sm:h-11 w-full"
+                    />
+                    {inviteFriends.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveInvite(index)}
+                        className="h-10 w-10 text-gray-400 hover:text-red-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddMoreInvite}
+                className="flex items-center gap-2 border-gray-300 bg-white text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              >
+                <Plus className="h-4 w-4" />
+                Add More
+              </Button>
+            </div>
+          </div>
+
+          <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4 mt-4 sm:mt-6">
+            <Button
+              onClick={handleSendInvites}
+              disabled={inviteMutation.isPending}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+            >
+              {inviteMutation.isPending ? "Sending..." : "Send Invite"}
+            </Button>
+            <AlertDialogCancel
+              onClick={() => {
+                setIsInviteModalOpen(false);
+                setInviteFriends([{ name: "", email: "" }]);
+              }}
+              className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
+            >
+              Cancel
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

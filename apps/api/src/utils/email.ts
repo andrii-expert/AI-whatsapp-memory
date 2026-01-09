@@ -1354,3 +1354,250 @@ function getShareNotificationEmailTemplate({
   `.trim();
 }
 
+
+interface InviteEmailParams {
+  to: string;
+  friendName: string;
+  inviterName: string;
+}
+
+export async function sendInviteEmail({ to, friendName, inviterName }: InviteEmailParams) {
+  try {
+    // Validate inputs
+    if (!to || !to.trim()) {
+      logger.error({ to, friendName, inviterName }, 'Cannot send invite email: missing recipient email');
+      return null;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(to.trim())) {
+      logger.error({ to, friendName, inviterName }, 'Cannot send invite email: invalid email format');
+      return null;
+    }
+
+    // Check if Resend API key is configured
+    if (!process.env.RESEND_API_KEY) {
+      logger.error({ to }, 'Cannot send invite email: RESEND_API_KEY is not configured');
+      return null;
+    }
+
+    // Get and validate FROM_EMAIL at runtime
+    const fromEmail = getFromEmail();
+    if (!fromEmail) {
+      logger.error({ 
+        to,
+        resendFromEmail: process.env.RESEND_FROM_EMAIL 
+      }, 'Cannot send invite email: RESEND_FROM_EMAIL is invalid or not configured properly');
+      return null;
+    }
+
+    // Get Resend client
+    const resend = getResendClient();
+    if (!resend) {
+      logger.error({ to }, 'Cannot send invite email: Failed to initialize Resend client');
+      return null;
+    }
+
+    const signupUrl = `${APP_URL}/sign-up`;
+    const emailHtml = getInviteEmailTemplate(friendName, inviterName, signupUrl);
+
+    logger.info({ 
+      to, 
+      friendName,
+      inviterName,
+      from: fromEmail,
+      hasApiKey: !!process.env.RESEND_API_KEY,
+      apiKeyPrefix: process.env.RESEND_API_KEY?.substring(0, 10) || 'NOT_SET',
+    }, '[INVITE_EMAIL] Attempting to send invite email');
+
+    try {
+      const { data, error } = await resend.emails.send({
+        from: fromEmail,
+        to: to.trim(),
+        subject: `You've been invited to signup to CrackOn by ${inviterName}`,
+        html: emailHtml,
+      });
+
+      if (error) {
+        logger.error({ 
+          error, 
+          errorMessage: error.message,
+          errorName: error.name,
+          errorType: typeof error,
+          errorString: String(error),
+          to,
+          from: fromEmail,
+          hasApiKey: !!process.env.RESEND_API_KEY,
+        }, '[INVITE_EMAIL] Resend API returned an error when sending invite email');
+        throw error;
+      }
+
+      if (!data) {
+        logger.warn({ 
+          to,
+          from: fromEmail,
+        }, '[INVITE_EMAIL] Resend API returned no data when sending invite email');
+        return null;
+      }
+
+      logger.info({ 
+        emailId: data.id, 
+        to,
+        from: fromEmail,
+        friendName,
+        inviterName,
+      }, '[INVITE_EMAIL] Invite email sent successfully');
+      return data;
+    } catch (sendError) {
+      logger.error({
+        error: sendError instanceof Error ? sendError.message : String(sendError),
+        errorStack: sendError instanceof Error ? sendError.stack : undefined,
+        errorType: sendError instanceof Error ? sendError.constructor.name : typeof sendError,
+        errorDetails: sendError,
+        to,
+        from: fromEmail,
+        hasApiKey: !!process.env.RESEND_API_KEY,
+        apiKeyPrefix: process.env.RESEND_API_KEY?.substring(0, 10) || 'NOT_SET',
+      }, '[INVITE_EMAIL] Exception caught while sending invite email');
+      throw sendError;
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    logger.error({ 
+      error: errorMessage,
+      errorStack,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      to,
+      from: getFromEmail(),
+      hasApiKey: !!process.env.RESEND_API_KEY,
+      apiKeyPrefix: process.env.RESEND_API_KEY?.substring(0, 10) || 'NOT_SET',
+    }, '[INVITE_EMAIL] Error sending invite email');
+    
+    return null;
+  }
+}
+
+function getInviteEmailTemplate(friendName: string, inviterName: string, signupUrl: string): string {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You've been invited to CrackOn</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333333;
+      background-color: #f4f7fa;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .greeting {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a202c;
+      margin-bottom: 20px;
+    }
+    .message {
+      font-size: 16px;
+      color: #4a5568;
+      line-height: 1.8;
+      margin-bottom: 20px;
+    }
+    .cta-button {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #ffffff;
+      text-decoration: none;
+      padding: 14px 32px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 30px 0;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    .footer {
+      background-color: #f7fafc;
+      padding: 30px;
+      text-align: left;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer-text {
+      color: #718096;
+      font-size: 14px;
+      margin: 8px 0;
+      line-height: 1.6;
+    }
+    .footer-link {
+      color: #667eea;
+      text-decoration: none;
+    }
+    @media only screen and (max-width: 600px) {
+      .content {
+        padding: 30px 20px;
+      }
+      .cta-button {
+        display: block;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="content">
+      <p class="greeting">Hi ${friendName}</p>
+      
+      <p class="message">
+        You've been invited to signup to CrackOn by ${inviterName}
+      </p>
+      
+      <p class="message">
+        CrackOn helps you stay organised, collaborate easily, and keep everything important in one place.
+      </p>
+      
+      <p class="message">
+        Click the Signup button below to register.
+      </p>
+      
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${signupUrl}" class="cta-button">
+          Accept Invitation
+        </a>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p class="footer-text">
+        If you weren't expecting this invitation, you can safely ignore this email.
+      </p>
+      <p class="footer-text">
+        If you have any questions, feel free to reply to this message, we are happy to help.
+      </p>
+      <p class="footer-text" style="margin-top: 20px;">
+        Best regards,<br>
+        The CrackOn Team<br>
+        <a href="${signupUrl}" class="footer-link">CrackOn.ai</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+}
