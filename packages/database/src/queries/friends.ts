@@ -384,3 +384,68 @@ export async function searchUsersByEmailOrPhoneForFriends(
     }
   );
 }
+
+/**
+ * Find pending friends by email (friends that were invited but haven't signed up yet)
+ */
+export async function findPendingFriendsByEmail(
+  db: Database,
+  email: string
+) {
+  return withQueryLogging(
+    'findPendingFriendsByEmail',
+    { email },
+    async () => {
+      const emailLower = email.toLowerCase();
+      
+      return db.query.friends.findMany({
+        where: and(
+          eq(friends.email, emailLower),
+          isNull(friends.connectedUserId) // Only pending friends (not yet connected)
+        ),
+      });
+    }
+  );
+}
+
+/**
+ * Link pending friends to a user when they sign up
+ */
+export async function linkPendingFriendsToUser(
+  db: Database,
+  userId: string,
+  userEmail: string
+) {
+  return withMutationLogging(
+    'linkPendingFriendsToUser',
+    { userId, userEmail },
+    async () => {
+      const emailLower = userEmail.toLowerCase();
+      
+      // Find all pending friends with this email
+      const pendingFriends = await findPendingFriendsByEmail(db, emailLower);
+      
+      if (pendingFriends.length === 0) {
+        return { linked: 0 };
+      }
+      
+      // Update all pending friends to link them to this user
+      const friendIds = pendingFriends.map(f => f.id);
+      
+      await db
+        .update(friends)
+        .set({ 
+          connectedUserId: userId,
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(friends.email, emailLower),
+            isNull(friends.connectedUserId)
+          )
+        );
+      
+      return { linked: pendingFriends.length };
+    }
+  );
+}

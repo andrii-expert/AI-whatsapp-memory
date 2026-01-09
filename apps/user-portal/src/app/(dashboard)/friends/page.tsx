@@ -404,7 +404,12 @@ export default function FriendsPage() {
 
   const handleInviteFriendChange = (index: number, field: "name" | "email", value: string) => {
     const updated = [...inviteFriends];
-    updated[index] = { ...updated[index], [field]: value };
+    updated[index] = { 
+      name: updated[index]?.name || "", 
+      email: updated[index]?.email || "",
+      ...updated[index], 
+      [field]: value 
+    };
     setInviteFriends(updated);
   };
 
@@ -451,10 +456,12 @@ export default function FriendsPage() {
     }
 
     inviteMutation.mutate({
-      friends: validFriends.map(f => ({
-        name: f.name.trim(),
-        email: f.email.trim().toLowerCase(),
-      })),
+      friends: validFriends
+        .filter(f => f.name.trim() && f.email.trim())
+        .map(f => ({
+          name: f.name.trim(),
+          email: f.email.trim().toLowerCase(),
+        })),
     });
   };
 
@@ -607,9 +614,11 @@ export default function FriendsPage() {
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               <div>
                 {filteredAddresses.map((address: any, index) => {
-                  const avatarBgColor = getAvatarColor(address.id || address.name);
-                  const avatarTextColor = getAvatarTextColor(avatarBgColor);
-                  const initials = getFriendInitials(address.name);
+                  const addressName = String(address?.name ?? "");
+                  const addressId = String(address?.id ?? "");
+                  const avatarBgColor = getAvatarColor(addressId || addressName);
+                  const avatarTextColor = getAvatarTextColor(String(avatarBgColor));
+                  const initials: string = getFriendInitials(addressName);
                   
                   return (
                     <div key={address.id}>
@@ -623,18 +632,26 @@ export default function FriendsPage() {
                         
                         {/* Friend Content */}
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-gray-900 text-base mb-1">
-                            {address.name}
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="font-bold text-gray-900 text-base">
+                              {address.name}
+                            </div>
+                            {/* Pending badge - show if email exists but no connectedUserId */}
+                            {address.email && !address.connectedUserId && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                                Pending
+                              </span>
+                            )}
                           </div>
-                          {address.connectedUser && (
+                          {(address.connectedUser || address.email) && (
                             <div className="space-y-1">
-                              {address.connectedUser.email && (
+                              {(address.connectedUser?.email || address.email) && (
                                 <div className="flex items-center gap-1.5 text-sm text-gray-500">
                                   <Mail className="h-3.5 w-3.5" />
-                                  <span>{address.connectedUser.email}</span>
+                                  <span>{address.connectedUser?.email || address.email}</span>
                                 </div>
                               )}
-                              {address.connectedUser.phone && (
+                              {address.connectedUser?.phone && (
                                 <div className="flex items-center gap-1.5 text-sm text-gray-500">
                                   <Phone className="h-3.5 w-3.5" />
                                   <span>{address.connectedUser.phone}</span>
@@ -642,7 +659,7 @@ export default function FriendsPage() {
                               )}
                             </div>
                           )}
-                          {!address.connectedUser && (
+                          {!address.connectedUser && !address.email && (
                             <div className="text-sm text-gray-400 italic">
                               No contact information
                             </div>
@@ -763,14 +780,14 @@ export default function FriendsPage() {
               <Input
                 id="address-name"
                 value={addressModalName}
-                onChange={(e) => setAddressModalName(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddressModalName(e.target.value)}
                 placeholder="e.g., John Doe, Company Name"
                 className="bg-gray-50 h-10 sm:h-11 w-full"
               />
             </div>
 
             <div className="space-y-1.5 sm:space-y-2">
-              <Label className="text-sm font-medium text-gray-900">Connect to User <span className="text-gray-500 font-normal">(optional)</span></Label>
+              <Label className="text-sm font-medium text-gray-900">Connect to User</Label>
               {addressModalConnectedUser ? (
                 <div className="border border-gray-200 rounded-lg p-3 flex items-center justify-between bg-gray-50">
                   <div>
@@ -795,7 +812,7 @@ export default function FriendsPage() {
                     <Input
                       placeholder="Search by email or phone number..."
                       value={userSearchTerm}
-                      onChange={(e) => {
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         setUserSearchTerm(e.target.value);
                         if (e.target.value.length >= 2) {
                           handleSearchUsers(e.target.value);
@@ -1013,8 +1030,8 @@ export default function FriendsPage() {
                   </Label>
                   <Input
                     id={`friend-name-${index}`}
-                    value={friend.name}
-                    onChange={(e) => handleInviteFriendChange(index, "name", e.target.value)}
+                    value={friend.name || ""}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInviteFriendChange(index, "name", e.target.value)}
                     placeholder="Name"
                     className="bg-gray-50 h-10 sm:h-11 w-full"
                   />
@@ -1027,8 +1044,8 @@ export default function FriendsPage() {
                     <Input
                       id={`friend-email-${index}`}
                       type="email"
-                      value={friend.email}
-                      onChange={(e) => handleInviteFriendChange(index, "email", e.target.value)}
+                      value={friend.email || ""}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInviteFriendChange(index, "email", e.target.value)}
                       placeholder="email"
                       className="bg-gray-50 h-10 sm:h-11 w-full"
                     />

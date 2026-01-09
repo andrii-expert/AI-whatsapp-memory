@@ -281,6 +281,18 @@ export const authRouter = createTRPCRouter({
           utcOffset: input.utcOffset,
           showWelcomeModal: true, // Show welcome modal for new users
         });
+
+        // Link any pending friend invitations for this email
+        if (session.user.email) {
+          const { linkPendingFriendsToUser } = await import("@imaginecalendar/database/queries");
+          const linkResult = await linkPendingFriendsToUser(db, session.user.id, session.user.email);
+          if (linkResult.linked > 0) {
+            logger.info(
+              { userId: session.user.id, email: session.user.email, linked: linkResult.linked },
+              "Linked pending friends to new user"
+            );
+          }
+        }
       } else {
         // Update existing user with onboarding data
         await updateUser(db, session.user.id, {

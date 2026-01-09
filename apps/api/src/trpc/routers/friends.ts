@@ -10,8 +10,11 @@ import {
   updateFriendFolder,
   deleteFriendFolder,
   searchUsersByEmailOrPhoneForFriends,
+  linkPendingFriendsToUser,
 } from "@imaginecalendar/database/queries";
 import { getUserByEmail, getUserById } from "@imaginecalendar/database/queries";
+import { friends } from "@imaginecalendar/database/schema";
+import { eq, and } from "drizzle-orm";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -241,6 +244,45 @@ export const friendsRouter = createTRPCRouter({
         });
       }
 
+      // Create friend entries for all invited friends (pending status)
+      const createdFriends = [];
+      for (const friend of input.friends) {
+        try {
+          // Check if friend already exists with this email for this user
+          const existingFriends = await db.query.friends.findMany({
+            where: and(
+              eq(friends.userId, session.user.id),
+              eq(friends.email, friend.email.toLowerCase())
+            ),
+          });
+
+          // Only create if doesn't exist
+          if (existingFriends.length === 0) {
+            const newFriend = await createFriend(db, {
+              userId: session.user.id,
+              name: friend.name,
+              email: friend.email.toLowerCase(),
+              connectedUserId: null, // Pending until they sign up
+            });
+            createdFriends.push(newFriend);
+            logger.info(
+              { userId: session.user.id, friendId: newFriend.id, email: friend.email },
+              "Created pending friend entry"
+            );
+          } else {
+            logger.info(
+              { userId: session.user.id, email: friend.email },
+              "Friend already exists, skipping creation"
+            );
+          }
+        } catch (error) {
+          logger.error(
+            { userId: session.user.id, email: friend.email, error },
+            "Failed to create friend entry"
+          );
+        }
+      }
+
       // Send invite emails to all friends
       const emailResults = await Promise.allSettled(
         input.friends.map((friend) =>
@@ -287,11 +329,12 @@ export const friendsRouter = createTRPCRouter({
         );
       }
 
-      logger.info({ userId: session.user.id, sent: input.friends.length - failedCount }, "Invite emails sent");
+      logger.info({ userId: session.user.id, sent: input.friends.length - failedCount, created: createdFriends.length }, "Invite emails sent and friends created");
       return {
         success: true,
         sent: input.friends.length - failedCount,
         total: input.friends.length,
+        created: createdFriends.length,
       };
     }),
 });
