@@ -520,7 +520,7 @@ export default function FriendsPage() {
   return (
     <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-0 md:space-y-6">
       {/* Breadcrumb Navigation */}
-      <div className="hidden lg:flex items-center gap-2 text-sm justify-between">
+      <div className="hidden lg:flex items-center gap-2 text-[13px] justify-between">
         <div className="flex items-center justify-center gap-2">
           <Link
             href="/dashboard"
@@ -538,7 +538,7 @@ export default function FriendsPage() {
       <div className="w-full space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Your Friends</h2>
+          <h2 className="text-[17px] font-bold text-gray-900">Your Friends</h2>
           <div className="flex items-center gap-2">
             <Button
               onClick={() => setIsInviteModalOpen(true)}
@@ -603,8 +603,8 @@ export default function FriendsPage() {
           ) : filteredAddresses.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Users className="h-12 w-12 mx-auto text-gray-400" />
-              <p className="text-lg font-medium">No friends found</p>
-              <p className="text-sm mt-1">
+              <p className="text-[17px] font-medium">No friends found</p>
+              <p className="text-[13px] mt-1">
                 {searchQuery
                   ? "Try adjusting your search"
                   : "Add your first friend to get started"}
@@ -625,7 +625,7 @@ export default function FriendsPage() {
                       <div className="flex items-center gap-4 py-4 px-4 hover:bg-gray-50 transition-colors">
                         {/* Avatar */}
                         <div className={`w-12 h-12 rounded-full ${avatarBgColor} flex items-center justify-center flex-shrink-0`}>
-                          <span className={`text-sm font-semibold ${avatarTextColor}`}>
+                          <span className={`text-[13px] font-semibold ${avatarTextColor}`}>
                             {initials}
                           </span>
                         </div>
@@ -633,12 +633,12 @@ export default function FriendsPage() {
                         {/* Friend Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <div className="font-bold text-gray-900 text-base">
+                            <div className="font-bold text-gray-900 text-[15px]">
                               {address.name}
                             </div>
                             {/* Pending badge - show if email exists but no connectedUserId */}
                             {address.email && !address.connectedUserId && (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                              <span className="px-2 py-0.5 text-[11px] font-medium bg-yellow-100 text-yellow-800 rounded-full">
                                 Pending
                               </span>
                             )}
@@ -646,13 +646,13 @@ export default function FriendsPage() {
                           {(address.connectedUser || address.email) && (
                             <div className="space-y-1">
                               {(address.connectedUser?.email || address.email) && (
-                                <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                <div className="flex items-center gap-1.5 text-[13px] text-gray-500">
                                   <Mail className="h-3.5 w-3.5" />
                                   <span>{address.connectedUser?.email || address.email}</span>
                                 </div>
                               )}
                               {address.connectedUser?.phone && (
-                                <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                <div className="flex items-center gap-1.5 text-[13px] text-gray-500">
                                   <Phone className="h-3.5 w-3.5" />
                                   <span>{address.connectedUser.phone}</span>
                                 </div>
@@ -660,7 +660,7 @@ export default function FriendsPage() {
                             </div>
                           )}
                           {!address.connectedUser && !address.email && (
-                            <div className="text-sm text-gray-400 italic">
+                            <div className="text-[13px] text-gray-400 italic">
                               No contact information
                             </div>
                           )}
@@ -756,10 +756,10 @@ export default function FriendsPage() {
           <div className="relative mb-4">
             {/* Centered Title and Subtitle */}
             <div className="text-center">
-              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+              <AlertDialogTitle className="text-[17px] sm:text-[19px] font-bold text-gray-900 mb-1">
                 {addressModalMode === "add" ? "Add Contact" : "Edit Contact"}
               </AlertDialogTitle>
-              <AlertDialogDescription className="text-sm text-gray-500">
+              <AlertDialogDescription className="text-[13px] text-gray-500">
                 {addressModalMode === "add"
                   ? "Does your contact already have CrackOn? Search below and add them."
                   : "Update the contact details."}
@@ -776,7 +776,7 @@ export default function FriendsPage() {
             }
           }} className="space-y-4 sm:space-y-6 overflow-x-hidden">
             <div className="space-y-1.5 sm:space-y-2">
-              <Label htmlFor="address-name" className="text-sm font-medium text-gray-900">Friend Name *</Label>
+              <Label htmlFor="address-name" className="text-[13px] font-medium text-gray-900">Friend Name *</Label>
               <Input
                 id="address-name"
                 value={addressModalName}
@@ -787,7 +787,7 @@ export default function FriendsPage() {
             </div>
 
             <div className="space-y-1.5 sm:space-y-2">
-              <Label className="text-sm font-medium text-gray-900">Connect to User</Label>
+              <Label className="text-[13px] font-medium text-gray-900">Connect to User</Label>
               {addressModalConnectedUser ? (
                 <div className="border border-gray-200 rounded-lg p-3 flex items-center justify-between bg-gray-50">
                   <div>
@@ -795,10 +795,10 @@ export default function FriendsPage() {
                       {addressModalConnectedUser.firstName || addressModalConnectedUser.name || "User"}
                     </div>
                     {addressModalConnectedUser.email && (
-                      <div className="text-sm text-gray-500 mt-1">{addressModalConnectedUser.email}</div>
+                      <div className="text-[13px] text-gray-500 mt-1">{addressModalConnectedUser.email}</div>
                     )}
                     {addressModalConnectedUser.phone && (
-                      <div className="text-sm text-gray-500 mt-1">{addressModalConnectedUser.phone}</div>
+                      <div className="text-[13px] text-gray-500 mt-1">{addressModalConnectedUser.phone}</div>
                     )}
                   </div>
                   <Button variant="ghost" size="icon" onClick={handleRemoveConnectedUser} className="h-8 w-8">
@@ -840,17 +840,17 @@ export default function FriendsPage() {
                             {user.firstName || user.name || "User"}
                           </div>
                           {user.email && (
-                            <div className="text-sm text-gray-500 mt-1">{user.email}</div>
+                            <div className="text-[13px] text-gray-500 mt-1">{user.email}</div>
                           )}
                           {user.phone && (
-                            <div className="text-sm text-gray-500 mt-1">{user.phone}</div>
+                            <div className="text-[13px] text-gray-500 mt-1">{user.phone}</div>
                           )}
                         </div>
                       ))}
                     </div>
                   )}
                   {userSearchTerm.length >= 2 && !isSearchingUsers && userSearchResults.length === 0 && (
-                    <div className="text-sm text-gray-500 text-center py-4">
+                    <div className="text-[13px] text-gray-500 text-center py-4">
                       No users found
                     </div>
                   )}
@@ -861,7 +861,7 @@ export default function FriendsPage() {
             <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
               <Button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-[13px] sm:text-[15px]"
                 disabled={!addressModalName.trim() || createAddressMutation.isPending || updateAddressMutation.isPending}
               >
                 {addressModalMode === "add" ? "Add Contact" : "Update Contact"}
@@ -871,7 +871,7 @@ export default function FriendsPage() {
                   setIsAddressModalOpen(false);
                   resetAddressModal();
                 }}
-                className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
+                className="w-full border-gray-300 h-10 sm:h-11 text-[13px] sm:text-[15px]"
               >
                 Cancel
               </AlertDialogCancel>
@@ -886,10 +886,10 @@ export default function FriendsPage() {
           <div className="relative mb-4">
             {/* Centered Title and Subtitle */}
             <div className="text-center">
-              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+              <AlertDialogTitle className="text-[17px] sm:text-[19px] font-bold text-gray-900 mb-1">
                 {viewAddressData?.name}
               </AlertDialogTitle>
-              <AlertDialogDescription className="text-sm text-gray-500">
+              <AlertDialogDescription className="text-[13px] text-gray-500">
                 Friend details
               </AlertDialogDescription>
             </div>
@@ -898,19 +898,19 @@ export default function FriendsPage() {
           <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
             {viewAddressData?.connectedUser && (
               <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-sm font-medium text-gray-900">Connected User</Label>
+                <Label className="text-[13px] font-medium text-gray-900">Connected User</Label>
                 <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
                   <div className="font-medium text-gray-900">
                     {viewAddressData.connectedUser.firstName || viewAddressData.connectedUser.name || "User"}
                   </div>
                   {viewAddressData.connectedUser.email && (
-                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                    <div className="text-[13px] text-gray-500 mt-1 flex items-center gap-1.5">
                       <Mail className="h-3 w-3" />
                       {viewAddressData.connectedUser.email}
                     </div>
                   )}
                   {viewAddressData.connectedUser.phone && (
-                    <div className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                    <div className="text-[13px] text-gray-500 mt-1 flex items-center gap-1.5">
                       <Phone className="h-3 w-3" />
                       {viewAddressData.connectedUser.phone}
                     </div>
@@ -929,7 +929,7 @@ export default function FriendsPage() {
                     setIsViewAddressModalOpen(false);
                     if (viewAddressData) openEditAddressModal(viewAddressData);
                   }}
-                  className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
+                  className="w-full border-gray-300 h-10 sm:h-11 text-[13px] sm:text-[15px]"
                 >
                   Edit
                 </Button>
@@ -940,7 +940,7 @@ export default function FriendsPage() {
                       openShareModal("address", viewAddressData.id, viewAddressData.name);
                     }
                   }}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-[13px] sm:text-[15px]"
                 >
                   Share
                 </Button>
@@ -970,7 +970,7 @@ export default function FriendsPage() {
           <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
             <AlertDialogAction
               onClick={handleDeleteAddress}
-              className="w-full bg-red-600 hover:bg-red-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+              className="w-full bg-red-600 hover:bg-red-700 text-white h-10 sm:h-11 text-[13px] sm:text-[15px]"
             >
               Delete
             </AlertDialogAction>
@@ -1005,10 +1005,10 @@ export default function FriendsPage() {
           <div className="relative mb-4">
             {/* Centered Title and Subtitle */}
             <div className="text-center">
-              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+              <AlertDialogTitle className="text-[17px] sm:text-[19px] font-bold text-gray-900 mb-1">
                 Invite Friends
               </AlertDialogTitle>
-              <AlertDialogDescription className="text-sm text-gray-500">
+              <AlertDialogDescription className="text-[13px] text-gray-500">
                 Invite friends to access and collaborate.
               </AlertDialogDescription>
             </div>
@@ -1018,7 +1018,7 @@ export default function FriendsPage() {
             {inviteFriends.map((friend, index) => (
               <div key={index} className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5 sm:space-y-2">
-                  <Label htmlFor={`friend-name-${index}`} className="text-sm font-medium text-gray-900">
+                  <Label htmlFor={`friend-name-${index}`} className="text-[13px] font-medium text-gray-900">
                     Friend Name
                   </Label>
                   <Input
@@ -1030,7 +1030,7 @@ export default function FriendsPage() {
                   />
                 </div>
                 <div className="space-y-1.5 sm:space-y-2">
-                  <Label htmlFor={`friend-email-${index}`} className="text-sm font-medium text-gray-900">
+                  <Label htmlFor={`friend-email-${index}`} className="text-[13px] font-medium text-gray-900">
                     Email Address
                   </Label>
                   <div className="flex items-center gap-2">
@@ -1064,7 +1064,7 @@ export default function FriendsPage() {
             <Button
               onClick={handleSendInvites}
               disabled={inviteMutation.isPending}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white h-10 sm:h-11 text-[13px] sm:text-[15px]"
             >
               {inviteMutation.isPending ? "Sending..." : "Send Invite"}
             </Button>
