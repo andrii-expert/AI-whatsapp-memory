@@ -294,9 +294,10 @@ function getWelcomeEmailTemplate(fullName: string): string {
     }
     .cta-button {
       display: inline-block;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #446DE1;
       color: #ffffff;
       text-decoration: none;
+      text-color: #ffffff;
       padding: 16px 40px;
       border-radius: 8px;
       font-weight: 600;
