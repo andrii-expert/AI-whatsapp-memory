@@ -679,237 +679,247 @@ export default function DashboardPage() {
   // Calculate birthdays today (placeholder - set to 0 for now)
   const birthdaysToday = 0;
 
-  const userName = user?.firstName || user?.fullName?.split(' ')[0] || "there";
-  
-  // Get greeting based on time of day
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-  };
+  const userName = user?.firstName || "there";
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Main Container */}
-      <div className="mx-auto max-w-md">
-        {/* Header Section */}
-        <div className="border-t-[0.33px] border-[#E6E8EC] bg-white shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
-          <div className="p-4 bg-white">
-            <div className="flex flex-col gap-[3px]">
-              <h1 className="text-[24px] font-semibold leading-[32px] tracking-[-0.48px] text-[#141718]">
-                {getGreeting()}, {userName}! 👋
-              </h1>
-              <p className="text-[14px] font-normal leading-[130%] text-[#9999A5]">
-                Here's what's happening with your workspace today
-              </p>
-            </div>
+    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl">
+      {/* Page Header */}
+      <div className="mb-6 space-y-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-primary">
+              Welcome back, {userName}!
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Here's what's happening with your workspace today
+            </p>
+          </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-[10px] mt-4">
-              <button
-                onClick={() =>
-                  router.push(
-                    hasVerifiedWhatsApp
-                      ? "/settings/whatsapp"
-                      : "/settings/whatsapp?from=dashboard"
-                  )
-                }
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-[10px] rounded-xl border border-[#D0D5DD] bg-white"
+          <div className="flex flex-row gap-3 w-full xl:w-auto">
+            <button
+              onClick={() =>
+                router.push(
+                  hasVerifiedWhatsApp
+                    ? "/settings/whatsapp"
+                    : "/settings/whatsapp?from=dashboard"
+                )
+              }
+              className="group relative flex flex-1 items-center justify-center gap-2 rounded-full border border-muted bg-background px-3 py-2 shadow-sm transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {hasVerifiedWhatsApp && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-100 text-green-700 border-green-200 tracking-tight">
+                  Connected
+                </Badge>
+              )}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 flex-shrink-0"
+                fill="currentColor"
+                style={{ color: "#128c7e" }}
+                viewBox="0 0 24 24"
               >
-                <svg width="21" height="21" viewBox="0 0 21 21" fill="none">
-                  <rect width="21" height="21" rx="10.5" fill="url(#paint0_linear)" />
-                  <path d="M4.13086 16.6088L5.03118 13.3395C4.47456 12.3799 4.18257 11.2931 4.18561 10.1822C4.18561 6.70094 7.03256 3.87054 10.5274 3.87054C12.2246 3.87054 13.8184 4.52744 15.0137 5.72014C16.2121 6.91284 16.8722 8.49907 16.8691 10.1852C16.8691 13.6664 14.0222 16.4968 10.5243 16.4968H10.5213C9.45976 16.4968 8.41649 16.2304 7.4888 15.7279L4.13086 16.6088ZM7.65 14.5867L7.84162 14.7017C8.65069 15.18 9.57838 15.4313 10.5243 15.4343H10.5274C13.4321 15.4343 15.7985 13.0822 15.7985 10.1882C15.7985 8.78665 15.251 7.46983 14.2564 6.47693C13.2618 5.48402 11.9356 4.93913 10.5274 4.93913C7.62263 4.9361 5.25626 7.28821 5.25626 10.1822C5.25626 11.172 5.53304 12.1377 6.06228 12.9732L6.18699 13.173L5.65471 15.1074L7.65 14.5867Z" fill="white" />
-                  <path fillRule="evenodd" clipRule="evenodd" d="M8.94278 7.5425C8.82416 7.27914 8.69945 7.27308 8.58691 7.27006C8.49567 7.26703 8.38921 7.26703 8.28275 7.26703C8.1763 7.26703 8.00597 7.30638 7.85997 7.46379C7.71397 7.62121 7.3064 8.00263 7.3064 8.78061C7.3064 9.55556 7.87518 10.3063 7.95426 10.4122C8.03334 10.5182 9.05228 12.1619 10.6613 12.7946C11.9996 13.3213 12.2733 13.2154 12.5623 13.1881C12.8513 13.1609 13.4991 12.8067 13.6329 12.4374C13.7637 12.0681 13.7637 11.7533 13.7242 11.6867C13.6847 11.6201 13.5782 11.5807 13.42 11.502C13.2619 11.4233 12.4832 11.0419 12.3372 10.9874C12.1912 10.9359 12.0848 10.9087 11.9814 11.0661C11.8749 11.2235 11.5707 11.5777 11.4795 11.6837C11.3882 11.7896 11.2939 11.8017 11.1358 11.723C10.9776 11.6443 10.4666 11.4778 9.86135 10.939C9.3899 10.5212 9.07053 10.0036 8.97928 9.84617C8.88803 9.68875 8.97016 9.60399 9.04924 9.52529C9.1192 9.45566 9.2074 9.34063 9.28649 9.24982C9.36557 9.159 9.39294 9.0924 9.44465 8.98645C9.49636 8.8805 9.47202 8.78969 9.43248 8.71098C9.39294 8.6353 9.0827 7.8543 8.94278 7.5425Z" fill="white" />
-                  <defs>
-                    <linearGradient id="paint0_linear" x1="10.4995" y1="20.999" x2="10.4995" y2="-0.000734736" gradientUnits="userSpaceOnUse">
-                      <stop stopColor="#20B038" />
-                      <stop offset="1" stopColor="#60D66A" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <span className="text-[14px] font-medium text-[#344054]">Link Whatsapp</span>
-              </button>
-              <button
-                onClick={() => router.push("/calendars")}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-[10px] rounded-xl border border-[#D0D5DD] bg-white"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path d="M1.66667 16.6667C1.20833 16.6667 0.815972 16.5035 0.489583 16.1771C0.163194 15.8507 0 15.4583 0 15V3.33333C0 2.875 0.163194 2.48264 0.489583 2.15625C0.815972 1.82986 1.20833 1.66667 1.66667 1.66667H2.5V0.833333C2.5 0.597222 2.57986 0.399306 2.73958 0.239583C2.89931 0.0798611 3.09722 0 3.33333 0C3.56944 0 3.76736 0.0798611 3.92708 0.239583C4.08681 0.399306 4.16667 0.597222 4.16667 0.833333V1.66667H10.8333V0.833333C10.8333 0.597222 10.9132 0.399306 11.0729 0.239583C11.2326 0.0798611 11.4306 0 11.6667 0C11.9028 0 12.1007 0.0798611 12.2604 0.239583C12.4201 0.399306 12.5 0.597222 12.5 0.833333V1.66667H13.3333C13.7917 1.66667 14.184 1.82986 14.5104 2.15625C14.8368 2.48264 15 2.875 15 3.33333V15C15 15.4583 14.8368 15.8507 14.5104 16.1771C14.184 16.5035 13.7917 16.6667 13.3333 16.6667H1.66667ZM1.66667 15H13.3333V6.66667H1.66667V15Z" fill="#446DE1" />
-                </svg>
-                <span className="text-[14px] font-medium text-[#344054]">Link Calendar</span>
-              </button>
-            </div>
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
+              </svg>
+              <span className="text-sm font-normal tracking-wide text-foreground whitespace-nowrap">
+                Link WhatsApp
+              </span>
+            </button>
+
+            <button
+              onClick={() => router.push("/calendars")}
+              className="group relative flex flex-1 items-center justify-center gap-2 rounded-full border border-muted bg-background px-3 py-2 shadow-sm transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {hasCalendar && (
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-100 text-green-700 border-green-200 tracking-tight">
+                  Connected
+                </Badge>
+              )}
+              <Calendar
+                className="h-5 w-5 flex-shrink-0"
+                style={{ color: "#0f52ba" }}
+              />
+              <span className="text-sm font-normal tracking-wide text-foreground whitespace-nowrap">
+                Link Calendar
+              </span>
+            </button>
           </div>
         </div>
 
+      </div>
 
-        {/* Stats Grid */}
-        <div className="px-4 py-4">
-          <div className="flex flex-col gap-6">
-            {/* First Row */}
-            <div className="flex gap-2">
-              <StatCard
-                number={totalScheduledEvents.toString()}
-                label="Meetings today"
-                iconBg="#FFF7F1"
-                borderColor="#FCF3EC"
-                blurColor="#FFDEC5"
-                icon={
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M7.66667 10.6667C7.2 10.6667 6.80556 10.5056 6.48333 10.1833C6.16111 9.86111 6 9.46667 6 9C6 8.53333 6.16111 8.13889 6.48333 7.81667C6.80556 7.49444 7.2 7.33333 7.66667 7.33333C8.13333 7.33333 8.52778 7.49444 8.85 7.81667C9.17222 8.13889 9.33333 8.53333 9.33333 9C9.33333 9.46667 9.17222 9.86111 8.85 10.1833C8.52778 10.5056 8.13333 10.6667 7.66667 10.6667ZM1.33333 13.3333C0.966667 13.3333 0.652778 13.2028 0.391667 12.9417C0.130556 12.6806 0 12.3667 0 12V2.66667C0 2.3 0.130556 1.98611 0.391667 1.725C0.652778 1.46389 0.966667 1.33333 1.33333 1.33333H2V0.666667C2 0.477778 2.06389 0.319444 2.19167 0.191667C2.31944 0.0638889 2.47778 0 2.66667 0C2.85556 0 3.01389 0.0638889 3.14167 0.191667C3.26944 0.319444 3.33333 0.477778 3.33333 0.666667V1.33333H8.66667V0.666667C8.66667 0.477778 8.73056 0.319444 8.85833 0.191667C8.98611 0.0638889 9.14444 0 9.33333 0C9.52222 0 9.68056 0.0638889 9.80833 0.191667C9.93611 0.319444 10 0.477778 10 0.666667V1.33333H10.6667C11.0333 1.33333 11.3472 1.46389 11.6083 1.725C11.8694 1.98611 12 2.3 12 2.66667V12C12 12.3667 11.8694 12.6806 11.6083 12.9417C11.3472 13.2028 11.0333 13.3333 10.6667 13.3333H1.33333ZM1.33333 12H10.6667V5.33333H1.33333V12Z" fill="#EEB183" />
-                  </svg>
-                }
-                onClick={() => router.push("/calendars")}
-              />
-              <StatCard
-                number={totalActiveReminders.toString()}
-                label="Todays Reminders"
-                iconBg="#F2FBFF"
-                borderColor="#ECF7FC"
-                blurColor="#C5EEFF"
-                icon={
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M0.666667 11.3333C0.477778 11.3333 0.319444 11.2694 0.191667 11.1417C0.0638889 11.0139 0 10.8556 0 10.6667C0 10.4778 0.0638889 10.3194 0.191667 10.1917C0.319444 10.0639 0.477778 10 0.666667 10H1.33333V5.33333C1.33333 4.41111 1.61111 3.59167 2.16667 2.875C2.72222 2.15833 3.44444 1.68889 4.33333 1.46667V1C4.33333 0.722222 4.43056 0.486111 4.625 0.291667C4.81944 0.0972222 5.05556 0 5.33333 0C5.61111 0 5.84722 0.0972222 6.04167 0.291667C6.23611 0.486111 6.33333 0.722222 6.33333 1V1.46667C7.22222 1.68889 7.94444 2.15833 8.5 2.875C9.05556 3.59167 9.33333 4.41111 9.33333 5.33333V10H10C10.1889 10 10.3472 10.0639 10.475 10.1917C10.6028 10.3194 10.6667 10.4778 10.6667 10.6667C10.6667 10.8556 10.6028 11.0139 10.475 11.1417C10.3472 11.2694 10.1889 11.3333 10 11.3333H0.666667ZM5.33333 13.3333C4.96667 13.3333 4.65278 13.2028 4.39167 12.9417C4.13056 12.6806 4 12.3667 4 12H6.66667C6.66667 12.3667 6.53611 12.6806 6.275 12.9417C6.01389 13.2028 5.7 13.3333 5.33333 13.3333Z" fill="#48BBED" />
-                  </svg>
-                }
-                onClick={() => router.push("/reminders")}
-              />
+
+      <div className="grid grid-cols-1 gap-6">
+        {/* Main Content Area */}
+        <div>
+          {/* Status Cards Row */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6 text-center">
+            <div 
+              onClick={() => router.push("/calendars")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {totalScheduledEvents}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Meetings today
+              </div>
             </div>
 
-            {/* Second Row */}
-            <div className="flex gap-2">
-              <StatCard
-                number={totalShoppingListItems.toString()}
-                label="Remaining Purchase"
-                iconBg="#F2FFF4"
-                borderColor="#ECFCEE"
-                blurColor="#C4FFCC"
-                icon={
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M4 13.3333C3.63333 13.3333 3.31944 13.2028 3.05833 12.9417C2.79722 12.6806 2.66667 12.3667 2.66667 12C2.66667 11.6333 2.79722 11.3194 3.05833 11.0583C3.31944 10.7972 3.63333 10.6667 4 10.6667C4.36667 10.6667 4.68056 10.7972 4.94167 11.0583C5.20278 11.3194 5.33333 11.6333 5.33333 12C5.33333 12.3667 5.20278 12.6806 4.94167 12.9417C4.68056 13.2028 4.36667 13.3333 4 13.3333ZM10.6667 13.3333C10.3 13.3333 9.98611 13.2028 9.725 12.9417C9.46389 12.6806 9.33333 12.3667 9.33333 12C9.33333 11.6333 9.46389 11.3194 9.725 11.0583C9.98611 10.7972 10.3 10.6667 10.6667 10.6667C11.0333 10.6667 11.3472 10.7972 11.6083 11.0583C11.8694 11.3194 12 11.6333 12 12C12 12.3667 11.8694 12.6806 11.6083 12.9417C11.3472 13.2028 11.0333 13.3333 10.6667 13.3333Z" fill="#54D465" />
-                  </svg>
-                }
-                onClick={() => router.push("/shopping-lists")}
-              />
-              <StatCard
-                number={birthdaysToday.toString()}
-                label="Birthdays Today"
-                iconBg="#FFFCF2"
-                borderColor="#FCF8EC"
-                blurColor="#FFF0C5"
-                icon={
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M0.666667 13.2C0.477778 13.2 0.319444 13.1361 0.191667 13.0083C0.0638889 12.8806 0 12.7222 0 12.5333V9.2C0 8.83333 0.130556 8.51945 0.391667 8.25833C0.652778 7.99722 0.966667 7.86667 1.33333 7.86667V5.2C1.33333 4.83333 1.46389 4.51944 1.725 4.25833C1.98611 3.99722 2.3 3.86667 2.66667 3.86667H5.33333V2.9C5.13333 2.76667 4.97222 2.60556 4.85 2.41667C4.72778 2.22778 4.66667 2 4.66667 1.73333C4.66667 1.56667 4.7 1.40278 4.76667 1.24167C4.83333 1.08056 4.93333 0.933333 5.06667 0.8L5.76667 0.1C5.78889 0.0777778 5.86667 0.0444445 6 0C6.02222 0 6.1 0.0333333 6.23333 0.1L6.93333 0.8C7.06667 0.933333 7.16667 1.08056 7.23333 1.24167C7.3 1.40278 7.33333 1.56667 7.33333 1.73333C7.33333 2 7.27222 2.22778 7.15 2.41667C7.02778 2.60556 6.86667 2.76667 6.66667 2.9V3.86667H9.33333C9.7 3.86667 10.0139 3.99722 10.275 4.25833C10.5361 4.51944 10.6667 4.83333 10.6667 5.2V7.86667C11.0333 7.86667 11.3472 7.99722 11.6083 8.25833C11.8694 8.51945 12 8.83333 12 9.2V12.5333C12 12.7222 11.9361 12.8806 11.8083 13.0083C11.6806 13.1361 11.5222 13.2 11.3333 13.2H0.666667Z" fill="#E1B739" />
-                  </svg>
-                }
-                onClick={() => router.push("/friends")}
-              />
+            <div 
+              onClick={() => router.push("/reminders")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {totalActiveReminders}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Todays Reminders
+              </div>
             </div>
 
-            {/* Third Row */}
-            <div className="flex gap-2">
-              <StatCard
-                number={totalFriends.toString()}
-                label="Friends Added"
-                iconBg="#FFF2F7"
-                borderColor="#FFF3F8"
-                blurColor="#FFC5DA"
-                icon={
-                  <svg width="19" height="19" viewBox="0 0 19 19" fill="none">
-                    <path d="M0.791667 9.5C0.567361 9.5 0.37934 9.42413 0.227604 9.2724C0.0758681 9.12066 0 8.93264 0 8.70833V8.25313C0 7.68576 0.290278 7.22396 0.870833 6.86771C1.45139 6.51146 2.21667 6.33333 3.16667 6.33333C3.33819 6.33333 3.50313 6.33663 3.66146 6.34323C3.81979 6.34983 3.97153 6.36632 4.11667 6.39271C3.93194 6.66979 3.7934 6.96007 3.70104 7.26354C3.60868 7.56701 3.5625 7.88368 3.5625 8.21354V9.5H0.791667ZM5.54167 9.5C5.31736 9.5 5.12934 9.42413 4.9776 9.2724C4.82587 9.12066 4.75 8.93264 4.75 8.70833V8.21354C4.75 7.79132 4.86545 7.40538 5.09635 7.05573C5.32726 6.70608 5.65382 6.39931 6.07604 6.13542C6.49826 5.87153 7.00295 5.67361 7.5901 5.54167C8.17726 5.40972 8.81389 5.34375 9.5 5.34375C10.1993 5.34375 10.8425 5.40972 11.4297 5.54167C12.0168 5.67361 12.5215 5.87153 12.9438 6.13542C13.366 6.39931 13.6892 6.70608 13.9135 7.05573C14.1378 7.40538 14.25 7.79132 14.25 8.21354V8.70833C14.25 8.93264 14.1741 9.12066 14.0224 9.2724C13.8707 9.42413 13.6826 9.5 13.4583 9.5H5.54167Z" fill="#EE83AA" />
-                  </svg>
-                }
-                onClick={() => router.push("/friends")}
-              />
-              <StatCard
-                number={allCombinedNotes.length.toString()}
-                label="Notes Created"
-                iconBg="#F2F5FF"
-                borderColor="#F0F4FF"
-                blurColor="#C5D2FF"
-                icon={
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M1.33333 12C0.966667 12 0.652778 11.8694 0.391667 11.6083C0.130556 11.3472 0 11.0333 0 10.6667V1.33333C0 0.966667 0.130556 0.652778 0.391667 0.391667C0.652778 0.130556 0.966667 0 1.33333 0H10.6667C11.0333 0 11.3472 0.130556 11.6083 0.391667C11.8694 0.652778 12 0.966667 12 1.33333V10.6667C12 11.0333 11.8694 11.3472 11.6083 11.6083C11.3472 11.8694 11.0333 12 10.6667 12H1.33333ZM1.33333 10.6667H10.6667V1.33333H1.33333V10.6667Z" fill="#4867CC" />
-                  </svg>
-                }
-                onClick={() => router.push("/notes")}
-              />
+            <div 
+              onClick={() => router.push("/shopping-lists")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {totalShoppingListItems}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Remaining Purchase
+              </div>
+            </div>
+
+            <div 
+              onClick={() => router.push("/friends")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {birthdaysToday}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Birthdays Today
+              </div>
+            </div>
+
+            <div 
+              onClick={() => router.push("/friends")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {totalFriends}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Friends Added
+              </div>
+            </div>
+
+            <div 
+              onClick={() => router.push("/notes")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {allCombinedNotes.length}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Notes Created
+              </div>
             </div>
           </div>
 
-          {/* Recent Shopping List */}
-          <div className="mt-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-[16px] font-semibold leading-[130%] text-black">
-                Recent Shopping List
-              </h2>
-              <button
-                onClick={() => router.push("/shopping-lists")}
-                className="px-2 py-2 rounded-lg border border-[#F1F1F1] bg-white"
-              >
-                <span className="text-[14px] font-medium text-[#1D2228]">View All</span>
-              </button>
-            </div>
-
-            <div className="rounded-2xl border border-[#EFEFEF] bg-white shadow-[0_2px_24px_0_rgba(0,0,0,0.05)]">
-              {filteredShoppingListItems.length === 0 ? (
-                <div className="px-4 py-8 text-center">
-                  <p className="text-sm text-gray-500">No items in shopping list</p>
-                </div>
-              ) : (
-                <>
-                  {filteredShoppingListItems.map((item: any, index: number) => {
-                    const creatorName = item.user?.firstName || item.user?.name || "You";
-                    const isCurrentUser = item.userId === userData?.id;
-                    const formattedDate = item.createdAt 
-                      ? format(new Date(item.createdAt), 'd MMMM')
-                      : '';
-                    const badgeColor = isCurrentUser ? "gray" : "pink";
-                    const badgeStyles = badgeColor === "pink"
-                      ? "bg-[#FEF2FD] text-[#E751DD] rounded-lg"
-                      : "bg-white border border-[#F7F7F7] text-[#9999A5] shadow-[0_0_12px_0_rgba(0,0,0,0.04)] rounded-[4px]";
-                    
-                    return (
-                      <div
-                        key={item.id}
-                        className={`flex justify-between items-center px-4 py-5 ${
-                          index < filteredShoppingListItems.length - 1 ? 'border-b border-[#F1F1F1]' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <path d="M6 2.75H18C19.7949 2.75 21.25 4.20507 21.25 6V18C21.25 19.7949 19.7949 21.25 18 21.25H6C4.20507 21.25 2.75 19.7949 2.75 18V6C2.75 4.20507 4.20507 2.75 6 2.75Z" stroke="#C6C6CD" strokeWidth="1.5" />
-                          </svg>
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-1">
-                              <span className="text-[14px] font-semibold leading-[130%] text-[#1D2228]">
-                                {item.name}
-                              </span>
-                              <div className={`flex items-center gap-1 px-2 py-1 ${badgeStyles}`}>
-                                <span className="text-[10px] font-medium">{creatorName}</span>
-                                <div className="w-1 h-1 rounded-full" style={{ background: badgeColor === "pink" ? "#E751DD" : "#D9D9D9" }} />
-                                <span className="text-[10px] font-medium">{formattedDate}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Shopping List Card */}
+            <Card className="flex flex-col h-[420px] rounded-lg border border-gray-200 shadow-sm overflow-hidden bg-white">
+              <CardHeader className="flex flex-row items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
+                <CardTitle className="text-lg font-bold text-gray-900">Shopping List</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-sm border-gray-300"
+                  onClick={() => router.push("/shopping-lists")}
+                >
+                  View All
+                </Button>
+              </CardHeader>
+              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  {filteredShoppingListItems.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-8 text-center">
+                      No items in shopping list
+                    </p>
+                  ) : (
+                    <div className="space-y-0">
+                      {filteredShoppingListItems.map((item: any, index: number) => {
+                        const creatorName = item.user?.firstName || item.user?.name || "You";
+                        const isCurrentUser = item.userId === userData?.id;
+                        const formattedDate = item.createdAt 
+                          ? format(new Date(item.createdAt), 'd MMMM')
+                          : '';
+                        
+                        return (
+                          <div key={item.id}>
+                            <div className="flex items-start gap-3 py-3">
+                              <input
+                                type="checkbox"
+                                checked={item.status === "completed"}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  toggleShoppingListItemMutation.mutate({ id: item.id });
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                disabled={toggleShoppingListItemMutation.isPending}
+                                className="h-4 w-4 mt-1 rounded border-gray-300 text-blue-600 focus:ring-0 focus:ring-offset-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-bold text-gray-900">
+                                    {item.name}
+                                  </p>
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    isCurrentUser 
+                                      ? 'bg-gray-100 text-gray-600' 
+                                      : 'bg-pink-100 text-pink-600'
+                                  }`}>
+                                    {creatorName} • {formattedDate}
+                                  </span>
+                                </div>
+                                {item.description ? (
+                                  <p className="text-xs text-gray-500 italic">
+                                    {item.description}
+                                  </p>
+                                ) : null}
                               </div>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                  <DropdownMenuItem
+                                    onClick={() => router.push("/shopping-lists")}
+                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                  >
+                                    <span>View</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
-                            {item.description && (
-                              <div className="text-[12px] font-medium leading-[130%] text-[#9999A5]">
-                                {item.description}
-                              </div>
+                            {index < filteredShoppingListItems.length - 1 && (
+                              <div className="h-px bg-gray-200" />
                             )}
                           </div>
-                        </div>
-                        <button className="text-[#9B9BA7]">
-                          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                            <path d="M10 13.3333C9.54167 13.3333 9.14931 13.1701 8.82292 12.8437C8.49653 12.5174 8.33333 12.125 8.33333 11.6667C8.33333 11.2083 8.49653 10.816 8.82292 10.4896C9.14931 10.1632 9.54167 10 10 10C10.4583 10 10.8507 10.1632 11.1771 10.4896C11.5035 10.816 11.6667 11.2083 11.6667 11.6667C11.6667 12.125 11.5035 12.5174 11.1771 12.8437C10.8507 13.1701 10.4583 13.3333 10 13.3333ZM10 8.33333C9.54167 8.33333 9.14931 8.17014 8.82292 7.84375C8.49653 7.51736 8.33333 7.125 8.33333 6.66667C8.33333 6.20833 8.49653 5.81597 8.82292 5.48958C9.14931 5.16319 9.54167 5 10 5C10.4583 5 10.8507 5.16319 11.1771 5.48958C11.5035 5.81597 11.6667 6.20833 11.6667 6.66667C11.6667 7.125 11.5035 7.51736 11.1771 7.84375C10.8507 8.17014 10.4583 8.33333 10 8.33333ZM10 3.33333C9.54167 3.33333 9.14931 3.17014 8.82292 2.84375C8.49653 2.51736 8.33333 2.125 8.33333 1.66667C8.33333 1.20833 8.49653 0.815972 8.82292 0.489583C9.14931 0.163194 9.54167 0 10 0C10.4583 0 10.8507 0.163194 11.1771 0.489583C11.5035 0.815972 11.6667 1.20833 11.6667 1.66667C11.6667 2.125 11.5035 2.51736 11.1771 2.84375C10.8507 3.17014 10.4583 3.33333 10 3.33333Z" fill="currentColor" transform="translate(0, 3)" />
-                          </svg>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-            </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Events Card */}
             {shouldShowEvents && (
@@ -1504,40 +1514,6 @@ export default function DashboardPage() {
         open={isWelcomeModalOpen} 
         onOpenChange={setIsWelcomeModalOpen} 
       />
-    </div>
-  );
-}
-
-// StatCard Component
-function StatCard({ number, label, iconBg, borderColor, blurColor, icon, onClick }: {
-  number: string;
-  label: string;
-  iconBg: string;
-  borderColor: string;
-  blurColor: string;
-  icon: React.ReactNode;
-  onClick?: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden cursor-pointer"
-      style={{ borderColor }}
-    >
-      <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: blurColor, filter: 'blur(50px)' }} />
-      <div className="relative flex items-start gap-2">
-        <div className="flex-1 flex flex-col gap-2">
-          <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
-            {number}
-          </div>
-          <div className="text-[12px] font-normal tracking-[-0.48px] text-[#4C4C4C]">
-            {label}
-          </div>
-        </div>
-        <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: iconBg }}>
-          {icon}
-        </div>
-      </div>
     </div>
   );
 }
