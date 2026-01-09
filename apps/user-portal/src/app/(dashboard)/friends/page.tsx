@@ -1003,13 +1003,6 @@ export default function FriendsPage() {
       <AlertDialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
         <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <div className="relative mb-4">
-            {/* Close button */}
-            <button
-              onClick={() => setIsInviteModalOpen(false)}
-              className="absolute right-0 top-0 h-6 w-6 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
             {/* Centered Title and Subtitle */}
             <div className="text-center">
               <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
