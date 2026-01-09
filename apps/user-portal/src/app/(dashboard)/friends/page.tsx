@@ -532,18 +532,18 @@ export default function FriendsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">Your Friends</h2>
-          <div className="hidden lg:flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Button
               onClick={() => setIsInviteModalOpen(true)}
               variant="outline"
               className="flex items-center gap-2 border-gray-300"
             >
               <UserPlus className="h-4 w-4" />
-              Invite
+              <span className="hidden sm:inline">Invite</span>
             </Button>
             <Button
               onClick={openAddAddressModal}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+              className="hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Plus className="h-4 w-4" />
               Add Friend
