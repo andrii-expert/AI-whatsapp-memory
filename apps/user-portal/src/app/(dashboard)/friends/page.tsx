@@ -622,7 +622,7 @@ export default function FriendsPage() {
                   
                   return (
                     <div key={address.id}>
-                      <div className="flex items-center gap-4 py-4 px-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-2 py-4 px-2 hover:bg-gray-50 transition-colors">
                         {/* Avatar */}
                         <div className={`w-12 h-12 rounded-full ${avatarBgColor} flex items-center justify-center flex-shrink-0`}>
                           <span className={`text-[13px] font-semibold ${avatarTextColor}`}>
@@ -632,7 +632,7 @@ export default function FriendsPage() {
                         
                         {/* Friend Content */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1 justify-between">
                             <div className="font-bold text-gray-900 text-[15px]">
                               {address.name}
                             </div>
@@ -642,6 +642,64 @@ export default function FriendsPage() {
                                 Pending
                               </span>
                             )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                                >
+                                  <MoreVertical className="h-5 w-5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    openViewAddressModal(address);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  <span>View</span>
+                                </DropdownMenuItem>
+                                {!address.isSharedWithMe && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        openEditAddressModal(address);
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      <Edit3 className="h-4 w-4" />
+                                      <span>Edit</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        openShareModal("address", address.id, address.name);
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      <Share2 className="h-4 w-4" />
+                                      <span>Share</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        setItemToDelete({ id: address.id, name: address.name });
+                                        setDeleteConfirmOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      <span>Delete</span>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                           {(address.connectedUser || address.email) && (
                             <div className="space-y-1">
@@ -664,68 +722,6 @@ export default function FriendsPage() {
                               No contact information
                             </div>
                           )}
-                        </div>
-                        
-                        {/* Three dots menu */}
-                        <div className="flex items-center flex-shrink-0">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-gray-500 hover:text-gray-700"
-                              >
-                                <MoreVertical className="h-5 w-5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
-                              <DropdownMenuItem
-                                onClick={(e: React.MouseEvent) => {
-                                  e.stopPropagation();
-                                  openViewAddressModal(address);
-                                }}
-                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                              >
-                                <Eye className="h-4 w-4" />
-                                <span>View</span>
-                              </DropdownMenuItem>
-                              {!address.isSharedWithMe && (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={(e: React.MouseEvent) => {
-                                      e.stopPropagation();
-                                      openEditAddressModal(address);
-                                    }}
-                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                                  >
-                                    <Edit3 className="h-4 w-4" />
-                                    <span>Edit</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={(e: React.MouseEvent) => {
-                                      e.stopPropagation();
-                                      openShareModal("address", address.id, address.name);
-                                    }}
-                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                                  >
-                                    <Share2 className="h-4 w-4" />
-                                    <span>Share</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={(e: React.MouseEvent) => {
-                                      e.stopPropagation();
-                                      setItemToDelete({ id: address.id, name: address.name });
-                                      setDeleteConfirmOpen(true);
-                                    }}
-                                    className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    <span>Delete</span>
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                         </div>
                       </div>
                       {/* Divider - only show if not last item */}
