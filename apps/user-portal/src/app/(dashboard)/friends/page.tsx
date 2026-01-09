@@ -635,13 +635,13 @@ export default function FriendsPage() {
                           <div className="flex items-center gap-2 mb-1 justify-between">
                             <div className="font-bold text-gray-900 text-[15px]">
                               {address.name}
+                              {/* Pending badge - show if email exists but no connectedUserId */}
+                              {address.email && !address.connectedUserId && (
+                                <span className="px-2 py-0.5 text-[11px] font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                                  Pending
+                                </span>
+                              )}
                             </div>
-                            {/* Pending badge - show if email exists but no connectedUserId */}
-                            {address.email && !address.connectedUserId && (
-                              <span className="px-2 py-0.5 text-[11px] font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                                Pending
-                              </span>
-                            )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button
@@ -724,9 +724,9 @@ export default function FriendsPage() {
                           )}
                         </div>
                       </div>
-                      {/* Divider - only show if not last item */}
+                      {/* Divider - 90% width, only show if not last item */}
                       {index < filteredAddresses.length - 1 && (
-                        <div className="h-px bg-gray-200" />
+                        <div className="w-[90%] mx-auto h-px bg-gray-100" />
                       )}
                     </div>
                   );
