@@ -6,6 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@imaginecalendar/ui/ca
 import { Badge } from "@imaginecalendar/ui/badge";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@imaginecalendar/ui/dropdown-menu";
+import {
   AlertDialog,
   AlertDialogContent,
   AlertDialogDescription,
@@ -28,9 +34,11 @@ import {
   ArrowRight,
   AlertCircle,
   X,
-  Search,
   ExternalLink,
   ShoppingCart,
+  MoreVertical,
+  MapPin,
+  Video,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
@@ -44,7 +52,6 @@ export default function DashboardPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
   const [selectedNote, setSelectedNote] = useState<any | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
@@ -63,6 +70,7 @@ export default function DashboardPage() {
   const { data: folders = [] } = useQuery(trpc.tasks.folders.list.queryOptions());
   const { data: shoppingListItems = [] } = useQuery(trpc.shoppingList.list.queryOptions({}));
   const { data: sharedResources } = useQuery(trpc.taskSharing.getSharedWithMe.queryOptions());
+  const { data: friends = [] } = useQuery(trpc.friends.list.queryOptions());
 
   // Check if welcome modal should be shown from database
   useEffect(() => {
@@ -172,23 +180,6 @@ export default function DashboardPage() {
   const hasVerifiedWhatsApp = whatsappNumbers?.some(number => number.isVerified) || false;
   const hasCalendar = calendars && calendars.length > 0;
 
-  // Search functionality
-  const filterItems = (items: any[]) => {
-    let filtered = items;
-
-    // Apply search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((item: any) => {
-        const title = (item.title || "").toLowerCase();
-        const content = (item.content || "").toLowerCase();
-        const description = (item.description || "").toLowerCase();
-        return title.includes(query) || content.includes(query) || description.includes(query);
-      });
-    }
-
-    return filtered;
-  };
 
   // Filter active reminders - show all active reminders ordered by created date
   const activeReminders = useMemo(() => {
@@ -205,12 +196,9 @@ export default function DashboardPage() {
       return dateB - dateA; // Newest first
     });
     
-    // Apply search filter
-    const searched = filterItems(sorted);
-    
     // Return up to 10 reminders
-    return searched.slice(0, 10);
-  }, [reminders, searchQuery]);
+    return sorted.slice(0, 10);
+  }, [reminders]);
 
   // Extract shared shopping list items from shared folders
   const sharedShoppingListItems = useMemo(() => {
@@ -258,16 +246,8 @@ export default function DashboardPage() {
       const dateB = new Date(b.createdAt || 0).getTime();
       return dateB - dateA; // Most recent first
     });
-    const searched = sorted.filter((item) => {
-      if (!searchQuery.trim()) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        item.name.toLowerCase().includes(query) ||
-        (item.description && item.description.toLowerCase().includes(query))
-      );
-    });
-    return searched.slice(0, 10); // Show up to 10 items
-  }, [allShoppingListItems, searchQuery]);
+    return sorted.slice(0, 10); // Show up to 10 items
+  }, [allShoppingListItems]);
 
   // Extract shared tasks from shared resources
   const sharedTasks = useMemo(() => {
@@ -332,9 +312,8 @@ export default function DashboardPage() {
       const dateB = new Date(b.createdAt || 0).getTime();
       return dateB - dateA; // Most recent first
     });
-    const searched = filterItems(sorted);
-    return searched.slice(0, 10); // Show up to 10 tasks
-  }, [allCombinedTasks, searchQuery]);
+    return sorted.slice(0, 10); // Show up to 10 tasks
+  }, [allCombinedTasks]);
 
   // Fetch shared notes (notes have separate sharing endpoint)
   const { data: sharedNoteResources } = useQuery(trpc.noteSharing.getSharedWithMe.queryOptions());
@@ -395,16 +374,20 @@ export default function DashboardPage() {
   const quickNotes = useMemo(() => {
     const sorted = [...allCombinedNotes]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const searched = filterItems(sorted);
-    return searched.slice(0, 10); // Show up to 10 notes
-  }, [allCombinedNotes, searchQuery]);
+    return sorted.slice(0, 10); // Show up to 10 notes
+  }, [allCombinedNotes]);
 
   // Process events for display (EXACT same as calendar page)
   const processedEvents = useMemo(() => {
     return allCalendarEvents.map((event: any) => {
       const calendar = calendars?.find((cal: any) => cal.id === event.calendarId);
       const provider = calendar?.provider || "google";
-      const color = provider === "google" ? "bg-blue-500" : "bg-purple-500";
+      // Use color from event or default based on provider
+      const eventColor = event.color || (provider === "google" ? "blue" : "purple");
+      const color = eventColor === "orange" ? "bg-orange-500" : 
+                    eventColor === "purple" ? "bg-purple-500" :
+                    eventColor === "blue" ? "bg-blue-500" :
+                    "bg-blue-500";
       
       return {
         id: event.id,
@@ -412,9 +395,12 @@ export default function DashboardPage() {
         start: new Date(event.start),
         end: new Date(event.end),
         color,
+        eventColor,
         location: event.location,
         htmlLink: event.htmlLink,
         webLink: event.webLink,
+        conferenceUrl: event.conferenceUrl,
+        attendees: event.attendees || [],
       };
     });
   }, [allCalendarEvents, calendars]);
@@ -452,6 +438,11 @@ export default function DashboardPage() {
         ? "All day" 
         : format(startDate, "h:mm a");
       
+      // Format time range (e.g., "9AM -10PM (EST)")
+      const startTime = format(startDate, "ha");
+      const endTime = format(endDate, "ha");
+      const timeRange = isAllDay ? "All day" : `${startTime} -${endTime} (EST)`;
+      
       return {
         id: event.id,
         title: event.title || "Untitled Event",
@@ -460,20 +451,23 @@ export default function DashboardPage() {
         startDate: startDate,
         endDate: endDate,
         timeLabel,
+        timeRange,
         location: event.location,
         description: event.description,
         htmlLink: event.htmlLink,
         webLink: event.webLink,
         color: event.color,
+        eventColor: event.eventColor,
+        conferenceUrl: event.conferenceUrl,
+        attendees: event.attendees || [],
       };
     });
     
     // Sort by start time
     formattedEvents.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     
-    const searched = filterItems(formattedEvents);
-    return searched.slice(0, 10); // Show up to 10 events
-  }, [processedEvents, searchQuery]);
+    return formattedEvents.slice(0, 10); // Show up to 10 events
+  }, [processedEvents]);
 
   const shouldShowReminders = true;
   const shouldShowTasks = true;
@@ -668,14 +662,22 @@ export default function DashboardPage() {
       return (today >= eventStart && today <= eventEnd) || isSameDay(event.start, now);
     });
     
-    return filterItems(todayEvents).length;
-  }, [processedEvents, searchQuery]);
+    return todayEvents.length;
+  }, [processedEvents]);
   
   const totalQuickNotes = useMemo(() => {
     const sorted = [...allCombinedNotes]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return filterItems(sorted).length;
-  }, [allCombinedNotes, searchQuery]);
+    return sorted.length;
+  }, [allCombinedNotes]);
+
+  // Calculate friends count
+  const totalFriends = useMemo(() => {
+    return friends.length;
+  }, [friends]);
+
+  // Calculate birthdays today (placeholder - set to 0 for now)
+  const birthdaysToday = 0;
 
   const userName = user?.firstName || "there";
 
@@ -745,68 +747,21 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-6 space-y-3">
-        <div className="flex flex-col lg:flex-row gap-3 items-center w-full">
-          <div className="relative w-full lg:flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search across reminders, tasks, events, and notes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-background border border-input rounded-lg text-sm ring-2 ring-gray-300 focus:ring-primary focus:border-transparent transition-all placeholder:text-muted-foreground"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 gap-6">
         {/* Main Content Area */}
         <div>
           {/* Status Cards Row */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6 text-center">
-            <div 
-              onClick={() => router.push("/shopping-lists")}
-              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 col-span-2 lg:col-span-1 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
-            >
-              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
-                {totalShoppingListItems}
-              </div>
-              <div className="text-sm text-gray-500 font-normal">
-                Shopping List
-              </div>
-            </div>
-
-            <div 
-              onClick={() => router.push("/tasks")}
-              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
-            >
-              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
-                {totalPendingTasks}
-              </div>
-              <div className="text-sm text-gray-500 font-normal">
-                Pending Tasks
-              </div>
-            </div>
-
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6 text-center">
             <div 
               onClick={() => router.push("/calendars")}
               className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
             >
-              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
                 {totalScheduledEvents}
               </div>
               <div className="text-sm text-gray-500 font-normal">
-                Todays Events
+                Meetings today
               </div>
             </div>
 
@@ -814,11 +769,47 @@ export default function DashboardPage() {
               onClick={() => router.push("/reminders")}
               className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
             >
-              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
                 {totalActiveReminders}
               </div>
               <div className="text-sm text-gray-500 font-normal">
-                Reminders Today
+                Todays Reminders
+              </div>
+            </div>
+
+            <div 
+              onClick={() => router.push("/shopping-lists")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {totalShoppingListItems}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Remaining Purchase
+              </div>
+            </div>
+
+            <div 
+              onClick={() => router.push("/friends")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {birthdaysToday}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Birthdays Today
+              </div>
+            </div>
+
+            <div 
+              onClick={() => router.push("/friends")}
+              className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
+            >
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
+                {totalFriends}
+              </div>
+              <div className="text-sm text-gray-500 font-normal">
+                Friends Added
               </div>
             </div>
 
@@ -826,7 +817,7 @@ export default function DashboardPage() {
               onClick={() => router.push("/notes")}
               className="bg-white rounded-lg shadow-[0_2px_8px_rgba(0,0,0,0.1)] border border-gray-100 p-2 px-4 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:border-primary transition-all"
             >
-              <div className="text-3xl font-bold" style={{ color: "#f7b267" }}>
+              <div className="text-3xl font-bold" style={{ color: "#1e40af" }}>
                 {allCombinedNotes.length}
               </div>
               <div className="text-sm text-gray-500 font-normal">
@@ -836,344 +827,313 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* First Column - Shopping List */}
-            <div className="space-y-6">
-              <Card className="flex flex-col h-[420px] lg:h-full rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                    <ShoppingCart className="h-4 w-4 text-white" />
-                    Shopping List
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-                    {filteredShoppingListItems.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
-                        No items in shopping list
-                      </p>
-                    ) : (
-                      filteredShoppingListItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={item.status === "completed"}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              toggleShoppingListItemMutation.mutate({ id: item.id });
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            disabled={toggleShoppingListItemMutation.isPending}
-                            aria-label={`Mark item ${item.name} as ${
-                              item.status === "completed" ? "open" : "completed"
-                            }`}
-                            className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-[#1f2933] truncate">
-                              {item.name}
-                            </p>
-                            {item.description && (
-                              <p className="text-xs text-gray-500 truncate mt-0.5">
-                                {item.description}
-                              </p>
+            {/* Shopping List Card */}
+            <Card className="flex flex-col h-[420px] rounded-lg border border-gray-200 shadow-sm overflow-hidden bg-white">
+              <CardHeader className="flex flex-row items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
+                <CardTitle className="text-lg font-bold text-gray-900">Shopping List</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-sm border-gray-300"
+                  onClick={() => router.push("/shopping-lists")}
+                >
+                  View All
+                </Button>
+              </CardHeader>
+              <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  {filteredShoppingListItems.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-8 text-center">
+                      No items in shopping list
+                    </p>
+                  ) : (
+                    <div className="space-y-0">
+                      {filteredShoppingListItems.map((item: any, index: number) => {
+                        const creatorName = item.user?.firstName || item.user?.name || "You";
+                        const isCurrentUser = item.userId === userData?.id;
+                        const formattedDate = item.createdAt 
+                          ? format(new Date(item.createdAt), 'd MMMM')
+                          : '';
+                        
+                        return (
+                          <div key={item.id}>
+                            <div className="flex items-start gap-3 py-3">
+                              <input
+                                type="checkbox"
+                                checked={item.status === "completed"}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  toggleShoppingListItemMutation.mutate({ id: item.id });
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                disabled={toggleShoppingListItemMutation.isPending}
+                                className="h-4 w-4 mt-1 rounded border-gray-300 text-blue-600 focus:ring-0 focus:ring-offset-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-bold text-gray-900">
+                                    {item.name}
+                                  </p>
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    isCurrentUser 
+                                      ? 'bg-gray-100 text-gray-600' 
+                                      : 'bg-pink-100 text-pink-600'
+                                  }`}>
+                                    {creatorName} • {formattedDate}
+                                  </span>
+                                </div>
+                                {item.description ? (
+                                  <p className="text-xs text-gray-500 italic">
+                                    {item.description}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                  <DropdownMenuItem
+                                    onClick={() => router.push("/shopping-lists")}
+                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                  >
+                                    <span>View</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                            {index < filteredShoppingListItems.length - 1 && (
+                              <div className="h-px bg-gray-200" />
                             )}
                           </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  {totalShoppingListItems > filteredShoppingListItems.length && (
-                    <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
-                      Showing {filteredShoppingListItems.length} of {totalShoppingListItems} items
+                        );
+                      })}
                     </div>
                   )}
-                  <div className="border-t border-[#e2e8f0] px-4 py-3">
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                      onClick={() => {
-                        router.push("/shopping-list");
-                      }}
-                    >
-                      View Shopping List
-                      <ArrowRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </CardContent>
+            </Card>
 
-            {/* Second Column - Events and Reminders */}
-            <div className="space-y-6">
-              {/* Today Events */}
-              {shouldShowEvents && (
-              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                    <Calendar className="h-4 w-4 text-white" />
-                    Today Events
-                  </div>
+            {/* Events Card */}
+            {shouldShowEvents && (
+              <Card className="flex flex-col h-[420px] rounded-lg border border-gray-200 shadow-sm overflow-hidden bg-white">
+                <CardHeader className="flex flex-row items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
+                  <CardTitle className="text-lg font-bold text-gray-900">Events</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-sm border-gray-300"
+                    onClick={() => router.push("/calendars")}
+                  >
+                    View All
+                  </Button>
                 </CardHeader>
                 <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                  <div className="flex-1 overflow-y-auto px-6 py-4">
                     {scheduledEvents.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
+                      <p className="text-sm text-gray-500 py-8 text-center">
                         No events today
                       </p>
                     ) : (
-                      scheduledEvents.map((event: any) => {
-                        return (
-                          <div
-                            key={event.id}
-                            className={cn(
-                              "rounded-lg px-3 py-2 cursor-pointer hover:opacity-90 transition-opacity border-2 shadow-sm",
-                              event.color === "bg-blue-500" ? "border-blue-500 bg-blue-50 text-blue-900" : "border-purple-500 bg-purple-50 text-purple-900"
-                            )}
-                            title={`${event.title} - ${event.timeLabel}${event.location ? ` - ${event.location}` : ""}`}
-                            onClick={() => {
-                              if (event.htmlLink) {
-                                window.open(event.htmlLink, "_blank");
-                              } else if (event.webLink) {
-                                window.open(event.webLink, "_blank");
-                              }
-                            }}
-                          >
-                            <p className="text-sm font-medium truncate">
-                              {event.title}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <p className="text-xs opacity-90">
-                                {event.timeLabel}
-                              </p>
-                              {event.location && (
-                                <p className="text-xs opacity-75 truncate">
-                                  • {event.location}
-                                </p>
-                              )}
+                      <div className="space-y-4">
+                        {scheduledEvents.map((event: any, index: number) => {
+                          const borderColor = event.eventColor === "orange" ? "border-orange-500" :
+                                             event.eventColor === "purple" ? "border-purple-500" :
+                                             event.eventColor === "blue" ? "border-blue-500" :
+                                             "border-blue-500";
+                          
+                          // Get first 2 attendees for display
+                          const displayAttendees = event.attendees?.slice(0, 2) || [];
+                          const additionalCount = event.attendees?.length > 2 ? event.attendees.length - 2 : 0;
+                          
+                          // Get initials for attendees
+                          const getInitials = (email: string) => {
+                            const name = email.split('@')[0];
+                            const parts = name.split('.');
+                            if (parts.length >= 2) {
+                              return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+                            }
+                            return name.substring(0, 2).toUpperCase();
+                          };
+                          
+                          return (
+                            <div
+                              key={event.id}
+                              className={`rounded-lg border-2 ${borderColor} bg-white p-4 space-y-3`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h3 className="text-sm font-bold text-gray-900">
+                                      {event.title}
+                                    </h3>
+                                    {event.conferenceUrl && (
+                                      <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs">
+                                        <Video className="h-3 w-3" />
+                                        Google meet
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-500 mb-3">
+                                    {event.timeRange} (EST)
+                                  </p>
+                                  {displayAttendees.length > 0 && (
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="flex -space-x-2">
+                                        {displayAttendees.map((attendee: string, idx: number) => (
+                                          <div
+                                            key={idx}
+                                            className="w-8 h-8 rounded-full bg-gray-300 border-2 border-white flex items-center justify-center text-xs font-medium text-gray-700"
+                                          >
+                                            {getInitials(attendee)}
+                                          </div>
+                                        ))}
+                                      </div>
+                                      {additionalCount > 0 && (
+                                        <span className="text-xs text-gray-500">
+                                          +{additionalCount}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                  {event.location && (
+                                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                      <MapPin className="h-3.5 w-3.5" />
+                                      <span>{event.location}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        if (event.htmlLink) {
+                                          window.open(event.htmlLink, "_blank");
+                                        } else if (event.webLink) {
+                                          window.open(event.webLink, "_blank");
+                                        }
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      <span>View</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })}
+                      </div>
                     )}
-                  </div>
-                  <div className="border-t border-[#e2e8f0] px-4 py-3">
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                      onClick={() => router.push("/calendars")}
-                    >
-                      View All Events
-                      <ArrowRight className="h-3 w-3 ml-1" />
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
-              )}
+            )}
 
-              {/* Active Reminders */}
-              {shouldShowReminders && (
-              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                    <BellRing className="h-4 w-4 text-white" />
-                    Active Reminders
-                  </div>
+            {/* Reminders Card */}
+            {shouldShowReminders && (
+              <Card className="flex flex-col h-[420px] rounded-lg border border-gray-200 shadow-sm overflow-hidden bg-white">
+                <CardHeader className="flex flex-row items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
+                  <CardTitle className="text-lg font-bold text-gray-900">Reminders</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-sm border-gray-300"
+                    onClick={() => router.push("/reminders")}
+                  >
+                    View All
+                  </Button>
                 </CardHeader>
                 <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+                  <div className="flex-1 overflow-y-auto px-6 py-4">
                     {activeReminders.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
+                      <p className="text-sm text-gray-500 py-8 text-center">
                         No active reminders
                       </p>
                     ) : (
-                      activeReminders.map((reminder: any) => {
-                        const visual = getReminderColorScheme(
-                          reminder.frequency || 
-                          reminder.scheduleType || 
-                          reminder.recurrence ||
-                          reminder.interval
-                        );
-                        const subtitle = formatReminderSubtitle(reminder);
-                        return (
-                          <div
-                            key={reminder.id}
-                            onClick={() => {
-                              setSelectedReminder(reminder);
-                              setIsReminderModalOpen(true);
-                            }}
-                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${visual.background} ${visual.border} ${visual.shadow} transition-all hover:shadow-md cursor-pointer`}
-                          >
-                            <div className={`h-8 w-1.5 rounded-full ${visual.accent} flex-shrink-0`} />
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium ${visual.labelClass}`}>
-                                {reminder.title || "Untitled Reminder"}
-                              </p>
-                              {subtitle ? (
-                                <p className={`text-xs mt-0.5 ${visual.metaClass}`}>
-                                  {subtitle}
-                                </p>
-                              ) : (
-                                reminder.time && (
-                                  <p className={`text-xs mt-0.5 ${visual.metaClass}`}>
-                                    {reminder.time}
-                                  </p>
-                                )
+                      <div className="space-y-0">
+                        {activeReminders.map((reminder: any, index: number) => {
+                          const subtitle = formatReminderSubtitle(reminder);
+                          
+                          return (
+                            <div key={reminder.id}>
+                              <div
+                                onClick={() => {
+                                  setSelectedReminder(reminder);
+                                  setIsReminderModalOpen(true);
+                                }}
+                                className="flex items-start justify-between py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="text-sm font-bold text-gray-900">
+                                      {reminder.title || "Untitled Reminder"}
+                                    </h3>
+                                  </div>
+                                  {subtitle && (
+                                    <p className="text-xs text-gray-500">
+                                      {subtitle}
+                                    </p>
+                                  )}
+                                  {reminder.time && !subtitle && (
+                                    <p className="text-xs text-gray-500">
+                                      {reminder.time}
+                                    </p>
+                                  )}
+                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-gray-500 hover:text-gray-700"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setSelectedReminder(reminder);
+                                        setIsReminderModalOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      <span>View</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                              {index < activeReminders.length - 1 && (
+                                <div className="h-px bg-gray-200" />
                               )}
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })}
+                      </div>
                     )}
-                  </div>
-                  {totalActiveReminders > activeReminders.length && (
-                    <div className="text-center py-2 text-xs text-muted-foreground border-t border-[#e2e8f0] px-4">
-                      Showing {activeReminders.length} of {totalActiveReminders} reminders
-                    </div>
-                  )}
-                  <div className="border-t border-[#e2e8f0] px-4 py-3">
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                      onClick={() => router.push("/reminders")}
-                    >
-                      View All Reminders
-                      <ArrowRight className="h-3 w-3 ml-1" />
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
-              )}
-            </div>
-
-            {/* Third Column - Tasks and Notes */}
-            <div className="space-y-6">
-              {/* Pending Tasks */}
-              {shouldShowTasks && (
-              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                    <CheckSquare className="h-4 w-4 text-white" />
-                    Pending Tasks
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-                    {pendingTasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
-                        No pending tasks
-                      </p>
-                    ) : (
-                      pendingTasks.map((task) => (
-                        <div
-                          key={task.id}
-                          onClick={() => {
-                            setSelectedTask(task);
-                            setIsTaskModalOpen(true);
-                          }}
-                          className="flex items-center gap-3 rounded-2xl border border-[#e6ebf5] bg-[#f5f7fb] px-3 py-2.5 cursor-pointer hover:bg-[#e9ecf3] transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={task.status === "completed"}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleToggleTask(task.id);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            disabled={
-                              toggleTaskMutation.isPending &&
-                              toggleTaskMutation.variables?.id === task.id
-                            }
-                            aria-label={`Mark task ${task.title || "Untitled Task"} as ${
-                              task.status === "completed" ? "open" : "completed"
-                            }`}
-                            className="h-4 w-4 rounded border border-[#94a3b8] text-[#1976c5] focus:ring-offset-0 focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-[#1f2933] truncate">
-                              {task.title || "Untitled Task"}
-                            </p>
-                            {task.dueDate && (
-                              <p className="text-xs text-[#6b7a90] mt-0.5">
-                                Due {task.dueDate}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="border-t border-[#e2e8f0] px-4 py-3">
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                      onClick={() => router.push("/tasks")}
-                    >
-                      View All Tasks
-                      <ArrowRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-              )}
-
-              {/* Quick Notes */}
-              {shouldShowNotes && (
-              <Card className="flex flex-col h-[420px] rounded-[18px] border border-[#dfe8f5] shadow-[0_6px_24px_rgba(20,80,180,0.08)] overflow-hidden bg-white">
-                <CardHeader className="flex flex-row items-center justify-center bg-primary px-4 py-4">
-                  <div className="flex items-center gap-2 text-white text-sm font-semibold tracking-wide uppercase">
-                    <StickyNote className="h-4 w-4 text-white" />
-                    Quick Notes
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-col flex-1 min-h-0 px-0 pb-0">
-                  <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-                    {quickNotes.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-8 text-center">
-                        No notes available
-                      </p>
-                    ) : (
-                      quickNotes.map((note) => (
-                        <div
-                          key={note.id}
-                          onClick={() => {
-                            setSelectedNote(note);
-                            setIsNoteModalOpen(true);
-                          }}
-                          className="border-b border-[#e2e8f0] pb-4 last:border-b-0 cursor-pointer hover:bg-[#f5f7fb] rounded-lg px-2 py-2 -mx-2 transition-colors"
-                        >
-                          <p className="text-sm font-semibold text-[#1f2933]">
-                            {note.title || "Untitled Note"}
-                          </p>
-                          {note.content && (
-                            <p className="text-xs text-[#6b7a90] mt-1 line-clamp-2">
-                              {note.content}
-                            </p>
-                          )}
-                          <p className="text-xs text-[#94a3b8] mt-1">
-                            Updated {new Date(note.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="border-t border-[#e2e8f0] px-4 py-3">
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-center text-xs font-semibold text-[#1976c5] hover:bg-[#e9f2ff]"
-                      onClick={() => router.push("/notes")}
-                    >
-                      View All Notes
-                      <ArrowRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
