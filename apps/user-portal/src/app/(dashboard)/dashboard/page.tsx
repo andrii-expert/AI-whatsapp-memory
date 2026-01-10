@@ -181,24 +181,187 @@ export default function DashboardPage() {
   const hasCalendar = calendars && calendars.length > 0;
 
 
-  // Filter active reminders - show all active reminders ordered by created date
-  const activeReminders = useMemo(() => {
-    // Filter only active reminders
-    const filtered = reminders.filter((r: any) => {
-      if (!r.active) return false;
-      return true;
-    });
+  // Helper function to check if reminder occurs today
+  const doesReminderOccurToday = (reminder: any, userTimezone?: string): boolean => {
+    if (!reminder.active) return false;
     
-    // Sort by created date (newest first)
+    const today = new Date();
+    const todayStart = startOfDay(today);
+    const todayEnd = endOfDay(today);
+    
+    // Get date components for today in user's timezone
+    let todayInTz: Date;
+    if (userTimezone) {
+      const todayStr = today.toLocaleString("en-US", { timeZone: userTimezone });
+      todayInTz = new Date(todayStr);
+    } else {
+      todayInTz = new Date(today);
+    }
+    
+    const year = todayInTz.getFullYear();
+    const month = todayInTz.getMonth() + 1; // 1-12
+    const day = todayInTz.getDate();
+    const dayOfWeek = todayInTz.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+    
+    switch (reminder.frequency) {
+      case "daily":
+        // Daily reminders occur every day
+        return true;
+        
+      case "hourly":
+      case "minutely":
+        // Hourly and minutely reminders occur every day
+        return true;
+        
+      case "once":
+        // Check if target date is today
+        if (reminder.targetDate) {
+          const target = new Date(reminder.targetDate);
+          let targetInTz: Date;
+          if (userTimezone) {
+            const targetStr = target.toLocaleString("en-US", { timeZone: userTimezone });
+            targetInTz = new Date(targetStr);
+          } else {
+            targetInTz = new Date(target);
+          }
+          return (
+            targetInTz.getFullYear() === year &&
+            targetInTz.getMonth() + 1 === month &&
+            targetInTz.getDate() === day
+          );
+        }
+        if (reminder.daysFromNow !== null) {
+          const now = new Date();
+          let nowInTz: Date;
+          if (userTimezone) {
+            const nowStr = now.toLocaleString("en-US", { timeZone: userTimezone });
+            nowInTz = new Date(nowStr);
+          } else {
+            nowInTz = new Date(now);
+          }
+          const targetDate = new Date(nowInTz);
+          targetDate.setDate(targetDate.getDate() + reminder.daysFromNow);
+          return (
+            targetDate.getFullYear() === year &&
+            targetDate.getMonth() + 1 === month &&
+            targetDate.getDate() === day
+          );
+        }
+        return false;
+        
+      case "weekly":
+        // Check if today's day of week matches
+        if (!reminder.daysOfWeek || reminder.daysOfWeek.length === 0) {
+          return false;
+        }
+        return reminder.daysOfWeek.includes(dayOfWeek);
+        
+      case "monthly":
+        // Check if today's day of month matches
+        const reminderDay = reminder.dayOfMonth ?? 1;
+        const lastDayOfMonth = new Date(year, month, 0).getDate();
+        const targetDay = Math.min(reminderDay, lastDayOfMonth);
+        return day === targetDay;
+        
+      case "yearly":
+        // Check if today's month and day match
+        const reminderMonth = reminder.month ?? 1;
+        const reminderDayOfMonth = reminder.dayOfMonth ?? 1;
+        const lastDayOfYearMonth = new Date(year, reminderMonth, 0).getDate();
+        const targetDayOfYear = Math.min(reminderDayOfMonth, lastDayOfYearMonth);
+        return month === reminderMonth && day === targetDayOfYear;
+        
+      default:
+        return false;
+    }
+  };
+
+  // Helper function to calculate next occurrence time for sorting
+  const getNextOccurrenceTime = (reminder: any, userTimezone?: string): Date | null => {
+    if (!reminder.active) return null;
+    
+    const now = new Date();
+    
+    try {
+      // For daily reminders, calculate next occurrence today
+      if (reminder.frequency === "daily" && reminder.time) {
+        const [hours, minutes] = reminder.time.split(":").map(Number);
+        const today = new Date();
+        today.setHours(hours || 0, minutes || 0, 0, 0);
+        
+        // If time has passed today, it's tomorrow
+        if (today <= now) {
+          today.setDate(today.getDate() + 1);
+        }
+        return today;
+      }
+      
+      // For weekly reminders, find next occurrence
+      if (reminder.frequency === "weekly" && reminder.daysOfWeek && reminder.daysOfWeek.length > 0 && reminder.time) {
+        const [hours, minutes] = reminder.time.split(":").map(Number);
+        const today = new Date();
+        const currentDayOfWeek = today.getDay();
+        const sortedDays = [...reminder.daysOfWeek].sort((a, b) => a - b);
+        
+        // Find next day this week
+        for (const day of sortedDays) {
+          if (day > currentDayOfWeek) {
+            const nextDate = new Date(today);
+            const daysToAdd = day - currentDayOfWeek;
+            nextDate.setDate(nextDate.getDate() + daysToAdd);
+            nextDate.setHours(hours || 0, minutes || 0, 0, 0);
+            return nextDate;
+          }
+          if (day === currentDayOfWeek) {
+            const todayAtTime = new Date(today);
+            todayAtTime.setHours(hours || 0, minutes || 0, 0, 0);
+            if (todayAtTime > now) {
+              return todayAtTime;
+            }
+          }
+        }
+        
+        // If no day found this week, use first day of next week
+        const firstDay = sortedDays[0];
+        const nextDate = new Date(today);
+        const daysUntilNextWeek = 7 - currentDayOfWeek;
+        nextDate.setDate(nextDate.getDate() + daysUntilNextWeek + firstDay);
+        nextDate.setHours(hours || 0, minutes || 0, 0, 0);
+        return nextDate;
+      }
+      
+      // For other frequencies, return a default time today
+      return new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
+    } catch (error) {
+      return null;
+    }
+  };
+
+  // Filter active reminders that occur today
+  const activeReminders = useMemo(() => {
+    const userTimezone = (userData as any)?.timezone;
+    
+    // Filter only active reminders that occur today
+    const filtered = reminders
+      .map((r: any) => ({
+        ...r,
+        nextAt: getNextOccurrenceTime(r, userTimezone),
+      }))
+      .filter((r: any) => {
+        if (!r.active) return false;
+        return doesReminderOccurToday(r, userTimezone);
+      });
+    
+    // Sort by next occurrence time (earliest first)
     const sorted = [...filtered].sort((a, b) => {
-      const dateA = new Date(a.createdAt || 0).getTime();
-      const dateB = new Date(b.createdAt || 0).getTime();
-      return dateB - dateA; // Newest first
+      const timeA = a.nextAt?.getTime() || Infinity;
+      const timeB = b.nextAt?.getTime() || Infinity;
+      return timeA - timeB;
     });
     
     // Return up to 10 reminders
     return sorted.slice(0, 10);
-  }, [reminders]);
+  }, [reminders, userData]);
 
   // Extract shared shopping list items from shared folders
   const sharedShoppingListItems = useMemo(() => {
@@ -1402,9 +1565,28 @@ function ShoppingItem({ title, description, badge, date, badgeColor = "gray", ha
 }
 
 function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgColor: string; event: any }) {
+  // Normalize attendees - handle both string arrays and object arrays with email property
+  const normalizedAttendees = useMemo(() => {
+    if (!event?.attendees || !Array.isArray(event.attendees)) return [];
+    return event.attendees
+      .map((attendee: any) => {
+        // If it's a string, use it directly
+        if (typeof attendee === 'string') return attendee;
+        // If it's an object with email property, extract the email
+        if (attendee && typeof attendee === 'object' && attendee.email) return attendee.email;
+        // If it's an object with other properties, try to find email
+        if (attendee && typeof attendee === 'object') {
+          // Check common email property names
+          return attendee.email || attendee.mail || attendee.emailAddress || null;
+        }
+        return null;
+      })
+      .filter((email: string | null): email is string => email !== null && email.trim().length > 0);
+  }, [event?.attendees]);
+
   // Get first 2 attendees for display
-  const displayAttendees = event?.attendees?.slice(0, 2) || [];
-  const additionalCount = (event?.attendees?.length || 0) > 2 ? (event?.attendees?.length || 0) - 2 : 0;
+  const displayAttendees = normalizedAttendees.slice(0, 2);
+  const additionalCount = normalizedAttendees.length > 2 ? normalizedAttendees.length - 2 : 0;
   
   // Get initials for attendees
   const getInitials = (email: string) => {
@@ -1422,7 +1604,7 @@ function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgCol
   const handleGoogleMeetClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (event?.conferenceUrl) {
-      window.open(event.conferenceUrl, '_blank');
+      window.open(event.conferenceUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -1437,10 +1619,10 @@ function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgCol
         // If coordinates are found, use them for Google Maps
         const lat = coordMatch[1];
         const lng = coordMatch[2];
-        window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+        window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank', 'noopener,noreferrer');
       } else {
         // Otherwise, search for the location text
-        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
+        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank', 'noopener,noreferrer');
       }
     }
   };
@@ -1456,9 +1638,10 @@ function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgCol
             {event?.conferenceUrl && (
               <button
                 onClick={handleGoogleMeetClick}
-                className="flex items-center gap-1 px-[7px] py-1 rounded border border-black/10 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-[7px] py-1 rounded border border-black/10 bg-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                title="Join Google Meet"
               >
-                <img src="https://api.builder.io/api/v1/image/assets/TEMP/202723389e34de298dca05ebfb3eb4cf4d22ffee?width=24" alt="" className="w-3 h-[10px]" />
+                <Video className="w-3 h-[10px] text-[#9999A5]" />
                 <span className="text-[10px] font-medium text-[#9999A5]">Google meet</span>
               </button>
             )}
