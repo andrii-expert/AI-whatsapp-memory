@@ -1708,39 +1708,47 @@ export default function RemindersPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setStatusTab("all")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
                 statusTab === "all"
                   ? "bg-black text-white"
-                  : "text-gray-600 hover:text-gray-900"
+                  : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
               All
             </button>
             <button
               onClick={() => setStatusTab("active")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
                 statusTab === "active"
                   ? "bg-black text-white"
-                  : "text-gray-600 hover:text-gray-900"
+                  : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
               Active
-              {statusTab !== "active" && (
-                <span className="ml-2" style={{ color: "#9B9BA7" }}>({activeCount})</span>
-              )}
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                statusTab === "active"
+                  ? "bg-white/20 text-white"
+                  : ""
+              }`} style={statusTab !== "active" ? { backgroundColor: "#F5F3FF", color: "#2563EB" } : undefined}>
+                {activeCount}
+              </span>
             </button>
             <button
               onClick={() => setStatusTab("paused")}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
                 statusTab === "paused"
                   ? "bg-black text-white"
-                  : "text-gray-600 hover:text-gray-900"
+                  : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
               Paused
-              {statusTab !== "paused" && (
-                <span className="ml-2" style={{ color: "#9B9BA7" }}>({pausedCount})</span>
-              )}
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                statusTab === "paused"
+                  ? "bg-white/20 text-white"
+                  : "bg-[#F0FDF4] text-green-600"
+              }`} style={statusTab !== "paused" ? { backgroundColor: "#F0FDF4", color: "#16A34A" } : undefined}>
+                {pausedCount}
+              </span>
             </button>
           </div>
         </div>
