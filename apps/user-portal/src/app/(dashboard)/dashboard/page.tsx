@@ -882,6 +882,12 @@ export default function DashboardPage() {
               >
                 <WhatsappIcon />
                 <span className="text-[14px] font-medium text-[#344054]">Link Whatsapp</span>
+                {hasVerifiedWhatsApp && (
+                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0.5 h-auto">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Connected
+                  </Badge>
+                )}
               </button>
               <button
                 onClick={() => router.push("/calendars")}
@@ -889,6 +895,12 @@ export default function DashboardPage() {
               >
                 <CalendarIcon />
                 <span className="text-[14px] font-medium text-[#344054]">Link Calendar</span>
+                {hasCalendar && (
+                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0.5 h-auto">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Connected
+                  </Badge>
+                )}
               </button>
             </div>
           </div>
