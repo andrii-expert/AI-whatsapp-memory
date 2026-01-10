@@ -1668,15 +1668,17 @@ export default function RemindersPage() {
               <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#C5EEFF", filter: 'blur(50px)' }} />
               <div className="relative flex items-start gap-2">
                 <div className="flex-1 flex flex-col gap-2">
-                  <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
-                    {remindersToday}
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
+                      {remindersToday}
+                    </div>
+                    <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#F2FBFF" }}>
+                      <BellRing size={16} style={{ color: "#48BBED" }} />
+                    </div>
                   </div>
                   <div className="text-[12px] font-normal tracking-[-0.48px] text-[#4C4C4C]">
                     Reminders Today
                   </div>
-                </div>
-                <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#F2FBFF" }}>
-                  <BellRing size={16} style={{ color: "#48BBED" }} />
                 </div>
               </div>
             </div>
@@ -1684,15 +1686,17 @@ export default function RemindersPage() {
               <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#FFF0C5", filter: 'blur(50px)' }} />
               <div className="relative flex items-start gap-2">
                 <div className="flex-1 flex flex-col gap-2">
-                  <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
-                    {remindersTomorrow}
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
+                      {remindersTomorrow}
+                    </div>
+                    <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#FFFCF2" }}>
+                      <CalendarIcon size={16} style={{ color: "#E1B739" }} />
+                    </div>
                   </div>
                   <div className="text-[12px] font-normal tracking-[-0.48px] text-[#4C4C4C]">
                     Reminders Tomorrow
                   </div>
-                </div>
-                <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#FFFCF2" }}>
-                  <CalendarIcon size={16} style={{ color: "#E1B739" }} />
                 </div>
               </div>
             </div>
