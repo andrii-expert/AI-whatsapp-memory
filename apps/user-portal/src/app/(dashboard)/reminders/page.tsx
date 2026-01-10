@@ -1422,7 +1422,7 @@ export default function RemindersPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Main Container */}
-      <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-6xl">
+      <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
         {/* Search and Sort Bar */}
         <div className="p-4 bg-white border-b border-[#E6E8EC]">
           <div className="flex items-center gap-2">

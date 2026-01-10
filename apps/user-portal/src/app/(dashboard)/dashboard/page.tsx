@@ -855,7 +855,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Main Container */}
-      <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-6xl">
+      <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
         {/* Header Section */}
         <div className="bg-white shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
           <div className="p-4 bg-white">

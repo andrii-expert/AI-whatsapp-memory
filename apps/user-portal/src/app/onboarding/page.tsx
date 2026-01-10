@@ -406,7 +406,7 @@ export default function OnboardingPage() {
         </div>
       </header>
 
-      <div className="container max-w-6xl mx-auto p-6">
+      <div className="container max-w-7xl mx-auto p-6">
         <div className="mb-8 text-center">
           <h2 className="text-3xl font-bold mb-2">Welcome! Let's Get Started</h2>
           <p className="text-muted-foreground">
