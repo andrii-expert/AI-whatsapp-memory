@@ -2244,6 +2244,7 @@ export default function ShoppingListPage() {
               })()}
             </div>
           </div>
+          </div>
 
           {/* Search and Sort Bar */}
           <div className="px-4 pb-4 lg:px-0 lg:pb-0 mb-4 w-full flex gap-2">
@@ -2578,7 +2579,7 @@ export default function ShoppingListPage() {
         </div>
         </div>
         </div>
-        </div>
+      </div>
 
       {/* Add Item Modal */}
       <AlertDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
