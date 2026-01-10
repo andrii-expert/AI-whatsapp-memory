@@ -1499,7 +1499,7 @@ function StatCard({ number, label, iconBg, borderColor, blurColor, icon, onClick
       <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: blurColor, filter: 'blur(50px)' }} />
       <div className="relative flex items-start">
         <div className="flex-1 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between w-full gap-2">
             <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
               {number}
             </div>
