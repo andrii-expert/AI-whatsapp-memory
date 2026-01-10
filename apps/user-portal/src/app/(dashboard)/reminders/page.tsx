@@ -974,6 +974,61 @@ export default function RemindersPage() {
 
   // Filter and sort reminders
   const userTimezone = (user as any)?.timezone;
+  
+  // Calculate reminders for today and tomorrow
+  const remindersWithNext = useMemo(() => {
+    const now = new Date();
+    return reminders.map((r) => {
+      const reminderForCompute: Reminder = {
+        ...r,
+        time: r.time ?? null,
+        minuteOfHour: r.minuteOfHour ?? null,
+        intervalMinutes: r.intervalMinutes ?? null,
+        daysFromNow: r.daysFromNow ?? null,
+        targetDate: r.targetDate ? (r.targetDate instanceof Date ? r.targetDate : new Date(r.targetDate)) : null,
+        dayOfMonth: r.dayOfMonth ?? null,
+        month: r.month ?? null,
+        daysOfWeek: r.daysOfWeek ?? null,
+        createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
+        updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
+      };
+      return {
+        ...r,
+        nextAt: computeNext(reminderForCompute, now, userTimezone)
+      };
+    });
+  }, [reminders, userTimezone]);
+
+  // Count reminders for today and tomorrow
+  const remindersToday = useMemo(() => {
+    const today = startOfDay(new Date());
+    const tomorrow = endOfDay(new Date());
+    return remindersWithNext.filter((r) => {
+      if (!r.nextAt || !r.active) return false;
+      return r.nextAt >= today && r.nextAt <= tomorrow;
+    }).length;
+  }, [remindersWithNext]);
+
+  const remindersTomorrow = useMemo(() => {
+    const tomorrowStart = startOfDay(addDays(new Date(), 1));
+    const tomorrowEnd = endOfDay(addDays(new Date(), 1));
+    return remindersWithNext.filter((r) => {
+      if (!r.nextAt || !r.active) return false;
+      return r.nextAt >= tomorrowStart && r.nextAt <= tomorrowEnd;
+    }).length;
+  }, [remindersWithNext]);
+
+  // Count active and paused reminders
+  const activeCount = useMemo(() => reminders.filter((r) => r.active).length, [reminders]);
+  const pausedCount = useMemo(() => reminders.filter((r) => !r.active).length, [reminders]);
+
+  // Status filter state (All, Active, Paused)
+  const [statusTab, setStatusTab] = useState<"all" | "active" | "paused">("all");
+
+  // Sort state
+  const [sortBy, setSortBy] = useState<"date" | "alphabetical" | undefined>(undefined);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc" | undefined>(undefined);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const now = new Date();
@@ -1036,12 +1091,12 @@ export default function RemindersPage() {
           return false;
         }
         
-        // Status filter (active/inactive)
-        if (statusFilter !== "all") {
-          if (statusFilter === "active" && !r.active) {
+        // Status filter (active/inactive) - use statusTab for the new UI
+        if (statusTab !== "all") {
+          if (statusTab === "active" && !r.active) {
             return false;
           }
-          if (statusFilter === "inactive" && r.active) {
+          if (statusTab === "paused" && r.active) {
             return false;
           }
         }
@@ -1092,8 +1147,33 @@ export default function RemindersPage() {
         const aCreatedAt = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
         const bCreatedAt = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
         return bCreatedAt.getTime() - aCreatedAt.getTime();
+      })
+      .sort((a, b) => {
+        // Apply sort if specified
+        if (sortBy && sortOrder) {
+          if (sortBy === "alphabetical") {
+            const comparison = a.title.localeCompare(b.title);
+            return sortOrder === "asc" ? comparison : -comparison;
+          } else if (sortBy === "date") {
+            const aTime = a.nextAt?.getTime() || (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime());
+            const bTime = b.nextAt?.getTime() || (b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime());
+            return sortOrder === "asc" ? aTime - bTime : bTime - aTime;
+          }
+        }
+        // Default: Active reminders first, sorted by next occurrence
+        if (a.active && b.active) {
+          const aTime = a.nextAt?.getTime() || Infinity;
+          const bTime = b.nextAt?.getTime() || Infinity;
+          return aTime - bTime;
+        }
+        if (a.active) return -1;
+        if (b.active) return 1;
+        // Inactive sorted by creation date (newest first)
+        const aCreatedAt = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+        const bCreatedAt = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+        return bCreatedAt.getTime() - aCreatedAt.getTime();
       });
-  }, [reminders, query, userTimezone, dateFilter, customDateRange, statusFilter, typeFilter]);
+  }, [reminders, query, userTimezone, dateFilter, customDateRange, statusTab, typeFilter, sortBy, sortOrder]);
 
   const resetForm = useCallback(() => {
     setForm(initialFormState);
@@ -1290,74 +1370,96 @@ export default function RemindersPage() {
     }
   }, [reminders, toast, toggleActiveMutation]);
 
+  // Helper function to format frequency description for display
+  const getFrequencyText = (reminder: any) => {
+    if (reminder.frequency === "daily") return "Daily";
+    if (reminder.frequency === "weekly") {
+      if (reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
+        const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        if (reminder.daysOfWeek.length === 1) {
+          return `Every ${dayNames[reminder.daysOfWeek[0]]}`;
+        }
+        return "Weekly";
+      }
+      return "Weekly";
+    }
+    if (reminder.frequency === "monthly") return "Monthly";
+    if (reminder.frequency === "yearly") return "Yearly";
+    if (reminder.frequency === "hourly") return "Hourly";
+    if (reminder.frequency === "minutely") return "Every N minutes";
+    if (reminder.frequency === "once") return "Once";
+    return "Reminder";
+  };
+
+  // Helper function to format time
+  const formatTime = (timeStr: string | null) => {
+    if (!timeStr) return "08:00 PM";
+    const [hours, minutes] = timeStr.split(":");
+    const hour = parseInt(hours || "20", 10);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes || "00"} ${ampm}`;
+  };
+
+  // Helper function to calculate time until next occurrence
+  const getTimeUntilNext = (reminder: any) => {
+    if (!reminder.nextAt || !reminder.active) return null;
+    const now = new Date();
+    const next = reminder.nextAt instanceof Date ? reminder.nextAt : new Date(reminder.nextAt);
+    const diffMs = next.getTime() - now.getTime();
+    
+    if (diffMs < 0) return null;
+    
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0) {
+      return `${hours} hour${hours !== 1 ? "s" : ""} ${minutes} min${minutes !== 1 ? "s" : ""}`;
+    }
+    return `${minutes} min${minutes !== 1 ? "s" : ""}`;
+  };
+
   return (
-    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Home className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <span className="font-medium">Reminders</span>
-      </div>
-
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-primary">Reminders</h1>
-            <p className="text-muted-foreground mt-2">
-              Create and manage recurring reminders
-            </p>
-          </div>
-          <UserTimeDisplay timezone={(user as any)?.timezone} />
-        </div>
-      </div>
-
-      {/* Search, Filter and Add Button */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-sm md:max-w-md lg:max-w-lg">
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-            <Input
-              value={query}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-              placeholder="Search reminders..."
-              className="pl-10"
-            />
-          </div>
+    <div className="min-h-screen bg-white">
+      {/* Main Container */}
+      <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-6xl">
+        {/* Search and Sort Bar */}
+        <div className="p-4 bg-white border-b border-[#E6E8EC]">
           <div className="flex items-center gap-2">
-            <Button
-              onClick={() => setFilterDialogOpen(true)}
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9B9BA7] pointer-events-none" size={18} />
+              <Input
+                value={query}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+                placeholder="Search reminders..."
+                className="w-full h-10 sm:h-11 bg-gray-50 border border-gray-200 rounded-lg pr-10 pl-4 text-sm"
+              />
+            </div>
+            <Select
+              value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
+              onValueChange={(value) => {
+                const [by, order] = value.split("-") as ["date" | "alphabetical", "asc" | "desc"];
+                setSortBy(by);
+                setSortOrder(order);
+              }}
             >
-              <Filter size={18} className="mr-2" />
-              Filters
-              {activeFiltersCount > 0 && (
-                <Badge variant="default" className="ml-2 h-5 min-w-5 px-1.5 text-xs">
-                  {activeFiltersCount}
-                </Badge>
-              )}
-            </Button>
-            <Button
-              onClick={openNewForm}
-              type="button"
-              variant="default"
-              className="w-full sm:w-auto"
-            >
-              <Plus size={18} className="mr-2" /> New Reminder
-            </Button>
+              <SelectTrigger className="w-[140px] h-10 sm:h-11 bg-gray-50 border border-gray-200">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                <SelectItem value="alphabetical-asc">A-Z</SelectItem>
+                <SelectItem value="alphabetical-desc">Z-A</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
-      </div>
-      
-      {/* Filter Modal */}
+
+        {/* Heading */}
+        <div className="px-4 pt-6 pb-4">
+          <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Reminders</h1>
+        </div>
       <AlertDialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
         <AlertDialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
@@ -1548,130 +1650,371 @@ export default function RemindersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Stats */}
-      {reminders.length > 0 && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Card className="rounded-xl border-slate-200">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-[hsl(var(--brand-orange))]">{reminders.length}</div>
-              <div className="text-xs text-slate-600">Total Reminders</div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-xl border-slate-200">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-green-600">
-                {reminders.filter((r) => r.active).length}
-              </div>
-              <div className="text-xs text-slate-600">Active</div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-xl border-slate-200">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-slate-400">
-                {reminders.filter((r) => !r.active).length}
-              </div>
-              <div className="text-xs text-slate-600">Paused</div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-xl border-slate-200">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-purple-600">
-                {reminders.filter((r) => r.frequency === "daily").length}
-              </div>
-              <div className="text-xs text-slate-600">Daily</div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Reminders Grid */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((r) => (
-          <div
-            key={r.id}
-            className="animate-in fade-in-50 slide-in-from-bottom-2 duration-200"
-          >
-            <Card className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <BellRing size={16} className="text-primary flex-shrink-0" />
-                      <span className="truncate">{r.title}</span>
-                    </CardTitle>
-                    <div className="mt-2 text-sm text-muted-foreground">
-                      {getFrequencyDescription(r)}
-                    </div>
-                    {r.active && r.nextAt && (
-                      <div className="mt-2 text-xs font-medium text-green-600">
-                        Next: {formatDateTime(r.nextAt, userTimezone)} ({getRelativeTime(r.nextAt)})
-                      </div>
-                    )}
+        {/* Summary Cards */}
+        <div className="px-4 pb-4">
+          <div className="flex gap-2">
+            <div className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#ECF7FC" }}>
+              <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#C5EEFF", filter: 'blur(50px)' }} />
+              <div className="relative flex items-start gap-2">
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
+                    {remindersToday}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <Switch
-                      checked={r.active}
-                      onCheckedChange={() => toggleActive(r.id)}
-                      aria-label={`Toggle ${r.title}`}
-                    />
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                        >
-                          <MoreVertical size={16} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditForm(r)}>
-                          <Pencil size={14} className="mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => confirmDelete(r.id)}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 size={14} className="mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <div className="text-[12px] font-normal tracking-[-0.48px] text-[#4C4C4C]">
+                    Reminders Today
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant={r.active ? "default" : "secondary"}>
-                    {r.active ? "Active" : "Paused"}
-                  </Badge>
-                  <span>•</span>
-                  <span className="capitalize">{r.frequency}</span>
-                  <span>•</span>
-                  <span>{new Date(r.createdAt).toLocaleDateString()}</span>
+                <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#F2FBFF" }}>
+                  <BellRing size={16} style={{ color: "#48BBED" }} />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+            <div className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#FCF8EC" }}>
+              <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#FFF0C5", filter: 'blur(50px)' }} />
+              <div className="relative flex items-start gap-2">
+                <div className="flex-1 flex flex-col gap-2">
+                  <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
+                    {remindersTomorrow}
+                  </div>
+                  <div className="text-[12px] font-normal tracking-[-0.48px] text-[#4C4C4C]">
+                    Reminders Tomorrow
+                  </div>
+                </div>
+                <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#FFFCF2" }}>
+                  <CalendarIcon size={16} style={{ color: "#E1B739" }} />
+                </div>
+              </div>
+            </div>
           </div>
-        ))}
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="px-4 pb-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setStatusTab("all")}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                statusTab === "all"
+                  ? "bg-black text-white"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setStatusTab("active")}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                statusTab === "active"
+                  ? "bg-black text-white"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Active
+              {statusTab !== "active" && (
+                <span className="ml-2" style={{ color: "#9B9BA7" }}>({activeCount})</span>
+              )}
+            </button>
+            <button
+              onClick={() => setStatusTab("paused")}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                statusTab === "paused"
+                  ? "bg-black text-white"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Paused
+              {statusTab !== "paused" && (
+                <span className="ml-2" style={{ color: "#9B9BA7" }}>({pausedCount})</span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Reminders List */}
+        <div className="px-4 pb-20">
+          {filtered.length === 0 ? (
+            <div className="text-center py-12">
+              <BellRing className="h-12 w-12 mx-auto mb-4 text-gray-400 opacity-50" />
+              <p className="text-sm text-gray-500">
+                {query ? `No reminders found matching "${query}"` : "No reminders found. Create your first reminder!"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {filtered.map((r, index) => {
+                const timeUntilNext = getTimeUntilNext(r);
+                const frequencyText = getFrequencyText(r);
+                const timeText = formatTime(r.time);
+                
+                return (
+                  <React.Fragment key={r.id}>
+                    <div className="flex items-center justify-between py-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[14px] font-semibold leading-[130%] text-[#1D1D1B] mb-1">
+                          {r.title}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[12px] font-medium text-[#EEB183]">
+                            • {frequencyText}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Clock size={14} style={{ color: "#6D6DE2" }} />
+                            <span className="text-[12px] font-medium text-[#6D6DE2]">
+                              {timeText}
+                            </span>
+                          </div>
+                          {timeUntilNext && (
+                            <>
+                              <span className="text-[12px] text-[#A9A9A9]">•</span>
+                              <span className="text-[12px] font-medium text-[#9999A5]">
+                                {timeUntilNext}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <Switch
+                          checked={r.active}
+                          onCheckedChange={() => toggleActive(r.id)}
+                          aria-label={`Toggle ${r.title}`}
+                          className={r.active ? "data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" : "data-[state=unchecked]:bg-gray-300"}
+                        />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="text-[#9B9BA7] hover:text-gray-700">
+                              <MoreVertical size={20} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                            <DropdownMenuItem
+                              onClick={() => openEditForm(r)}
+                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                            >
+                              <Pencil size={14} className="mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => confirmDelete(r.id)}
+                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5 text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 size={14} className="mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                    {index < filtered.length - 1 && (
+                      <div className="w-[90%] mx-auto h-px bg-gray-100" />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Floating Action Button */}
+        <button
+          onClick={openNewForm}
+          className="fixed bottom-6 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg flex items-center justify-center transition-colors z-50 lg:hidden"
+        >
+          <Plus className="h-6 w-6 text-white" />
+        </button>
       </div>
 
-      {/* Empty States */}
-      {filtered.length === 0 && query && (
-        <div className="col-span-full text-center py-12 text-muted-foreground">
-          <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <p className="text-sm">No reminders found matching "{query}"</p>
-        </div>
-      )}
-
-      {filtered.length === 0 && !query && (
-        <div className="col-span-full text-center py-12 text-muted-foreground">
-          <BellRing className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-          <p className="text-sm">No reminders found. Create your first reminder here or through WhatsApp!</p>
-        </div>
-      )}
+      {/* Filter Modal */}
+      <AlertDialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+        <AlertDialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Filter size={20} />
+              Filter Reminders
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Date Filter Section */}
+            <div className="space-y-3">
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <CalendarIcon size={16} />
+                Date Filter
+              </Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {(["all", "today", "tomorrow", "thisWeek", "thisMonth"] as DateFilterType[]).map((filter) => {
+                  const isActive = dateFilter === filter;
+                  const labels: Record<DateFilterType, string> = {
+                    all: "All",
+                    today: "Today",
+                    tomorrow: "Tomorrow",
+                    thisWeek: "This Week",
+                    thisMonth: "This Month",
+                    custom: "Custom",
+                  };
+                  
+                  return (
+                    <Button
+                      key={filter}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setDateFilter(filter);
+                        if (filter !== "custom") {
+                          setCustomDateRange(undefined);
+                        }
+                      }}
+                      className="h-9"
+                    >
+                      {labels[filter]}
+                    </Button>
+                  );
+                })}
+                
+                {/* Custom date range picker */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={dateFilter === "custom" ? "default" : "outline"}
+                      size="sm"
+                      className="h-9"
+                    >
+                      <CalendarIcon size={14} className="mr-1.5" />
+                      Custom Range
+                      {customDateRange?.from && customDateRange?.to && (
+                        <span className="ml-1.5 text-xs opacity-70">
+                          ({format(customDateRange.from, "MMM d")} - {format(customDateRange.to, "MMM d")})
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={customDateRange?.from}
+                      selected={customDateRange}
+                      onSelect={(range: DateRange | undefined) => {
+                        if (range?.from && range?.to) {
+                          setCustomDateRange(range);
+                          setDateFilter("custom");
+                        } else if (range?.from) {
+                          setCustomDateRange({ from: range.from, to: undefined });
+                          setDateFilter("custom");
+                        } else {
+                          setCustomDateRange(undefined);
+                        }
+                      }}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            
+            {/* Status Filter Section */}
+            <div className="space-y-3">
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <BellRing size={16} />
+                Status Filter
+              </Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {(["all", "active", "inactive"] as StatusFilterType[]).map((filter) => {
+                  const isActive = statusFilter === filter;
+                  const labels: Record<StatusFilterType, string> = {
+                    all: "All",
+                    active: "Active",
+                    inactive: "Paused",
+                  };
+                  
+                  return (
+                    <Button
+                      key={filter}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setStatusFilter(filter)}
+                      className="h-9"
+                    >
+                      {labels[filter]}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            
+            {/* Reminder Type Filter Section */}
+            <div className="space-y-3">
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <AlarmClock size={16} />
+                Reminder Type
+              </Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant={typeFilter === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTypeFilter("all")}
+                  className="h-9"
+                >
+                  All
+                </Button>
+                {(["daily", "hourly", "minutely", "once", "weekly", "monthly", "yearly"] as ReminderFrequency[]).map((frequency) => {
+                  const isActive = typeFilter === frequency;
+                  const labels: Record<ReminderFrequency, string> = {
+                    daily: "Daily",
+                    hourly: "Hourly",
+                    minutely: "Minutely",
+                    once: "Once",
+                    weekly: "Weekly",
+                    monthly: "Monthly",
+                    yearly: "Yearly",
+                  };
+                  
+                  return (
+                    <Button
+                      key={frequency}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTypeFilter(frequency)}
+                      className="h-9"
+                    >
+                      {labels[frequency]}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          
+          <AlertDialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDateFilter("all");
+                setStatusFilter("all");
+                setTypeFilter("all");
+                setCustomDateRange(undefined);
+              }}
+              className="flex-1 sm:flex-none"
+            >
+              <X size={16} className="mr-2" />
+              Clear All
+            </Button>
+            <AlertDialogAction
+              onClick={() => setFilterDialogOpen(false)}
+              className="flex-1 sm:flex-none"
+            >
+              Apply Filters
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Form Modal */}
       <AlertDialog
