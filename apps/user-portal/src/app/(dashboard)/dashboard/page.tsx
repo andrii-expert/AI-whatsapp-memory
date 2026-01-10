@@ -342,7 +342,7 @@ export default function DashboardPage() {
   const activeReminders = useMemo(() => {
     const userTimezone = (userData as any)?.timezone;
     
-    // Filter only active reminders that occur today
+    // Filter only active reminders (all active reminders, not just today)
     const filtered = reminders
       .map((r: any) => ({
         ...r,
@@ -350,7 +350,8 @@ export default function DashboardPage() {
       }))
       .filter((r: any) => {
         if (!r.active) return false;
-        return doesReminderOccurToday(r, userTimezone);
+        // Only include reminders that have a valid next occurrence time
+        return r.nextAt !== null;
       });
     
     // Sort by next occurrence time (earliest first)
@@ -360,8 +361,8 @@ export default function DashboardPage() {
       return timeA - timeB;
     });
     
-    // Return up to 10 reminders
-    return sorted.slice(0, 10);
+    // Return next 3 reminders
+    return sorted.slice(0, 3);
   }, [reminders, userData]);
 
   // Extract shared shopping list items from shared folders
@@ -569,25 +570,21 @@ export default function DashboardPage() {
     });
   }, [allCalendarEvents, calendars]);
 
-  // Get scheduled events - only today's events (using EXACT same logic as calendar page)
+  // Get next events (upcoming events, not just today)
   const scheduledEvents = useMemo(() => {
     if (!processedEvents || processedEvents.length === 0) return [];
     
     // Get current date for filtering
     const now = new Date();
     
-    // Filter events for today using EXACT same logic as calendar page's getEventsForDate
-    // This is the exact same function from calendar page
-    const todayEvents = processedEvents.filter(event => {
-      const eventStart = startOfDay(event.start);
-      const eventEnd = endOfDay(event.end);
-      const checkDate = startOfDay(now);
-      // Exact same logic as calendar page: (checkDate >= eventStart && checkDate <= eventEnd) || isSameDay(event.start, now)
-      return (checkDate >= eventStart && checkDate <= eventEnd) || isSameDay(event.start, now);
+    // Filter events that start from now onwards (upcoming events)
+    const upcomingEvents = processedEvents.filter(event => {
+      // Include events that haven't ended yet
+      return event.end.getTime() >= now.getTime();
     });
     
     // Format events for display (same as calendar page)
-    const formattedEvents = todayEvents.map((event: any) => {
+    const formattedEvents = upcomingEvents.map((event: any) => {
       const startDate = event.start;
       const endDate = event.end;
       
@@ -627,10 +624,10 @@ export default function DashboardPage() {
       };
     });
     
-    // Sort by start time
+    // Sort by start time (earliest first)
     formattedEvents.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     
-    return formattedEvents.slice(0, 10); // Show up to 10 events
+    return formattedEvents.slice(0, 3); // Show next 3 events
   }, [processedEvents]);
 
   const shouldShowReminders = true;
@@ -1040,12 +1037,12 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Today's Events */}
+          {/* Next Events */}
           {shouldShowEvents && (
             <div className="mt-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-[16px] font-semibold leading-[130%] text-black">
-                  Today's Events
+                  Next Events
                 </h2>
                 <button
                   onClick={() => router.push("/calendars")}
@@ -1058,10 +1055,10 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-2">
                 {scheduledEvents.length === 0 ? (
                   <div className="px-4 py-8 text-center">
-                    <p className="text-sm text-gray-500">No events today</p>
+                    <p className="text-sm text-gray-500">No upcoming events</p>
                   </div>
                 ) : (
-                  scheduledEvents.slice(0, 2).map((event: any) => {
+                  scheduledEvents.map((event: any) => {
                     const borderColor = event.eventColor === "orange" ? "#D8A4FF" :
                                        event.eventColor === "purple" ? "#D8A4FF" :
                                        event.eventColor === "blue" ? "#D8A4FF" :
@@ -1085,12 +1082,12 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Today's Reminders */}
+          {/* Next Reminders */}
           {shouldShowReminders && (
             <div className="mt-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-[16px] font-semibold leading-[130%] text-black">
-                  Today's Reminders
+                  Next Reminders
                 </h2>
                 <button
                   onClick={() => router.push("/reminders")}
@@ -1106,7 +1103,7 @@ export default function DashboardPage() {
                     <p className="text-sm text-gray-500">No active reminders</p>
                   </div>
                 ) : (
-                  activeReminders.slice(0, 3).map((reminder: any) => (
+                  activeReminders.map((reminder: any) => (
                     <ReminderCard
                       key={reminder.id}
                       reminder={reminder}
