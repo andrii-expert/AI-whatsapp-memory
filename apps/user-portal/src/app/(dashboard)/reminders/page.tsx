@@ -60,7 +60,7 @@ import { Home, ChevronLeft, Clock } from "lucide-react";
 
 // ==================== TYPES ====================
 
-type ReminderFrequency = "daily" | "hourly" | "minutely" | "once" | "weekly" | "monthly" | "yearly";
+type ReminderFrequency = "none" | "daily" | "hourly" | "minutely" | "once" | "weekly" | "monthly" | "yearly";
 
 interface Reminder {
   id: string;
@@ -893,8 +893,8 @@ export default function RemindersPage() {
     return {
       id: null,
       title: "",
-      frequency: "daily",
-      time: "17:00",
+      frequency: "none",
+      time: "09:00",
       minuteOfHour: 0,
       intervalMinutes: 5,
       daysFromNow: 1,
@@ -1297,7 +1297,18 @@ export default function RemindersPage() {
     };
 
     // Add frequency-specific fields
-    if (form.frequency === "daily") {
+    if (form.frequency === "none") {
+      // Treat "none" as a one-time reminder with the specified time for today
+      payload.frequency = "once";
+      if (form.time) {
+        const today = new Date();
+        const [hours, minutes] = form.time.split(":");
+        today.setHours(parseInt(hours || "9", 10), parseInt(minutes || "0", 10), 0, 0);
+        payload.targetDate = today;
+      } else {
+        payload.daysFromNow = 0;
+      }
+    } else if (form.frequency === "daily") {
       payload.time = form.time;
     } else if (form.frequency === "hourly") {
       payload.minuteOfHour = form.minuteOfHour;
@@ -1610,6 +1621,7 @@ export default function RemindersPage() {
                 {(["daily", "hourly", "minutely", "once", "weekly", "monthly", "yearly"] as ReminderFrequency[]).map((frequency) => {
                   const isActive = typeFilter === frequency;
                   const labels: Record<ReminderFrequency, string> = {
+                    none: "None",
                     daily: "Daily",
                     hourly: "Hourly",
                     minutely: "Minutely",
@@ -1790,7 +1802,15 @@ export default function RemindersPage() {
                       {/* Time and Duration Row */}
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#F6F6FF]">
-                          <Clock size={14} style={{ color: "#6D6DE2" }} />
+                        <svg width="17" height="17" viewBox="0 0 17 17" fill="none" xmlns="http://www.w3.org/2000/svg">
+<mask id="mask0_237_987" style={{ maskType: 'alpha' as const }} maskUnits="userSpaceOnUse" x="0" y="0" width="17" height="17">
+<rect width="17" height="17" fill="#D9D9D9"/>
+</mask>
+<g mask="url(#mask0_237_987)">
+<path d="M9.20842 8.62398L10.8022 10.2177C10.932 10.3476 10.997 10.5099 10.997 10.7047C10.997 10.8995 10.932 11.0677 10.8022 11.2094C10.6605 11.3511 10.4923 11.4219 10.2975 11.4219C10.1027 11.4219 9.93446 11.3511 9.79279 11.2094L8.00425 9.42085C7.93342 9.35002 7.88029 9.27033 7.84487 9.18179C7.80946 9.09325 7.79175 9.00176 7.79175 8.90731V6.37502C7.79175 6.17433 7.85963 6.0061 7.99539 5.87033C8.13116 5.73457 8.29939 5.66669 8.50008 5.66669C8.70078 5.66669 8.86901 5.73457 9.00477 5.87033C9.14053 6.0061 9.20842 6.17433 9.20842 6.37502V8.62398ZM8.50008 4.25002C8.29939 4.25002 8.13116 4.18214 7.99539 4.04637C7.85963 3.91061 7.79175 3.74238 7.79175 3.54169V2.83335H9.20842V3.54169C9.20842 3.74238 9.14053 3.91061 9.00477 4.04637C8.86901 4.18214 8.70078 4.25002 8.50008 4.25002ZM12.7501 8.50002C12.7501 8.29933 12.818 8.1311 12.9537 7.99533C13.0895 7.85957 13.2577 7.79169 13.4584 7.79169H14.1667V9.20835H13.4584C13.2577 9.20835 13.0895 9.14047 12.9537 9.00471C12.818 8.86894 12.7501 8.70072 12.7501 8.50002ZM8.50008 12.75C8.70078 12.75 8.86901 12.8179 9.00477 12.9537C9.14053 13.0894 9.20842 13.2577 9.20842 13.4584V14.1667H7.79175V13.4584C7.79175 13.2577 7.85963 13.0894 7.99539 12.9537C8.13116 12.8179 8.29939 12.75 8.50008 12.75ZM4.25008 8.50002C4.25008 8.70072 4.1822 8.86894 4.04644 9.00471C3.91067 9.14047 3.74244 9.20835 3.54175 9.20835H2.83341V7.79169H3.54175C3.74244 7.79169 3.91067 7.85957 4.04644 7.99533C4.1822 8.1311 4.25008 8.29933 4.25008 8.50002ZM8.50008 15.5834C7.52022 15.5834 6.59939 15.3974 5.73758 15.0255C4.87578 14.6537 4.12612 14.149 3.48862 13.5115C2.85112 12.874 2.34644 12.1243 1.97456 11.2625C1.60269 10.4007 1.41675 9.47988 1.41675 8.50002C1.41675 7.52016 1.60269 6.59933 1.97456 5.73752C2.34644 4.87571 2.85112 4.12606 3.48862 3.48856C4.12612 2.85106 4.87578 2.34637 5.73758 1.9745C6.59939 1.60262 7.52022 1.41669 8.50008 1.41669C9.47994 1.41669 10.4008 1.60262 11.2626 1.9745C12.1244 2.34637 12.874 2.85106 13.5115 3.48856C14.149 4.12606 14.6537 4.87571 15.0256 5.73752C15.3975 6.59933 15.5834 7.52016 15.5834 8.50002C15.5834 9.47988 15.3975 10.4007 15.0256 11.2625C14.6537 12.1243 14.149 12.874 13.5115 13.5115C12.874 14.149 12.1244 14.6537 11.2626 15.0255C10.4008 15.3974 9.47994 15.5834 8.50008 15.5834ZM14.1667 8.50002C14.1667 6.91808 13.6178 5.57815 12.5199 4.48023C11.422 3.38231 10.082 2.83335 8.50008 2.83335C6.91814 2.83335 5.57821 3.38231 4.48029 4.48023C3.38237 5.57815 2.83341 6.91808 2.83341 8.50002C2.83341 10.082 3.38237 11.4219 4.48029 12.5198C5.57821 13.6177 6.91814 14.1667 8.50008 14.1667C10.082 14.1667 11.422 13.6177 12.5199 12.5198C13.6178 11.4219 14.1667 10.082 14.1667 8.50002Z" fill="#6D6DE2"/>
+</g>
+</svg>
+
                           <span className="text-[12px] font-medium" style={{ color: "#6D6DE2" }}>
                             {timeText}
                           </span>
@@ -1993,6 +2013,7 @@ export default function RemindersPage() {
                 {(["daily", "hourly", "minutely", "once", "weekly", "monthly", "yearly"] as ReminderFrequency[]).map((frequency) => {
                   const isActive = typeFilter === frequency;
                   const labels: Record<ReminderFrequency, string> = {
+                    none: "None",
                     daily: "Daily",
                     hourly: "Hourly",
                     minutely: "Minutely",
@@ -2055,21 +2076,11 @@ export default function RemindersPage() {
         }}
       >
         <AlertDialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader className="space-y-3 pb-4 border-b">
-            <AlertDialogTitle className="text-2xl font-bold flex items-center gap-3">
-              <div
-                className={`w-10 h-10 rounded-lg flex items-center justify-center ${form.id ? "bg-indigo-100" : "bg-blue-100"
-                  }`}
-              >
-                {form.id ? (
-                  <Pencil className="h-5 w-5 text-indigo-600" />
-                ) : (
-                  <Plus className="h-5 w-5 text-blue-600" />
-                )}
-              </div>
+          <AlertDialogHeader className="space-y-1 pb-4">
+            <AlertDialogTitle className="text-xl font-bold text-gray-900">
               {form.id ? "Edit Reminder" : "Add New Reminder"}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-base">
+            <AlertDialogDescription className="text-sm text-gray-500">
               {form.id
                 ? "Update your reminder settings"
                 : "Create a new recurring reminder"}
@@ -2081,32 +2092,28 @@ export default function RemindersPage() {
             <div className="space-y-2">
               <Label
                 htmlFor="title"
-                className="text-sm font-semibold text-gray-700 flex items-center gap-1"
+                className="text-sm font-medium text-gray-900"
               >
                 Title
-                <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="title"
-                placeholder="e.g., Daily standup meeting"
+                placeholder="Save by name..."
                 value={form.title}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setForm({ ...form, title: e.target.value })
                 }
-                className="w-full h-11 text-base"
+                className="w-full h-11 text-base bg-white border border-gray-200 rounded-lg"
                 autoFocus
                 required
                 maxLength={100}
               />
-              <p className="text-xs text-gray-500">
-                {form.title.length}/100 characters
-              </p>
             </div>
 
-            {/* Frequency */}
+            {/* Repeat */}
             <div className="space-y-2">
-              <Label htmlFor="frequency" className="text-sm font-semibold text-gray-700">
-                Frequency
+              <Label htmlFor="frequency" className="text-sm font-medium text-gray-900">
+                Repeat
               </Label>
               <Select
                 value={form.frequency}
@@ -2125,10 +2132,11 @@ export default function RemindersPage() {
                   }
                 }}
               >
-                <SelectTrigger className="h-11" id="frequency">
-                  <SelectValue placeholder="Select frequency" />
+                <SelectTrigger className="h-11 bg-white border border-gray-200 rounded-lg" id="frequency">
+                  <SelectValue placeholder="none" />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px] z-50">
+                  <SelectItem value="none">none</SelectItem>
                   <SelectItem value="daily">Every day</SelectItem>
                   <SelectItem value="hourly">Every hour</SelectItem>
                   <SelectItem value="minutely">Every N minutes</SelectItem>
@@ -2140,21 +2148,47 @@ export default function RemindersPage() {
               </Select>
             </div>
 
-            {/* Daily - Time */}
-            {form.frequency === "daily" && (
+            {/* Select time - Always visible for basic reminder */}
+            {(form.frequency === "daily" || form.frequency === "none" || !form.frequency) && (
               <div className="space-y-2">
-                <Label htmlFor="time" className="text-sm font-semibold text-gray-700">
-                  Time
+                <Label htmlFor="time" className="text-sm font-medium text-gray-900">
+                  Select time
                 </Label>
-                <Input
-                  id="time"
-                  type="time"
-                  value={form.time}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setForm({ ...form, time: e.target.value })
-                  }
-                  className="h-11"
-                />
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none z-10" />
+                  <Select
+                    value={form.time || "09:00"}
+                    onValueChange={(value) => setForm({ ...form, time: value })}
+                  >
+                    <SelectTrigger className="h-11 pl-10 bg-white border border-gray-200 rounded-lg" id="time">
+                      <SelectValue>
+                        {form.time ? (() => {
+                          const [hours, minutes] = (form.time || "09:00").split(":");
+                          const hour = parseInt(hours || "9", 10);
+                          const ampm = hour >= 12 ? "PM" : "AM";
+                          const hour12 = hour % 12 || 12;
+                          return `${hour12}:${minutes || "00"} ${ampm}`;
+                        })() : "09:00 AM"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px] z-50">
+                      {Array.from({ length: 48 }, (_, i) => {
+                        const hour = Math.floor(i / 2);
+                        const minute = (i % 2) * 30;
+                        const hour24 = hour;
+                        const hour12 = hour24 % 12 || 12;
+                        const ampm = hour24 >= 12 ? "PM" : "AM";
+                        const timeValue = `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+                        const displayValue = `${hour12}:${String(minute).padStart(2, "0")} ${ampm}`;
+                        return (
+                          <SelectItem key={timeValue} value={timeValue}>
+                            {displayValue}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
 
@@ -2492,16 +2526,16 @@ export default function RemindersPage() {
                   setShowForm(false);
                   resetForm();
                 }}
-                className="flex-1 sm:flex-none h-11"
+                className="flex-1 sm:flex-none h-11 bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 variant="default"
-                className="flex-1 sm:flex-none h-11 min-w-[140px]"
+                className="flex-1 sm:flex-none h-11 min-w-[140px] bg-purple-500 hover:bg-purple-600 text-white"
               >
-                {form.id ? "Update Reminder" : "Add Reminder"}
+                {form.id ? "Update" : "Add"}
               </Button>
             </AlertDialogFooter>
           </form>
