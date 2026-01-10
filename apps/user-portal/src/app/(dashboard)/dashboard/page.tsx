@@ -873,7 +873,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-[10px] mt-4">
               <div className="flex-1 relative">
                 {hasVerifiedWhatsApp && (
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
                     <Badge className="bg-green-100 text-green-700 border border-green-300 text-[11px] font-semibold px-2 py-0.5 h-auto rounded-full shadow-sm flex items-center gap-1">
                       <div className="w-3 h-3 rounded-full bg-green-600 flex items-center justify-center">
                         <Check className="h-2 w-2 text-white stroke-[3]" />
@@ -898,7 +898,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 relative">
                 {hasCalendar && (
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
                     <Badge className="bg-green-100 text-green-700 border border-green-300 text-[11px] font-semibold px-2 py-0.5 h-auto rounded-full shadow-sm flex items-center gap-1">
                       <div className="w-3 h-3 rounded-full bg-green-600 flex items-center justify-center">
                         <Check className="h-2 w-2 text-white stroke-[3]" />
