@@ -1761,23 +1761,30 @@ export default function RemindersPage() {
                   <React.Fragment key={r.id}>
                     <div className="flex items-center justify-between py-4">
                       <div className="flex-1 min-w-0">
-                        <div className="text-[14px] font-semibold leading-[130%] text-[#1D1D1B] mb-1">
-                          {r.title}
+                        {/* Title and Frequency Tag Row */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="text-[14px] font-semibold leading-[130%] text-[#1D1D1B]">
+                            {r.title}
+                          </div>
+                          <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#EEB183]">
+                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                            <span className="text-[10px] font-medium text-white">
+                              {frequencyText}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[12px] font-medium text-[#EEB183]">
-                            • {frequencyText}
-                          </span>
+                        {/* Time and Duration Row */}
+                        <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1">
                             <Clock size={14} style={{ color: "#6D6DE2" }} />
-                            <span className="text-[12px] font-medium text-[#6D6DE2]">
+                            <span className="text-[12px] font-medium" style={{ color: "#6D6DE2" }}>
                               {timeText}
                             </span>
                           </div>
                           {timeUntilNext && (
                             <>
-                              <span className="text-[12px] text-[#A9A9A9]">•</span>
-                              <span className="text-[12px] font-medium text-[#9999A5]">
+                              <span className="text-[12px]" style={{ color: "#A9A9A9" }}>•</span>
+                              <span className="text-[12px] font-medium" style={{ color: "#9999A5" }}>
                                 {timeUntilNext}
                               </span>
                             </>
