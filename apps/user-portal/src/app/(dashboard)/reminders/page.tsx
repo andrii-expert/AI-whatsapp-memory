@@ -1432,7 +1432,7 @@ export default function RemindersPage() {
                 value={query}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
                 placeholder="Search reminders..."
-                className="w-full h-10 sm:h-11 bg-gray-50 border border-gray-200 rounded-lg pr-10 pl-4 text-sm"
+                className="w-full h-10 sm:h-11 bg-white border border-gray-200 rounded-lg pr-10 pl-4 text-sm"
               />
             </div>
             <Select
@@ -1443,7 +1443,7 @@ export default function RemindersPage() {
                 setSortOrder(order);
               }}
             >
-              <SelectTrigger className="w-[140px] h-10 sm:h-11 bg-gray-50 border border-gray-200">
+              <SelectTrigger className="w-[140px] h-10 sm:h-11 bg-white border border-gray-200">
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
               <SelectContent>
