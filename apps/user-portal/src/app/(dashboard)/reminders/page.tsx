@@ -1751,83 +1751,81 @@ export default function RemindersPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-0">
+            <div className="flex flex-col gap-2">
               {filtered.map((r, index) => {
                 const timeUntilNext = getTimeUntilNext(r);
                 const frequencyText = getFrequencyText(r);
                 const timeText = formatTime(r.time);
                 
                 return (
-                  <React.Fragment key={r.id}>
-                    <div className="flex items-center justify-between py-4">
-                      <div className="flex-1 min-w-0">
-                        {/* Title and Frequency Tag Row */}
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="text-[14px] font-semibold leading-[130%] text-[#1D1D1B]">
-                            {r.title}
-                          </div>
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#EEB183]">
-                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                            <span className="text-[10px] font-medium text-white">
-                              {frequencyText}
-                            </span>
-                          </div>
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.05)]"
+                  >
+                    <div className="flex-1 min-w-0">
+                      {/* Title and Frequency Tag Row */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="text-[14px] font-semibold leading-[130%] text-[#1D1D1B]">
+                          {r.title}
                         </div>
-                        {/* Time and Duration Row */}
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
-                            <Clock size={14} style={{ color: "#6D6DE2" }} />
-                            <span className="text-[12px] font-medium" style={{ color: "#6D6DE2" }}>
-                              {timeText}
-                            </span>
-                          </div>
-                          {timeUntilNext && (
-                            <>
-                              <span className="text-[12px]" style={{ color: "#A9A9A9" }}>•</span>
-                              <span className="text-[12px] font-medium" style={{ color: "#9999A5" }}>
-                                {timeUntilNext}
-                              </span>
-                            </>
-                          )}
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#FFF4E6]">
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#EEB183" }} />
+                          <span className="text-[10px] font-medium" style={{ color: "#EEB183" }}>
+                            {frequencyText}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        <Switch
-                          checked={r.active}
-                          onCheckedChange={() => toggleActive(r.id)}
-                          aria-label={`Toggle ${r.title}`}
-                          className={r.active ? "data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" : "data-[state=unchecked]:bg-gray-300"}
-                        />
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="text-[#9B9BA7] hover:text-gray-700">
-                              <MoreVertical size={20} />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
-                            <DropdownMenuItem
-                              onClick={() => openEditForm(r)}
-                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                            >
-                              <Pencil size={14} className="mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => confirmDelete(r.id)}
-                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5 text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 size={14} className="mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                      {/* Time and Duration Row */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#F6F6FF]">
+                          <Clock size={14} style={{ color: "#6D6DE2" }} />
+                          <span className="text-[12px] font-medium" style={{ color: "#6D6DE2" }}>
+                            {timeText}
+                          </span>
+                        </div>
+                        {timeUntilNext && (
+                          <>
+                            <span className="text-[12px]" style={{ color: "#A9A9A9" }}>•</span>
+                            <span className="text-[12px] font-medium" style={{ color: "#9999A5" }}>
+                              {timeUntilNext}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
-                    {index < filtered.length - 1 && (
-                      <div className="w-[90%] mx-auto h-px bg-gray-100" />
-                    )}
-                  </React.Fragment>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <Switch
+                        checked={r.active}
+                        onCheckedChange={() => toggleActive(r.id)}
+                        aria-label={`Toggle ${r.title}`}
+                        className={r.active ? "data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" : "data-[state=unchecked]:bg-gray-300"}
+                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="text-[#9B9BA7] hover:text-gray-700">
+                            <MoreVertical size={20} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                          <DropdownMenuItem
+                            onClick={() => openEditForm(r)}
+                            className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                          >
+                            <Pencil size={14} className="mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => confirmDelete(r.id)}
+                            className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5 text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 size={14} className="mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
                 );
               })}
             </div>
