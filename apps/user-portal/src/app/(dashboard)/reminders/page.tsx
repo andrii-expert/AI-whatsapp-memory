@@ -1458,7 +1458,18 @@ export default function RemindersPage() {
 
         {/* Heading */}
         <div className="px-4 pt-6 pb-4">
-          <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Reminders</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Reminders</h1>
+            <Button
+              onClick={openNewForm}
+              variant="outline"
+              size="sm"
+              className="hidden lg:flex items-center gap-1.5"
+            >
+              <Plus className="h-4 w-4" />
+              Add New
+            </Button>
+          </div>
         </div>
       <AlertDialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
         <AlertDialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
@@ -1819,7 +1830,7 @@ export default function RemindersPage() {
         {/* Floating Action Button */}
         <button
           onClick={openNewForm}
-          className="fixed bottom-6 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg flex items-center justify-center transition-colors z-50 lg:hidden"
+          className="fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg flex items-center justify-center transition-colors z-50 lg:hidden"
         >
           <Plus className="h-6 w-6 text-white" />
         </button>
