@@ -39,6 +39,7 @@ import {
   MoreVertical,
   MapPin,
   Video,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
@@ -870,38 +871,50 @@ export default function DashboardPage() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-[10px] mt-4">
-              <button
-                onClick={() =>
-                  router.push(
-                    hasVerifiedWhatsApp
-                      ? "/settings/whatsapp"
-                      : "/settings/whatsapp?from=dashboard"
-                  )
-                }
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-[10px] rounded-xl border border-[#D0D5DD] bg-white"
-              >
-                <WhatsappIcon />
-                <span className="text-[14px] font-medium text-[#344054]">Link Whatsapp</span>
+              <div className="flex-1 relative">
                 {hasVerifiedWhatsApp && (
-                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0.5 h-auto">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Connected
-                  </Badge>
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
+                    <Badge className="bg-green-100 text-green-700 border border-green-300 text-[11px] font-semibold px-2 py-0.5 h-auto rounded-full shadow-sm flex items-center gap-1">
+                      <div className="w-3 h-3 rounded-full bg-green-600 flex items-center justify-center">
+                        <Check className="h-2 w-2 text-white stroke-[3]" />
+                      </div>
+                      Connected
+                    </Badge>
+                  </div>
                 )}
-              </button>
-              <button
-                onClick={() => router.push("/calendars")}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-[10px] rounded-xl border border-[#D0D5DD] bg-white"
-              >
-                <CalendarIcon />
-                <span className="text-[14px] font-medium text-[#344054]">Link Calendar</span>
+                <button
+                  onClick={() =>
+                    router.push(
+                      hasVerifiedWhatsApp
+                        ? "/settings/whatsapp"
+                        : "/settings/whatsapp?from=dashboard"
+                    )
+                  }
+                  className="w-full flex items-center justify-center gap-2 px-3 py-[10px] rounded-xl border border-[#D0D5DD] bg-white"
+                >
+                  <WhatsappIcon />
+                  <span className="text-[14px] font-medium text-[#344054]">Link Whatsapp</span>
+                </button>
+              </div>
+              <div className="flex-1 relative">
                 {hasCalendar && (
-                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0.5 h-auto">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Connected
-                  </Badge>
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
+                    <Badge className="bg-green-100 text-green-700 border border-green-300 text-[11px] font-semibold px-2 py-0.5 h-auto rounded-full shadow-sm flex items-center gap-1">
+                      <div className="w-3 h-3 rounded-full bg-green-600 flex items-center justify-center">
+                        <Check className="h-2 w-2 text-white stroke-[3]" />
+                      </div>
+                      Connected
+                    </Badge>
+                  </div>
                 )}
-              </button>
+                <button
+                  onClick={() => router.push("/calendars")}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-[10px] rounded-xl border border-[#D0D5DD] bg-white"
+                >
+                  <CalendarIcon />
+                  <span className="text-[14px] font-medium text-[#344054]">Link Calendar</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
