@@ -1420,11 +1420,11 @@ export default function RemindersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F8F8]">
+    <div className="min-h-screen bg-white">
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
         {/* Search and Sort Bar */}
-        <div className="px-0 py-4 md:px-4 bg-white border-b border-[#E6E8EC]">
+        <div className="p-4 bg-white border-b border-[#E6E8EC]">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9B9BA7] pointer-events-none" size={18} />
@@ -1457,7 +1457,7 @@ export default function RemindersPage() {
         </div>
 
         {/* Heading */}
-        <div className="px-0 pt-6 pb-4 md:px-4">
+        <div className="px-4 pt-6 pb-4">
           <div className="flex items-center justify-between">
             <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Reminders</h1>
             <Button
@@ -1662,7 +1662,7 @@ export default function RemindersPage() {
       </AlertDialog>
 
         {/* Summary Cards */}
-        <div className="px-0 pb-4 md:px-4">
+        <div className="px-4 pb-4">
           <div className="flex gap-2">
             <div className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#ECF7FC" }}>
               <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#C5EEFF", filter: 'blur(50px)' }} />
@@ -1704,7 +1704,7 @@ export default function RemindersPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="px-0 pb-4 md:px-4">
+        <div className="px-4 pb-4">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setStatusTab("all")}
@@ -1754,7 +1754,7 @@ export default function RemindersPage() {
         </div>
 
         {/* Reminders List */}
-        <div className="px-0 pb-20 md:px-4">
+        <div className="px-4 pb-20">
           {filtered.length === 0 ? (
             <div className="text-center py-12">
               <BellRing className="h-12 w-12 mx-auto mb-4 text-gray-400 opacity-50" />

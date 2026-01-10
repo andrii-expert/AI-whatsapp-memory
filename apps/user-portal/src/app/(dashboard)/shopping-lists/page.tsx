@@ -1425,58 +1425,63 @@ export default function ShoppingListPage() {
         strategy="lazyOnload"
         onLoad={initializeGoogleAds}
       />
-      <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-0 md:space-y-6">
-        {/* Breadcrumb Navigation */}
-      <div className="hidden lg:flex items-center gap-2 text-sm justify-between">
-        <div className="flex items-center justify-center gap-2">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Home className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">Your Shopping Lists</span>
-        </div>
-      </div>
+      <div className="min-h-screen bg-white">
+        {/* Main Container */}
+        <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
+          {/* Breadcrumb Navigation */}
+          <div className="hidden lg:flex items-center gap-2 text-sm justify-between px-4 pt-6 pb-4">
+            <div className="flex items-center justify-center gap-2">
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Home className="h-4 w-4" />
+                Dashboard
+              </Link>
+              <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+              <span className="font-medium">Your Shopping Lists</span>
+            </div>
+          </div>
 
+          {/* Main Content - Three Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
+            {/* Mobile Lists View - Show when no folder is selected */}
+            {!selectedFolderId && !viewAllItems && !viewAllShared && (
+              <div className="lg:hidden w-full">
+                {/* Your Lists Header */}
+                <div className="px-4 pt-6 pb-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Shopping Lists</h2>
+                    <Button
+                      onClick={handleOpenCreateListModal}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1.5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add New
+                    </Button>
+                  </div>
+                </div>
 
-      {/* Main Content - Three Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
-        {/* Mobile Lists View - Show when no folder is selected */}
-        {!selectedFolderId && !viewAllItems && !viewAllShared && (
-          <div className="lg:hidden space-y-4 w-full">
-            <div className="space-y-4">
-              {/* Your Lists Header */}
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-900">Your Shopping Lists</h2>
-                <Button
-                  onClick={handleOpenCreateListModal}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1.5"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add New
-                </Button>
-              </div>
+                {/* Search Bar */}
+                <div className="px-4 pb-4">
+                  <div className="relative">
+                    <Input
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setSearchQuery(e.target.value)
+                      }
+                      className="pr-10"
+                    />
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  </div>
+                </div>
 
-              {/* Search Bar */}
-              <div className="relative">
-                <Input
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSearchQuery(e.target.value)
-                  }
-                  className="pr-10"
-                />
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
-
-              {/* Lists */}
-              <div className="space-y-2">
+                {/* Lists */}
+                <div className="px-4 pb-20">
+                  <div className="space-y-2">
                 {/* All Items Card */}
                 <div
                   onClick={handleViewAllItems}
@@ -1772,32 +1777,32 @@ export default function ShoppingListPage() {
                     })}
                   </>
                 )}
-              </div>
+                  </div>
+                </div>
 
-              {/* Mobile Google Ad */}
-              <div className="lg:hidden mt-6">
-                <div ref={mobileAdContainerRef} className="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[250px] flex items-center justify-center">
-                  <div className="text-center text-gray-500 w-full">
-                    <div className="text-sm font-medium mb-2">Advertisement</div>
-                    {/* Google Ads will be inserted here */}
-                    <ins
-                      className="adsbygoogle"
-                      style={{ 
-                        display: 'block',
-                        width: '100%',
-                        height: '250px'
-                      }}
-                      data-ad-client="ca-pub-7722576468912568"
-                      data-ad-slot="XXXXXXXXXX"
-                      data-ad-format="auto"
-                      data-full-width-responsive="true"
-                    />
+                {/* Mobile Google Ad */}
+                <div className="px-4 pb-6">
+                  <div ref={mobileAdContainerRef} className="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[250px] flex items-center justify-center">
+                    <div className="text-center text-gray-500 w-full">
+                      <div className="text-sm font-medium mb-2">Advertisement</div>
+                      {/* Google Ads will be inserted here */}
+                      <ins
+                        className="adsbygoogle"
+                        style={{ 
+                          display: 'block',
+                          width: '100%',
+                          height: '250px'
+                        }}
+                        data-ad-client="ca-pub-7722576468912568"
+                        data-ad-slot="XXXXXXXXXX"
+                        data-ad-format="auto"
+                        data-full-width-responsive="true"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
         {/* Desktop Left Panel - Lists Sidebar */}
         <div className="hidden lg:block space-y-4">
@@ -2132,12 +2137,12 @@ export default function ShoppingListPage() {
 
         {/* Right Panel - Items */}
         <div className={cn(
-          "space-y-4 w-full min-w-0",
+          "w-full min-w-0",
           (!selectedFolderId && !viewAllItems && !viewAllShared) ? "hidden lg:block" : "block"
         )}>
-
           {/* Header with list name and shared info */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="px-4 pt-6 pb-4 lg:px-0 lg:pt-0">
+            <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               {/* Mobile Back Button */}
               {(selectedFolder || viewAllItems || viewAllShared) && (
@@ -2241,7 +2246,7 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Search and Sort Bar */}
-          <div className="mb-4 w-full flex gap-2">
+          <div className="px-4 pb-4 lg:px-0 lg:pb-0 mb-4 w-full flex gap-2">
             <div className="relative flex-1">
               <Input
                 placeholder="Search items..."
@@ -2346,7 +2351,8 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Items List */}
-          <div className="space-y-4 relative pb-20">
+          <div className="px-4 pb-20 lg:px-0">
+            <div className="space-y-4 relative">
         {filteredItems.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
@@ -2522,6 +2528,7 @@ export default function ShoppingListPage() {
             </div>
           </div>
         )}
+            </div>
           </div>
           
           {/* Floating Action Button - Mobile Only */}
@@ -2570,7 +2577,8 @@ export default function ShoppingListPage() {
           </div>
         </div>
         </div>
-      </div>
+        </div>
+        </div>
 
       {/* Add Item Modal */}
       <AlertDialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
