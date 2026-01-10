@@ -2353,7 +2353,7 @@ export default function ShoppingListPage() {
           {/* Items List */}
           <div className="px-4 pb-20 lg:px-0">
             <div className="space-y-4 relative">
-        {filteredItems.length === 0 ? (
+              {filteredItems.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
             <p className="text-lg font-medium">No items found</p>
