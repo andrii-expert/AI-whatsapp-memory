@@ -902,7 +902,7 @@ export default function RemindersPage() {
       dayOfMonth: 1,
       month: 1,
       daysOfWeek: [1], // Default to Monday
-      active: true,
+      active: true, // Always active, no toggle needed
     };
   }, []);
 
@@ -1285,7 +1285,7 @@ export default function RemindersPage() {
     const payload: any = {
       title: form.title,
       frequency: form.frequency,
-      active: form.active,
+      active: true, // Always active, no toggle
       time: null,
       minuteOfHour: null,
       intervalMinutes: null,
@@ -2075,21 +2075,24 @@ export default function RemindersPage() {
           }
         }}
       >
-        <AlertDialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader className="space-y-1 pb-4">
-            <AlertDialogTitle className="text-xl font-bold text-gray-900">
-              {form.id ? "Edit Reminder" : "Add New Reminder"}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-gray-500">
-              {form.id
-                ? "Update your reminder settings"
-                : "Create a new recurring reminder"}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <div className="relative">
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                {form.id ? "Edit Reminder" : "Add New Reminder"}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
+                {form.id
+                  ? "Update your reminder settings"
+                  : "Create a new recurring reminder"}
+              </AlertDialogDescription>
+            </div>
+          </div>
 
-          <form onSubmit={(e: React.FormEvent) => { e.preventDefault(); saveForm(); }} className="space-y-6 pt-2">
+          <form onSubmit={(e: React.FormEvent) => { e.preventDefault(); saveForm(); }} className="space-y-4 sm:space-y-6 overflow-x-hidden">
             {/* Title */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <Label
                 htmlFor="title"
                 className="text-sm font-medium text-gray-900"
@@ -2103,15 +2106,18 @@ export default function RemindersPage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setForm({ ...form, title: e.target.value })
                 }
-                className="w-full h-11 text-base bg-white border border-gray-200 rounded-lg"
+                className="bg-gray-50 h-10 sm:h-11 w-full"
                 autoFocus
                 required
                 maxLength={100}
+                style={{
+                  border: 0
+                }}
               />
             </div>
 
             {/* Repeat */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <Label htmlFor="frequency" className="text-sm font-medium text-gray-900">
                 Repeat
               </Label>
@@ -2132,7 +2138,7 @@ export default function RemindersPage() {
                   }
                 }}
               >
-                <SelectTrigger className="h-11 bg-white border border-gray-200 rounded-lg" id="frequency">
+                <SelectTrigger className="h-10 sm:h-11 w-full" id="frequency">
                   <SelectValue placeholder="none" />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px] z-50">
@@ -2150,7 +2156,7 @@ export default function RemindersPage() {
 
             {/* Select time - Always visible for basic reminder */}
             {(form.frequency === "daily" || form.frequency === "none" || !form.frequency) && (
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="time" className="text-sm font-medium text-gray-900">
                   Select time
                 </Label>
@@ -2160,7 +2166,7 @@ export default function RemindersPage() {
                     value={form.time || "09:00"}
                     onValueChange={(value) => setForm({ ...form, time: value })}
                   >
-                    <SelectTrigger className="h-11 pl-10 bg-white border border-gray-200 rounded-lg" id="time">
+                    <SelectTrigger className="h-10 sm:h-11 w-full pl-10" id="time">
                       <SelectValue>
                         {form.time ? (() => {
                           const [hours, minutes] = (form.time || "09:00").split(":");
@@ -2505,20 +2511,14 @@ export default function RemindersPage() {
               </div>
             )}
 
-            {/* Active Toggle */}
-            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
-              <span className="text-sm font-medium text-gray-700">
-                Start reminder immediately
-              </span>
-              <Switch
-                checked={form.active}
-                onCheckedChange={(v: boolean) => setForm({ ...form, active: v })}
-                aria-label="Active status"
-              />
-            </div>
-
             {/* Footer Buttons */}
-            <AlertDialogFooter className="gap-3 pt-4 border-t">
+            <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-sm sm:text-base"
+              >
+                {form.id ? "Update Reminder" : "Add Reminder"}
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -2526,16 +2526,9 @@ export default function RemindersPage() {
                   setShowForm(false);
                   resetForm();
                 }}
-                className="flex-1 sm:flex-none h-11 bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
+                className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
               >
                 Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="default"
-                className="flex-1 sm:flex-none h-11 min-w-[140px] bg-purple-500 hover:bg-purple-600 text-white"
-              >
-                {form.id ? "Update" : "Add"}
               </Button>
             </AlertDialogFooter>
           </form>

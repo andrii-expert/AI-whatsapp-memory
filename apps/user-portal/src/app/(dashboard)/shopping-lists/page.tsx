@@ -826,7 +826,7 @@ export default function ShoppingListPage() {
   };
 
   const handleOpenCreateListModal = () => {
-    setNewFolderName("Grocery"); // Pre-fill with "Grocery" as shown in image
+    setNewFolderName(""); // Pre-fill with "Grocery" as shown in image
     setSelectedIcon("🎂");
     setSelectedColor("pink");
     setIconSearchQuery("");
@@ -2283,7 +2283,7 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex flex-row w-full justify-between items-center gap-2 mb-4">
+          <div className="flex flex-row w-full justify-between items-center gap-2 mb-4 px-4">
             <div className="flex flex-row items-center gap-2">
               <button
                 onClick={() => setFilterStatus("all")}
@@ -2605,6 +2605,9 @@ export default function ShoppingListPage() {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemName(e.target.value)}
                   placeholder="Milk"
                   className="bg-gray-50 h-10 sm:h-11 w-full"
+                  style={{
+                    border: 0
+                  }}
                 />
               </div>
               <div className="space-y-1.5 sm:space-y-2">
@@ -2617,6 +2620,9 @@ export default function ShoppingListPage() {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemDescription(e.target.value)}
                   placeholder="Write details..."
                   className="bg-gray-50 h-10 sm:h-11 w-full"
+                  style={{
+                    border: 0
+                  }}
                 />
               </div>
             </div>
@@ -2799,9 +2805,10 @@ export default function ShoppingListPage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setNewFolderName(e.target.value)
                 }
-                placeholder="Grocery"
                 className="bg-gray-50 h-10 sm:h-11 w-full"
-                autoFocus
+                style={{
+                  border: 0
+                }}
               />
             </div>
 
@@ -2810,7 +2817,7 @@ export default function ShoppingListPage() {
               <Label htmlFor="share-with" className="text-sm font-medium text-gray-900">
                 Share with
               </Label>
-              <div className="flex items-center w-full border border-gray-200 rounded-lg bg-gray-50 overflow-hidden">
+              <div className="flex items-center w-full rounded-lg bg-gray-50 overflow-hidden">
                 <Input
                   id="share-with"
                   value={shareWithInput}
@@ -2842,6 +2849,9 @@ export default function ShoppingListPage() {
                   setIconSearchQuery(e.target.value)
                 }
                 className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11 w-full"
+                style={{
+                  border: 0
+                }}
               />
               <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
                 <div 
