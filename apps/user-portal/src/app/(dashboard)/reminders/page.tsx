@@ -1424,7 +1424,7 @@ export default function RemindersPage() {
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
         {/* Search and Sort Bar */}
-        <div className="p-4 bg-white border-b border-[#E6E8EC]">
+        <div className="p-4 bg-white rounded-xl shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9B9BA7] pointer-events-none" size={18} />
