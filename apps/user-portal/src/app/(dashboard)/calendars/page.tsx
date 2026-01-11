@@ -2393,7 +2393,7 @@ export default function CalendarsPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Breadcrumb Navigation - Hidden on mobile */}
-      <div className="hidden lg:flex items-center gap-2 text-sm overflow-x-auto px-4">
+      {/* <div className="hidden lg:flex items-center gap-2 text-sm overflow-x-auto px-4">
         <Link
           href="/dashboard"
           className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
@@ -2403,7 +2403,7 @@ export default function CalendarsPage() {
         </Link>
         <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4 rotate-180 text-muted-foreground flex-shrink-0" />
         <span className="font-medium whitespace-nowrap">Calendar Connections</span>
-      </div>
+      </div> */}
 
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
