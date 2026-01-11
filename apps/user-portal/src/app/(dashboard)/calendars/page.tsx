@@ -2391,9 +2391,9 @@ export default function CalendarsPage() {
   }
 
   return (
-    <div>
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm overflow-x-auto">
+    <div className="min-h-screen bg-white">
+      {/* Breadcrumb Navigation - Hidden on mobile */}
+      <div className="hidden lg:flex items-center gap-2 text-sm overflow-x-auto px-4">
         <Link
           href="/dashboard"
           className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
@@ -2405,82 +2405,84 @@ export default function CalendarsPage() {
         <span className="font-medium whitespace-nowrap">Calendar Connections</span>
       </div>
 
-      {/* Page Header */}
-      <div className="my-4 sm:my-6 space-y-3 sm:space-y-4">
-        <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary">
-              Calendar Connections
-            </h1>
-            <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">
-              Connect your Google and Microsoft calendars to manage events
-              through WhatsApp
-            </p>
-          </div>
+      {/* Main Container */}
+      <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
+        {/* Page Header */}
+        <div className="px-4 pt-6 pb-4 lg:my-4 lg:px-0 lg:pt-0 space-y-3 sm:space-y-4">
+          <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary">
+                Calendar Connections
+              </h1>
+              <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">
+                Connect your Google and Microsoft calendars to manage events
+                through WhatsApp
+              </p>
+            </div>
 
-          <div className="hidden lg:flex lg:flex-row gap-3 w-full xl:w-auto">
-            <Button
-              onClick={() => handleConnectCalendar("google")}
-              disabled={connectingProvider === "google" || !canAddMore}
-              variant="outline"
-              size="default"
-              className={cn(
-                "flex items-center justify-center gap-3 w-full sm:w-auto",
-                "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
-                "px-6 py-3 h-auto font-medium text-sm",
-                "transition-all duration-200 shadow-sm hover:shadow-md",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
-              )}
-            >
-              {connectingProvider === "google" ? (
-                <Clock className="h-5 w-5 animate-spin text-gray-600" />
-              ) : (
-                <GoogleIcon className="h-5 w-5 flex-shrink-0" />
-              )}
-              <span className="whitespace-nowrap text-gray-900">
-                Connect Google Calendar
-              </span>
-            </Button>
-            <Button
-              onClick={() => handleConnectCalendar("microsoft")}
-              disabled={connectingProvider === "microsoft" || !canAddMore}
-              variant="outline"
-              size="default"
-              className={cn(
-                "flex items-center justify-center gap-3 w-full sm:w-auto",
-                "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
-                "px-6 py-3 h-auto font-medium text-sm",
-                "transition-all duration-200 shadow-sm hover:shadow-md",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
-              )}
-            >
-              {connectingProvider === "microsoft" ? (
-                <Clock className="h-5 w-5 animate-spin text-gray-600" />
-              ) : (
-                <MicrosoftIcon className="h-5 w-5 flex-shrink-0" />
-              )}
-              <span className="whitespace-nowrap text-gray-900">
-                Connect Microsoft Calendar
-              </span>
-            </Button>
+            <div className="hidden lg:flex lg:flex-row gap-3 w-full xl:w-auto">
+              <Button
+                onClick={() => handleConnectCalendar("google")}
+                disabled={connectingProvider === "google" || !canAddMore}
+                variant="outline"
+                size="default"
+                className={cn(
+                  "flex items-center justify-center gap-3 w-full sm:w-auto",
+                  "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
+                  "px-6 py-3 h-auto font-medium text-sm",
+                  "transition-all duration-200 shadow-sm hover:shadow-md",
+                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+              >
+                {connectingProvider === "google" ? (
+                  <Clock className="h-5 w-5 animate-spin text-gray-600" />
+                ) : (
+                  <GoogleIcon className="h-5 w-5 flex-shrink-0" />
+                )}
+                <span className="whitespace-nowrap text-gray-900">
+                  Connect Google Calendar
+                </span>
+              </Button>
+              <Button
+                onClick={() => handleConnectCalendar("microsoft")}
+                disabled={connectingProvider === "microsoft" || !canAddMore}
+                variant="outline"
+                size="default"
+                className={cn(
+                  "flex items-center justify-center gap-3 w-full sm:w-auto",
+                  "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
+                  "px-6 py-3 h-auto font-medium text-sm",
+                  "transition-all duration-200 shadow-sm hover:shadow-md",
+                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+              >
+                {connectingProvider === "microsoft" ? (
+                  <Clock className="h-5 w-5 animate-spin text-gray-600" />
+                ) : (
+                  <MicrosoftIcon className="h-5 w-5 flex-shrink-0" />
+                )}
+                <span className="whitespace-nowrap text-gray-900">
+                  Connect Microsoft Calendar
+                </span>
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Mobile - Calendars Button */}
-      <div className="lg:hidden mb-4">
+      <div className="lg:hidden px-4 mb-4">
         <Button
-                                    variant="outline"
+          variant="outline"
           onClick={() => setIsMobileSidebarOpen(true)}
           className="flex items-center justify-center gap-2 w-full px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-                >
-                  <Calendar className="h-4 w-4" />
+        >
+          <Calendar className="h-4 w-4" />
           <span className="font-medium">Calendars</span>
-                </Button>
-          </div>
+        </Button>
+      </div>
 
       {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 md:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 md:gap-6 px-4 lg:px-0">
         {/* Left Column: Connected Calendars and Monthly Calendar */}
         <div className="lg:col-span-1">
 
@@ -2915,8 +2917,8 @@ export default function CalendarsPage() {
         </div>
       </div>
 
-      {/* Mobile Day Details Section */}
-      <div className="lg:hidden mt-6">
+        {/* Mobile Day Details Section */}
+        <div className="lg:hidden px-4 mt-6 pb-20">
         {(() => {
           // Show today's events by default, or selected date's events if one is selected
           const displayDate = selectedMobileDay.date || new Date();
@@ -3041,6 +3043,7 @@ export default function CalendarsPage() {
           </div>
         );
         })()}
+        </div>
       </div>
 
       {/* Calendar Selection Dialog */}
