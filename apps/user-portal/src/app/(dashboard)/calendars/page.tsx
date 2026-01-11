@@ -1494,8 +1494,10 @@ export default function CalendarsPage() {
         });
       });
   }, [eventQueries, activeCalendars]);
-  const canAddMore = canAddCalendar(calendars.length);
-  const remainingCalendars = getCalendarsRemaining(calendars.length);
+  // Count only active calendars for limit check
+  const activeCalendarCount = calendars.filter((cal: any) => cal.isActive).length;
+  const canAddMore = canAddCalendar(activeCalendarCount);
+  const remainingCalendars = getCalendarsRemaining(activeCalendarCount);
 
   // Handle OAuth callback from cookies
   useEffect(() => {

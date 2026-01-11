@@ -28,7 +28,7 @@ export interface PlanMetadata {
 export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLimits {
   const defaultLimits: PlanLimits = {
     maxEvents: 15,
-    maxCalendars: 1,
+    maxCalendars: 10, // Allow multiple calendars by default
     hasReminders: false,
     hasNotes: false,
     hasSharedNotes: false,
