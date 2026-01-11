@@ -47,6 +47,7 @@ import {
   Phone,
   User,
   Star,
+  MoreVertical,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@imaginecalendar/ui/command";
@@ -503,6 +504,119 @@ import {
   AlertDialogTitle,
 } from "@imaginecalendar/ui/alert-dialog";
 
+// EventCard component (matching dashboard design)
+function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgColor: string; event: any }) {
+  const normalizedAttendees = useMemo(() => {
+    if (!event?.attendees || !Array.isArray(event.attendees)) return [];
+    return event.attendees
+      .map((attendee: any) => {
+        if (typeof attendee === 'string') return attendee;
+        if (attendee && typeof attendee === 'object' && attendee.email) return attendee.email;
+        if (attendee && typeof attendee === 'object') {
+          return attendee.email || attendee.mail || attendee.emailAddress || null;
+        }
+        return null;
+      })
+      .filter((email: string | null): email is string => email !== null && email.trim().length > 0);
+  }, [event?.attendees]);
+
+  const displayAttendees = normalizedAttendees.slice(0, 2);
+  const additionalCount = normalizedAttendees.length > 2 ? normalizedAttendees.length - 2 : 0;
+  
+  const getInitials = (email: string) => {
+    if (!email) return "??";
+    const name = email.split('@')[0];
+    if (!name) return "??";
+    const parts = name.split('.');
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase() || "??";
+  };
+
+  const handleGoogleMeetClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (event?.conferenceUrl) {
+      window.open(event.conferenceUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleLocationClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (event?.location) {
+      const location = event.location;
+      const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+      if (coordMatch) {
+        const lat = coordMatch[1];
+        const lng = coordMatch[2];
+        window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank', 'noopener,noreferrer');
+      } else {
+        window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank', 'noopener,noreferrer');
+      }
+    }
+  };
+
+  return (
+    <div className="flex justify-between items-start p-4 rounded-xl border shadow-[0_2px_24px_0_rgba(0,0,0,0.05)]" style={{ borderColor, background: bgColor }}>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[15px] font-medium leading-[130%] text-[#1D2228]">
+              {event?.title || "Event"}
+            </span>
+            {event?.conferenceUrl && (
+              <button
+                onClick={handleGoogleMeetClick}
+                className="flex items-center gap-1 px-[7px] py-1 rounded border border-black/10 bg-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                title="Join Google Meet"
+              >
+                <Video className="w-3 h-[10px] text-[#9999A5]" />
+                <span className="text-[10px] font-medium text-[#9999A5]">Google meet</span>
+              </button>
+            )}
+          </div>
+          <div className="text-[12px] font-normal text-black/40">
+            {event?.timeRange || "9AM -10PM (EST)"}
+          </div>
+        </div>
+
+        {displayAttendees.length > 0 && (
+          <div className="flex items-center gap-1 px-1 pr-2 py-1 rounded-[114px] border border-[#EBEBEB] bg-white w-fit">
+            <div className="flex items-center -space-x-1">
+              {displayAttendees.map((attendee: string, idx: number) => (
+                <div
+                  key={idx}
+                  className="w-[21px] h-[21px] rounded-full border-2 border-white bg-gray-300 flex items-center justify-center text-[10px] font-medium text-gray-700"
+                >
+                  {getInitials(attendee)}
+                </div>
+              ))}
+            </div>
+            {additionalCount > 0 && (
+              <span className="text-[12px] font-medium text-[#9999A5] ml-1">+{additionalCount}</span>
+            )}
+          </div>
+        )}
+
+        {event?.location && (
+          <button
+            onClick={handleLocationClick}
+            className="flex items-center gap-[2px] hover:opacity-80 transition-opacity cursor-pointer text-left"
+          >
+            <LocationIcon />
+            <span className="text-[12px] font-normal text-black/40">
+              {event.location}
+            </span>
+          </button>
+        )}
+      </div>
+      <button className="text-[#9B9BA7] hover:opacity-80 transition-opacity">
+        <MoreVertical className="h-5 w-5" />
+      </button>
+    </div>
+  );
+}
+
 export default function CalendarsPage() {
   const trpc = useTRPC();
   const { toast } = useToast();
@@ -543,7 +657,7 @@ export default function CalendarsPage() {
     }
     return [];
   });
-  const [viewMode, setViewMode] = useState<"week" | "month" | "year">("month");
+  // Removed viewMode - only monthly calendar view is supported
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
     open: boolean;
     connectionId: string | null;
@@ -1253,23 +1367,12 @@ export default function CalendarsPage() {
   const activeCalendars = useMemo(() => calendars.filter((cal: any) => cal.isActive), [calendars]);
   
   const timeRange = useMemo(() => {
-    if (viewMode === "year") {
-      return {
-        timeMin: startOfYear(currentMonth).toISOString(),
-        timeMax: endOfYear(currentMonth).toISOString(),
-      };
-    } else if (viewMode === "week") {
-      return {
-        timeMin: startOfWeek(currentMonth, { weekStartsOn: 0 }).toISOString(),
-        timeMax: endOfWeek(currentMonth, { weekStartsOn: 0 }).toISOString(),
-      };
-    } else {
-      return {
-        timeMin: startOfMonth(currentMonth).toISOString(),
-        timeMax: endOfMonth(currentMonth).toISOString(),
-      };
-    }
-  }, [viewMode, currentMonth]);
+    // Only monthly view
+    return {
+      timeMin: startOfMonth(currentMonth).toISOString(),
+      timeMax: endOfMonth(currentMonth).toISOString(),
+    };
+  }, [currentMonth]);
 
   // Fetch events for each active calendar using useQueries
   const eventQueries = useQueries({
@@ -2015,6 +2118,7 @@ export default function CalendarsPage() {
 
   const handleDateClick = (date: Date) => {
     const dayEvents = getEventsForDate(date);
+    setSelectedDate(date); // Always update selected date for events list
 
     if (isMobile()) {
       // On mobile, show events below calendar instead of modal
@@ -2023,12 +2127,7 @@ export default function CalendarsPage() {
         events: dayEvents,
       });
     } else {
-      // On desktop/tablet, open modal
-      setDayDetailsModal({
-        open: true,
-        date: date,
-        events: dayEvents,
-      });
+      // On desktop, events are shown in the right column, no modal needed
     }
   };
 
@@ -2365,53 +2464,12 @@ export default function CalendarsPage() {
           </div>
 
       {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Left Column: Connected Calendars */}
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 md:gap-6">
+        {/* Left Column: Connected Calendars and Monthly Calendar */}
         <div className="lg:col-span-1">
 
-          {/* Desktop: View Mode first, Connected Calendars second */}
+          {/* Desktop: Connected Calendars */}
           <div className="hidden lg:block space-y-4 md:space-y-6">
-            {/* View Mode Selector - Desktop first */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-              <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
-                View Mode
-              </h3>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant={viewMode === "week" ? "blue-primary" : "outline"}
-                  size="sm"
-                  onClick={() => setViewMode("week")}
-                  className={cn(
-                    "flex items-center justify-center gap-2"
-                  )}
-                >
-                  <CalendarDays className="h-4 w-4" />
-                  <span className="hidden sm:inline">Week</span>
-                </Button>
-                <Button
-                  variant={viewMode === "month" ? "blue-primary" : "outline"}
-                  size="sm"
-                  onClick={() => setViewMode("month")}
-                  className={cn(
-                    "flex items-center justify-center gap-2"
-                  )}
-                >
-                  <CalendarRange className="h-4 w-4" />
-                  <span className="hidden sm:inline">Month</span>
-                </Button>
-                <Button
-                  variant={viewMode === "year" ? "blue-primary" : "outline"}
-                  size="sm"
-                  onClick={() => setViewMode("year")}
-                  className={cn(
-                    "flex items-center justify-center gap-2"
-                  )}
-                >
-                  <Calendar className="h-4 w-4" />
-                  <span className="hidden sm:inline">Year</span>
-                </Button>
-              </div>
-            </div>
             <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
@@ -2570,8 +2628,11 @@ export default function CalendarsPage() {
 
         </div>
 
-        {/* Right Column: Monthly Calendar View */}
-        <div className="lg:col-span-2">
+        {/* Right Column: Monthly Calendar and Events List */}
+        <div className="lg:col-span-1">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
+            {/* Monthly Calendar */}
+            <div className="xl:col-span-1">
           <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
             {/* Event Creation Button */}
             <div className="mb-3 sm:mb-4 md:mb-6 flex w-full justify-end">
@@ -2589,41 +2650,19 @@ export default function CalendarsPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
               <div className="min-w-0 flex-1">
                 <h2 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-1">
-                  {viewMode === "week"
-                    ? "Weekly View"
-                    : viewMode === "year"
-                    ? "Yearly View"
-                    : "Monthly View"}
+                  Monthly View
                 </h2>
                 <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate">
-                  {viewMode === "week"
-                    ? `${format(
-                        startOfWeek(currentMonth, { weekStartsOn: 0 }),
-                        "MMM d"
-                      )} - ${format(
-                        endOfWeek(currentMonth, { weekStartsOn: 0 }),
-                        "MMM d, yyyy"
-                      )}`
-                    : viewMode === "year"
-                    ? format(currentMonth, "yyyy")
-                    : format(currentMonth, "MMMM yyyy")}
+                  {format(currentMonth, "MMMM yyyy")}
                 </h3>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => {
-                    if (viewMode === "week") {
-                      setCurrentMonth(subWeeks(currentMonth, 1));
-                    } else if (viewMode === "year") {
-                      setCurrentMonth(subYears(currentMonth, 1));
-                    } else {
-                      setCurrentMonth(subMonths(currentMonth, 1));
-                    }
-                  }}
+                  onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
                   className="h-8 w-8"
-                  aria-label={`Previous ${viewMode}`}
+                  aria-label="Previous month"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
@@ -2641,25 +2680,17 @@ export default function CalendarsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => {
-                    if (viewMode === "week") {
-                      setCurrentMonth(addWeeks(currentMonth, 1));
-                    } else if (viewMode === "year") {
-                      setCurrentMonth(addYears(currentMonth, 1));
-                    } else {
-                      setCurrentMonth(addMonths(currentMonth, 1));
-                    }
-                  }}
+                  onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
                   className="h-8 w-8"
-                  aria-label={`Next ${viewMode}`}
+                  aria-label="Next month"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
 
-            {/* Calendar Grid */}
-            {viewMode === "week" ? (
+            {/* Calendar Grid - Monthly View Only */}
+            {(
               <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                 <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
                   {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
@@ -2751,7 +2782,115 @@ export default function CalendarsPage() {
                   })}
                 </div>
               </div>
-            ) : viewMode === "year" ? (
+            )}
+          </div>
+            </div>
+
+            {/* Events List for Selected Date */}
+            <div className="xl:col-span-1">
+              <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
+                  {selectedDate ? format(selectedDate, "MMMM d, yyyy") : format(new Date(), "MMMM d, yyyy")}
+                </h2>
+                {(() => {
+                  const displayDate = selectedDate || new Date();
+                  const dayEvents = getEventsForDate(displayDate);
+                  
+                  // Format events like dashboard
+                  const formattedEvents = dayEvents.map((event: any) => {
+                    const startDate = new Date(event.start);
+                    const endDate = new Date(event.end);
+                    
+                    // Check if it's an all-day event
+                    const isAllDay = startDate.getHours() === 0 && 
+                                     startDate.getMinutes() === 0 &&
+                                     startDate.getSeconds() === 0 &&
+                                     (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
+                    
+                    // Format time range
+                    const startTime = format(startDate, "ha");
+                    const endTime = format(endDate, "ha");
+                    const timeRange = isAllDay ? "All day" : `${startTime} -${endTime} (EST)`;
+                    
+                    return {
+                      id: event.id,
+                      title: event.title || "Untitled Event",
+                      start: startDate,
+                      end: endDate,
+                      startDate: startDate,
+                      endDate: endDate,
+                      timeRange,
+                      location: event.location,
+                      description: event.description,
+                      htmlLink: event.htmlLink,
+                      webLink: event.webLink,
+                      color: event.color,
+                      eventColor: event.eventColor || "blue",
+                      conferenceUrl: event.conferenceUrl,
+                      attendees: event.attendees || [],
+                    };
+                  }).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+                  if (formattedEvents.length === 0) {
+                    return (
+                      <div className="text-center py-8">
+                        <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500 text-sm mb-4">No events scheduled for this day</p>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setEventTitle("");
+                            setEventDate(format(displayDate, "yyyy-MM-dd"));
+                            setEventTime("");
+                            setEventLocation("");
+                            setEventAddressId("");
+                            setEventAddress("");
+                            setEventCoordinates("");
+                            setEnableDropPin(false);
+                            setAddressComponents({});
+                            setIsGeocoding(false);
+                            setCreateGoogleMeet(false);
+                            setSelectedCalendarIds([]);
+                            setCreateEventDialogOpen(true);
+                          }}
+                          className="text-sm"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Event
+                        </Button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="flex flex-col gap-2">
+                      {formattedEvents.map((event: any) => {
+                        const borderColor = event.eventColor === "orange" ? "#D8A4FF" :
+                                           event.eventColor === "purple" ? "#D8A4FF" :
+                                           event.eventColor === "blue" ? "#D8A4FF" :
+                                           "#E6CB8A";
+                        const bgColor = event.eventColor === "orange" ? "#FDFAFF" :
+                                      event.eventColor === "purple" ? "#FDFAFF" :
+                                      event.eventColor === "blue" ? "#FDFAFF" :
+                                      "#FFFEFA";
+                        
+                        return (
+                          <EventCard
+                            key={event.id}
+                            borderColor={borderColor}
+                            bgColor={bgColor}
+                            event={event}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
               <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
                   {Array.from({ length: 12 }, (_, i) => {
@@ -4856,47 +4995,7 @@ export default function CalendarsPage() {
             </Button>
           </div>
 
-          {/* View Mode Selector - Mobile */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-3">
-              View Mode
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                variant={viewMode === "week" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("week")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <CalendarDays className="h-4 w-4" />
-                <span>Week</span>
-              </Button>
-              <Button
-                variant={viewMode === "month" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("month")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <CalendarRange className="h-4 w-4" />
-                <span>Month</span>
-              </Button>
-              <Button
-                variant={viewMode === "year" ? "blue-primary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("year")}
-                className={cn(
-                  "flex items-center justify-center gap-2"
-                )}
-              >
-                <Calendar className="h-4 w-4" />
-                <span>Year</span>
-              </Button>
-            </div>
-          </div>
+          {/* View Mode Selector removed - only monthly view */}
 
           {/* Connect Calendar Buttons */}
           <div className="space-y-3">
