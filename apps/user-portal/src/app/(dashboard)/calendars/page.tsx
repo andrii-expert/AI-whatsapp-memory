@@ -2809,8 +2809,8 @@ export default function CalendarsPage() {
           </div>
             </div>
 
-            {/* Events List for Selected Date */}
-            <div className="xl:col-span-1">
+            {/* Events List for Selected Date - Hidden on mobile, shown on xl+ */}
+            <div className="hidden xl:block xl:col-span-1">
               <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
                   {selectedDate ? format(selectedDate, "MMMM d, yyyy") : format(new Date(), "MMMM d, yyyy")}
