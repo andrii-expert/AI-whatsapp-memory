@@ -2690,99 +2690,106 @@ export default function CalendarsPage() {
             </div>
 
             {/* Calendar Grid - Monthly View Only */}
-            {(
-              <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
-                  {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
-                    (day) => (
-                      <div
-                        key={day}
-                        className="px-1 sm:px-2 py-2 sm:py-3 text-[10px] sm:text-xs font-semibold text-gray-700 text-center"
-                      >
-                        <span className="hidden sm:inline">{day}</span>
-                        <span className="sm:hidden">{day.substring(0, 1)}</span>
-                      </div>
-                    )
-                  )}
-                </div>
-                <div className="grid grid-cols-7 divide-x divide-gray-200">
-                  {eachDayOfInterval({
-                    start: startOfWeek(currentMonth, { weekStartsOn: 0 }),
-                    end: endOfWeek(currentMonth, { weekStartsOn: 0 }),
-                  }).map((day, dayIdx) => {
-                    const isToday = isSameDay(day, new Date());
-                    const isSelected =
-                      selectedDate && isSameDay(day, selectedDate);
-                    const dayEvents = getEventsForDate(day);
-
-                    return (
-                      <div
-                        key={dayIdx}
-                        className={cn(
-                          "min-h-[100px] sm:min-h-[120px] md:min-h-[200px] p-1.5 sm:p-2 md:p-3 flex flex-col",
-                          isToday && !isSelected && "bg-blue-50"
-                        )}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <button
-                            onClick={() => handleDateClick(day)}
-                            className={cn(
-                              "text-sm md:text-base font-medium transition-all duration-200 relative",
-                              isToday &&
-                                "h-7 w-7 md:h-8 md:w-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-sm",
-                              isSelected &&
-                                !isToday &&
-                                "h-7 w-7 md:h-8 md:w-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center",
-                              !isToday &&
-                                !isSelected &&
-                                dayEvents.length > 0 &&
-                                "text-blue-700 font-semibold hover:bg-blue-50 rounded-full h-7 w-7 md:h-8 md:w-8 flex items-center justify-center",
-                              !isToday &&
-                                !isSelected &&
-                                dayEvents.length === 0 &&
-                                "text-gray-900 hover:bg-gray-100 rounded-full h-7 w-7 md:h-8 md:w-8 flex items-center justify-center"
-                            )}
-                          >
-                            {format(day, "d")}
-                          </button>
-                        </div>
-                        {/* Desktop/Tablet: Show events */}
-                        <div className="hidden md:block space-y-1 flex-1 overflow-y-auto">
-                          {dayEvents.map((event, eventIdx) => (
-                            <div
-                              key={eventIdx}
-                              className={cn(
-                                "text-xs px-2 py-1 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
-                              )}
-                              style={{ backgroundColor: event.colorHex || '#3b82f6' }}
-                              title={event.title}
-                              onClick={() => handleEventClick(event)}
-                            >
-                              <div className="font-semibold truncate">
-                                {event.title}
-                              </div>
-                              <div className="text-[10px] opacity-90">
-                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Mobile: Show event indicator dot */}
-                        <div className="md:hidden flex justify-center mt-1">
-                          {dayEvents.length > 0 && (
-                            <div
-                              className="w-1.5 h-1.5 rounded-full bg-blue-500"
-                              title={`${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+              {/* Weekday Headers */}
+              <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
+                {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
+                  (day) => (
+                    <div
+                      key={day}
+                      className="px-1 sm:px-2 py-1.5 sm:py-2 md:py-3 text-[10px] sm:text-xs font-semibold text-gray-700 text-center"
+                    >
+                      <span className="hidden sm:inline">{day}</span>
+                      <span className="sm:hidden">{day.substring(0, 1)}</span>
+                    </div>
+                  )
+                )}
               </div>
-            )}
+
+              {/* Calendar Days */}
+              <div className="grid grid-cols-7 divide-x divide-y divide-gray-200">
+                {allDays.map((day, dayIdx) => {
+                  const isCurrentMonth = isSameMonth(day, currentMonth);
+                  const isToday = isSameDay(day, new Date());
+                  const isSelected =
+                    selectedDate && isSameDay(day, selectedDate);
+                  const dayEvents = getEventsForDate(day);
+
+                  return (
+                    <div
+                      key={dayIdx}
+                      className={cn(
+                        "min-h-[60px] md:min-h-[100px] p-1 md:p-2 flex flex-col",
+                        !isCurrentMonth && "bg-gray-50/50",
+                        isToday && !isSelected && "bg-blue-50"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <button
+                          onClick={() => handleDateClick(day)}
+                          className={cn(
+                            "text-xs md:text-sm font-medium transition-all duration-200 relative",
+                            isToday &&
+                              "h-6 w-6 md:h-7 md:w-7 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-sm",
+                            isSelected &&
+                              !isToday &&
+                              "h-6 w-6 md:h-7 md:w-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center",
+                            !isToday &&
+                              !isSelected &&
+                              isCurrentMonth &&
+                              dayEvents.length > 0 &&
+                              "text-blue-700 font-semibold hover:bg-blue-50 rounded-full h-6 w-6 md:h-7 md:w-7 flex items-center justify-center",
+                            !isToday &&
+                              !isSelected &&
+                              isCurrentMonth &&
+                              dayEvents.length === 0 &&
+                              "text-gray-900 hover:bg-gray-100 rounded-full h-6 w-6 md:h-7 md:w-7 flex items-center justify-center",
+                            !isCurrentMonth && "text-gray-400"
+                          )}
+                        >
+                          {format(day, "d")}
+                        </button>
+                      </div>
+                      {/* Desktop/Tablet: Show events */}
+                      <div className="hidden md:block space-y-0.5 md:space-y-1 flex-1 overflow-hidden">
+                        {dayEvents.slice(0, 2).map((event, eventIdx) => (
+                          <div
+                            key={eventIdx}
+                            className={cn(
+                              "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
+                            )}
+                            style={{ backgroundColor: event.colorHex || '#3b82f6' }}
+                            title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
+                            onClick={() => handleEventClick(event)}
+                          >
+                            <span className="hidden md:inline">• </span>
+                            <span className="truncate">{event.title}</span>
+                            <span className="hidden lg:inline ml-1">
+                              {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
+                            </span>
+                          </div>
+                        ))}
+                        {dayEvents.length > 2 && (
+                          <div className="text-[10px] md:text-xs text-gray-500 px-1">
+                            +{dayEvents.length - 2} more
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Mobile: Show event indicator dot */}
+                      <div className="md:hidden flex justify-center mt-1">
+                        {dayEvents.length > 0 && (
+                          <div
+                            className="w-1.5 h-1.5 rounded-full bg-blue-500"
+                            title={`${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
             </div>
 
@@ -2888,189 +2895,6 @@ export default function CalendarsPage() {
                 })()}
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-              <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const monthDate = new Date(
-                      currentMonth.getFullYear(),
-                      i,
-                      1
-                    );
-                    const monthStart = startOfMonth(monthDate);
-                    const monthEnd = endOfMonth(monthDate);
-                    const monthDays = eachDayOfInterval({
-                      start: monthStart,
-                      end: monthEnd,
-                    });
-                    const firstDayOfWeek = monthStart.getDay();
-                    const monthEvents = processedEvents.filter((event) =>
-                      isSameMonth(event.start, monthDate)
-                    );
-
-                    return (
-                      <div
-                        key={i}
-                        className="border border-gray-200 rounded-lg p-2"
-                      >
-                        <div className="text-xs font-semibold text-gray-700 mb-2 text-center">
-                          {format(monthDate, "MMM")}
-                        </div>
-                        <div className="grid grid-cols-7 gap-0.5">
-                          {["S", "M", "T", "W", "T", "F", "S"].map(
-                            (day, idx) => (
-                              <div
-                                key={idx}
-                                className="text-[8px] text-gray-500 text-center py-0.5"
-                              >
-                                {day}
-                              </div>
-                            )
-                          )}
-                          {Array.from({ length: firstDayOfWeek }, (_, idx) => (
-                            <div key={`empty-${idx}`} className="h-4"></div>
-                          ))}
-                          {monthDays.map((day) => {
-                            const isToday = isSameDay(day, new Date());
-                            const dayEvents = getEventsForDate(day);
-                            return (
-                              <button
-                                key={day.getTime()}
-                                onClick={() => handleDateClick(day)}
-                                className={cn(
-                                  "h-4 text-[9px] flex items-center justify-center cursor-pointer hover:bg-gray-100 rounded relative",
-                                  isToday &&
-                                    "bg-blue-500 text-white font-semibold",
-                                  dayEvents.length > 0 &&
-                                    !isToday &&
-                                    "bg-blue-100 text-blue-700 font-semibold"
-                                )}
-                                title={
-                                  dayEvents.length > 0
-                                    ? `${dayEvents.length} event(s)`
-                                    : format(day, "d")
-                                }
-                              >
-                                {format(day, "d")}
-                                {/* Event indicator for mobile */}
-                                <div className="md:hidden absolute -bottom-1 left-1/2 transform -translate-x-1/2">
-                                  {dayEvents.length > 0 && (
-                                    <div className="w-0.5 h-0.5 rounded-full bg-blue-600" />
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                {/* Weekday Headers */}
-                <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
-                  {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
-                    (day) => (
-                      <div
-                        key={day}
-                        className="px-1 sm:px-2 py-1.5 sm:py-2 md:py-3 text-[10px] sm:text-xs font-semibold text-gray-700 text-center"
-                      >
-                        <span className="hidden sm:inline">{day}</span>
-                        <span className="sm:hidden">{day.substring(0, 1)}</span>
-                      </div>
-                    )
-                  )}
-                </div>
-
-                {/* Calendar Days */}
-                <div className="grid grid-cols-7 divide-x divide-y divide-gray-200">
-                  {allDays.map((day, dayIdx) => {
-                    const isCurrentMonth = isSameMonth(day, currentMonth);
-                    const isToday = isSameDay(day, new Date());
-                    const isSelected =
-                      selectedDate && isSameDay(day, selectedDate);
-                    const dayEvents = getEventsForDate(day);
-
-                    return (
-                      <div
-                        key={dayIdx}
-                        className={cn(
-                          "min-h-[60px] md:min-h-[100px] p-1 md:p-2 flex flex-col",
-                          !isCurrentMonth && "bg-gray-50/50",
-                          isToday && !isSelected && "bg-blue-50"
-                        )}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <button
-                            onClick={() => handleDateClick(day)}
-                            className={cn(
-                              "text-xs md:text-sm font-medium transition-all duration-200 relative",
-                              isToday &&
-                                "h-6 w-6 md:h-7 md:w-7 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-sm",
-                              isSelected &&
-                                !isToday &&
-                                "h-6 w-6 md:h-7 md:w-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center",
-                              !isToday &&
-                                !isSelected &&
-                                isCurrentMonth &&
-                                dayEvents.length > 0 &&
-                                "text-blue-700 font-semibold hover:bg-blue-50 rounded-full h-6 w-6 md:h-7 md:w-7 flex items-center justify-center",
-                              !isToday &&
-                                !isSelected &&
-                                isCurrentMonth &&
-                                dayEvents.length === 0 &&
-                                "text-gray-900 hover:bg-gray-100 rounded-full h-6 w-6 md:h-7 md:w-7 flex items-center justify-center",
-                              !isCurrentMonth && "text-gray-400"
-                            )}
-                          >
-                            {format(day, "d")}
-                          </button>
-                        </div>
-                        {/* Desktop/Tablet: Show events */}
-                        <div className="hidden md:block space-y-0.5 md:space-y-1 flex-1 overflow-hidden">
-                          {dayEvents.slice(0, 2).map((event, eventIdx) => (
-                            <div
-                              key={eventIdx}
-                              className={cn(
-                                "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
-                              )}
-                              style={{ backgroundColor: event.colorHex || '#3b82f6' }}
-                              title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
-                              onClick={() => handleEventClick(event)}
-                            >
-                              <span className="hidden md:inline">• </span>
-                              <span className="truncate">{event.title}</span>
-                              <span className="hidden lg:inline ml-1">
-                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
-                              </span>
-                            </div>
-                          ))}
-                          {dayEvents.length > 2 && (
-                            <div className="text-[10px] md:text-xs text-gray-500 px-1">
-                              +{dayEvents.length - 2} more
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Mobile: Show event indicator dot */}
-                        <div className="md:hidden flex justify-center mt-1">
-                          {dayEvents.length > 0 && (
-                            <div
-                              className="w-1.5 h-1.5 rounded-full bg-blue-500"
-                              title={`${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
