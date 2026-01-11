@@ -2690,7 +2690,6 @@ export default function CalendarsPage() {
             </div>
 
             {/* Calendar Grid - Monthly View Only */}
-            <div className="bg-gray-100 rounded-lg p-3 sm:p-4 shadow-sm">
               <div className="bg-white rounded-lg overflow-hidden">
                 {/* Weekday Headers */}
                 <div className="grid grid-cols-7 border-b border-gray-200">
@@ -2707,7 +2706,7 @@ export default function CalendarsPage() {
                 </div>
 
                 {/* Calendar Days */}
-                <div className="grid grid-cols-7 divide-x divide-y divide-gray-200">
+                <div className="grid grid-cols-7">
                   {allDays.map((day, dayIdx) => {
                     const isCurrentMonth = isSameMonth(day, currentMonth);
                     const isToday = isSameDay(day, new Date());
@@ -2779,7 +2778,6 @@ export default function CalendarsPage() {
                   })}
                 </div>
               </div>
-            </div>
           </div>
             </div>
 
