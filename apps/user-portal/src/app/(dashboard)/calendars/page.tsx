@@ -2409,7 +2409,22 @@ export default function CalendarsPage() {
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
         {/* Page Header */}
         <div className="px-4 pt-6 pb-4 lg:my-4 lg:px-0 lg:pt-0 space-y-3 sm:space-y-4">
-          <div className="flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
+          {/* Mobile Header - Simple title with Link Calendar button */}
+          <div className="lg:hidden flex items-center justify-between">
+            <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Events</h1>
+            <Button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-1.5"
+            >
+              <Link2 className="h-4 w-4" />
+              Link Calendar
+            </Button>
+          </div>
+          
+          {/* Desktop Header */}
+          <div className="hidden lg:flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary">
                 Calendar Connections
@@ -2469,17 +2484,6 @@ export default function CalendarsPage() {
           </div>
         </div>
 
-      {/* Mobile - Calendars Button */}
-      <div className="lg:hidden px-4 mb-4">
-        <Button
-          variant="outline"
-          onClick={() => setIsMobileSidebarOpen(true)}
-          className="flex items-center justify-center gap-2 w-full px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-        >
-          <Calendar className="h-4 w-4" />
-          <span className="font-medium">Calendars</span>
-        </Button>
-      </div>
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 md:gap-6 px-4 lg:px-0">
@@ -2652,8 +2656,8 @@ export default function CalendarsPage() {
             {/* Monthly Calendar */}
             <div className="xl:col-span-1">
           <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
-            {/* Event Creation Button */}
-            <div className="mb-3 sm:mb-4 md:mb-6 flex w-full justify-end">
+            {/* Event Creation Button - Hidden on mobile */}
+            <div className="hidden md:block mb-3 sm:mb-4 md:mb-6 flex w-full justify-end">
               <Button
                 variant="blue-primary"
                 className="w-full sm:w-auto text-sm sm:text-base"
@@ -3044,6 +3048,14 @@ export default function CalendarsPage() {
         );
         })()}
         </div>
+
+        {/* Floating Action Button for Add Event - Mobile only */}
+        <button
+          onClick={() => setCreateEventDialogOpen(true)}
+          className="fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg flex items-center justify-center transition-colors z-50 lg:hidden"
+        >
+          <Plus className="h-6 w-6 text-white" />
+        </button>
       </div>
 
       {/* Calendar Selection Dialog */}
