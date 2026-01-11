@@ -2669,147 +2669,115 @@ export default function CalendarsPage() {
             </div>
 
             {/* Calendar Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-6">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-xs font-semibold text-gray-900 uppercase tracking-wide mb-1">
-                  Monthly View
-                </h2>
-                <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate">
-                  {format(currentMonth, "MMMM yyyy")}
-                </h3>
-              </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                  className="h-8 w-8"
-                  aria-label="Previous month"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setCurrentMonth(new Date());
-                    setSelectedDate(new Date());
-                  }}
-                  className="text-xs sm:text-sm"
-                >
-                  Today
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                  className="h-8 w-8"
-                  aria-label="Next month"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <button
+                onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Previous month"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900">
+                {format(currentMonth, "MMMM yyyy")}
+              </h3>
+              <button
+                onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label="Next month"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
 
             {/* Calendar Grid - Monthly View Only */}
-            <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-              {/* Weekday Headers */}
-              <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-200">
-                {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
-                  (day) => (
-                    <div
-                      key={day}
-                      className="px-1 sm:px-2 py-1.5 sm:py-2 md:py-3 text-[10px] sm:text-xs font-semibold text-gray-700 text-center"
-                    >
-                      <span className="hidden sm:inline">{day}</span>
-                      <span className="sm:hidden">{day.substring(0, 1)}</span>
-                    </div>
-                  )
-                )}
-              </div>
-
-              {/* Calendar Days */}
-              <div className="grid grid-cols-7 divide-x divide-y divide-gray-200">
-                {allDays.map((day, dayIdx) => {
-                  const isCurrentMonth = isSameMonth(day, currentMonth);
-                  const isToday = isSameDay(day, new Date());
-                  const isSelected =
-                    selectedDate && isSameDay(day, selectedDate);
-                  const dayEvents = getEventsForDate(day);
-
-                  return (
-                    <div
-                      key={dayIdx}
-                      className={cn(
-                        "min-h-[60px] md:min-h-[100px] p-1 md:p-2 flex flex-col",
-                        !isCurrentMonth && "bg-gray-50/50",
-                        isToday && !isSelected && "bg-blue-50"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <button
-                          onClick={() => handleDateClick(day)}
-                          className={cn(
-                            "text-xs md:text-sm font-medium transition-all duration-200 relative",
-                            isToday &&
-                              "h-6 w-6 md:h-7 md:w-7 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-sm",
-                            isSelected &&
-                              !isToday &&
-                              "h-6 w-6 md:h-7 md:w-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center",
-                            !isToday &&
-                              !isSelected &&
-                              isCurrentMonth &&
-                              dayEvents.length > 0 &&
-                              "text-blue-700 font-semibold hover:bg-blue-50 rounded-full h-6 w-6 md:h-7 md:w-7 flex items-center justify-center",
-                            !isToday &&
-                              !isSelected &&
-                              isCurrentMonth &&
-                              dayEvents.length === 0 &&
-                              "text-gray-900 hover:bg-gray-100 rounded-full h-6 w-6 md:h-7 md:w-7 flex items-center justify-center",
-                            !isCurrentMonth && "text-gray-400"
-                          )}
-                        >
-                          {format(day, "d")}
-                        </button>
+            <div className="bg-gray-100 rounded-lg p-3 sm:p-4 shadow-sm">
+              <div className="bg-white rounded-lg overflow-hidden">
+                {/* Weekday Headers */}
+                <div className="grid grid-cols-7 border-b border-gray-200">
+                  {["SAN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
+                    (day) => (
+                      <div
+                        key={day}
+                        className="px-1 sm:px-2 py-2 sm:py-3 text-[10px] sm:text-xs font-medium text-gray-500 text-center"
+                      >
+                        {day}
                       </div>
-                      {/* Desktop/Tablet: Show events */}
-                      <div className="hidden md:block space-y-0.5 md:space-y-1 flex-1 overflow-hidden">
-                        {dayEvents.slice(0, 2).map((event, eventIdx) => (
-                          <div
-                            key={eventIdx}
+                    )
+                  )}
+                </div>
+
+                {/* Calendar Days */}
+                <div className="grid grid-cols-7 divide-x divide-y divide-gray-200">
+                  {allDays.map((day, dayIdx) => {
+                    const isCurrentMonth = isSameMonth(day, currentMonth);
+                    const isToday = isSameDay(day, new Date());
+                    const isSelected =
+                      selectedDate && isSameDay(day, selectedDate);
+                    const dayEvents = getEventsForDate(day);
+
+                    return (
+                      <div
+                        key={dayIdx}
+                        className={cn(
+                          "min-h-[60px] md:min-h-[100px] p-1 md:p-2 flex flex-col",
+                          !isCurrentMonth && "bg-gray-50/50"
+                        )}
+                      >
+                        <div className="flex items-center justify-center mb-1">
+                          <button
+                            onClick={() => handleDateClick(day)}
                             className={cn(
-                              "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
+                              "text-xs md:text-sm font-medium transition-all duration-200 relative",
+                              isSelected &&
+                                "h-7 w-7 md:h-8 md:w-8 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-sm",
+                              !isSelected &&
+                                isCurrentMonth &&
+                                "text-gray-900 hover:bg-gray-100 rounded-full h-7 w-7 md:h-8 md:w-8 flex items-center justify-center",
+                              !isCurrentMonth && "text-gray-400"
                             )}
-                            style={{ backgroundColor: event.colorHex || '#3b82f6' }}
-                            title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
-                            onClick={() => handleEventClick(event)}
                           >
-                            <span className="hidden md:inline">• </span>
-                            <span className="truncate">{event.title}</span>
-                            <span className="hidden lg:inline ml-1">
-                              {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
-                            </span>
-                          </div>
-                        ))}
-                        {dayEvents.length > 2 && (
-                          <div className="text-[10px] md:text-xs text-gray-500 px-1">
-                            +{dayEvents.length - 2} more
-                          </div>
-                        )}
-                      </div>
+                            {format(day, "d")}
+                          </button>
+                        </div>
+                        {/* Desktop/Tablet: Show events */}
+                        <div className="hidden md:block space-y-0.5 md:space-y-1 flex-1 overflow-hidden">
+                          {dayEvents.slice(0, 2).map((event, eventIdx) => (
+                            <div
+                              key={eventIdx}
+                              className={cn(
+                                "text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-90 text-white font-medium shadow-sm"
+                              )}
+                              style={{ backgroundColor: event.colorHex || '#3b82f6' }}
+                              title={`${event.title} - ${formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}`}
+                              onClick={() => handleEventClick(event)}
+                            >
+                              <span className="hidden md:inline">• </span>
+                              <span className="truncate">{event.title}</span>
+                              <span className="hidden lg:inline ml-1">
+                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
+                              </span>
+                            </div>
+                          ))}
+                          {dayEvents.length > 2 && (
+                            <div className="text-[10px] md:text-xs text-gray-500 px-1">
+                              +{dayEvents.length - 2} more
+                            </div>
+                          )}
+                        </div>
 
-                      {/* Mobile: Show event indicator dot */}
-                      <div className="md:hidden flex justify-center mt-1">
-                        {dayEvents.length > 0 && (
-                          <div
-                            className="w-1.5 h-1.5 rounded-full bg-blue-500"
-                            title={`${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
-                          />
-                        )}
+                        {/* Mobile: Show event indicator dot */}
+                        <div className="md:hidden flex justify-center mt-1">
+                          {dayEvents.length > 0 && (
+                            <div
+                              className="w-1.5 h-1.5 rounded-full bg-blue-500"
+                              title={`${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
+                            />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
