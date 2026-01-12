@@ -23,6 +23,17 @@ import {
   AlertDialogCancel,
 } from "@imaginecalendar/ui/alert-dialog";
 import { Input } from "@imaginecalendar/ui/input";
+import { Textarea } from "@imaginecalendar/ui/textarea";
+import { Label } from "@imaginecalendar/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@imaginecalendar/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@imaginecalendar/ui/command";
 import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -50,12 +61,25 @@ import {
   Settings,
   Save,
   Link2,
+  Plus,
+  Mail,
+  Phone,
+  User,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { startOfDay, endOfDay, isSameDay, format } from "date-fns";
 import { WelcomeModal } from "@/components/welcome-modal";
+
+// Google Maps component
+declare global {
+  interface Window {
+    google: any;
+    initMap: () => void;
+  }
+}
 
 // Microsoft Icon Component
 const MicrosoftIcon = ({ className }: { className?: string }) => (
@@ -71,6 +95,406 @@ const MicrosoftIcon = ({ className }: { className?: string }) => (
     <path d="M11.5 11.5H23V23H11.5V11.5z" fill="#FFB900" />
   </svg>
 );
+
+// TimePicker component
+const TimePicker = ({
+  value,
+  onChange,
+  id,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  id?: string;
+}) => {
+  const parseTime = (time24: string) => {
+    if (!time24) return { hour: 0, minute: 0 };
+    const [hours, minutes] = time24.split(":").map(Number);
+    if (isNaN(hours!) || isNaN(minutes!)) {
+      return { hour: 0, minute: 0 };
+    }
+    return {
+      hour: hours!,
+      minute: minutes!,
+    };
+  };
+
+  const formatTimeDisplay = (time24: string) => {
+    if (!time24) return "09:00 AM";
+    const { hour, minute } = parseTime(time24);
+    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const ampm = hour >= 12 ? "PM" : "AM";
+    return `${hour12.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} ${ampm}`;
+  };
+
+  const { hour, minute } = parseTime(value);
+  const [selectedHour, setSelectedHour] = useState(hour.toString().padStart(2, "0"));
+  const [selectedMinute, setSelectedMinute] = useState(minute.toString().padStart(2, "0"));
+  const [selectedAmPm, setSelectedAmPm] = useState(hour >= 12 ? "PM" : "AM");
+
+  useEffect(() => {
+    const { hour: h, minute: m } = parseTime(value);
+    setSelectedHour(h.toString().padStart(2, "0"));
+    setSelectedMinute(m.toString().padStart(2, "0"));
+    setSelectedAmPm(h >= 12 ? "PM" : "AM");
+  }, [value]);
+
+  const handleTimeChange = (newHour: string, newMinute: string, newAmPm: string) => {
+    setSelectedHour(newHour);
+    setSelectedMinute(newMinute);
+    setSelectedAmPm(newAmPm);
+    
+    let hour24 = parseInt(newHour);
+    if (newAmPm === "PM" && hour24 !== 12) {
+      hour24 += 12;
+    } else if (newAmPm === "AM" && hour24 === 12) {
+      hour24 = 0;
+    }
+    const newTime = `${hour24.toString().padStart(2, "0")}:${newMinute}`;
+    onChange(newTime);
+  };
+
+  const hours12 = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, "0"));
+  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"));
+  const ampmOptions = ["AM", "PM"];
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          id={id}
+          className="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-normal text-left hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-gray-500" />
+            <span className={value ? "text-gray-900" : "text-gray-500"}>
+              {value ? formatTimeDisplay(value) : "09:00 AM"}
+            </span>
+          </div>
+          <ChevronDown className="h-4 w-4 text-gray-500" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3" align="start">
+        <div className="flex items-center gap-2">
+          <Select 
+            value={selectedHour} 
+            onValueChange={(newHour) => handleTimeChange(newHour, selectedMinute, selectedAmPm)}
+          >
+            <SelectTrigger className="w-[70px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {hours12.map((h) => (
+                <SelectItem key={h} value={h}>
+                  {h}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <span className="text-gray-500 font-semibold">:</span>
+          
+          <Select 
+            value={selectedMinute} 
+            onValueChange={(newMinute) => handleTimeChange(selectedHour, newMinute, selectedAmPm)}
+          >
+            <SelectTrigger className="w-[70px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {minutes.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select 
+            value={selectedAmPm} 
+            onValueChange={(newAmPm) => handleTimeChange(selectedHour, selectedMinute, newAmPm)}
+          >
+            <SelectTrigger className="w-[70px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ampmOptions.map((ampm) => (
+                <SelectItem key={ampm} value={ampm}>
+                  {ampm}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+// GoogleMap component
+function GoogleMap({
+  lat,
+  lng,
+  address,
+  onPinDrop,
+  enableClickToDrop = false
+}: {
+  lat?: number | null;
+  lng?: number | null;
+  address?: string;
+  onPinDrop?: (lat: number, lng: number) => void;
+  enableClickToDrop?: boolean;
+}) {
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const clickListenerRef = useRef<any>(null);
+  const initAttemptsRef = useRef(0);
+  const maxInitAttempts = 20;
+
+  useEffect(() => {
+    if (!window.google?.maps) {
+      setMapInitialized(false);
+      return;
+    }
+
+    const hasValidCoords = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+
+    if (!hasValidCoords && !enableClickToDrop) {
+      setMapInitialized(false);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+      }
+      return;
+    }
+
+    initAttemptsRef.current = 0;
+    setMapInitialized(false);
+
+    const initMap = () => {
+      if (!mapContainerRef.current) {
+        initAttemptsRef.current++;
+        if (initAttemptsRef.current < maxInitAttempts) {
+          setTimeout(initMap, 100);
+        } else {
+          setMapError("Map container not found. Please refresh the page.");
+        }
+        return;
+      }
+
+      try {
+        const centerLat = hasValidCoords ? lat : 20;
+        const centerLng = hasValidCoords ? lng : 0;
+        const zoom = hasValidCoords ? 15 : 3;
+
+        if (!mapInstanceRef.current) {
+          mapInstanceRef.current = new window.google.maps.Map(mapContainerRef.current, {
+            center: { lat: centerLat, lng: centerLng },
+            zoom: zoom,
+            mapTypeControl: true,
+            streetViewControl: true,
+            fullscreenControl: true,
+            zoomControl: true,
+            mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+          });
+
+          let mapReady = false;
+          const onMapReady = () => {
+            if (!mapReady) {
+              mapReady = true;
+              setMapInitialized(true);
+              setMapError(null);
+
+              if (enableClickToDrop && onPinDrop) {
+                if (clickListenerRef.current) {
+                  window.google.maps.event.removeListener(clickListenerRef.current);
+                }
+                try {
+                  clickListenerRef.current = mapInstanceRef.current.addListener('click', (e: any) => {
+                    if (e && e.latLng && onPinDrop) {
+                      try {
+                        const clickedLat = e.latLng.lat();
+                        const clickedLng = e.latLng.lng();
+                        if (typeof clickedLat === 'number' && typeof clickedLng === 'number' && !isNaN(clickedLat) && !isNaN(clickedLng)) {
+                          onPinDrop(clickedLat, clickedLng);
+                        }
+                      } catch (error) {
+                        console.error('Error handling map click:', error);
+                      }
+                    }
+                  });
+                } catch (error) {
+                  console.error('Error adding click listener:', error);
+                }
+              }
+            }
+          };
+
+          mapInstanceRef.current.addListener('idle', onMapReady);
+          mapInstanceRef.current.addListener('tilesloaded', onMapReady);
+
+          setTimeout(() => {
+            if (!mapReady && mapInstanceRef.current) {
+              onMapReady();
+            }
+          }, 1000);
+        } else {
+          if (hasValidCoords) {
+            mapInstanceRef.current.setCenter({ lat, lng });
+            mapInstanceRef.current.setZoom(15);
+          }
+          setMapInitialized(true);
+        }
+
+        if (hasValidCoords) {
+          if (markerRef.current) {
+            markerRef.current.setPosition({ lat, lng });
+            markerRef.current.setTitle(address || "Location");
+            markerRef.current.setMap(mapInstanceRef.current);
+          } else {
+            markerRef.current = new window.google.maps.Marker({
+              position: { lat, lng },
+              map: mapInstanceRef.current,
+              title: address || "Location",
+              animation: window.google.maps.Animation.DROP,
+            });
+          }
+        } else if (markerRef.current) {
+          markerRef.current.setMap(null);
+        }
+
+        setMapError(null);
+      } catch (error) {
+        console.error("GoogleMap: Error initializing map:", error);
+        setMapError(`Failed to initialize map: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setMapInitialized(false);
+      }
+    };
+
+    const timeoutId = setTimeout(initMap, 100);
+    return () => {
+      clearTimeout(timeoutId);
+      if (clickListenerRef.current) {
+        window.google?.maps?.event?.removeListener(clickListenerRef.current);
+        clickListenerRef.current = null;
+      }
+    };
+  }, [lat, lng, address, enableClickToDrop, onPinDrop]);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.google?.maps || !mapInitialized) return;
+
+    if (clickListenerRef.current) {
+      window.google.maps.event.removeListener(clickListenerRef.current);
+      clickListenerRef.current = null;
+    }
+
+    if (enableClickToDrop && onPinDrop) {
+      try {
+        clickListenerRef.current = mapInstanceRef.current.addListener('click', (e: any) => {
+          if (e && e.latLng && onPinDrop) {
+            try {
+              const clickedLat = e.latLng.lat();
+              const clickedLng = e.latLng.lng();
+              if (typeof clickedLat === 'number' && typeof clickedLng === 'number' && !isNaN(clickedLat) && !isNaN(clickedLng)) {
+                onPinDrop(clickedLat, clickedLng);
+              }
+            } catch (error) {
+              console.error('Error handling map click:', error);
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error adding click listener:', error);
+      }
+    }
+
+    return () => {
+      if (clickListenerRef.current) {
+        window.google?.maps?.event?.removeListener(clickListenerRef.current);
+        clickListenerRef.current = null;
+      }
+    };
+  }, [enableClickToDrop, onPinDrop, mapInitialized]);
+
+  if ((lat == null || lng == null || isNaN(lat) || isNaN(lng)) && !enableClickToDrop) {
+    return (
+      <div className="w-full h-[300px] sm:h-[400px] bg-green-50 border-2 border-dashed border-green-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+          <p className="text-xs sm:text-sm text-green-700 font-medium text-center">Map placeholder - Enter coordinates or address to view map</p>
+        </div>
+        {address && (
+          <p className="text-xs text-green-600 text-center mt-2">
+            Showing preview for {address}.
+          </p>
+        )}
+        <p className="text-xs text-green-600 text-center mt-1">
+          Please enter an address or coordinates to display the map.
+        </p>
+      </div>
+    );
+  }
+
+  if (!window.google?.maps) {
+    return (
+      <div className="w-full h-[300px] sm:h-[400px] bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
+        <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-blue-600 mb-4" />
+        <p className="text-xs sm:text-sm text-gray-700 font-medium">Loading Google Maps...</p>
+        <p className="text-xs text-gray-500 text-center mt-2">
+          Please wait while we load the map.
+        </p>
+      </div>
+    );
+  }
+
+  if (mapError) {
+    return (
+      <div className="w-full h-[300px] sm:h-[400px] bg-red-50 border-2 border-dashed border-red-200 rounded-lg flex flex-col items-center justify-center p-4 sm:p-8">
+        <p className="text-xs sm:text-sm text-red-700 font-medium mb-2">Error loading map</p>
+        <p className="text-xs text-red-600 text-center mb-4">{mapError}</p>
+        <Button
+          onClick={() => {
+            setMapError(null);
+            setMapInitialized(false);
+            mapInstanceRef.current = null;
+            markerRef.current = null;
+          }}
+          variant="outline"
+          size="sm"
+          className="touch-manipulation"
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-[300px] sm:h-[400px] rounded-lg overflow-hidden border border-gray-200 bg-gray-100 relative">
+      <div
+        ref={mapContainerRef}
+        className={cn(
+          "w-full h-full",
+          enableClickToDrop && mapInitialized && "cursor-crosshair"
+        )}
+      />
+      {!mapInitialized && (
+        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        </div>
+      )}
+      {enableClickToDrop && mapInitialized && (
+        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg shadow-lg z-10 pointer-events-none max-w-[90%]">
+          <p className="text-xs sm:text-sm font-medium text-center">Click anywhere on the map to drop a pin</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -102,6 +526,26 @@ export default function DashboardPage() {
   const [editEventDate, setEditEventDate] = useState("");
   const [editEventTime, setEditEventTime] = useState("");
   const [editEventLocation, setEditEventLocation] = useState("");
+  const [editEventAddressId, setEditEventAddressId] = useState<string>("");
+  const [editEventAddress, setEditEventAddress] = useState("");
+  const [editEventCoordinates, setEditEventCoordinates] = useState("");
+  const [editEnableDropPin, setEditEnableDropPin] = useState(false);
+  const [editAddressComponents, setEditAddressComponents] = useState<{
+    street?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+  }>({});
+  const [editIsGeocoding, setEditIsGeocoding] = useState(false);
+  const [editAutocomplete, setEditAutocomplete] = useState<any>(null);
+  const editAutocompleteRef = useRef<any>(null);
+  const [editCreateGoogleMeet, setEditCreateGoogleMeet] = useState(false);
+  const [editEventColor, setEditEventColor] = useState("blue");
+  const [editEventAttendees, setEditEventAttendees] = useState<string[]>([]);
+  const [editManualAttendeeInput, setEditManualAttendeeInput] = useState("");
+  const [editAttendeeSearchOpen, setEditAttendeeSearchOpen] = useState(false);
+  const [editAttendeeSearchTerm, setEditAttendeeSearchTerm] = useState("");
 
   // Fetch all data
   const { data: userData } = useQuery(trpc.user.me.queryOptions());
@@ -114,6 +558,15 @@ export default function DashboardPage() {
   const { data: shoppingListItems = [] } = useQuery(trpc.shoppingList.list.queryOptions({}));
   const { data: sharedResources } = useQuery(trpc.taskSharing.getSharedWithMe.queryOptions());
   const { data: friends = [] } = useQuery(trpc.friends.list.queryOptions());
+  
+  // Fetch addresses
+  const { data: addresses = [] } = useQuery(trpc.addresses.list.queryOptions());
+  
+  // Search users for attendee autocomplete (edit form)
+  const { data: editSearchedUsers = [], isLoading: isEditSearchingUsers } = useQuery({
+    ...trpc.friends.searchUsers.queryOptions({ searchTerm: editAttendeeSearchTerm }),
+    enabled: editAttendeeSearchTerm.length >= 2 && editAttendeeSearchOpen,
+  });
 
   // Check if welcome modal should be shown from database
   useEffect(() => {
@@ -187,6 +640,8 @@ export default function DashboardPage() {
     
     return {
       ...event,
+      start: event.start ? new Date(event.start) : undefined,
+      end: event.end ? new Date(event.end) : undefined,
       colorHex,
       userTimezone: calendar?.timeZone || 'Africa/Johannesburg',
     };
@@ -309,11 +764,239 @@ export default function DashboardPage() {
   const hasVerifiedWhatsApp = whatsappNumbers?.some(number => number.isVerified) || false;
   const hasCalendar = calendars && calendars.length > 0;
 
+  // Helper functions
+  const formatInTimezone = (date: Date, timezone: string, formatStr: 'time' | 'date' | 'datetime' = 'datetime') => {
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: timezone,
+    };
+    
+    if (formatStr === 'time') {
+      options.hour = 'numeric';
+      options.minute = '2-digit';
+      options.hour12 = false;
+    } else if (formatStr === 'date') {
+      options.weekday = 'short';
+      options.month = 'short';
+      options.day = 'numeric';
+    } else {
+      options.hour = 'numeric';
+      options.minute = '2-digit';
+      options.hour12 = false;
+      options.weekday = 'short';
+      options.month = 'short';
+      options.day = 'numeric';
+    }
+    
+    return new Intl.DateTimeFormat('en-US', options).format(date);
+  };
+
+  const formatFullAddress = (address: {
+    street?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    country?: string | null;
+  }): string => {
+    const addressParts = [
+      address.street,
+      address.city,
+      address.state,
+      address.zip,
+      address.country,
+    ].filter((part): part is string => Boolean(part) && typeof part === 'string' && part.trim().length > 0);
+    return addressParts.join(", ");
+  };
+
+  const parseCoordinates = (coordString: string | undefined): { lat: number | null; lng: number | null } => {
+    if (!coordString || !coordString.trim()) return { lat: null, lng: null };
+    const parts = coordString.split(",").map(p => p.trim());
+    if (parts.length === 2) {
+      const lat = parseFloat(parts[0] || "");
+      const lng = parseFloat(parts[1] || "");
+      if (!isNaN(lat) && !isNaN(lng)) {
+        return { lat, lng };
+      }
+    }
+    return { lat: null, lng: null };
+  };
+
+  const handleEditAddressPaste = (value: string) => {
+    setEditEventAddress(value);
+
+    const googleMapsRegex = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
+    const match = value.match(googleMapsRegex);
+    if (match && match[1] && match[2]) {
+      const lat = parseFloat(match[1]);
+      const lng = parseFloat(match[2]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setEditEventCoordinates(`${lat}, ${lng}`);
+      }
+    } else if (value.trim() && window.google?.maps) {
+      setEditIsGeocoding(true);
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: value }, (results: any, status: string) => {
+        setEditIsGeocoding(false);
+        if (status === "OK" && results?.[0]) {
+          const result = results[0];
+          if (result.geometry?.location) {
+            const lat = result.geometry.location.lat();
+            const lng = result.geometry.location.lng();
+            setEditEventCoordinates(`${lat}, ${lng}`);
+          }
+          const components: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zip?: string;
+            country?: string;
+          } = {};
+          if (result.address_components) {
+            result.address_components.forEach((component: any) => {
+              const types = component.types;
+              if (types.includes("street_number") || types.includes("route")) {
+                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+              }
+              if (types.includes("locality")) {
+                components.city = component.long_name;
+              } else if (types.includes("administrative_area_level_1")) {
+                components.state = component.long_name;
+              } else if (types.includes("postal_code")) {
+                components.zip = component.long_name;
+              } else if (types.includes("country")) {
+                components.country = component.long_name;
+              }
+            });
+          }
+          setEditAddressComponents(components);
+        }
+      });
+    }
+  };
+
+  const handleEditPinDrop = (lat: number, lng: number) => {
+    setEditEventCoordinates(`${lat}, ${lng}`);
+    setEditEnableDropPin(false);
+
+    if (window.google?.maps) {
+      setEditIsGeocoding(true);
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+        setEditIsGeocoding(false);
+        if (status === "OK" && results?.[0]) {
+          const result = results[0];
+          setEditEventAddress(result.formatted_address);
+          const components: {
+            street?: string;
+            city?: string;
+            state?: string;
+            zip?: string;
+            country?: string;
+          } = {};
+          if (result.address_components) {
+            result.address_components.forEach((component: any) => {
+              const types = component.types;
+              if (types.includes("street_number") || types.includes("route")) {
+                const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+              }
+              if (types.includes("locality")) {
+                components.city = component.long_name;
+              } else if (types.includes("administrative_area_level_1")) {
+                components.state = component.long_name;
+              } else if (types.includes("postal_code")) {
+                components.zip = component.long_name;
+              } else if (types.includes("country")) {
+                components.country = component.long_name;
+              }
+            });
+          }
+          setEditAddressComponents(components);
+        }
+      });
+    }
+  };
+
+  const handleAddEditAttendee = (input: string) => {
+    const trimmed = input.trim().toLowerCase();
+    
+    if (editEventAttendees.includes(trimmed)) {
+      toast({
+        title: "Already added",
+        description: "This email is already in the attendees list.",
+        variant: "info",
+      });
+      return;
+    }
+    
+    if (trimmed.includes("@") && trimmed.includes(".")) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (emailRegex.test(trimmed)) {
+        setEditEventAttendees([...editEventAttendees, trimmed]);
+        setEditManualAttendeeInput("");
+        setEditAttendeeSearchOpen(false);
+      } else {
+        toast({
+          title: "Invalid email",
+          description: "Please enter a valid email address.",
+          variant: "error",
+        });
+      }
+    } else {
+      toast({
+        title: "Invalid email",
+        description: "Please enter a valid email address. Google Calendar requires email addresses for attendees.",
+        variant: "error",
+      });
+    }
+  };
+
+  const resetEditFields = () => {
+    setEditEventTitle("");
+    setEditEventDate("");
+    setEditEventTime("");
+    setEditEventLocation("");
+    setEditEventAddressId("");
+    setEditEventAddress("");
+    setEditEventCoordinates("");
+    setEditEnableDropPin(false);
+    setEditAddressComponents({});
+    setEditIsGeocoding(false);
+    setEditCreateGoogleMeet(false);
+    setEditEventColor("blue");
+    setEditEventAttendees([]);
+    setEditManualAttendeeInput("");
+  };
+
   // Event handlers
   const handleEventClick = (event: any) => {
     setEditEventTitle(event.title || "");
     setEditEventLocation(event.location || "");
+    setEditEventAddressId("");
+    setEditEventAddress(event.location || "");
+    setEditEventCoordinates("");
+    setEditEnableDropPin(false);
+    setEditAddressComponents({});
+    setEditIsGeocoding(false);
+    setEditCreateGoogleMeet(!!event.conferenceUrl);
+    setEditEventColor(event.color || event.eventColor || "blue");
     
+    // Normalize attendees
+    const normalizedAttendees = event.attendees ? (
+      Array.isArray(event.attendees) ? event.attendees.map((a: any) => {
+        if (typeof a === 'string') return a.toLowerCase();
+        if (a && typeof a === 'object' && a.email) return a.email.toLowerCase();
+        if (a && typeof a === 'object') {
+          return (a.email || a.mail || a.emailAddress || '').toLowerCase();
+        }
+        return '';
+      }).filter((e: string) => e) : []
+    ) : [];
+    setEditEventAttendees(normalizedAttendees);
+    setEditManualAttendeeInput("");
+
     // Format date and time for form inputs
     if (event.start || event.startDate) {
       const eventDate = new Date(event.start || event.startDate);
@@ -335,9 +1018,26 @@ export default function DashboardPage() {
 
   const handleEditEvent = () => {
     if (eventDetailsModal.event) {
-      const event = eventDetailsModal.event;
+      const event = processedIndividualEvent || eventDetailsModal.event;
       setEditEventTitle(event.title || "");
       setEditEventLocation(event.location || "");
+      setEditEventAddress(event.location || "");
+      setEditCreateGoogleMeet(!!event.conferenceUrl);
+      setEditEventColor(event.color || event.eventColor || "blue");
+      
+      // Normalize attendees
+      const normalizedAttendees = event.attendees ? (
+        Array.isArray(event.attendees) ? event.attendees.map((a: any) => {
+          if (typeof a === 'string') return a.toLowerCase();
+          if (a && typeof a === 'object' && a.email) return a.email.toLowerCase();
+          if (a && typeof a === 'object') {
+            return (a.email || a.mail || a.emailAddress || '').toLowerCase();
+          }
+          return '';
+        }).filter((e: string) => e) : []
+      ) : [];
+      setEditEventAttendees(normalizedAttendees);
+      setEditManualAttendeeInput("");
 
       // Format date and time for form inputs
       if (event.start || event.startDate) {
@@ -399,6 +1099,7 @@ export default function DashboardPage() {
       calendarId: eventDetailsModal.event.calendarId,
       eventId: eventDetailsModal.event.id,
       allDay: !editEventTime,
+      createGoogleMeet: editCreateGoogleMeet,
     };
 
     // Only include fields that have values
@@ -415,9 +1116,19 @@ export default function DashboardPage() {
       updateData.end = endDate.toISOString();
     }
 
-    const location = editEventLocation.trim();
+    const location = editEventAddress.trim() || editEventLocation.trim();
     if (location) {
       updateData.location = location;
+    }
+
+    // Add color to update data
+    if (editEventColor && editEventColor !== "blue") {
+      updateData.color = editEventColor;
+    }
+
+    // Add attendees to update data
+    if (editEventAttendees.length > 0) {
+      updateData.attendees = editEventAttendees;
     }
 
     updateEventMutation.mutate(updateData);
@@ -1760,15 +2471,12 @@ export default function DashboardPage() {
         open={eventDetailsModal.open}
         onOpenChange={(open) => {
           if (!open) {
+            resetEditFields();
             setEventDetailsModal({
               open: false,
               event: null,
               isEditing: false,
             });
-            setEditEventTitle("");
-            setEditEventDate("");
-            setEditEventTime("");
-            setEditEventLocation("");
           }
         }}
       >
@@ -1806,6 +2514,16 @@ export default function DashboardPage() {
                       placeholder="Enter event title"
                       value={editEventTitle}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventTitle(e.target.value)}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                        if (
+                          e.key === "Enter" &&
+                          editEventTitle.trim() &&
+                          editEventDate &&
+                          eventDetailsModal.event?.calendarId
+                        ) {
+                          handleSaveEdit();
+                        }
+                      }}
                       className="text-sm sm:text-base"
                     />
                   </div>
@@ -1827,27 +2545,489 @@ export default function DashboardPage() {
                       <label htmlFor="edit-event-time" className="text-sm font-medium">
                         Time
                       </label>
-                      <Input
+                      <TimePicker
                         id="edit-event-time"
-                        type="time"
                         value={editEventTime}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventTime(e.target.value)}
-                        className="text-sm sm:text-base"
+                        onChange={setEditEventTime}
                       />
                     </div>
                   </div>
 
+                  {/* Address Selection */}
                   <div className="space-y-2">
-                    <label htmlFor="edit-event-location" className="text-sm font-medium">
-                      Location (optional)
+                    <label htmlFor="edit-event-address" className="text-sm font-medium">
+                      Address (optional)
                     </label>
-                    <Input
-                      id="edit-event-location"
-                      placeholder="Enter location"
-                      value={editEventLocation}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventLocation(e.target.value)}
-                      className="text-sm sm:text-base"
-                    />
+
+                    {/* Saved Addresses Dropdown */}
+                    {addresses.length > 0 && (
+                      <div className="space-y-2">
+                        <Select
+                          value={editEventAddressId}
+                          onValueChange={(value) => {
+                            setEditEventAddressId(value);
+                            if (value) {
+                              const selectedAddr = addresses.find((addr: any) => addr.id === value);
+                              if (selectedAddr) {
+                                const components = {
+                                  street: selectedAddr.street ?? undefined,
+                                  city: selectedAddr.city ?? undefined,
+                                  state: selectedAddr.state ?? undefined,
+                                  zip: selectedAddr.zip ?? undefined,
+                                  country: selectedAddr.country ?? undefined,
+                                };
+                                setEditAddressComponents(components);
+                                
+                                const fullAddress = formatFullAddress(components);
+                                
+                                if (!fullAddress && selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                                  if (window.google?.maps) {
+                                    const geocoder = new window.google.maps.Geocoder();
+                                    geocoder.geocode(
+                                      { location: { lat: selectedAddr.latitude, lng: selectedAddr.longitude } },
+                                      (results: any, status: string) => {
+                                        if (status === "OK" && results?.[0]) {
+                                          setEditEventAddress(results[0].formatted_address);
+                                        } else {
+                                          setEditEventAddress(selectedAddr.name || "");
+                                        }
+                                      }
+                                    );
+                                  } else {
+                                    setEditEventAddress(selectedAddr.name || "");
+                                  }
+                                } else {
+                                  setEditEventAddress(fullAddress || selectedAddr.name || "");
+                                }
+                                
+                                if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
+                                  setEditEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
+                                }
+                              }
+                            } else {
+                              setEditEventAddress("");
+                              setEditEventCoordinates("");
+                              setEditAddressComponents({});
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full text-sm sm:text-base">
+                            <SelectValue placeholder="Select from saved addresses" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {addresses.map((address: any) => (
+                              <SelectItem key={address.id} value={address.id}>
+                                {address.name} - {[
+                                  address.street,
+                                  address.city,
+                                  address.state,
+                                  address.country,
+                                ].filter(Boolean).join(", ")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2">
+                          <div className="h-px bg-gray-200 flex-1"></div>
+                          <span className="text-xs text-gray-500 bg-white px-2">or</span>
+                          <div className="h-px bg-gray-200 flex-1"></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Address Input */}
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          id="edit-event-address"
+                          placeholder="Type or paste the full address"
+                          value={editEventAddress}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            handleEditAddressPaste(e.target.value)
+                          }
+                          className="h-20 pr-10"
+                        />
+                        {editIsGeocoding && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        You can also paste a Google Maps link here. Your backend can normalise it and store the coordinates.
+                      </p>
+                    </div>
+
+                    {/* Coordinates Input */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="edit-event-coordinates" className="text-sm font-medium">
+                          Pin / coordinates (optional)
+                        </Label>
+                        <button
+                          type="button"
+                          className={cn(
+                            "text-sm font-medium transition-colors",
+                            editEnableDropPin
+                              ? "text-red-600 hover:text-red-700"
+                              : "text-blue-600 hover:text-blue-700"
+                          )}
+                          onClick={() => {
+                            if (editEnableDropPin) {
+                              setEditEnableDropPin(false);
+                              toast({
+                                title: "Drop pin cancelled",
+                                description: "Click 'Drop pin on map' again to enable.",
+                              });
+                            } else {
+                              if (window.google?.maps) {
+                                setEditEnableDropPin(true);
+                                toast({
+                                  title: "Drop pin enabled",
+                                  description: "Click anywhere on the map to drop a pin.",
+                                });
+                              } else {
+                                toast({
+                                  title: "Google Maps not loaded",
+                                  description: "Please wait for Google Maps to load, or enter coordinates manually.",
+                                  variant: "destructive",
+                                });
+                              }
+                            }
+                          }}
+                        >
+                          {editEnableDropPin ? "Cancel drop pin" : "Drop pin on map"}
+                        </button>
+                      </div>
+                      <Input
+                        id="edit-event-coordinates"
+                        placeholder="e.g. -34.0822, 18.8501"
+                        value={editEventCoordinates}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                          setEditEventCoordinates(e.target.value);
+                          if (e.target.value.trim() && window.google?.maps) {
+                            const { lat, lng } = parseCoordinates(e.target.value);
+                            if (lat && lng) {
+                              setEditIsGeocoding(true);
+                              const geocoder = new window.google.maps.Geocoder();
+                              geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
+                                setEditIsGeocoding(false);
+                                if (status === "OK" && results?.[0]) {
+                                  const result = results[0];
+                                  setEditEventAddress(result.formatted_address);
+
+                                  const components: {
+                                    street?: string;
+                                    city?: string;
+                                    state?: string;
+                                    zip?: string;
+                                    country?: string;
+                                  } = {};
+
+                                  if (result.address_components) {
+                                    result.address_components.forEach((component: any) => {
+                                      const types = component.types;
+
+                                      if (types.includes("street_number") || types.includes("route")) {
+                                        const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                                        const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                                        components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
+                                      }
+
+                                      if (types.includes("locality")) {
+                                        components.city = component.long_name;
+                                      } else if (types.includes("administrative_area_level_1")) {
+                                        components.state = component.long_name;
+                                      } else if (types.includes("postal_code")) {
+                                        components.zip = component.long_name;
+                                      } else if (types.includes("country")) {
+                                        components.country = component.long_name;
+                                      }
+                                    });
+                                  }
+
+                                  setEditAddressComponents(components);
+                                }
+                              });
+                            }
+                          }
+                        }}
+                        className="text-sm"
+                      />
+                      {editEnableDropPin && (
+                        <div className="mt-4">
+                          <div className="mb-2">
+                            <p className="text-sm text-blue-600 font-medium mb-1">
+                              Click on the map below to drop a pin
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              The coordinates and address will be automatically filled in.
+                            </p>
+                          </div>
+                          <GoogleMap
+                            lat={null}
+                            lng={null}
+                            address=""
+                            enableClickToDrop={true}
+                            onPinDrop={handleEditPinDrop}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant={editCreateGoogleMeet ? "default" : "outline"}
+                    onClick={() => setEditCreateGoogleMeet(!editCreateGoogleMeet)}
+                    className={editCreateGoogleMeet ? "w-full sm:w-auto bg-primary text-primary-foreground hover:font-bold hover:bg-primary" : "w-full sm:w-auto"}
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    {editCreateGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
+                  </Button>
+
+                  {/* Attendees Section */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Attendees (optional)
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      Add people to invite to this event. Google Calendar requires email addresses.
+                    </p>
+                    
+                    {/* Select from Friends */}
+                    {friends.length > 0 && (
+                      <div className="space-y-2">
+                        <Select
+                          value=""
+                          onValueChange={(friendId) => {
+                            const friend = friends.find((f: any) => f.id === friendId);
+                            if (friend && friend.email && !editEventAttendees.includes(friend.email)) {
+                              setEditEventAttendees([...editEventAttendees, friend.email]);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full text-sm">
+                            <SelectValue placeholder="Select from friends" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {friends
+                              .filter((f: any) => f.email && !editEventAttendees.includes(f.email))
+                              .map((friend: any) => (
+                                <SelectItem key={friend.id} value={friend.id}>
+                                  {friend.name} {friend.email ? `(${friend.email})` : ''}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Email/Phone Entry with Autocomplete */}
+                    <Popover open={editAttendeeSearchOpen} onOpenChange={setEditAttendeeSearchOpen}>
+                      <div className="flex gap-2">
+                        <PopoverTrigger asChild>
+                          <div className="relative flex-1">
+                            <Input
+                              type="text"
+                              placeholder="Type email or phone to search users..."
+                              value={editManualAttendeeInput}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                const value = e.target.value;
+                                setEditManualAttendeeInput(value);
+                                setEditAttendeeSearchTerm(value);
+                                if (value.length >= 2) {
+                                  setEditAttendeeSearchOpen(true);
+                                }
+                              }}
+                              onFocus={() => {
+                                if (editManualAttendeeInput.length >= 2) {
+                                  setEditAttendeeSearchOpen(true);
+                                }
+                              }}
+                              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                                if (e.key === "Enter" && editManualAttendeeInput.trim()) {
+                                  e.preventDefault();
+                                  handleAddEditAttendee(editManualAttendeeInput.trim());
+                                } else if (e.key === "Escape") {
+                                  setEditAttendeeSearchOpen(false);
+                                }
+                              }}
+                              className="text-sm"
+                            />
+                          </div>
+                        </PopoverTrigger>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (editManualAttendeeInput.trim()) {
+                              handleAddEditAttendee(editManualAttendeeInput.trim());
+                            }
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search by email or phone..."
+                            value={editAttendeeSearchTerm}
+                            onValueChange={setEditAttendeeSearchTerm}
+                          />
+                          <CommandList>
+                            {isEditSearchingUsers && (
+                              <div className="flex items-center justify-center py-6">
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                              </div>
+                            )}
+                            {!isEditSearchingUsers && editSearchedUsers.length > 0 && (
+                              <CommandGroup heading="Users">
+                                {editSearchedUsers
+                                  .filter((user: any) => {
+                                    const email = user.email?.toLowerCase() || "";
+                                    return email && !editEventAttendees.includes(email);
+                                  })
+                                  .map((user: any) => {
+                                    const displayName = user.firstName && user.lastName
+                                      ? `${user.firstName} ${user.lastName}`
+                                      : user.name || user.email || "Unknown";
+                                    const email = user.email?.toLowerCase() || "";
+                                    return (
+                                      <CommandItem
+                                        key={user.id}
+                                        value={user.id}
+                                        onSelect={() => {
+                                          if (email && !editEventAttendees.includes(email)) {
+                                            setEditEventAttendees([...editEventAttendees, email]);
+                                            setEditManualAttendeeInput("");
+                                            setEditAttendeeSearchTerm("");
+                                            setEditAttendeeSearchOpen(false);
+                                          }
+                                        }}
+                                        className="flex items-center gap-2 cursor-pointer"
+                                      >
+                                        {user.avatarUrl ? (
+                                          <img
+                                            src={user.avatarUrl}
+                                            alt={displayName}
+                                            className="h-6 w-6 rounded-full"
+                                          />
+                                        ) : (
+                                          <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center">
+                                            <User className="h-4 w-4 text-gray-500" />
+                                          </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-medium text-sm truncate">{displayName}</div>
+                                          <div className="text-xs text-gray-500 truncate flex items-center gap-1">
+                                            {email && (
+                                              <>
+                                                <Mail className="h-3 w-3" />
+                                                {email}
+                                              </>
+                                            )}
+                                            {user.phone && (
+                                              <>
+                                                {email && <span className="mx-1">•</span>}
+                                                <Phone className="h-3 w-3" />
+                                                {user.phone}
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </CommandItem>
+                                    );
+                                  })}
+                              </CommandGroup>
+                            )}
+                            {!isEditSearchingUsers && editAttendeeSearchTerm.length >= 2 && editSearchedUsers.length === 0 && (
+                              <CommandEmpty>
+                                <div className="py-4 text-center text-sm text-gray-500">
+                                  No users found. You can still add "{editAttendeeSearchTerm}" as an email address.
+                                </div>
+                              </CommandEmpty>
+                            )}
+                            {!isEditSearchingUsers && editAttendeeSearchTerm.length >= 2 && (
+                              <CommandGroup>
+                                <CommandItem
+                                  onSelect={() => {
+                                    handleAddEditAttendee(editAttendeeSearchTerm);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer text-blue-600"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  <span>Add "{editAttendeeSearchTerm}" as email</span>
+                                </CommandItem>
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+
+                    {/* Selected Attendees List */}
+                    {editEventAttendees.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-gray-700">Selected attendees:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {editEventAttendees.map((email: string, index: number) => (
+                            <Badge
+                              key={index}
+                              variant="secondary"
+                              className="flex items-center gap-1 px-2 py-1"
+                            >
+                              <span className="text-xs">{email}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditEventAttendees(editEventAttendees.filter((_: string, i: number) => i !== index));
+                                }}
+                                className="ml-1 hover:bg-gray-300 rounded-full p-0.5"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Color
+                    </label>
+                    <div className="grid grid-cols-6 gap-2 p-2">
+                      {[
+                        { value: "blue", color: "bg-blue-500" },
+                        { value: "green", color: "bg-green-500" },
+                        { value: "purple", color: "bg-purple-500" },
+                        { value: "red", color: "bg-red-500" },
+                        { value: "yellow", color: "bg-yellow-500" },
+                        { value: "orange", color: "bg-orange-500" },
+                        { value: "turquoise", color: "bg-cyan-500" },
+                        { value: "gray", color: "bg-gray-500" },
+                        { value: "bold-blue", color: "bg-blue-700" },
+                        { value: "bold-green", color: "bg-green-700" },
+                        { value: "bold-red", color: "bg-red-700" },
+                      ].map(({ value, color }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setEditEventColor(value)}
+                          className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
+                            editEventColor === value
+                              ? "border-gray-800 scale-110"
+                              : "border-gray-300 hover:border-gray-500"
+                          } ${color}`}
+                          title={value.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1860,7 +3040,11 @@ export default function DashboardPage() {
                     ></div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-gray-900">
-                        {format((processedIndividualEvent || eventDetailsModal.event).start || (processedIndividualEvent || eventDetailsModal.event).startDate, "PPP 'at' p")}
+                        {formatInTimezone(
+                          (processedIndividualEvent || eventDetailsModal.event).start,
+                          (processedIndividualEvent || eventDetailsModal.event).userTimezone || processedIndividualEvent?.userTimezone || 'Africa/Johannesburg',
+                          'datetime'
+                        )}
                       </div>
                     </div>
                   </div>
