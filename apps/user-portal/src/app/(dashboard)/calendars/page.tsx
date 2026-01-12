@@ -636,12 +636,20 @@ function EventCard({
     return name.substring(0, 2).toUpperCase() || "??";
   };
 
-  const handleGoogleMeetClick = (e: React.MouseEvent) => {
+  const handleConferenceClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (event?.conferenceUrl) {
       window.open(event.conferenceUrl, '_blank', 'noopener,noreferrer');
     }
   };
+
+  // Detect meeting type from conferenceUrl
+  const conferenceUrl = event?.conferenceUrl || '';
+  const isMicrosoftTeams = conferenceUrl.includes('teams.microsoft.com') || 
+                          conferenceUrl.includes('teams.live.com') ||
+                          conferenceUrl.includes('microsoft.com/meet');
+  const isGoogleMeet = conferenceUrl.includes('meet.google.com');
+  const meetingLabel = isMicrosoftTeams ? 'Microsoft Teams' : isGoogleMeet ? 'Google meet' : 'Meeting';
 
   const handleLocationClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -684,12 +692,16 @@ function EventCard({
             </span>
             {event?.conferenceUrl && (
               <button
-                onClick={handleGoogleMeetClick}
+                onClick={handleConferenceClick}
                 className="flex items-center gap-1 px-[7px] py-1 rounded border border-black/10 bg-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
-                title="Join Google Meet"
+                title={`Join ${meetingLabel}`}
               >
-                <Video className="w-3 h-[10px] text-[#9999A5]" />
-                <span className="text-[10px] font-medium text-[#9999A5]">Google meet</span>
+                {isMicrosoftTeams ? (
+                  <MicrosoftIcon className="w-3 h-[10px]" />
+                ) : (
+                  <Video className="w-3 h-[10px] text-[#9999A5]" />
+                )}
+                <span className="text-[10px] font-medium text-[#9999A5]">{meetingLabel}</span>
               </button>
             )}
           </div>
@@ -2642,7 +2654,7 @@ export default function CalendarsPage() {
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
         {/* Page Header */}
-        <div className="px-4 pt-6 pb-4 lg:my-4 lg:px-0 lg:pt-0 space-y-3 sm:space-y-4">
+        <div className="px-4 pt-4 pb-2 lg:my-4 lg:px-0 lg:pt-0 space-y-3 sm:space-y-4">
           {/* Mobile Header - Simple title with Link Calendar button */}
           <div className="lg:hidden flex items-center justify-between">
             <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Events</h1>
@@ -2727,69 +2739,46 @@ export default function CalendarsPage() {
           {/* Desktop: Connected Calendars */}
           <div className="hidden lg:block space-y-4 md:space-y-6">
             <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-                  Connected Calendars
-                </h2>
-                <div className="flex gap-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {activeCalendars.length} active
-                  </Badge>
-                  {/* <Badge variant="outline" className="text-xs">
-                    {selectedCalendarIds.length} selected
-                  </Badge> */}
-                </div>
-              </div>
-
               {calendars.length === 0 ? (
                 <div className="text-center py-8">
                   <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-500">No calendars connected</p>
                 </div>
               ) : (
-              <div className="space-y-3">
+                <div className="space-y-0">
                   {Object.entries(groupedCalendars).map(
-                    ([key, group]: [string, any]) => (
-                      <Card key={key} className="border-gray-200 shadow-sm">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between gap-2 mb-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div
-                                  className={cn(
-                                    "h-3 w-3 rounded-full flex-shrink-0",
-                                    group.calendars.some((cal: any) => cal.isActive)
-                                      ? group.provider === "google"
-                                        ? "bg-blue-500"
-                                        : "bg-purple-500"
-                                      : "bg-gray-300"
-                                  )}
-                                ></div>
-                                <span className="text-sm font-semibold text-gray-900 capitalize">
-                                  {group.provider === "google" ? "Google" : "Microsoft"}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-600 truncate ml-5">
-                                {group.email}
-                              </p>
+                    ([key, group]: [string, any], groupIndex: number) => {
+                      // Get user name from user object or use email
+                      const userName = user?.firstName && user?.lastName
+                        ? `${user.firstName} ${user.lastName}`
+                        : user?.fullName || group.email?.split('@')[0] || 'User';
+                      const userEmail = group.email || user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
+                      
+                      return (
+                        <div key={key}>
+                          {/* Header with name and email */}
+                          <div className="mb-3">
+                            <div className="font-semibold text-gray-900 text-sm mb-1">
+                              {userName}
                             </div>
-                            {group.calendars.some((cal: any) => cal.isActive) && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDisconnectProvider(group.provider, group.calendars)}
-                                disabled={disconnectCalendarMutation.isPending}
-                                className="text-xs h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
-                                title={`Disconnect all ${group.provider === "google" ? "Google" : "Microsoft"} calendars for ${group.email}`}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            )}
+                            <div className="text-xs text-gray-600 mb-2">
+                              {userEmail}
+                            </div>
+                            {/* Horizontal separator */}
+                            <div className="h-px bg-gray-200"></div>
                           </div>
 
-                          <div className="space-y-2">
-                            {group.calendars.map((calendar: any) => (
-                              <div key={calendar.id} className="flex items-center gap-2">
+                          {/* Calendar list items */}
+                          <div className="space-y-0">
+                            {group.calendars.map((calendar: any, calendarIndex: number) => (
+                              <div
+                                key={calendar.id}
+                                className={cn(
+                                  "flex items-center gap-3 py-2",
+                                  calendarIndex < group.calendars.length - 1 && "border-b border-gray-100"
+                                )}
+                              >
+                                {/* Checkbox */}
                                 <Checkbox
                                   id={`calendar-${calendar.id}`}
                                   checked={selectedCalendarIds.includes(calendar.id)}
@@ -2801,81 +2790,70 @@ export default function CalendarsPage() {
                                     }
                                   }}
                                   disabled={!calendar.isActive}
+                                  className="h-4 w-4"
                                 />
+                                
+                                {/* Calendar name */}
                                 <label
                                   htmlFor={`calendar-${calendar.id}`}
-                                  className="flex-1 text-sm cursor-pointer min-w-0"
+                                  className="flex-1 text-sm text-gray-900 cursor-pointer min-w-0"
                                 >
-                                  <div className="font-medium text-gray-900 truncate">
-                                    {calendar.calendarName || calendar.email}
-                                  </div>
-                                  <div className="text-xs text-gray-500 truncate">
-                                    {calendar.email}
-                                  </div>
+                                  {calendar.calendarName || calendar.email || 'Calendar'}
                                 </label>
-                                {calendar.isActive ? (
-                                  <div className="flex items-center gap-1">
-                                    {calendar.isPrimary ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-xs py-0 px-1.5 h-5 border-blue-500 text-blue-700 bg-blue-50"
-                                        title="Primary calendar - events will be created here by default"
-                                      >
-                                        <Star className="h-3 w-3 mr-1 fill-blue-500" />
-                                        Primary
-                                      </Badge>
-                                    ) : (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleSetPrimaryCalendar(calendar.id)}
-                                        disabled={updateCalendarMutation.isPending}
-                                        className="text-xs h-6 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                        title="Set as primary calendar"
-                                      >
-                                        <Star className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        handleDisconnectCalendar(
-                                          calendar.id,
-                                          calendar.calendarName || calendar.email
-                                        )
+
+                                {/* Star icon (outline) */}
+                                {calendar.isActive && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (calendar.isPrimary) {
+                                        // Already primary, do nothing or show tooltip
+                                      } else {
+                                        handleSetPrimaryCalendar(calendar.id);
                                       }
-                                      disabled={disconnectCalendarMutation.isPending}
-                                      className="text-xs h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                      title="Disconnect calendar"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
+                                    }}
+                                    disabled={updateCalendarMutation.isPending}
+                                    className={cn(
+                                      "p-1 hover:bg-gray-100 rounded transition-colors",
+                                      calendar.isPrimary && "text-yellow-500"
+                                    )}
+                                    title={calendar.isPrimary ? "Primary calendar" : "Set as primary calendar"}
+                                  >
+                                    <Star className={cn(
+                                      "h-4 w-4",
+                                      calendar.isPrimary ? "fill-yellow-500 stroke-yellow-500" : "stroke-gray-400"
+                                    )} />
+                                  </button>
+                                )}
+
+                                {/* Trash icon */}
+                                {calendar.isActive && (
+                                  <button
+                                    type="button"
                                     onClick={() =>
-                                      handleConnectCalendar(
-                                        group.provider as "google" | "microsoft"
+                                      handleDisconnectCalendar(
+                                        calendar.id,
+                                        calendar.calendarName || calendar.email
                                       )
                                     }
-                                    disabled={
-                                      connectingProvider === group.provider || !canAddMore
-                                    }
-                                    className="text-xs h-6 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    disabled={disconnectCalendarMutation.isPending}
+                                    className="p-1 hover:bg-red-50 rounded transition-colors text-gray-400 hover:text-red-600"
+                                    title="Disconnect calendar"
                                   >
-                                    <Plus className="h-3 w-3 mr-1" />
-                                    Connect
-                                  </Button>
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
                                 )}
                               </div>
                             ))}
                           </div>
-                        </CardContent>
-                      </Card>
-                    )
+
+                          {/* Separator between groups (except last) */}
+                          {groupIndex < Object.entries(groupedCalendars).length - 1 && (
+                            <div className="h-px bg-gray-200 my-4"></div>
+                          )}
+                        </div>
+                      );
+                    }
                   )}
                 </div>
               )}
@@ -4852,26 +4830,46 @@ export default function CalendarsPage() {
                     </div>
                   )}
 
-                  {(processedIndividualEvent || eventDetailsModal.event).conferenceUrl && (
-                    <div className="flex items-start gap-3">
-                      <Video
-                        className="w-4 h-4 mt-1 flex-shrink-0"
-                        style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <button
-                          onClick={() => {
-                            const event = processedIndividualEvent || eventDetailsModal.event;
-                            window.open(event.conferenceUrl, '_blank');
-                          }}
-                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left flex items-center gap-2"
+                  {(processedIndividualEvent || eventDetailsModal.event).conferenceUrl && (() => {
+                    const event = processedIndividualEvent || eventDetailsModal.event;
+                    const conferenceUrl = event.conferenceUrl || '';
+                    const isMicrosoftTeams = conferenceUrl.includes('teams.microsoft.com') || 
+                                            conferenceUrl.includes('teams.live.com') ||
+                                            conferenceUrl.includes('microsoft.com/meet');
+                    const isGoogleMeet = conferenceUrl.includes('meet.google.com');
+                    const meetingType = isMicrosoftTeams ? 'Microsoft Teams' : isGoogleMeet ? 'Google Meet' : 'Meeting';
+                    const meetingIcon = isMicrosoftTeams ? (
+                      <MicrosoftIcon className="h-4 w-4" />
+                    ) : (
+                      <Video className="h-4 w-4" />
+                    );
+                    
+                    return (
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="w-4 h-4 mt-1 flex-shrink-0 flex items-center justify-center"
+                          style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
                         >
-                          <Video className="h-3 w-3" />
-                          Join Google Meet
-                        </button>
+                          {meetingIcon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <button
+                            onClick={() => {
+                              window.open(conferenceUrl, '_blank', 'noopener,noreferrer');
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left flex items-center gap-2"
+                          >
+                            {isMicrosoftTeams ? (
+                              <MicrosoftIcon className="h-3 w-3" />
+                            ) : (
+                              <Video className="h-3 w-3" />
+                            )}
+                            Join {meetingType}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
             </div>

@@ -448,7 +448,7 @@ export class MicrosoftCalendarProvider implements CalendarProvider {
 
       let request = graphClient
         .api(`/me/calendars/${params.calendarId}/events`)
-        .select("id,subject,body,start,end,location,attendees,webLink,showAs")
+        .select("id,subject,body,start,end,location,attendees,webLink,showAs,onlineMeeting")
         .orderby("start/dateTime");
 
       // Add search query if provided
@@ -489,6 +489,17 @@ export class MicrosoftCalendarProvider implements CalendarProvider {
           color = showAsMap[event.showAs.toLowerCase()] || 'blue';
         }
 
+        // Extract Microsoft Teams meeting URL from onlineMeeting property
+        let conferenceUrl: string | undefined;
+        if (event.onlineMeeting) {
+          // Microsoft Teams meeting URL can be in joinUrl or joinWebUrl
+          if (event.onlineMeeting.joinUrl) {
+            conferenceUrl = event.onlineMeeting.joinUrl;
+          } else if (event.onlineMeeting.joinWebUrl) {
+            conferenceUrl = event.onlineMeeting.joinWebUrl;
+          }
+        }
+
         return {
           id: event.id || '',
           title: event.subject || 'Untitled Event',
@@ -498,11 +509,70 @@ export class MicrosoftCalendarProvider implements CalendarProvider {
           location: event.location?.displayName || undefined,
           attendees: event.attendees?.map((a: any) => a.emailAddress?.address || '') || undefined,
           webLink: event.webLink || undefined,
+          conferenceUrl,
           color,
         };
       });
     } catch (error: any) {
       throw new Error(`Failed to search Microsoft Calendar events: ${error.message}`);
+    }
+  }
+
+  async getEvent(accessToken: string, params: { calendarId: string; eventId: string }): Promise<CreatedEvent> {
+    try {
+      const graphClient = Client.init({
+        authProvider: (done) => {
+          done(null, accessToken);
+        },
+      });
+
+      const response = await graphClient
+        .api(`/me/calendars/${params.calendarId}/events/${params.eventId}`)
+        .select("id,subject,body,start,end,location,attendees,webLink,onlineMeeting")
+        .get();
+
+      if (!response.id || !response.subject) {
+        throw new Error('Invalid response from Microsoft Graph API');
+      }
+
+      // Extract Microsoft Teams meeting URL from onlineMeeting property
+      let conferenceUrl: string | undefined;
+      if (response.onlineMeeting) {
+        // Microsoft Teams meeting URL can be in joinUrl or joinWebUrl
+        if (response.onlineMeeting.joinUrl) {
+          conferenceUrl = response.onlineMeeting.joinUrl;
+        } else if (response.onlineMeeting.joinWebUrl) {
+          conferenceUrl = response.onlineMeeting.joinWebUrl;
+        }
+      }
+
+      // Map Microsoft showAs to our color system
+      let color: string | undefined;
+      if (response.showAs) {
+        const showAsMap: { [key: string]: string } = {
+          'free': 'gray',
+          'tentative': 'yellow',
+          'busy': 'blue',
+          'oof': 'orange',
+          'workingElsewhere': 'purple',
+        };
+        color = showAsMap[response.showAs.toLowerCase()] || 'blue';
+      }
+
+      return {
+        id: response.id,
+        title: response.subject,
+        description: response.body?.content || undefined,
+        start: new Date(response.start?.dateTime || ''),
+        end: new Date(response.end?.dateTime || ''),
+        location: response.location?.displayName || undefined,
+        attendees: response.attendees?.map((a: any) => a.emailAddress?.address || '') || undefined,
+        webLink: response.webLink || undefined,
+        conferenceUrl,
+        color,
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to get Microsoft Calendar event: ${error.message}`);
     }
   }
 
