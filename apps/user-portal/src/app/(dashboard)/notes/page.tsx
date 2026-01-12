@@ -70,7 +70,6 @@ import {
 import { UpgradePrompt } from "@/components/upgrade-prompt";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { ShareButton } from "@/components/share-button";
-import { ShareModal } from "@/components/share-modal";
 import { ShareDetailsModal } from "@/components/share-details-modal";
 
 export default function NotesPage() {
@@ -2234,20 +2233,12 @@ export default function NotesPage() {
 
       {/* Share Modal */}
       {shareResourceId && (
-        <ShareModal
-          isOpen={isShareModalOpen}
-          onClose={() => setIsShareModalOpen(false)}
-          resourceType={shareResourceType}
-          resourceId={shareResourceId}
-          resourceName={shareResourceName}
-        />
-      )}
-
-      {/* Share Details Modal */}
-      {shareResourceId && (
         <ShareDetailsModal
-          isOpen={isShareDetailsModalOpen}
-          onClose={() => setIsShareDetailsModalOpen(false)}
+          isOpen={isShareModalOpen || isShareDetailsModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            setIsShareDetailsModalOpen(false);
+          }}
           resourceType={shareResourceType}
           resourceId={shareResourceId}
           resourceName={shareResourceName}

@@ -58,7 +58,6 @@ import {
   DropdownMenuTrigger,
 } from "@imaginecalendar/ui/dropdown-menu";
 import { ShareButton } from "@/components/share-button";
-import { ShareModal } from "@/components/share-modal";
 import { ShareDetailsModal } from "@/components/share-details-modal";
 
 export default function FriendsPage() {
@@ -989,18 +988,12 @@ export default function FriendsPage() {
       </AlertDialog>
 
       {/* Share Modal */}
-      <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        resourceType={shareResourceType}
-        resourceId={shareResourceId || ""}
-        resourceName={shareResourceName}
-      />
-
-      {/* Share Details Modal */}
       <ShareDetailsModal
-        isOpen={isShareDetailsModalOpen}
-        onClose={() => setIsShareDetailsModalOpen(false)}
+        isOpen={isShareModalOpen || isShareDetailsModalOpen}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setIsShareDetailsModalOpen(false);
+        }}
         resourceType={shareResourceType}
         resourceId={shareResourceId || ""}
         resourceName={shareResourceName}

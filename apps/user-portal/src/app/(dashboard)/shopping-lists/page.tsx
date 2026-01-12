@@ -31,7 +31,6 @@ import {
 } from "@imaginecalendar/ui/alert-dialog";
 import { Label } from "@imaginecalendar/ui/label";
 import { ShareButton } from "@/components/share-button";
-import { ShareModal } from "@/components/share-modal";
 import { ShareDetailsModal } from "@/components/share-details-modal";
 import {
   DropdownMenu,
@@ -2735,20 +2734,12 @@ export default function ShoppingListPage() {
 
       {/* Share Modal */}
       {shareResourceId && shareResourceName && (
-        <ShareModal
-          isOpen={isShareModalOpen}
-          onClose={() => setIsShareModalOpen(false)}
-          resourceType={shareResourceType as "task" | "task_folder" | "shopping_list_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder"}
-          resourceId={shareResourceId}
-          resourceName={shareResourceName}
-        />
-      )}
-
-      {/* Share Details Modal */}
-      {shareResourceId && shareResourceName && (
         <ShareDetailsModal
-          isOpen={isShareDetailsModalOpen}
-          onClose={() => setIsShareDetailsModalOpen(false)}
+          isOpen={isShareModalOpen || isShareDetailsModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            setIsShareDetailsModalOpen(false);
+          }}
           resourceType={shareResourceType as "task" | "task_folder" | "shopping_list_folder" | "note" | "note_folder" | "file" | "file_folder" | "address" | "address_folder"}
           resourceId={shareResourceId}
           resourceName={shareResourceName}
