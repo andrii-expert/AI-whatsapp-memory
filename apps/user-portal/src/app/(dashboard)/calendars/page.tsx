@@ -658,6 +658,7 @@ export default function CalendarsPage() {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [autocomplete, setAutocomplete] = useState<any>(null);
   const autocompleteRef = useRef<any>(null);
+  const colorScrollRef = useRef<HTMLDivElement>(null);
   const [createGoogleMeet, setCreateGoogleMeet] = useState(false);
   const [eventColor, setEventColor] = useState("blue");
   const [eventAttendees, setEventAttendees] = useState<string[]>([]); // Array of email addresses
@@ -984,6 +985,67 @@ export default function CalendarsPage() {
         title: "Pin dropped",
         description: "Coordinates captured. You can now save it.",
       });
+    }
+  };
+
+  // Draggable scroll handler for colors
+  const handleDragScroll = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement | null>) => {
+    if (!ref.current) return;
+    
+    const isTouch = 'touches' in e;
+    
+    // For touch events, don't preventDefault on touchStart - only on touchMove
+    if (!isTouch) {
+      e.preventDefault();
+    }
+    e.stopPropagation();
+    
+    const clientX = isTouch ? e.touches[0]?.clientX : (e as React.MouseEvent).clientX;
+    if (clientX === undefined) return;
+    
+    const startX = clientX;
+    const scrollLeft = ref.current.scrollLeft;
+    let isDown = true;
+    let hasMoved = false;
+
+    const onMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      if (!isDown || !ref.current) return;
+      
+      const moveIsTouch = 'touches' in moveEvent;
+      const moveClientX = moveIsTouch ? (moveEvent as TouchEvent).touches[0]?.clientX : (moveEvent as MouseEvent).clientX;
+      if (moveClientX === undefined) return;
+      
+      // Mark that we've moved
+      if (!hasMoved) {
+        hasMoved = true;
+      }
+      
+      // Prevent default to stop page scrolling only after we start moving
+      if (hasMoved) {
+        moveEvent.preventDefault();
+      }
+      
+      const x = moveClientX - startX;
+      ref.current.scrollLeft = scrollLeft - x;
+    };
+
+    const onMouseUp = () => {
+      isDown = false;
+      hasMoved = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('touchmove', onMouseMove);
+      document.removeEventListener('touchend', onMouseUp);
+      document.removeEventListener('touchcancel', onMouseUp);
+    };
+
+    if (isTouch) {
+      document.addEventListener('touchmove', onMouseMove, { passive: false });
+      document.addEventListener('touchend', onMouseUp, { passive: true });
+      document.addEventListener('touchcancel', onMouseUp, { passive: true });
+    } else {
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
     }
   };
 
@@ -3091,7 +3153,30 @@ export default function CalendarsPage() {
               <label className="text-sm font-semibold text-[#141718]">
                 Select Color
               </label>
-              <div className="flex items-center gap-3 flex-wrap">
+              <div
+                ref={colorScrollRef}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  handleDragScroll(e, colorScrollRef as React.RefObject<HTMLDivElement | null>);
+                }}
+                onTouchMove={(e) => {
+                  e.stopPropagation();
+                }}
+                className="flex gap-2 sm:gap-3 overflow-x-auto p-2 cursor-grab active:cursor-grabbing [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                style={{
+                  WebkitOverflowScrolling: 'touch',
+                  width: '100%',
+                  maxWidth: '100%',
+                  touchAction: 'pan-x',
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                }}
+              >
                 {[
                   { name: "pink", value: "#FCE7F3", label: "Pink" },
                   { name: "purple", value: "#F3E8FF", label: "Purple" },
