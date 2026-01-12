@@ -25,23 +25,23 @@ const SelectTrigger = React.forwardRef<
 >(({ className, children, hideIcon = false, customIcon, ...props }, ref) => {
   const IconComponent = customIcon || Icons.ChevronDown;
   return (
-    <SelectPrimitive.Trigger
-      ref={ref}
-      className={cn(
-        "!flex h-9 w-full items-center justify-between whitespace-nowrap rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-normal placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
-        className,
-      )}
-      {...props}
-    >
-      <span className="line-clamp-1">{children}</span>
-      {!hideIcon && (
+  <SelectPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      "!flex h-9 w-full items-center justify-between whitespace-nowrap rounded-lg border border-border bg-transparent px-3 py-2 text-sm font-normal placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      className,
+    )}
+    {...props}
+  >
+    <span className="line-clamp-1">{children}</span>
+    {!hideIcon && (
         <div className="h-4 w-4 flex items-center justify-center">
-          <SelectPrimitive.Icon asChild>
+        <SelectPrimitive.Icon asChild>
             <IconComponent className="h-4 w-4" />
-          </SelectPrimitive.Icon>
-        </div>
-      )}
-    </SelectPrimitive.Trigger>
+        </SelectPrimitive.Icon>
+      </div>
+    )}
+  </SelectPrimitive.Trigger>
   );
 });
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;

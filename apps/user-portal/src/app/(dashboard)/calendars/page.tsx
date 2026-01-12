@@ -3060,34 +3060,80 @@ export default function CalendarsPage() {
           }
         }}
       >
-        <AlertDialogContent className="w-[95vw] max-w-[640px] max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Plus className="h-5 w-5 text-primary flex-shrink-0" />
-              <span>Create New Event</span>
+        <AlertDialogContent className="w-[95vw] max-w-[640px] max-h-[90vh] overflow-y-auto p-6">
+          <AlertDialogHeader className="text-center pb-4">
+            <AlertDialogTitle className="text-xl font-bold text-[#141718]">
+              Create Event
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">
-              Add a new event to your calendar. Fill in the details below.
+            <AlertDialogDescription className="text-sm text-gray-500 mt-1">
+              Create new recurring reminder
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-4 py-2 sm:py-4">
+          <div className="space-y-5">
+            {/* Event Title - First Field */}
             <div className="space-y-2">
-              <label htmlFor="event-calendar" className="text-sm font-medium">
+              <label htmlFor="event-title" className="text-sm font-semibold text-[#141718]">
+                Event Title
+              </label>
+              <Input
+                id="event-title"
+                placeholder="Title..."
+                value={eventTitle}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEventTitle(e.target.value)
+                }
+                className="bg-gray-50 border-gray-200 text-sm"
+              />
+            </div>
+
+            {/* Select Color */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-[#141718]">
+                Select Color
+              </label>
+              <div className="flex items-center gap-3">
+                {[
+                  { value: "pink", color: "bg-pink-200" },
+                  { value: "purple", color: "bg-purple-200" },
+                  { value: "blue", color: "bg-blue-200" },
+                  { value: "cyan", color: "bg-cyan-200" },
+                  { value: "green", color: "bg-green-200" },
+                  { value: "lime", color: "bg-lime-200" },
+                  { value: "orange", color: "bg-orange-200" },
+                  { value: "rose", color: "bg-rose-200" },
+                  { value: "peach", color: "bg-orange-100" },
+                ].map(({ value, color }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setEventColor(value === "pink" ? "red" : value)}
+                    className={`w-10 h-10 rounded-full border-2 transition-all ${
+                      eventColor === (value === "pink" ? "red" : value)
+                        ? "border-black"
+                        : "border-transparent"
+                    } ${color}`}
+                    title={value}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Calendar */}
+            <div className="space-y-2">
+              <label htmlFor="event-calendar" className="text-sm font-semibold text-[#141718]">
                 Calendar
               </label>
               <Select
                 value={selectedCalendarIds[0] || ""}
                 onValueChange={(value) => {
-                  // If the selected calendar is not in the list, add it; otherwise just set as first
                   if (!selectedCalendarIds.includes(value)) {
                     setSelectedCalendarIds([value, ...selectedCalendarIds.filter(id => id !== value)]);
                   } else {
-                    // Reorder to put selected one first
                     setSelectedCalendarIds([value, ...selectedCalendarIds.filter(id => id !== value)]);
                   }
                 }}
               >
-                <SelectTrigger id="event-calendar" className="w-full text-sm sm:text-base">
+                <SelectTrigger id="event-calendar" className="w-full bg-white border-gray-200 text-sm">
                   <SelectValue placeholder="Select calendar" />
                 </SelectTrigger>
                 <SelectContent>
@@ -3107,49 +3153,35 @@ export default function CalendarsPage() {
                 </SelectContent>
               </Select>
             </div>
+            {/* Select Date and Time */}
             <div className="space-y-2">
-              <label htmlFor="event-title" className="text-sm font-medium">
-                Event Title
+              <label className="text-sm font-semibold text-[#141718]">
+                Select Date and Time
               </label>
-              <Input
-                id="event-title"
-                placeholder="Enter event title"
-                value={eventTitle}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setEventTitle(e.target.value)
-                }
-                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (
-                    e.key === "Enter" &&
-                    eventTitle.trim() &&
-                    eventDate &&
-                    selectedCalendarIds.length > 0
-                  ) {
-                    handleCreateEvent();
-                  }
-                }}
-                className="text-sm sm:text-base"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-2">
-                <label htmlFor="event-date" className="text-sm font-medium">
-                  Date
-                </label>
-                <Input
-                  id="event-date"
-                  type="date"
-                  value={eventDate}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setEventDate(e.target.value)
-                  }
-                  className="text-sm sm:text-base"
-                />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="event-time" className="text-sm font-medium">
-                  Time
-                </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal bg-white border-gray-200"
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {eventDate ? format(new Date(eventDate), "dd/MM/yy") : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={eventDate ? new Date(eventDate) : undefined}
+                      onSelect={(date) => {
+                        if (date && date instanceof Date) {
+                          setEventDate(format(date, "yyyy-MM-dd"));
+                        }
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
                 <TimePicker
                   id="event-time"
                   value={eventTime}
@@ -3157,52 +3189,23 @@ export default function CalendarsPage() {
                 />
               </div>
             </div>
-                        {/* Attendees Section */}
-                        <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Attendees (optional)
+            {/* Attendees Section */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-[#141718]">
+                Attendees <span className="text-gray-500 font-normal">(optional)</span>
               </label>
               <p className="text-xs text-gray-500">
-                Add people to invite to this event. Google Calendar requires email addresses.
+                Add people to invite to this event. Google calendar requires email addresses
               </p>
               
-              {/* Select from Friends */}
-              {friends.length > 0 && (
-                <div className="space-y-2">
-                  <Select
-                    value=""
-                    onValueChange={(friendId) => {
-                      const friend = friends.find((f: any) => f.id === friendId);
-                      if (friend && friend.email && !eventAttendees.includes(friend.email)) {
-                        setEventAttendees([...eventAttendees, friend.email]);
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-full text-sm">
-                      <SelectValue placeholder="Select from friends" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {friends
-                        .filter((f: any) => f.email && !eventAttendees.includes(f.email))
-                        .map((friend: any) => (
-                          <SelectItem key={friend.id} value={friend.id}>
-                            {friend.name} {friend.email ? `(${friend.email})` : ''}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
               {/* Email/Phone Entry with Autocomplete */}
               <Popover open={attendeeSearchOpen} onOpenChange={setAttendeeSearchOpen}>
-                <div className="flex gap-2">
-                  <PopoverTrigger asChild>
-                        <div className="relative flex-1">
-                          <Input
-                            type="text"
-                            placeholder="Type email or phone to search users..."
-                            value={manualAttendeeInput}
+                <PopoverTrigger asChild>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      placeholder="Type email or friend name..."
+                      value={manualAttendeeInput}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                           const value = e.target.value;
                           setManualAttendeeInput(value);
@@ -3224,23 +3227,10 @@ export default function CalendarsPage() {
                             setAttendeeSearchOpen(false);
                           }
                         }}
-                        className="text-sm"
-                      />
-                    </div>
-                  </PopoverTrigger>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (manualAttendeeInput.trim()) {
-                        handleAddAttendee(manualAttendeeInput.trim());
-                      }
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+                      className="bg-gray-50 border-gray-200 text-sm"
+                    />
+                  </div>
+                </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                   <Command shouldFilter={false}>
                     <CommandInput
@@ -3366,291 +3356,41 @@ export default function CalendarsPage() {
                 </div>
               )}
             </div>
-            {/* Address Selection */}
+            {/* Venue Section */}
             <div className="space-y-2">
-              <label htmlFor="event-address" className="text-sm font-medium">
-                Address (optional)
+              <label className="text-sm font-semibold text-[#141718]">
+                Venue <span className="text-gray-500 font-normal">(optional)</span>
               </label>
-              <br />
               <Button
                 type="button"
-                variant={createGoogleMeet ? "primary" : "outline"}
+                variant="outline"
                 onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
-                className={editCreateGoogleMeet ? "w-full sm:w-auto bg-primary text-primary-foreground hover:font-bold hover:bg-primary" : "w-full sm:w-auto"}
+                className="w-full bg-white border-gray-200 hover:bg-gray-50 justify-start"
               >
                 <Video className="h-4 w-4 mr-2" />
                 {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
               </Button>
-              <div className="flex items-center gap-2">
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                    <span className="text-xs text-gray-500 bg-white px-2">or</span>
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                  </div>
-
-              {/* Saved Addresses Dropdown */}
-              {addresses.length > 0 && (
-                <div className="space-y-2">
-                  <Select
-                    value={eventAddressId}
-                    onValueChange={(value) => {
-                      setEventAddressId(value);
-                      if (value) {
-                        const selectedAddr = addresses.find((addr: any) => addr.id === value);
-                        if (selectedAddr) {
-                          // Build address components object - handle null/undefined properly
-                          const components = {
-                            street: selectedAddr.street ?? undefined,
-                            city: selectedAddr.city ?? undefined,
-                            state: selectedAddr.state ?? undefined,
-                            zip: selectedAddr.zip ?? undefined,
-                            country: selectedAddr.country ?? undefined,
-                          };
-                          setAddressComponents(components);
-                          
-                          // Format full address from components
-                          const fullAddress = formatFullAddress(components);
-                          
-                          // If we have coordinates but no formatted address, try reverse geocoding
-                          if (!fullAddress && selectedAddr.latitude != null && selectedAddr.longitude != null) {
-                            setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
-                            // Try reverse geocoding to get full address
-                            if (window.google?.maps) {
-                              const geocoder = new window.google.maps.Geocoder();
-                              geocoder.geocode(
-                                { location: { lat: selectedAddr.latitude, lng: selectedAddr.longitude } },
-                                (results: any, status: string) => {
-                                  if (status === "OK" && results?.[0]) {
-                                    setEventAddress(results[0].formatted_address);
-                                  } else {
-                                    // Fallback to name if reverse geocoding fails
-                                    setEventAddress(selectedAddr.name || "");
-                                  }
-                                }
-                              );
-                            } else {
-                              // Fallback to name if Google Maps not loaded
-                              setEventAddress(selectedAddr.name || "");
-                            }
-                          } else {
-                            // Use full address if available, otherwise fall back to name
-                            setEventAddress(fullAddress || selectedAddr.name || "");
-                          }
-                          
-                          if (selectedAddr.latitude != null && selectedAddr.longitude != null) {
-                            setEventCoordinates(`${selectedAddr.latitude}, ${selectedAddr.longitude}`);
-                          }
-                        }
-                      } else {
-                        setEventAddress("");
-                        setEventCoordinates("");
-                        setAddressComponents({});
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-full text-sm sm:text-base">
-                      <SelectValue placeholder="Select from saved addresses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {addresses.map((address: any) => (
-                        <SelectItem key={address.id} value={address.id}>
-                          {address.name} - {[
-                            address.street,
-                            address.city,
-                            address.state,
-                            address.country,
-                          ].filter(Boolean).join(", ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center gap-2">
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                    <span className="text-xs text-gray-500 bg-white px-2">or</span>
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                  </div>
-                </div>
-              )}
-
-              {/* Address Input */}
-              <div className="space-y-2">
-                <div className="relative">
-              <Input
-                    id="event-address"
-                    placeholder="Type or paste the full address"
-                    value={eventAddress}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      handleAddressPaste(e.target.value)
-                    }
-                    className="h-20 pr-10"
-                  />
-                  {isGeocoding && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500">
-                  You can also paste a Google Maps link here. Your backend can normalise it and store the coordinates.
-                </p>
+              <div className="flex items-center justify-center my-2">
+                <span className="text-xs text-gray-500">OR</span>
               </div>
-
-              {/* Coordinates Input */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="event-coordinates" className="text-sm font-medium">
-                    Pin / coordinates (optional)
-                  </Label>
-                  <button
-                    type="button"
-                    className={cn(
-                      "text-sm font-medium transition-colors",
-                      enableDropPin
-                        ? "text-red-600 hover:text-red-700"
-                        : "text-blue-600 hover:text-blue-700"
-                    )}
-                    onClick={() => {
-                      if (enableDropPin) {
-                        setEnableDropPin(false);
-                        toast({
-                          title: "Drop pin cancelled",
-                          description: "Click 'Drop pin on map' again to enable.",
-                        });
-                      } else {
-                        if (window.google?.maps?.places) {
-                          setEnableDropPin(true);
-                          toast({
-                            title: "Drop pin enabled",
-                            description: "Click anywhere on the map to drop a pin.",
-                          });
-                        } else {
-                          toast({
-                            title: "Google Maps not loaded",
-                            description: "Please wait for Google Maps to load, or enter coordinates manually.",
-                            variant: "destructive",
-                          });
-                        }
-                      }
-                    }}
-                  >
-                    {enableDropPin ? "Cancel drop pin" : "Drop pin on map"}
-                  </button>
-                </div>
+              <div className="relative">
                 <Input
-                  id="event-coordinates"
-                  placeholder="e.g. -34.0822, 18.8501"
-                  value={eventCoordinates}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setEventCoordinates(e.target.value);
-                    // If coordinates are entered, try reverse geocoding
-                    if (e.target.value.trim() && window.google?.maps) {
-                      const { lat, lng } = parseCoordinates(e.target.value);
-                      if (lat && lng) {
-                        setIsGeocoding(true);
-                        const geocoder = new window.google.maps.Geocoder();
-                        geocoder.geocode({ location: { lat, lng } }, (results: any, status: string) => {
-                          setIsGeocoding(false);
-                          if (status === "OK" && results?.[0]) {
-                            const result = results[0];
-                            setEventAddress(result.formatted_address);
-
-                            // Extract address components
-                            const components: {
-                              street?: string;
-                              city?: string;
-                              state?: string;
-                              zip?: string;
-                              country?: string;
-                            } = {};
-
-                            if (result.address_components) {
-                              result.address_components.forEach((component: any) => {
-                                const types = component.types;
-
-                                if (types.includes("street_number") || types.includes("route")) {
-                                  const streetNumber = result.address_components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
-                                  const route = result.address_components.find((c: any) => c.types.includes("route"))?.long_name || "";
-                                  components.street = [streetNumber, route].filter(Boolean).join(" ").trim();
-                                }
-
-                                if (types.includes("locality")) {
-                                  components.city = component.long_name;
-                                } else if (types.includes("administrative_area_level_1")) {
-                                  components.state = component.long_name;
-                                } else if (types.includes("postal_code")) {
-                                  components.zip = component.long_name;
-                                } else if (types.includes("country")) {
-                                  components.country = component.long_name;
-                                }
-                              });
-                            }
-
-                            setAddressComponents(components);
-                          }
-                        });
-                      }
-                    }
-                  }}
-                className="text-sm sm:text-base"
-              />
-                {enableDropPin && (
-                  <div className="mt-4">
-                    <div className="mb-2">
-                      <p className="text-sm text-blue-600 font-medium mb-1">
-                        Click on the map below to drop a pin
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        The coordinates and address will be automatically filled in.
-                      </p>
-            </div>
-                    <GoogleMap
-                      lat={null}
-                      lng={null}
-                      address=""
-                      enableClickToDrop={true}
-                      onPinDrop={handlePinDrop}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Color
-              </label>
-              <div className="grid grid-cols-6 gap-2 p-2">
-                {[
-                  { value: "blue", color: "bg-blue-500" },
-                  { value: "green", color: "bg-green-500" },
-                  { value: "purple", color: "bg-purple-500" },
-                  { value: "red", color: "bg-red-500" },
-                  { value: "yellow", color: "bg-yellow-500" },
-                  { value: "orange", color: "bg-orange-500" },
-                  { value: "turquoise", color: "bg-cyan-500" },
-                  { value: "gray", color: "bg-gray-500" },
-                  { value: "bold-blue", color: "bg-blue-700" },
-                  { value: "bold-green", color: "bg-green-700" },
-                  { value: "bold-red", color: "bg-red-700" },
-                ].map(({ value, color }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setEventColor(value)}
-                    className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
-                      eventColor === value
-                        ? "border-gray-800 scale-110"
-                        : "border-gray-300 hover:border-gray-500"
-                    } ${color}`}
-                    title={value.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
-                  />
-                ))}
+                  id="event-location"
+                  placeholder="Add location..."
+                  value={eventLocation}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setEventLocation(e.target.value)
+                  }
+                  className="bg-gray-50 border-gray-200 text-sm pr-10"
+                />
+                <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-600" />
               </div>
             </div>
           </div>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+          <AlertDialogFooter className="flex-row gap-3 pt-4">
             <AlertDialogCancel
               disabled={createEventMutation.isPending}
-              className="bg-orange-500 text-white hover:bg-orange-600 hover:font-bold border-0 w-full sm:w-auto order-2 sm:order-1"
+              className="flex-1 bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
             >
               Cancel
             </AlertDialogCancel>
@@ -3662,7 +3402,7 @@ export default function CalendarsPage() {
                 selectedCalendarIds.length === 0 ||
                 createEventMutation.isPending
               }
-              className="bg-primary text-primary-foreground hover:font-bold hover:bg-primary w-full sm:w-auto order-1 sm:order-2"
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
             >
               {createEventMutation.isPending ? (
                 <>
@@ -3670,7 +3410,7 @@ export default function CalendarsPage() {
                   Creating...
                 </>
               ) : (
-                "Create Event"
+                "Create"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
