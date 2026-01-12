@@ -30,6 +30,7 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Home,
   Check,
   Circle,
@@ -405,7 +406,7 @@ function GoogleMap({
   );
 }
 
-// Time Picker Component (24-hour format)
+// Time Picker Component (12-hour format display)
 const TimePicker = ({
   value,
   onChange,
@@ -415,76 +416,132 @@ const TimePicker = ({
   onChange: (value: string) => void;
   id?: string;
 }) => {
-  // Parse 24-hour format (HH:mm)
+  // Parse 24-hour format (HH:mm) and convert to 12-hour format
   const parseTime = (time24: string) => {
-    if (!time24) return { hour: "00", minute: "00" };
+    if (!time24) return { hour: 0, minute: 0 };
 
     const [hours, minutes] = time24.split(":").map(Number);
     if (isNaN(hours!) || isNaN(minutes!)) {
-      return { hour: "00", minute: "00" };
+      return { hour: 0, minute: 0 };
     }
 
     return {
-      hour: hours!.toString().padStart(2, "0"),
-      minute: minutes!.toString().padStart(2, "0"),
+      hour: hours!,
+      minute: minutes!,
     };
   };
 
+  // Format time for display (12-hour format)
+  const formatTimeDisplay = (time24: string) => {
+    if (!time24) return "09:00 AM";
+    const { hour, minute } = parseTime(time24);
+    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const ampm = hour >= 12 ? "PM" : "AM";
+    return `${hour12.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")} ${ampm}`;
+  };
+
   const { hour, minute } = parseTime(value);
-  const [selectedHour, setSelectedHour] = useState(hour);
-  const [selectedMinute, setSelectedMinute] = useState(minute);
+  const [selectedHour, setSelectedHour] = useState(hour.toString().padStart(2, "0"));
+  const [selectedMinute, setSelectedMinute] = useState(minute.toString().padStart(2, "0"));
+  const [selectedAmPm, setSelectedAmPm] = useState(hour >= 12 ? "PM" : "AM");
 
   useEffect(() => {
     const { hour: h, minute: m } = parseTime(value);
-    setSelectedHour(h);
-    setSelectedMinute(m);
+    setSelectedHour(h.toString().padStart(2, "0"));
+    setSelectedMinute(m.toString().padStart(2, "0"));
+    setSelectedAmPm(h >= 12 ? "PM" : "AM");
   }, [value]);
 
-  const handleHourChange = (newHour: string) => {
+  const handleTimeChange = (newHour: string, newMinute: string, newAmPm: string) => {
     setSelectedHour(newHour);
-    const newTime = `${newHour}:${selectedMinute}`;
-    onChange(newTime);
-  };
-
-  const handleMinuteChange = (newMinute: string) => {
     setSelectedMinute(newMinute);
-    const newTime = `${selectedHour}:${newMinute}`;
+    setSelectedAmPm(newAmPm);
+    
+    let hour24 = parseInt(newHour);
+    if (newAmPm === "PM" && hour24 !== 12) {
+      hour24 += 12;
+    } else if (newAmPm === "AM" && hour24 === 12) {
+      hour24 = 0;
+    }
+    const newTime = `${hour24.toString().padStart(2, "0")}:${newMinute}`;
     onChange(newTime);
   };
 
-  const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"));
+  const hours12 = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, "0"));
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"));
+  const ampmOptions = ["AM", "PM"];
 
   return (
-    <div className="flex items-center gap-1 sm:gap-2">
-      <Select value={selectedHour} onValueChange={handleHourChange}>
-        <SelectTrigger id={id} className="sm:w-[85px] text-sm">
-          <SelectValue placeholder="Hour" />
-        </SelectTrigger>
-        <SelectContent>
-          {hours.map((h) => (
-            <SelectItem key={h} value={h}>
-              {h}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      
-      <span className="text-gray-500 font-semibold text-base sm:text-lg">:</span>
-      
-      <Select value={selectedMinute} onValueChange={handleMinuteChange}>
-        <SelectTrigger className="sm:w-[85px] text-sm">
-          <SelectValue placeholder="Minute" />
-        </SelectTrigger>
-        <SelectContent>
-          {minutes.map((m) => (
-            <SelectItem key={m} value={m}>
-              {m}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          id={id}
+          className="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-normal text-left hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-gray-500" />
+            <span className={value ? "text-gray-900" : "text-gray-500"}>
+              {value ? formatTimeDisplay(value) : "09:00 AM"}
+            </span>
+          </div>
+          <ChevronDown className="h-4 w-4 text-gray-500" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-3" align="start">
+        <div className="flex items-center gap-2">
+          <Select 
+            value={selectedHour} 
+            onValueChange={(newHour) => handleTimeChange(newHour, selectedMinute, selectedAmPm)}
+          >
+            <SelectTrigger className="w-[70px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {hours12.map((h) => (
+                <SelectItem key={h} value={h}>
+                  {h}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <span className="text-gray-500 font-semibold">:</span>
+          
+          <Select 
+            value={selectedMinute} 
+            onValueChange={(newMinute) => handleTimeChange(selectedHour, newMinute, selectedAmPm)}
+          >
+            <SelectTrigger className="w-[70px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {minutes.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select 
+            value={selectedAmPm} 
+            onValueChange={(newAmPm) => handleTimeChange(selectedHour, selectedMinute, newAmPm)}
+          >
+            <SelectTrigger className="w-[70px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ampmOptions.map((ampm) => (
+                <SelectItem key={ampm} value={ampm}>
+                  {ampm}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 };
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, addWeeks, subWeeks, startOfYear, endOfYear, addYears, subYears, eachWeekOfInterval, isSameWeek, getWeek, startOfDay, endOfDay } from "date-fns";
@@ -3222,7 +3279,7 @@ export default function CalendarsPage() {
                   }
                 }}
               >
-                <SelectTrigger id="event-calendar" className="w-full bg-white border-gray-200 text-sm">
+                <SelectTrigger id="event-calendar" className="w-full bg-white border border-gray-200 text-sm">
                   <SelectValue placeholder="Select calendar" />
                 </SelectTrigger>
                 <SelectContent>
@@ -3250,13 +3307,18 @@ export default function CalendarsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal bg-white border-gray-200"
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-normal text-left hover:bg-gray-50"
                     >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {eventDate ? format(new Date(eventDate), "dd/MM/yy") : "Select date"}
-                    </Button>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-gray-500" />
+                        <span className={eventDate ? "text-gray-900" : "text-gray-500"}>
+                          {eventDate ? format(new Date(eventDate), "dd/MM/yy") : "Select date"}
+                        </span>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
