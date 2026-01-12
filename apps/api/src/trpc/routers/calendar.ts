@@ -1209,4 +1209,101 @@ export const calendarRouter = createTRPCRouter({
           });
         }
       }),
+
+  deleteEvent: protectedProcedure
+    .input(z.object({
+      calendarId: z.string(),
+      eventId: z.string(),
+    }))
+    .mutation(async ({ ctx: { db, session }, input }) => {
+      const calendar = await getCalendarById(db, input.calendarId);
+
+      if (!calendar || calendar.userId !== session.user.id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Calendar not found",
+        });
+      }
+
+      if (!calendar.accessToken || !calendar.isActive) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Calendar is not connected or active",
+        });
+      }
+
+      if (!calendar.calendarId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Calendar configuration error",
+        });
+      }
+
+      try {
+        const provider = createCalendarProvider(calendar.provider);
+        let accessToken = calendar.accessToken;
+
+        // Try to delete the event
+        try {
+          await provider.deleteEvent(accessToken, {
+            calendarId: calendar.calendarId,
+            eventId: input.eventId,
+          });
+
+          logger.info({
+            userId: session.user.id,
+            calendarId: input.calendarId,
+            eventId: input.eventId,
+          }, "Calendar event deleted successfully");
+
+          return {
+            success: true,
+            message: "Event deleted successfully",
+          };
+        } catch (error: any) {
+          // If authentication fails and we have a refresh token, try refreshing
+          if (calendar.refreshToken && error.message?.includes("authentication")) {
+            const refreshedTokens = await provider.refreshTokens(calendar.refreshToken);
+            accessToken = refreshedTokens.accessToken;
+
+            // Update the calendar with the new tokens
+            await updateCalendarConnection(db, calendar.id, {
+              accessToken: refreshedTokens.accessToken,
+              refreshToken: refreshedTokens.refreshToken,
+              expiresAt: refreshedTokens.expiresAt,
+            });
+
+            // Retry with the new access token
+            await provider.deleteEvent(accessToken, {
+              calendarId: calendar.calendarId,
+              eventId: input.eventId,
+            });
+
+            logger.info({
+              userId: session.user.id,
+              calendarId: input.calendarId,
+              eventId: input.eventId,
+            }, "Calendar event deleted successfully after token refresh");
+
+            return {
+              success: true,
+              message: "Event deleted successfully",
+            };
+          }
+          throw error;
+        }
+      } catch (error: any) {
+        logger.error({
+          userId: session.user.id,
+          calendarId: input.calendarId,
+          eventId: input.eventId,
+          error: error.message
+        }, "Failed to delete calendar event");
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to delete event: ${error.message}`,
+        });
+      }
+    }),
   });

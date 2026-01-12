@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -49,9 +49,17 @@ import {
   User,
   Star,
   MoreVertical,
+  Edit3,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@imaginecalendar/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@imaginecalendar/ui/dropdown-menu";
 
 // Google Maps component
 declare global {
@@ -585,7 +593,21 @@ function MoreVertIcon() {
 }
 
 // EventCard component (matching dashboard design)
-function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgColor: string; event: any }) {
+function EventCard({ 
+  borderColor, 
+  bgColor, 
+  event,
+  onClick,
+  onEdit,
+  onDelete,
+}: { 
+  borderColor: string; 
+  bgColor: string; 
+  event: any;
+  onClick?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
   const normalizedAttendees = useMemo(() => {
     if (!event?.attendees || !Array.isArray(event.attendees)) return [];
     return event.attendees
@@ -636,8 +658,24 @@ function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgCol
     }
   };
 
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't trigger if clicking on interactive elements
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) {
+      return;
+    }
+    onClick?.();
+  };
+
+  const handleMoreClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+  };
+
   return (
-    <div className="flex justify-between items-start p-4 rounded-xl border shadow-[0_2px_24px_0_rgba(0,0,0,0.05)]" style={{ borderColor, background: bgColor }}>
+    <div 
+      className="flex justify-between items-start p-4 rounded-xl border shadow-[0_2px_24px_0_rgba(0,0,0,0.05)] cursor-pointer" 
+      style={{ borderColor, background: bgColor }}
+      onClick={handleCardClick}
+    >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1">
@@ -690,9 +728,45 @@ function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgCol
           </button>
         )}
       </div>
-      <button className="text-[#9B9BA7] hover:opacity-80 transition-opacity">
-        <MoreVertIcon />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button 
+            className="text-[#9B9BA7] hover:opacity-80 transition-opacity"
+            onClick={handleMoreClick}
+          >
+            <MoreVertIcon />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          {onEdit && (
+            <DropdownMenuItem
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="flex items-center gap-2 cursor-pointer"
+            >
+              <Edit3 className="h-4 w-4" />
+              <span>Edit</span>
+            </DropdownMenuItem>
+          )}
+          {onDelete && (
+            <>
+              {onEdit && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Delete</span>
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -1900,6 +1974,38 @@ export default function CalendarsPage() {
       },
     })
   );
+
+  // Delete event mutation - using utils pattern
+  const deleteEventMutation = useMutation({
+    mutationFn: async (input: { calendarId: string; eventId: string }) => {
+      // Use trpc utils to call the mutation
+      const result = await (trpc as any).calendar.deleteEvent.mutate(input);
+      return result;
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Event deleted",
+        description: data?.message || "Event has been deleted successfully.",
+        variant: "success",
+      });
+      // Close modal if open
+      setEventDetailsModal({
+        open: false,
+        event: null,
+        isEditing: false,
+      });
+      // Refresh events
+      eventQueries.forEach((query) => query.refetch());
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Event deletion failed",
+        description: error.message || "Failed to delete event. Please try again.",
+        variant: "error",
+        duration: 3500,
+      });
+    },
+  });
 
   const handleConnectCalendar = async (provider: "google" | "microsoft") => {
     if (!user) {
@@ -3121,6 +3227,33 @@ export default function CalendarsPage() {
                             borderColor={borderColor}
                             bgColor={bgColor}
                             event={event}
+                            onClick={() => handleEventClick(event)}
+                            onEdit={() => {
+                              handleEventClick(event);
+                              setTimeout(() => {
+                                handleEditEvent();
+                              }, 100);
+                            }}
+                            onDelete={() => {
+                              if (confirm("Are you sure you want to delete this event?")) {
+                                // Find the calendar that contains this event
+                                const eventCalendar = calendars.find((cal: any) => 
+                                  cal.id === event.calendarId || cal.calendarId === event.calendarId
+                                );
+                                if (eventCalendar) {
+                                  deleteEventMutation.mutate({
+                                    calendarId: eventCalendar.id,
+                                    eventId: event.id,
+                                  });
+                                } else {
+                                  toast({
+                                    title: "Error",
+                                    description: "Could not find calendar for this event",
+                                    variant: "error",
+                                  });
+                                }
+                              }
+                            }}
                           />
                         );
                       })}
