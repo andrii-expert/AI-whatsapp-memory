@@ -449,24 +449,18 @@ export function ShareDetailsModal({
                   People who have access to "{resourceName}"
                 </AlertDialogDescription>
               </div>
-              <button
-                onClick={onClose}
-                className="text-gray-500 hover:text-gray-700 transition-colors ml-4"
-              >
-                <X className="h-5 w-5" />
-              </button>
             </div>
           </AlertDialogHeader>
 
           {/* Tabs */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex bg-gray-100 rounded-lg p-1 mb-4">
             <button
               onClick={() => setActiveTab("friends")}
               className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                "flex-1 px-4 py-2 text-sm font-medium transition-all rounded-md",
                 activeTab === "friends"
                   ? "bg-white border border-gray-300 text-black"
-                  : "bg-gray-100 text-gray-600"
+                  : "bg-transparent text-gray-500"
               )}
             >
               Friends
@@ -474,10 +468,10 @@ export function ShareDetailsModal({
             <button
               onClick={() => setActiveTab("others")}
               className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                "flex-1 px-4 py-2 text-sm font-medium transition-all rounded-md",
                 activeTab === "others"
                   ? "bg-white border border-gray-300 text-black"
-                  : "bg-gray-100 text-gray-600"
+                  : "bg-transparent text-gray-500"
               )}
             >
               Others
