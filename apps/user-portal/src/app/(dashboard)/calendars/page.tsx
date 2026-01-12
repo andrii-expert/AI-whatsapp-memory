@@ -3185,7 +3185,7 @@ export default function CalendarsPage() {
               Create Event
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-gray-500 mt-1">
-              Create new recurring reminder
+              Create a New Meeting Request
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-5 overflow-x-hidden">
