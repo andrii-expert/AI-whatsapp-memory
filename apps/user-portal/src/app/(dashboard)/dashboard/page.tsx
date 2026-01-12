@@ -549,6 +549,7 @@ export default function DashboardPage() {
 
   // Fetch all data
   const { data: userData } = useQuery(trpc.user.me.queryOptions());
+  const { data: userPreferences } = useQuery(trpc.preferences.get.queryOptions());
   const { data: whatsappNumbers } = useQuery(trpc.whatsapp.getMyNumbers.queryOptions());
   const { data: calendars } = useQuery(trpc.calendar.list.queryOptions());
   const { data: allTasks = [] } = useQuery(trpc.tasks.list.queryOptions({}));
@@ -1557,15 +1558,21 @@ export default function DashboardPage() {
                        startDate.getSeconds() === 0 &&
                        (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
       
-      // Format time like calendar page does
+      // Get user timezone from database
+      const userTimezone = userPreferences?.timezone || 'America/New_York';
+      
+      // Format time like calendar page does using user timezone
       const timeLabel = isAllDay 
         ? "All day" 
-        : format(startDate, "h:mm a");
+        : formatInTimezone(startDate, userTimezone, 'time');
       
-      // Format time range (e.g., "9AM -10PM (EST)")
-      const startTime = format(startDate, "ha");
-      const endTime = format(endDate, "ha");
-      const timeRange = isAllDay ? "All day" : `${startTime} -${endTime} (EST)`;
+      // Format time range using user timezone (e.g., "9AM -10PM")
+      const startTimeStr = formatInTimezone(startDate, userTimezone, 'time');
+      const endTimeStr = formatInTimezone(endDate, userTimezone, 'time');
+      // Convert "5:00 PM" to "5PM" format
+      const startTime = startTimeStr.replace(/:\d{2}\s/, '').replace(/\s(AM|PM)/i, '$1');
+      const endTime = endTimeStr.replace(/:\d{2}\s/, '').replace(/\s(AM|PM)/i, '$1');
+      const timeRange = isAllDay ? "All day" : `${startTime} -${endTime}`;
       
       return {
         id: event.id,
@@ -1592,7 +1599,7 @@ export default function DashboardPage() {
     formattedEvents.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     
     return formattedEvents.slice(0, 3); // Show next 3 events
-  }, [processedEvents]);
+  }, [processedEvents, userPreferences]);
 
   const shouldShowReminders = true;
   const shouldShowTasks = true;
@@ -3451,7 +3458,7 @@ function EventCard({ borderColor, bgColor, event, onClick, onEdit, onDelete }: {
             )}
           </div>
           <div className="text-[12px] font-normal text-black/40">
-            {event?.timeRange || "9AM -10PM (EST)"}
+            {event?.timeRange || "9AM -10PM"}
           </div>
         </div>
 

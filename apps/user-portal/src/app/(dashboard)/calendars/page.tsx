@@ -706,7 +706,7 @@ function EventCard({
             )}
           </div>
           <div className="text-[12px] font-normal text-black/40">
-            {event?.timeRange || "9AM -10PM (EST)"}
+            {event?.timeRange || "9AM -10PM"}
           </div>
         </div>
 
@@ -3041,7 +3041,7 @@ export default function CalendarsPage() {
                     // Format time range
                     const startTime = format(startDate, "ha");
                     const endTime = format(endDate, "ha");
-                    const timeRange = isAllDay ? "All day" : `${startTime} -${endTime} (EST)`;
+                    const timeRange = isAllDay ? "All day" : `${startTime} -${endTime}`;
                     
                     return {
                       id: event.id,
@@ -3201,10 +3201,25 @@ export default function CalendarsPage() {
                                          startDate.getSeconds() === 0 &&
                                          (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
                         
-                        // Format time range
-                        const startTime = format(startDate, "ha");
-                        const endTime = format(endDate, "ha");
-                        const timeRange = isAllDay ? "All day" : `${startTime} -${endTime} (EST)`;
+                        // Format time range using user timezone
+                        const userTimezone = event.userTimezone || userPreferences?.timezone || 'America/New_York';
+                        // Use 12-hour format for time range
+                        const startTimeStr = new Intl.DateTimeFormat('en-US', {
+                          timeZone: userTimezone,
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true,
+                        }).format(startDate);
+                        const endTimeStr = new Intl.DateTimeFormat('en-US', {
+                          timeZone: userTimezone,
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true,
+                        }).format(endDate);
+                        // Convert "5:00 PM" to "5PM" format
+                        const startTime = startTimeStr.replace(/:\d{2}\s/, '').replace(/\s(AM|PM)/i, '$1');
+                        const endTime = endTimeStr.replace(/:\d{2}\s/, '').replace(/\s(AM|PM)/i, '$1');
+                        const timeRange = isAllDay ? "All day" : `${startTime} -${endTime}`;
                         
                         return {
                           id: event.id,
