@@ -20,7 +20,9 @@ import {
   AlertDialogTitle,
   AlertDialogFooter,
   AlertDialogAction,
+  AlertDialogCancel,
 } from "@imaginecalendar/ui/alert-dialog";
+import { Input } from "@imaginecalendar/ui/input";
 import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -43,6 +45,11 @@ import {
   Check,
   Edit3,
   Trash2,
+  Loader2,
+  CalendarDays,
+  Settings,
+  Save,
+  Link2,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
@@ -78,6 +85,23 @@ export default function DashboardPage() {
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
+  
+  // Event details modal state
+  const [eventDetailsModal, setEventDetailsModal] = useState<{
+    open: boolean;
+    event: any | null;
+    isEditing: boolean;
+  }>({
+    open: false,
+    event: null,
+    isEditing: false,
+  });
+  
+  // Edit event form state
+  const [editEventTitle, setEditEventTitle] = useState("");
+  const [editEventDate, setEditEventDate] = useState("");
+  const [editEventTime, setEditEventTime] = useState("");
+  const [editEventLocation, setEditEventLocation] = useState("");
 
   // Fetch all data
   const { data: userData } = useQuery(trpc.user.me.queryOptions());
@@ -130,6 +154,92 @@ export default function DashboardPage() {
         return (query.data || []).map((event: any) => ({ ...event, calendarId }));
       });
   }, [eventQueries, activeCalendars]);
+
+  // Query for fetching individual event data with conference information
+  const individualEventQuery = useQuery(
+    trpc.calendar.getEvent.queryOptions(
+      eventDetailsModal.event?.calendarId && eventDetailsModal.event?.id ? {
+        calendarId: eventDetailsModal.event.calendarId,
+        eventId: eventDetailsModal.event.id,
+      } : {
+        calendarId: '',
+        eventId: '',
+      },
+      {
+        enabled: eventDetailsModal.open && !!eventDetailsModal.event?.calendarId && !!eventDetailsModal.event?.id,
+        staleTime: 0, // Always fetch fresh data
+        refetchOnWindowFocus: false,
+      }
+    )
+  );
+
+  // Process individual event for display
+  const processedIndividualEvent = useMemo(() => {
+    if (!individualEventQuery.data) return null;
+    const event = individualEventQuery.data;
+    const calendar = calendars?.find((cal: any) => cal.id === eventDetailsModal.event?.calendarId);
+    const provider = calendar?.provider || "google";
+    const eventColor = event.color || (provider === "google" ? "blue" : "purple");
+    const colorHex = eventColor === "orange" ? "#FFA500" :
+                     eventColor === "purple" ? "#9333EA" :
+                     eventColor === "blue" ? "#3b82f6" :
+                     "#3b82f6";
+    
+    return {
+      ...event,
+      colorHex,
+      userTimezone: calendar?.timeZone || 'Africa/Johannesburg',
+    };
+  }, [individualEventQuery.data, calendars, eventDetailsModal.event?.calendarId]);
+
+  // Update event mutation
+  const updateEventMutation = useMutation(
+    trpc.calendar.updateEvent.mutationOptions({
+      onSuccess: (data) => {
+        toast({
+          title: "Event updated",
+          description: data.message || "Event has been updated successfully.",
+          variant: "success",
+        });
+        // Exit edit mode
+        setEventDetailsModal(prev => ({ ...prev, isEditing: false }));
+        // Refresh events
+        eventQueries.forEach((query) => query.refetch());
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Event update failed",
+          description: error.message || "Failed to update event. Please try again.",
+          variant: "error",
+          duration: 3500,
+        });
+      },
+    })
+  );
+
+  // Delete event mutation
+  const deleteEventMutation = useMutation({
+    mutationFn: async (input: { calendarId: string; eventId: string }) => {
+      const result = await (trpc as any).calendar.deleteEvent.mutate(input);
+      return result;
+    },
+    onSuccess: () => {
+      eventQueries.forEach((query) => query.refetch());
+      toast({
+        title: "Event deleted",
+        description: "Event has been deleted successfully.",
+        variant: "success",
+      });
+      setEventDetailsModal({ open: false, event: null, isEditing: false });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to delete event",
+        description: error?.message || "An error occurred while deleting the event.",
+        variant: "error",
+      });
+    },
+  });
 
   const toggleShoppingListItemMutation = useMutation(
     trpc.shoppingList.toggle.mutationOptions({
@@ -199,6 +309,129 @@ export default function DashboardPage() {
   const hasVerifiedWhatsApp = whatsappNumbers?.some(number => number.isVerified) || false;
   const hasCalendar = calendars && calendars.length > 0;
 
+  // Event handlers
+  const handleEventClick = (event: any) => {
+    setEditEventTitle(event.title || "");
+    setEditEventLocation(event.location || "");
+    
+    // Format date and time for form inputs
+    if (event.start || event.startDate) {
+      const eventDate = new Date(event.start || event.startDate);
+      const dateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = eventDate.toTimeString().slice(0, 5); // HH:MM
+      setEditEventDate(dateStr || "");
+      setEditEventTime(timeStr || "");
+    } else {
+      setEditEventDate("");
+      setEditEventTime("");
+    }
+
+    setEventDetailsModal({
+      open: true,
+      event: event,
+      isEditing: false,
+    });
+  };
+
+  const handleEditEvent = () => {
+    if (eventDetailsModal.event) {
+      const event = eventDetailsModal.event;
+      setEditEventTitle(event.title || "");
+      setEditEventLocation(event.location || "");
+
+      // Format date and time for form inputs
+      if (event.start || event.startDate) {
+        const eventDate = new Date(event.start || event.startDate);
+        const dateStr = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        const timeStr = eventDate.toTimeString().slice(0, 5); // HH:MM
+        setEditEventDate(dateStr || "");
+        setEditEventTime(timeStr || "");
+      } else {
+        setEditEventDate("");
+        setEditEventTime("");
+      }
+    }
+
+    setEventDetailsModal(prev => ({ ...prev, isEditing: true }));
+  };
+
+  const handleDeleteEvent = (calendarId: string, eventId: string) => {
+    if (confirm("Are you sure you want to delete this event?")) {
+      deleteEventMutation.mutate({ calendarId, eventId });
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (!eventDetailsModal.event) return;
+
+    // Parse date and time
+    let startDate: Date | undefined;
+    if (editEventDate) {
+      const dateParts = editEventDate.split('-').map(Number);
+      if (dateParts.length === 3 && !dateParts.some(isNaN)) {
+        const year = dateParts[0]!;
+        const month = dateParts[1]!;
+        const day = dateParts[2]!;
+        startDate = new Date(year, month - 1, day);
+
+        // Add time if provided
+        if (editEventTime) {
+          const timeParts = editEventTime.split(':').map(Number);
+          if (timeParts.length >= 2 && !timeParts.some(isNaN) && timeParts[0] !== undefined && timeParts[1] !== undefined) {
+            startDate.setHours(timeParts[0], timeParts[1], 0, 0);
+          }
+        }
+      }
+    }
+
+    // Calculate end date (1 hour after start, or end of day if no time)
+    let endDate: Date | undefined;
+    if (startDate) {
+      endDate = new Date(startDate);
+      if (editEventTime) {
+        endDate.setHours(startDate.getHours() + 1);
+      } else {
+        endDate.setHours(23, 59, 59, 999); // End of day for all-day events
+      }
+    }
+
+    const updateData: any = {
+      calendarId: eventDetailsModal.event.calendarId,
+      eventId: eventDetailsModal.event.id,
+      allDay: !editEventTime,
+    };
+
+    // Only include fields that have values
+    const trimmedTitle = editEventTitle.trim();
+    if (trimmedTitle) {
+      updateData.title = trimmedTitle;
+    }
+
+    if (startDate) {
+      updateData.start = startDate.toISOString();
+    }
+
+    if (endDate) {
+      updateData.end = endDate.toISOString();
+    }
+
+    const location = editEventLocation.trim();
+    if (location) {
+      updateData.location = location;
+    }
+
+    updateEventMutation.mutate(updateData);
+  };
+
+  const handleCancelEdit = () => {
+    setEventDetailsModal(prev => ({ ...prev, isEditing: false }));
+  };
+
+  const handleGoToCalendar = (event: any) => {
+    if (event.htmlLink) {
+      window.open(event.htmlLink, "_blank");
+    }
+  };
 
   // Helper function to check if reminder occurs today
   const doesReminderOccurToday = (reminder: any, userTimezone?: string): boolean => {
@@ -1094,18 +1327,15 @@ export default function DashboardPage() {
                         borderColor={borderColor}
                         bgColor={bgColor}
                         event={event}
-                        onClick={() => {
-                          // Navigate to calendars page to view event details
-                          router.push("/calendars");
-                        }}
+                        onClick={() => handleEventClick(event)}
                         onEdit={() => {
-                          // Navigate to calendars page for editing
-                          router.push("/calendars");
+                          handleEventClick(event);
+                          setTimeout(() => {
+                            handleEditEvent();
+                          }, 100);
                         }}
                         onDelete={() => {
-                          // For dashboard, just navigate to calendars page
-                          // Delete functionality is available on calendars page
-                          router.push("/calendars");
+                          handleDeleteEvent(event.calendarId, event.id);
                         }}
                       />
                     );
@@ -1521,6 +1751,246 @@ export default function DashboardPage() {
               <X className="h-4 w-4" />
               Close
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Event Details Modal */}
+      <AlertDialog
+        open={eventDetailsModal.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEventDetailsModal({
+              open: false,
+              event: null,
+              isEditing: false,
+            });
+            setEditEventTitle("");
+            setEditEventDate("");
+            setEditEventTime("");
+            setEditEventLocation("");
+          }
+        }}
+      >
+        <AlertDialogContent className="w-[95vw] max-w-[640px] max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
+              <span className="truncate">
+                {processedIndividualEvent?.title || eventDetailsModal.event?.title || "Event Details"}
+              </span>
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">
+              {eventDetailsModal.isEditing ? "Edit event details. Make changes below." : "View event details."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {eventDetailsModal.event && (
+            <div className="space-y-4 py-2">
+              {individualEventQuery.isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading event details...
+                  </div>
+                </div>
+              ) : eventDetailsModal.isEditing ? (
+                /* Edit Mode */
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="edit-event-title" className="text-sm font-medium">
+                      Event Title
+                    </label>
+                    <Input
+                      id="edit-event-title"
+                      placeholder="Enter event title"
+                      value={editEventTitle}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventTitle(e.target.value)}
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label htmlFor="edit-event-date" className="text-sm font-medium">
+                        Date
+                      </label>
+                      <Input
+                        id="edit-event-date"
+                        type="date"
+                        value={editEventDate}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventDate(e.target.value)}
+                        className="text-sm sm:text-base"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="edit-event-time" className="text-sm font-medium">
+                        Time
+                      </label>
+                      <Input
+                        id="edit-event-time"
+                        type="time"
+                        value={editEventTime}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventTime(e.target.value)}
+                        className="text-sm sm:text-base"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="edit-event-location" className="text-sm font-medium">
+                      Location (optional)
+                    </label>
+                    <Input
+                      id="edit-event-location"
+                      placeholder="Enter location"
+                      value={editEventLocation}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEventLocation(e.target.value)}
+                      className="text-sm sm:text-base"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* View Mode */
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-2 h-2 rounded-full mt-2 flex-shrink-0"
+                      style={{ backgroundColor: processedIndividualEvent?.colorHex || eventDetailsModal.event?.eventColor === "orange" ? "#FFA500" : eventDetailsModal.event?.eventColor === "purple" ? "#9333EA" : "#3b82f6" }}
+                    ></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-gray-900">
+                        {format((processedIndividualEvent || eventDetailsModal.event).start || (processedIndividualEvent || eventDetailsModal.event).startDate, "PPP 'at' p")}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(processedIndividualEvent || eventDetailsModal.event).location && (
+                    <div className="flex items-start gap-3">
+                      <MapPin
+                        className="w-4 h-4 mt-1 flex-shrink-0"
+                        style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.eventColor === "orange" ? "#FFA500" : eventDetailsModal.event?.eventColor === "purple" ? "#9333EA" : "#3b82f6" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <button
+                          onClick={() => {
+                            const event = processedIndividualEvent || eventDetailsModal.event;
+                            const location = event.location;
+                            if (location) {
+                              const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+                              if (coordMatch) {
+                                const lat = coordMatch[1];
+                                const lng = coordMatch[2];
+                                window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+                              } else {
+                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
+                              }
+                            }
+                          }}
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left"
+                        >
+                          {(processedIndividualEvent || eventDetailsModal.event).location}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(processedIndividualEvent || eventDetailsModal.event).conferenceUrl && (() => {
+                    const event = processedIndividualEvent || eventDetailsModal.event;
+                    const conferenceUrl = event.conferenceUrl || '';
+                    const isMicrosoftTeams = conferenceUrl.includes('teams.microsoft.com') || 
+                                            conferenceUrl.includes('teams.live.com') ||
+                                            conferenceUrl.includes('microsoft.com/meet');
+                    const isGoogleMeet = conferenceUrl.includes('meet.google.com');
+                    const meetingType = isMicrosoftTeams ? 'Microsoft Teams' : isGoogleMeet ? 'Google Meet' : 'Meeting';
+                    const meetingIcon = isMicrosoftTeams ? (
+                      <MicrosoftIcon className="h-4 w-4" />
+                    ) : (
+                      <Video className="h-4 w-4" />
+                    );
+                    
+                    return (
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="w-4 h-4 mt-1 flex-shrink-0 flex items-center justify-center"
+                          style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.eventColor === "orange" ? "#FFA500" : eventDetailsModal.event?.eventColor === "purple" ? "#9333EA" : "#3b82f6" }}
+                        >
+                          {meetingIcon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <button
+                            onClick={() => {
+                              window.open(conferenceUrl, '_blank', 'noopener,noreferrer');
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left flex items-center gap-2"
+                          >
+                            {isMicrosoftTeams ? (
+                              <MicrosoftIcon className="h-3 w-3" />
+                            ) : (
+                              <Video className="h-3 w-3" />
+                            )}
+                            Join {meetingType}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <AlertDialogCancel
+              onClick={eventDetailsModal.isEditing ? handleCancelEdit : undefined}
+              className="bg-orange-500 text-white hover:bg-orange-600 hover:font-bold border-0 w-full sm:w-auto order-2 sm:order-1"
+            >
+              {eventDetailsModal.isEditing ? "Cancel" : "Close"}
+            </AlertDialogCancel>
+            <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">
+              {eventDetailsModal.isEditing ? (
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={updateEventMutation.isPending || !editEventTitle.trim()}
+                  className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {updateEventMutation.isPending ? (
+                    <>
+                      <Clock className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleEditEvent}
+                    className="flex-1 sm:flex-none"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      if (eventDetailsModal.event) {
+                        handleGoToCalendar(eventDetailsModal.event);
+                        setEventDetailsModal({ open: false, event: null, isEditing: false });
+                      }
+                    }}
+                    className="w-full sm:w-auto"
+                  >
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Go to Calendar
+                  </Button>
+                </>
+              )}
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
