@@ -2486,19 +2486,6 @@ export default function DashboardPage() {
               <AlertDialogTitle className="text-lg sm:text-xl font-semibold text-black">
                 {processedIndividualEvent?.title || eventDetailsModal.event?.title || "Event Details"}
               </AlertDialogTitle>
-              <button
-                onClick={() => {
-                  resetEditFields();
-                  setEventDetailsModal({
-                    open: false,
-                    event: null,
-                    isEditing: false,
-                  });
-                }}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
             </div>
             {eventDetailsModal.isEditing && (
               <AlertDialogDescription className="text-sm mt-2">
