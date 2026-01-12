@@ -452,43 +452,48 @@ export function ShareDetailsModal({
             </div>
           </AlertDialogHeader>
 
-          {/* Tabs */}
-          <div className="flex bg-gray-100 rounded-lg p-1 mb-4">
-            <button
-              onClick={() => setActiveTab("friends")}
-              className={cn(
-                "flex-1 px-4 py-2 text-sm font-medium transition-all rounded-md",
-                activeTab === "friends"
-                  ? "bg-white border border-gray-300 text-black"
-                  : "bg-transparent text-gray-500"
-              )}
-            >
-              Friends
-            </button>
-            <button
-              onClick={() => setActiveTab("others")}
-              className={cn(
-                "flex-1 px-4 py-2 text-sm font-medium transition-all rounded-md",
-                activeTab === "others"
-                  ? "bg-white border border-gray-300 text-black"
-                  : "bg-transparent text-gray-500"
-              )}
-            >
-              Others
-            </button>
-          </div>
+          {/* Tabs and Search - only show when not viewing shared resource */}
+          {!isViewingShared && (
+            <>
+              {/* Tabs */}
+              <div className="flex bg-gray-100 rounded-lg p-1 mb-4">
+                <button
+                  onClick={() => setActiveTab("friends")}
+                  className={cn(
+                    "flex-1 px-4 py-2 text-sm font-medium transition-all rounded-md",
+                    activeTab === "friends"
+                      ? "bg-white border border-gray-300 text-black"
+                      : "bg-transparent text-gray-500"
+                  )}
+                >
+                  Friends
+                </button>
+                <button
+                  onClick={() => setActiveTab("others")}
+                  className={cn(
+                    "flex-1 px-4 py-2 text-sm font-medium transition-all rounded-md",
+                    activeTab === "others"
+                      ? "bg-white border border-gray-300 text-black"
+                      : "bg-transparent text-gray-500"
+                  )}
+                >
+                  Others
+                </button>
+              </div>
 
-          {/* Search Bar */}
-          <div className="relative mb-4">
-            <Input
-              placeholder="Search friends..."
-              value={searchTerm}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="pr-10 h-10 text-sm bg-white"
-            />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-          </div>
+              {/* Search Bar */}
+              <div className="relative mb-4">
+                <Input
+                  placeholder="Search friends..."
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="pr-10 h-10 text-sm bg-white"
+                />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              </div>
+            </>
+          )}
 
           <div className="space-y-4">
             {isLoading ? (
@@ -561,22 +566,26 @@ export function ShareDetailsModal({
                   </div>
                 </div>
               </div>
-            ) : shares.length === 0 ? (
-              <div className="text-center py-6 sm:py-8 text-gray-500">
-                <Users className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 text-gray-300" />
-                <p className="text-xs sm:text-sm">
-                  This {resourceType === "task" || resourceType === "note" ? (resourceType === "task" ? "task" : "note") : "folder"} hasn't been shared yet
-                </p>
-              </div>
             ) : (
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-black">Shared with</h3>
                 <div className="space-y-2">
-                  {shares.map((share: any) => {
-                    const displayName = [share.sharedWithUser.firstName, share.sharedWithUser.lastName]
-                      .filter(Boolean)
-                      .join(' ') || share.sharedWithUser.email?.split('@')[0] || "Unknown User";
-                    
+                  {(() => {
+                    // Filter shares based on active tab
+                    const filteredShares = shares.filter((share: any) => {
+                      if (activeTab === "friends") {
+                        // Check if the shared user is in friends list
+                        return friendsWithAccounts.some(
+                          (friend: any) => friend.connectedUserId === share.sharedWithUser.id
+                        );
+                      } else {
+                        // Others: users not in friends list
+                        return !friendsWithAccounts.some(
+                          (friend: any) => friend.connectedUserId === share.sharedWithUser.id
+                        );
+                      }
+                    });
+
                     // Get initials for avatar
                     const getInitials = (name: string) => {
                       if (!name) return "U";
@@ -586,47 +595,65 @@ export function ShareDetailsModal({
                       }
                       return name.substring(0, 2).toUpperCase();
                     };
-                    
-                    const initials = getInitials(displayName);
-                    
-                    return (
-                      <div
-                        key={share.id}
-                        className="flex items-center gap-3"
-                      >
-                        {/* Avatar with initials in pink */}
-                        <div className="w-10 h-10 rounded-full bg-pink-200 flex items-center justify-center flex-shrink-0">
-                          <span className="text-sm font-medium text-pink-700">
-                            {initials}
-                          </span>
+
+                    if (filteredShares.length === 0) {
+                      return (
+                        <div className="text-center py-6 text-gray-500">
+                          <p className="text-sm">
+                            {activeTab === "friends" 
+                              ? "No friends have access yet"
+                              : "No other users have access yet"}
+                          </p>
                         </div>
-                        
-                        {/* Name */}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-normal text-black">
-                            {displayName}
-                          </div>
-                        </div>
-                        
-                        {/* Permission Dropdown */}
-                        <Select
-                          value={share.permission}
-                          onValueChange={(value: "view" | "edit") =>
-                            handlePermissionChange(share.id, value)
-                          }
-                          disabled={updatePermissionMutation.isPending}
+                      );
+                    }
+
+                    return filteredShares.map((share: any) => {
+                      const displayName = [share.sharedWithUser.firstName, share.sharedWithUser.lastName]
+                        .filter(Boolean)
+                        .join(' ') || share.sharedWithUser.email?.split('@')[0] || "Unknown User";
+                      
+                      const initials = getInitials(displayName);
+                      
+                      return (
+                        <div
+                          key={share.id}
+                          className="flex items-center gap-3"
                         >
-                          <SelectTrigger className="w-[120px] h-9 border border-gray-200 bg-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="view">Can view</SelectItem>
-                            <SelectItem value="edit">Can edit</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    );
-                  })}
+                          {/* Avatar with initials in pink */}
+                          <div className="w-10 h-10 rounded-full bg-pink-200 flex items-center justify-center flex-shrink-0">
+                            <span className="text-sm font-medium text-pink-700">
+                              {initials}
+                            </span>
+                          </div>
+                          
+                          {/* Name */}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-normal text-black">
+                              {displayName}
+                            </div>
+                          </div>
+                          
+                          {/* Permission Dropdown */}
+                          <Select
+                            value={share.permission}
+                            onValueChange={(value: "view" | "edit") =>
+                              handlePermissionChange(share.id, value)
+                            }
+                            disabled={updatePermissionMutation.isPending}
+                          >
+                            <SelectTrigger className="w-[120px] h-9 border border-gray-200 bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="view">Can view</SelectItem>
+                              <SelectItem value="edit">Can edit</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}
