@@ -3073,7 +3073,7 @@ export default function DashboardPage() {
                                             conferenceUrl.includes('microsoft.com/meet');
                     const isGoogleMeet = conferenceUrl.includes('meet.google.com');
                     
-                    // Format time as "05:00 PM (EST)"
+                    // Format time as "05:00 PM"
                     const formatTimeForDisplay = () => {
                       if (!event?.start) return "N/A";
                       const date = new Date(event.start);
@@ -3087,18 +3087,7 @@ export default function DashboardPage() {
                         hour12: true,
                       }).format(date);
                       
-                      // Get timezone abbreviation
-                      let tzAbbr = 'EST';
-                      if (timezone.includes('America/New_York') || timezone.includes('EST') || timezone.includes('EDT')) {
-                        tzAbbr = 'EST';
-                      } else if (timezone.includes('America/Los_Angeles') || timezone.includes('PST') || timezone.includes('PDT')) {
-                        tzAbbr = 'PST';
-                      } else if (timezone.includes('America/Chicago') || timezone.includes('CST') || timezone.includes('CDT')) {
-                        tzAbbr = 'CST';
-                      } else if (timezone.includes('America/Denver') || timezone.includes('MST') || timezone.includes('MDT')) {
-                        tzAbbr = 'MST';
-                      }
-                      return `${timeStr} (${tzAbbr})`;
+                      return timeStr;
                     };
 
                     return (
@@ -3138,7 +3127,15 @@ export default function DashboardPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.open(conferenceUrl, '_blank', 'noopener,noreferrer');
+                                if (isMicrosoftTeams) {
+                                  // Microsoft Teams links - ensure they open correctly
+                                  const teamsUrl = conferenceUrl.startsWith('http') 
+                                    ? conferenceUrl 
+                                    : `https://${conferenceUrl}`;
+                                  window.open(teamsUrl, '_blank', 'noopener,noreferrer');
+                                } else {
+                                  window.open(conferenceUrl, '_blank', 'noopener,noreferrer');
+                                }
                               }}
                               className="flex items-center gap-1 px-[7px] py-1 rounded border border-black/10 bg-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
                             >
