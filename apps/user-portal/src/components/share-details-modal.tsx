@@ -51,6 +51,7 @@ export function ShareDetailsModal({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showFriendsList, setShowFriendsList] = useState(true);
+  const [activeTab, setActiveTab] = useState<"friends" | "others">("friends");
 
   // Fetch friends list
   const { data: friendsList = [] } = useQuery(trpc.friends.list.queryOptions());
@@ -437,23 +438,65 @@ export function ShareDetailsModal({
   return (
     <>
       <AlertDialog open={isOpen} onOpenChange={onClose}>
-        <AlertDialogContent className="w-[95vw] sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-          <AlertDialogHeader className="space-y-2 sm:space-y-3">
-            <AlertDialogTitle className="text-lg sm:text-xl font-bold flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+        <AlertDialogContent className="w-[95vw] sm:max-w-[500px] max-h-[90vh] overflow-y-auto p-6">
+          <AlertDialogHeader className="pb-4 border-b border-gray-200 mb-4 px-0">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <AlertDialogTitle className="text-lg sm:text-xl font-semibold text-black">
+                  Share With Friends
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-sm text-gray-500 mt-1">
+                  People who have access to "{resourceName}"
+                </AlertDialogDescription>
               </div>
-              <span className="truncate">{isViewingShared ? "Shared By" : "Shared With"}</span>
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm sm:text-base pt-1 break-all">
-              {isViewingShared 
-                ? `This ${resourceType === "task" || resourceType === "note" ? (resourceType === "task" ? "task" : "note") : "folder"} was shared with you by:`
-                : `People who have access to "${resourceName}"`
-              }
-            </AlertDialogDescription>
+              <button
+                onClick={onClose}
+                className="text-gray-500 hover:text-gray-700 transition-colors ml-4"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </AlertDialogHeader>
 
-          <div className="space-y-3 sm:space-y-4 pt-3 sm:pt-4">
+          {/* Tabs */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveTab("friends")}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                activeTab === "friends"
+                  ? "bg-white border border-gray-300 text-black"
+                  : "bg-gray-100 text-gray-600"
+              )}
+            >
+              Friends
+            </button>
+            <button
+              onClick={() => setActiveTab("others")}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                activeTab === "others"
+                  ? "bg-white border border-gray-300 text-black"
+                  : "bg-gray-100 text-gray-600"
+              )}
+            >
+              Others
+            </button>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative mb-4">
+            <Input
+              placeholder="Search friends..."
+              value={searchTerm}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="pr-10 h-10 text-sm bg-white"
+            />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+          </div>
+
+          <div className="space-y-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-6 sm:py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -532,49 +575,46 @@ export function ShareDetailsModal({
                 </p>
               </div>
             ) : (
-              <div className="space-y-2 sm:space-y-3">
-                {shares.map((share: any) => {
-                  const displayName = [share.sharedWithUser.firstName, share.sharedWithUser.lastName]
-                    .filter(Boolean)
-                    .join(' ') || share.sharedWithUser.email?.split('@')[0] || "Unknown User";
-                  
-                  return (
-                    <div
-                      key={share.id}
-                      className="border rounded-lg p-3 sm:p-4 hover:bg-gray-50 transition-colors"
-                    >
-                      {/* Mobile: Stacked Layout */}
-                      <div className="flex sm:hidden flex-col gap-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm text-gray-900 truncate">
-                              {displayName}
-                            </div>
-                            <div className="flex flex-col gap-1 mt-1">
-                              {share.sharedWithUser.email && (
-                                <div className="flex items-center gap-1 text-xs text-gray-500">
-                                  <Mail className="h-3 w-3 flex-shrink-0" />
-                                  <span className="truncate">{share.sharedWithUser.email}</span>
-                                </div>
-                              )}
-                              {share.sharedWithUser.phone && (
-                                <div className="flex items-center gap-1 text-xs text-gray-500">
-                                  <Phone className="h-3 w-3 flex-shrink-0" />
-                                  <span className="truncate">{share.sharedWithUser.phone}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 hover:bg-red-50 hover:text-red-600 flex-shrink-0"
-                            onClick={() => setShareToDelete(share.id)}
-                            title="Remove access"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-black">Shared with</h3>
+                <div className="space-y-2">
+                  {shares.map((share: any) => {
+                    const displayName = [share.sharedWithUser.firstName, share.sharedWithUser.lastName]
+                      .filter(Boolean)
+                      .join(' ') || share.sharedWithUser.email?.split('@')[0] || "Unknown User";
+                    
+                    // Get initials for avatar
+                    const getInitials = (name: string) => {
+                      if (!name) return "U";
+                      const parts = name.split(" ");
+                      if (parts.length >= 2 && parts[0] && parts[1]) {
+                        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+                      }
+                      return name.substring(0, 2).toUpperCase();
+                    };
+                    
+                    const initials = getInitials(displayName);
+                    
+                    return (
+                      <div
+                        key={share.id}
+                        className="flex items-center gap-3"
+                      >
+                        {/* Avatar with initials in pink */}
+                        <div className="w-10 h-10 rounded-full bg-pink-200 flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-medium text-pink-700">
+                            {initials}
+                          </span>
                         </div>
+                        
+                        {/* Name */}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-normal text-black">
+                            {displayName}
+                          </div>
+                        </div>
+                        
+                        {/* Permission Dropdown */}
                         <Select
                           value={share.permission}
                           onValueChange={(value: "view" | "edit") =>
@@ -582,295 +622,22 @@ export function ShareDetailsModal({
                           }
                           disabled={updatePermissionMutation.isPending}
                         >
-                          <SelectTrigger className="w-full h-8 text-xs">
+                          <SelectTrigger className="w-[120px] h-9 border border-gray-200 bg-white">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="view">
-                              <div className="flex items-center gap-2">
-                                <Eye className="h-3.5 w-3.5" />
-                                <span>View Only</span>
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="edit">
-                              <div className="flex items-center gap-2">
-                                <Edit3 className="h-3.5 w-3.5" />
-                                <span>Can Edit</span>
-                              </div>
-                            </SelectItem>
+                            <SelectItem value="view">Can view</SelectItem>
+                            <SelectItem value="edit">Can edit</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-
-                      {/* Desktop: Horizontal Layout */}
-                      <div className="hidden sm:flex items-center gap-4">
-                        {/* User Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-gray-900 truncate">
-                            {displayName}
-                          </div>
-                          <div className="flex flex-col gap-1 mt-1">
-                            {share.sharedWithUser.email && (
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
-                                <Mail className="h-3 w-3 flex-shrink-0" />
-                                <span className="truncate">{share.sharedWithUser.email}</span>
-                              </div>
-                            )}
-                            {share.sharedWithUser.phone && (
-                              <div className="flex items-center gap-1 text-xs text-gray-500">
-                                <Phone className="h-3 w-3 flex-shrink-0" />
-                                <span>{share.sharedWithUser.phone}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Permission Select */}
-                        <div className="flex-shrink-0">
-                          <Select
-                            value={share.permission}
-                            onValueChange={(value: "view" | "edit") =>
-                              handlePermissionChange(share.id, value)
-                            }
-                            disabled={updatePermissionMutation.isPending}
-                          >
-                            <SelectTrigger className="w-[130px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="view">
-                                <div className="flex items-center gap-2">
-                                  <Eye className="h-3.5 w-3.5" />
-                                  <span>View</span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="edit">
-                                <div className="flex items-center gap-2">
-                                  <Edit3 className="h-3.5 w-3.5" />
-                                  <span>Edit</span>
-                                </div>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Delete Button */}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-9 w-9 hover:bg-red-50 hover:text-red-600 flex-shrink-0"
-                          onClick={() => setShareToDelete(share.id)}
-                          title="Remove access"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Add More Users Section - only show if you're the owner */}
-          {!isViewingShared && (
-            <div className="border-t pt-3 sm:pt-4 mt-3 sm:mt-4">
-              {!isAddingUsers ? (
-                <Button
-                variant="outline"
-                onClick={() => setIsAddingUsers(true)}
-                className="w-full h-9 sm:h-10 text-sm"
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add More Users
-              </Button>
-            ) : (
-              <div className="space-y-2 sm:space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs sm:text-sm font-semibold text-gray-700">
-                    Add More Users
-                  </label>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setIsAddingUsers(false);
-                      setSearchTerm("");
-                      setSearchResults([]);
-                    }}
-                    className="h-7 w-7"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Friends List */}
-                {friendsWithAccounts.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs sm:text-sm font-semibold text-gray-700">
-                        Select from Friends ({friendsWithAccounts.length})
-                      </label>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowFriendsList(!showFriendsList)}
-                        className="h-7 text-xs"
-                      >
-                        {showFriendsList ? "Hide" : "Show"}
-                      </Button>
-                    </div>
-                    {showFriendsList && (
-                      <div className="border rounded-lg divide-y max-h-[120px] sm:max-h-[150px] overflow-y-auto">
-                        {friendsWithAccounts.map((friend: any) => {
-                          const user = friend.connectedUser;
-                          const displayName = [user.firstName, user.lastName]
-                            .filter(Boolean)
-                            .join(' ') || user.email?.split('@')[0] || friend.name || "Unknown User";
-                          const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
-                          const isAlreadyShared = existingUserIds.includes(user.id);
-                          
-                          return (
-                            <div
-                              key={friend.id}
-                              className={cn(
-                                "p-2 flex flex-col sm:flex-row sm:items-center gap-2",
-                                isAlreadyShared ? "bg-gray-50 opacity-60" : "hover:bg-gray-50"
-                              )}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm text-gray-900 truncate">
-                                  {displayName}
-                                  {friend.name && friend.name !== displayName && (
-                                    <span className="text-xs text-gray-500 ml-1">({friend.name})</span>
-                                  )}
-                                </div>
-                                <div className="text-xs text-gray-500 truncate">
-                                  {user.email}
-                                </div>
-                              </div>
-                              <div className="flex gap-1.5 sm:gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleAddFriend(friend, "view")}
-                                  disabled={createShareMutation.isPending || isAlreadyShared}
-                                  className="flex-1 sm:flex-none text-xs h-7 sm:h-8"
-                                >
-                                  <Eye className="h-3 w-3 mr-1" />
-                                  View
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="blue-primary"
-                                  onClick={() => handleAddFriend(friend, "edit")}
-                                  disabled={createShareMutation.isPending || isAlreadyShared}
-                                  className="flex-1 sm:flex-none text-xs h-7 sm:h-8"
-                                >
-                                  <Edit3 className="h-3 w-3 mr-1" />
-                                  Edit
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Search Input */}
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
-                    <Input
-                      placeholder="Search by email or phone..."
-                      value={searchTerm}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      className="pr-10 h-9 sm:h-10 text-sm"
-                    />
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                  <Button
-                    onClick={handleSearch}
-                    disabled={!searchTerm.trim() || isSearching}
-                    variant="blue-primary"
-                    size="sm"
-                    className="h-9 sm:h-10 sm:w-auto"
-                  >
-                    {isSearching ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Search className="h-4 w-4 sm:hidden mr-2" />
-                        <span>Search</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {/* Search Results */}
-                {searchResults.length > 0 && (
-                  <div className="border rounded-lg divide-y max-h-[120px] sm:max-h-[150px] overflow-y-auto">
-                    {searchResults.map((user: any) => {
-                      const displayName = [user.firstName, user.lastName]
-                        .filter(Boolean)
-                        .join(' ') || user.email?.split('@')[0] || "Unknown User";
-                      
-                      return (
-                        <div
-                          key={user.id}
-                          className="p-2 flex flex-col sm:flex-row sm:items-center gap-2 hover:bg-gray-50"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm text-gray-900 truncate">
-                              {displayName}
-                            </div>
-                            <div className="text-xs text-gray-500 truncate">
-                              {user.email}
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5 sm:gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleAddUser(user, "view")}
-                              disabled={createShareMutation.isPending}
-                              className="flex-1 sm:flex-none text-xs h-7 sm:h-8"
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              View
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="blue-primary"
-                              onClick={() => handleAddUser(user, "edit")}
-                              disabled={createShareMutation.isPending}
-                              className="flex-1 sm:flex-none text-xs h-7 sm:h-8"
-                            >
-                              <Edit3 className="h-3 w-3 mr-1" />
-                              Edit
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 sm:gap-3 pt-3 sm:pt-4 border-t mt-3 sm:mt-4">
-            <Button 
-              variant="outline" 
-              onClick={onClose}
-              className="w-full sm:w-auto h-9 sm:h-10"
-            >
-              Close
-            </Button>
-          </div>
         </AlertDialogContent>
       </AlertDialog>
 
