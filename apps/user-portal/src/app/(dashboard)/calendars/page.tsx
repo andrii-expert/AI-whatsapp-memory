@@ -3069,74 +3069,63 @@ export default function CalendarsPage() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="flex flex-col gap-2">
                     {displayEvents
-                      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-                      .map((event, index) => {
-                      const start = new Date(event.start);
-                      const end = new Date(event.end);
-                      const duration = end.getTime() - start.getTime();
-                      const hours = Math.floor(duration / (1000 * 60 * 60));
-                      const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
-                      const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-
-                      return (
-                        <div
-                          key={index}
-                          className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200 cursor-pointer"
-                          onClick={() => handleEventClick(event)}
-                        >
-                          {/* Event color indicator */}
-                          <div
-                            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
-                            style={{ backgroundColor: event.colorHex || '#3b82f6' }}
+                      .map((event: any) => {
+                        const startDate = new Date(event.start);
+                        const endDate = new Date(event.end);
+                        
+                        // Check if it's an all-day event
+                        const isAllDay = startDate.getHours() === 0 && 
+                                         startDate.getMinutes() === 0 &&
+                                         startDate.getSeconds() === 0 &&
+                                         (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
+                        
+                        // Format time range
+                        const startTime = format(startDate, "ha");
+                        const endTime = format(endDate, "ha");
+                        const timeRange = isAllDay ? "All day" : `${startTime} -${endTime} (EST)`;
+                        
+                        return {
+                          id: event.id,
+                          title: event.title || "Untitled Event",
+                          start: startDate,
+                          end: endDate,
+                          startDate: startDate,
+                          endDate: endDate,
+                          timeRange,
+                          location: event.location,
+                          description: event.description,
+                          htmlLink: event.htmlLink,
+                          webLink: event.webLink,
+                          color: event.color,
+                          eventColor: event.eventColor || "blue",
+                          conferenceUrl: event.conferenceUrl,
+                          attendees: event.attendees || [],
+                        };
+                      })
+                      .sort((a: any, b: any) => a.startDate.getTime() - b.startDate.getTime())
+                      .map((event: any) => {
+                        const borderColor = event.eventColor === "orange" ? "#D8A4FF" :
+                                           event.eventColor === "purple" ? "#D8A4FF" :
+                                           event.eventColor === "blue" ? "#D8A4FF" :
+                                           "#E6CB8A";
+                        const bgColor = event.eventColor === "orange" ? "#FDFAFF" :
+                                        event.eventColor === "purple" ? "#FDFAFF" :
+                                        event.eventColor === "blue" ? "#FDFAFF" :
+                                        "#FFFEFA";
+                        
+                        return (
+                          <EventCard
+                            key={event.id}
+                            borderColor={borderColor}
+                            bgColor={bgColor}
+                            event={event}
                           />
-
-                          <div className="flex items-start gap-4">
-                            {/* Time */}
-                            <div className="flex-shrink-0 w-20 text-center">
-                              <div className="text-sm font-semibold text-gray-900">
-                                {formatInTimezone(event.start, event.userTimezone || 'Africa/Johannesburg', 'time')}
-                              </div>
-                              {duration > 0 && (
-                                <div className="text-xs text-gray-500">
-                                  {durationText}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Event details */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="font-semibold text-gray-900 text-sm mb-1 truncate">
-                                    {event.title}
-                                  </h3>
-
-                                  {/* Location */}
-                                  {event.location && (
-                                    <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
-                                      <MapPin className="h-3 w-3 flex-shrink-0" />
-                                      <span className="truncate">{event.location}</span>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Action indicator */}
-                                <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Hover overlay */}
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-5 rounded-lg transition-all duration-200 pointer-events-none" />
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
+                        );
+                      })}
+                  </div>
+                )}
             </div>
           </div>
         );
