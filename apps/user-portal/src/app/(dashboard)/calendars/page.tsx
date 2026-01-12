@@ -2869,7 +2869,7 @@ export default function CalendarsPage() {
             <div className="xl:col-span-1 bg-white rounded-xl shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
           <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
             {/* Event Creation Button - Hidden on mobile */}
-            <div className="hidden md:block mb-3 sm:mb-4 md:mb-6 flex w-full justify-end">
+            <div className="hidden md:flex mb-3 sm:mb-4 md:mb-6 flex w-full justify-end">
               <Button
                 variant="blue-primary"
                 className="w-full sm:w-auto text-sm sm:text-base"
