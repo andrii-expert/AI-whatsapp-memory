@@ -3144,7 +3144,7 @@ export default function CalendarsPage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setEventTitle(e.target.value)
                 }
-                className="bg-gray-50 border-gray-200 text-sm"
+                className="bg-gray-50 border-0 text-sm"
               />
             </div>
 
