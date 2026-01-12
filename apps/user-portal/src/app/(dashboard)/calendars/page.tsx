@@ -3516,10 +3516,12 @@ export default function CalendarsPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
-                className="w-full bg-white border-gray-200 hover:bg-gray-50 justify-start"
+                className="w-full bg-white border border-gray-200 hover:bg-gray-50 justify-center"
               >
-                <img src="/google_meet.png" alt="Google Meet" className="h-4 w-4 mr-2" />
-                {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
+                <img src="/google_meet.png" alt="Google Meet" className="h-5 w-5 mr-2" />
+                <span className="text-gray-700 font-normal">
+                  {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
+                </span>
               </Button>
               <div className="flex items-center justify-center my-2">
                 <span className="text-xs text-gray-500">OR</span>
