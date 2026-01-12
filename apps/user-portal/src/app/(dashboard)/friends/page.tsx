@@ -518,6 +518,7 @@ export default function FriendsPage() {
   const isLoading = isLoadingAddresses;
 
   return (
+    <>
     <div className="min-h-screen bg-white">
       {/* Breadcrumb Navigation */}
       <div className="hidden lg:flex items-center gap-2 text-sm justify-between px-4 pt-6 pb-4">
@@ -1086,8 +1087,7 @@ export default function FriendsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-    </div>
+    </>
   );
 }
 
