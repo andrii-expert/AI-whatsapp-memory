@@ -519,7 +519,7 @@ export default function FriendsPage() {
 
   return (
     <>
-    <div className="min-h-screen bg-white">
+    <div className="bg-white">
       {/* Breadcrumb Navigation */}
       <div className="hidden lg:flex items-center gap-2 text-sm justify-between px-4 pt-6 pb-4">
         <div className="flex items-center justify-center gap-2">
