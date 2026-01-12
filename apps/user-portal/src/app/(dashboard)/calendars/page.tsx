@@ -3665,7 +3665,7 @@ export default function CalendarsPage() {
           <AlertDialogFooter className="flex-row gap-3 pt-4">
             <AlertDialogCancel
               disabled={createEventMutation.isPending}
-              className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg"
+              className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg mt-0"
             >
               Cancel
             </AlertDialogCancel>
