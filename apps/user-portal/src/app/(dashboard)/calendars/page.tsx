@@ -4064,17 +4064,18 @@ export default function CalendarsPage() {
           }
         }}
       >
-        <AlertDialogContent className="w-[95vw] max-w-[640px] max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
-              <span className="truncate">
-                {processedIndividualEvent?.title || eventDetailsModal.event?.title || "Edit Event"}
-              </span>
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">
-              Edit event details. Make changes below.
-            </AlertDialogDescription>
+        <AlertDialogContent className="w-[95vw] sm:w-full max-w-[500px] max-h-[90vh] overflow-y-auto p-6">
+          <AlertDialogHeader className="pb-4 border-b border-gray-200 mb-4 px-0">
+            <div className="flex items-center justify-between">
+              <AlertDialogTitle className="text-lg sm:text-xl font-semibold text-black">
+                {processedIndividualEvent?.title || eventDetailsModal.event?.title || "Event Details"}
+              </AlertDialogTitle>
+            </div>
+            {eventDetailsModal.isEditing && (
+              <AlertDialogDescription className="text-sm mt-2 text-gray-600">
+                Edit event details. Make changes below.
+              </AlertDialogDescription>
+            )}
           </AlertDialogHeader>
 
           {eventDetailsModal.event && (
@@ -4816,93 +4817,158 @@ export default function CalendarsPage() {
                 </div>
               ) : (
                 /* View Mode */
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="w-2 h-2 rounded-full mt-2 flex-shrink-0"
-                      style={{ backgroundColor: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
-                    ></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-900">
-                        {formatInTimezone(
-                          (processedIndividualEvent || eventDetailsModal.event).start,
-                          (processedIndividualEvent || eventDetailsModal.event).userTimezone || 'Africa/Johannesburg',
-                          'datetime'
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {(processedIndividualEvent || eventDetailsModal.event).location && (
-                    <div className="flex items-start gap-3">
-                      <MapPin
-                        className="w-4 h-4 mt-1 flex-shrink-0"
-                        style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <button
-                          onClick={() => {
-                            const event = processedIndividualEvent || eventDetailsModal.event;
-                            const location = event.location;
-                            if (location) {
-                              // Try to extract coordinates from the location string
-                              const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-                              if (coordMatch) {
-                                // If coordinates are found, use them for Google Maps
-                                const lat = coordMatch[1];
-                                const lng = coordMatch[2];
-                                window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
-                              } else {
-                                // Otherwise, search for the location text
-                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
-                              }
-                            }
-                          }}
-                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left"
-                        >
-                          {(processedIndividualEvent || eventDetailsModal.event).location}
-                        </button>
-                        </div>
-                    </div>
-                  )}
-
-                  {(processedIndividualEvent || eventDetailsModal.event).conferenceUrl && (() => {
+                <div className="px-0 py-2">
+                  {(() => {
                     const event = processedIndividualEvent || eventDetailsModal.event;
-                    const conferenceUrl = event.conferenceUrl || '';
+                    if (!event) return null;
+                    
+                    // Normalize attendees
+                    const normalizedAttendees = (() => {
+                      if (!event?.attendees || !Array.isArray(event.attendees)) return [];
+                      return event.attendees
+                        .map((attendee: any) => {
+                          if (typeof attendee === 'string') return attendee;
+                          if (attendee && typeof attendee === 'object' && attendee.email) return attendee.email;
+                          if (attendee && typeof attendee === 'object') {
+                            return attendee.email || attendee.mail || attendee.emailAddress || null;
+                          }
+                          return null;
+                        })
+                        .filter((email: string | null): email is string => email !== null && email.trim().length > 0);
+                    })();
+                    
+                    const displayAttendees = normalizedAttendees.slice(0, 2);
+                    const additionalCount = normalizedAttendees.length > 2 ? normalizedAttendees.length - 2 : 0;
+                    
+                    const getInitials = (email: string) => {
+                      if (!email) return "??";
+                      const name = email.split('@')[0];
+                      if (!name) return "??";
+                      const parts = name.split('.');
+                      if (parts.length >= 2 && parts[0] && parts[1]) {
+                        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+                      }
+                      return name.substring(0, 2).toUpperCase() || "??";
+                    };
+
+                    const conferenceUrl = event?.conferenceUrl || '';
                     const isMicrosoftTeams = conferenceUrl.includes('teams.microsoft.com') || 
                                             conferenceUrl.includes('teams.live.com') ||
                                             conferenceUrl.includes('microsoft.com/meet');
                     const isGoogleMeet = conferenceUrl.includes('meet.google.com');
-                    const meetingType = isMicrosoftTeams ? 'Microsoft Teams' : isGoogleMeet ? 'Google Meet' : 'Meeting';
-                    const meetingIcon = isMicrosoftTeams ? (
-                      <MicrosoftIcon className="h-4 w-4" />
-                    ) : (
-                      <Video className="h-4 w-4" />
-                    );
                     
+                    // Format time as "05:00 PM (EST)"
+                    const formatTimeForDisplay = () => {
+                      if (!event?.start) return "N/A";
+                      const date = new Date(event.start);
+                      // Get timezone from eventDetailsModal.event or use default
+                      const timezone = (eventDetailsModal.event as any)?.userTimezone || 
+                                      (processedIndividualEvent as any)?.userTimezone || 
+                                      userPreferences?.timezone || 
+                                      'America/New_York';
+                      
+                      // Format time in 12-hour format
+                      const timeStr = new Intl.DateTimeFormat('en-US', {
+                        timeZone: timezone,
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                      }).format(date);
+                      
+                      // Get timezone abbreviation
+                      let tzAbbr = 'EST';
+                      if (timezone.includes('America/New_York') || timezone.includes('EST') || timezone.includes('EDT')) {
+                        tzAbbr = 'EST';
+                      } else if (timezone.includes('America/Los_Angeles') || timezone.includes('PST') || timezone.includes('PDT')) {
+                        tzAbbr = 'PST';
+                      } else if (timezone.includes('America/Chicago') || timezone.includes('CST') || timezone.includes('CDT')) {
+                        tzAbbr = 'CST';
+                      } else if (timezone.includes('America/Denver') || timezone.includes('MST') || timezone.includes('MDT')) {
+                        tzAbbr = 'MST';
+                      }
+                      return `${timeStr} (${tzAbbr})`;
+                    };
+
                     return (
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="w-4 h-4 mt-1 flex-shrink-0 flex items-center justify-center"
-                          style={{ color: processedIndividualEvent?.colorHex || eventDetailsModal.event?.colorHex || '#3b82f6' }}
-                        >
-                          {meetingIcon}
+                      <div className="space-y-5">
+                        {/* Time */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-500">Time</span>
+                          <span className="text-sm font-normal text-black">{formatTimeForDisplay()}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <button
-                            onClick={() => {
-                              window.open(conferenceUrl, '_blank', 'noopener,noreferrer');
-                            }}
-                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline text-left flex items-center gap-2"
-                          >
-                            {isMicrosoftTeams ? (
-                              <MicrosoftIcon className="h-3 w-3" />
-                            ) : (
-                              <Video className="h-3 w-3" />
-                            )}
-                            Join {meetingType}
-                          </button>
-                        </div>
+
+                        {/* Attendees */}
+                        {displayAttendees.length > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-500">Attendees</span>
+                            <div className="flex items-center gap-1 px-1 pr-2 py-1 rounded-[114px] border border-[#EBEBEB] bg-white">
+                              <div className="flex items-center -space-x-1">
+                                {displayAttendees.map((attendee: string, idx: number) => (
+                                  <div
+                                    key={idx}
+                                    className="w-[21px] h-[21px] rounded-full border-2 border-white bg-gray-300 flex items-center justify-center text-[10px] font-medium text-gray-700"
+                                  >
+                                    {getInitials(attendee)}
+                                  </div>
+                                ))}
+                              </div>
+                              {additionalCount > 0 && (
+                                <span className="text-[12px] font-medium text-[#9999A5] ml-1">+{additionalCount}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Platform */}
+                        {conferenceUrl && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-500">Platform</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(conferenceUrl, '_blank', 'noopener,noreferrer');
+                              }}
+                              className="flex items-center gap-1 px-[7px] py-1 rounded border border-black/10 bg-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                            >
+                              {isMicrosoftTeams ? (
+                                <MicrosoftIcon className="w-3 h-[10px]" />
+                              ) : isGoogleMeet ? (
+                                <img src="/google_meet.png" alt="Google Meet" className="w-3 h-[10px] object-contain" />
+                              ) : (
+                                <Video className="w-3 h-[10px] text-[#9999A5]" />
+                              )}
+                              <span className="text-[10px] font-medium text-[#9999A5] lowercase">
+                                {isMicrosoftTeams ? 'Microsoft Teams' : isGoogleMeet ? 'Google meet' : 'Meeting'}
+                              </span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Venue */}
+                        {event?.location && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-500">Venue</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const location = event.location;
+                                if (location) {
+                                  const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+                                  if (coordMatch) {
+                                    const lat = coordMatch[1];
+                                    const lng = coordMatch[2];
+                                    window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+                                  } else {
+                                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
+                                  }
+                                }
+                              }}
+                              className="text-sm font-normal text-black hover:text-blue-600 hover:underline text-right max-w-[60%] sm:max-w-none truncate"
+                            >
+                              {event.location}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -4911,19 +4977,19 @@ export default function CalendarsPage() {
             </div>
           )}
 
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
-            <AlertDialogCancel
-              onClick={eventDetailsModal.isEditing ? handleCancelEdit : undefined}
-              className="bg-orange-500 text-white hover:bg-orange-600 hover:font-bold border-0 w-full sm:w-auto order-2 sm:order-1"
-            >
-              {eventDetailsModal.isEditing ? "Cancel" : "Close"}
-            </AlertDialogCancel>
-            <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">
-              {eventDetailsModal.isEditing ? (
+          <AlertDialogFooter className="flex-row gap-3 pt-4 border-t border-gray-200 mt-6 px-0">
+            {eventDetailsModal.isEditing ? (
+              <>
+                <AlertDialogCancel
+                  onClick={handleCancelEdit}
+                  className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg"
+                >
+                  Cancel
+                </AlertDialogCancel>
                 <Button
                   onClick={handleSaveEdit}
                   disabled={updateEventMutation.isPending || !editEventTitle.trim()}
-                  className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg"
                 >
                   {updateEventMutation.isPending ? (
                     <>
@@ -4937,32 +5003,35 @@ export default function CalendarsPage() {
                     </>
                   )}
                 </Button>
-              ) : (
-                <>
-                  <Button
-                    variant="outline"
-                    onClick={handleEditEvent}
-                    className="flex-1 sm:flex-none"
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      if (eventDetailsModal.event) {
-                        handleGoToCalendar(eventDetailsModal.event);
-                        setEventDetailsModal({ open: false, event: null, isEditing: false });
-                      }
-                    }}
-                    variant="blue-primary"
-                    className="w-full sm:w-auto"
-                  >
-                    <Link2 className="h-4 w-4 mr-2" />
-                    Go to Calendar
-                  </Button>
-                </>
-              )}
-            </div>
+              </>
+            ) : (
+              <>
+                <AlertDialogCancel
+                  onClick={() => {
+                    resetEditFields();
+                    setEventDetailsModal({
+                      open: false,
+                      event: null,
+                      isEditing: false,
+                    });
+                  }}
+                  className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg"
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <Button
+                  onClick={() => {
+                    if (eventDetailsModal.event) {
+                      handleGoToCalendar(eventDetailsModal.event);
+                      setEventDetailsModal({ open: false, event: null, isEditing: false });
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                >
+                  Go to Calendar
+                </Button>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
