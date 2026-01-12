@@ -4861,11 +4861,7 @@ export default function CalendarsPage() {
                     const formatTimeForDisplay = () => {
                       if (!event?.start) return "N/A";
                       const date = new Date(event.start);
-                      // Get timezone from eventDetailsModal.event or use default
-                      const timezone = (eventDetailsModal.event as any)?.userTimezone || 
-                                      (processedIndividualEvent as any)?.userTimezone || 
-                                      userPreferences?.timezone || 
-                                      'America/New_York';
+                      const timezone = (event as any)?.userTimezone || (processedIndividualEvent as any)?.userTimezone || 'America/New_York';
                       
                       // Format time in 12-hour format
                       const timeStr = new Intl.DateTimeFormat('en-US', {
@@ -5015,7 +5011,7 @@ export default function CalendarsPage() {
                       isEditing: false,
                     });
                   }}
-                  className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg"
+                  className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg mt-0"
                 >
                   Cancel
                 </AlertDialogCancel>
