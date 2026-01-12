@@ -3314,7 +3314,7 @@ export default function CalendarsPage() {
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-gray-500" />
                         <span className={eventDate ? "text-gray-900" : "text-gray-500"}>
-                          {eventDate ? format(new Date(eventDate), "dd/MM/yy") : "Select date"}
+                          {eventDate ? format(new Date(eventDate), "dd/MM/yy") : format(new Date(), "dd/MM/yy")}
                         </span>
                       </div>
                       <ChevronDown className="h-4 w-4 text-gray-500" />
@@ -3518,7 +3518,7 @@ export default function CalendarsPage() {
                 onClick={() => setCreateGoogleMeet(!createGoogleMeet)}
                 className="w-full bg-white border-gray-200 hover:bg-gray-50 justify-start"
               >
-                <Video className="h-4 w-4 mr-2" />
+                <img src="/google_meet.png" alt="Google Meet" className="h-4 w-4 mr-2" />
                 {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
               </Button>
               <div className="flex items-center justify-center my-2">
