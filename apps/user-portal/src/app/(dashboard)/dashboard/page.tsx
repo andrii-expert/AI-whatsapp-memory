@@ -574,6 +574,7 @@ export default function DashboardPage() {
       
       return {
         id: event.id,
+        calendarId: event.calendarId,
         title: event.title,
         start: new Date(event.start),
         end: new Date(event.end),
@@ -624,6 +625,7 @@ export default function DashboardPage() {
       
       return {
         id: event.id,
+        calendarId: event.calendarId,
         title: event.title || "Untitled Event",
         start: startDate,
         end: endDate,
@@ -1094,6 +1096,15 @@ export default function DashboardPage() {
                         event={event}
                         onClick={() => {
                           // Navigate to calendars page to view event details
+                          router.push("/calendars");
+                        }}
+                        onEdit={() => {
+                          // Navigate to calendars page for editing
+                          router.push("/calendars");
+                        }}
+                        onDelete={() => {
+                          // For dashboard, just navigate to calendars page
+                          // Delete functionality is available on calendars page
                           router.push("/calendars");
                         }}
                       />
