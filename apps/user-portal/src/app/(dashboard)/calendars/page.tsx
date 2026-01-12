@@ -3206,7 +3206,7 @@ export default function CalendarsPage() {
             </div>
 
             {/* Select Color */}
-            <div className="space-y-1.5 sm:space-y-2">
+            <div className="space-y-1.5 sm:space-y-2 mr-[-10px]">
               <label className="text-sm font-semibold text-[#141718]">
                 Select Color
               </label>
