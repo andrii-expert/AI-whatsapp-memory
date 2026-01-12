@@ -3038,9 +3038,24 @@ export default function CalendarsPage() {
                                      startDate.getSeconds() === 0 &&
                                      (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
                     
-                    // Format time range
-                    const startTime = format(startDate, "ha");
-                    const endTime = format(endDate, "ha");
+                    // Format time range using user timezone (same as other places)
+                    const userTimezone = event.userTimezone || userPreferences?.timezone || 'Africa/Johannesburg';
+                    // Use 12-hour format for time range
+                    const startTimeStr = new Intl.DateTimeFormat('en-US', {
+                      timeZone: userTimezone,
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                    }).format(startDate);
+                    const endTimeStr = new Intl.DateTimeFormat('en-US', {
+                      timeZone: userTimezone,
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true,
+                    }).format(endDate);
+                    // Convert "5:00 PM" to "5PM" format
+                    const startTime = startTimeStr.replace(/:\d{2}\s/, '').replace(/\s(AM|PM)/i, '$1');
+                    const endTime = endTimeStr.replace(/:\d{2}\s/, '').replace(/\s(AM|PM)/i, '$1');
                     const timeRange = isAllDay ? "All day" : `${startTime} -${endTime}`;
                     
                     return {
@@ -3202,7 +3217,7 @@ export default function CalendarsPage() {
                                          (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
                         
                         // Format time range using user timezone
-                        const userTimezone = event.userTimezone || userPreferences?.timezone || 'America/New_York';
+                        const userTimezone = event.userTimezone || userPreferences?.timezone || 'Africa/Johannesburg';
                         // Use 12-hour format for time range
                         const startTimeStr = new Intl.DateTimeFormat('en-US', {
                           timeZone: userTimezone,
@@ -4872,11 +4887,12 @@ export default function CalendarsPage() {
                                             conferenceUrl.includes('microsoft.com/meet');
                     const isGoogleMeet = conferenceUrl.includes('meet.google.com');
                     
-                    // Format time as "05:00 PM"
+                    // Format time as "05:00 PM" using user timezone from database
                     const formatTimeForDisplay = () => {
                       if (!event?.start) return "N/A";
                       const date = new Date(event.start);
-                      const timezone = (event as any)?.userTimezone || (processedIndividualEvent as any)?.userTimezone || 'America/New_York';
+                      // Always use userPreferences timezone from database
+                      const timezone = userPreferences?.timezone || 'Africa/Johannesburg';
                       
                       // Format time in 12-hour format
                       const timeStr = new Intl.DateTimeFormat('en-US', {

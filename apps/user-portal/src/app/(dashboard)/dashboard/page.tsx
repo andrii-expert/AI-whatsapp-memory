@@ -1517,6 +1517,9 @@ export default function DashboardPage() {
                     eventColor === "blue" ? "bg-blue-500" :
                     "bg-blue-500";
       
+      // Use user's timezone from database
+      const userTimezone = userPreferences?.timezone || 'Africa/Johannesburg';
+      
       return {
         id: event.id,
         calendarId: event.calendarId,
@@ -1530,9 +1533,10 @@ export default function DashboardPage() {
         webLink: event.webLink,
         conferenceUrl: event.conferenceUrl,
         attendees: event.attendees || [],
+        userTimezone, // Use user's timezone for all formatting
       };
     });
-  }, [allCalendarEvents, calendars]);
+  }, [allCalendarEvents, calendars, userPreferences]);
 
   // Get next events (upcoming events, not just today)
   const scheduledEvents = useMemo(() => {
@@ -1558,17 +1562,22 @@ export default function DashboardPage() {
                        startDate.getSeconds() === 0 &&
                        (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
       
-      // Get user timezone from database
-      const userTimezone = userPreferences?.timezone || 'America/New_York';
+      // Get user timezone from event (set in processedEvents) or fallback to userPreferences
+      const userTimezone = event.userTimezone || userPreferences?.timezone || 'Africa/Johannesburg';
       
-      // Format time like calendar page does using user timezone
-      const timeLabel = isAllDay 
-        ? "All day" 
-        : formatInTimezone(startDate, userTimezone, 'time');
-      
-      // Format time range using user timezone (e.g., "9AM -10PM")
-      const startTimeStr = formatInTimezone(startDate, userTimezone, 'time');
-      const endTimeStr = formatInTimezone(endDate, userTimezone, 'time');
+      // Format time range using user timezone (same as calendars page)
+      const startTimeStr = new Intl.DateTimeFormat('en-US', {
+        timeZone: userTimezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }).format(startDate);
+      const endTimeStr = new Intl.DateTimeFormat('en-US', {
+        timeZone: userTimezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }).format(endDate);
       // Convert "5:00 PM" to "5PM" format
       const startTime = startTimeStr.replace(/:\d{2}\s/, '').replace(/\s(AM|PM)/i, '$1');
       const endTime = endTimeStr.replace(/:\d{2}\s/, '').replace(/\s(AM|PM)/i, '$1');
@@ -1582,7 +1591,6 @@ export default function DashboardPage() {
         end: endDate,
         startDate: startDate,
         endDate: endDate,
-        timeLabel,
         timeRange,
         location: event.location,
         description: event.description,
@@ -3080,11 +3088,12 @@ export default function DashboardPage() {
                                             conferenceUrl.includes('microsoft.com/meet');
                     const isGoogleMeet = conferenceUrl.includes('meet.google.com');
                     
-                    // Format time as "05:00 PM"
+                    // Format time as "05:00 PM" using user timezone from database
                     const formatTimeForDisplay = () => {
                       if (!event?.start) return "N/A";
                       const date = new Date(event.start);
-                      const timezone = event.userTimezone || processedIndividualEvent?.userTimezone || 'America/New_York';
+                      // Always use userPreferences timezone from database
+                      const timezone = userPreferences?.timezone || 'Africa/Johannesburg';
                       
                       // Format time in 12-hour format
                       const timeStr = new Intl.DateTimeFormat('en-US', {
