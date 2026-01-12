@@ -3060,7 +3060,7 @@ export default function CalendarsPage() {
           }
         }}
       >
-        <AlertDialogContent className="w-[95vw] max-w-[640px] max-h-[90vh] overflow-y-auto p-6">
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <AlertDialogHeader className="text-center pb-4">
             <AlertDialogTitle className="text-xl font-bold text-[#141718]">
               Create Event
@@ -3069,7 +3069,7 @@ export default function CalendarsPage() {
               Create new recurring reminder
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="space-y-5">
+          <div className="space-y-5 overflow-x-hidden">
             {/* Event Title - First Field */}
             <div className="space-y-2">
               <label htmlFor="event-title" className="text-sm font-semibold text-[#141718]">
@@ -3087,32 +3087,36 @@ export default function CalendarsPage() {
             </div>
 
             {/* Select Color */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <label className="text-sm font-semibold text-[#141718]">
                 Select Color
               </label>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 {[
-                  { value: "pink", color: "bg-pink-200" },
-                  { value: "purple", color: "bg-purple-200" },
-                  { value: "blue", color: "bg-blue-200" },
-                  { value: "cyan", color: "bg-cyan-200" },
-                  { value: "green", color: "bg-green-200" },
-                  { value: "lime", color: "bg-lime-200" },
-                  { value: "orange", color: "bg-orange-200" },
-                  { value: "rose", color: "bg-rose-200" },
-                  { value: "peach", color: "bg-orange-100" },
-                ].map(({ value, color }) => (
+                  { name: "pink", value: "#FCE7F3", label: "Pink" },
+                  { name: "purple", value: "#F3E8FF", label: "Purple" },
+                  { name: "blue", value: "#DBEAFE", label: "Blue" },
+                  { name: "cyan", value: "#CFFAFE", label: "Cyan" },
+                  { name: "green", value: "#D1FAE5", label: "Green" },
+                  { name: "yellow", value: "#FEF3C7", label: "Yellow" },
+                  { name: "orange", value: "#FED7AA", label: "Orange" },
+                  { name: "red", value: "#FEE2E2", label: "Red" },
+                  { name: "indigo", value: "#E0E7FF", label: "Indigo" },
+                ].map((color) => (
                   <button
-                    key={value}
+                    key={color.name}
                     type="button"
-                    onClick={() => setEventColor(value === "pink" ? "red" : value)}
-                    className={`w-10 h-10 rounded-full border-2 transition-all ${
-                      eventColor === (value === "pink" ? "red" : value)
-                        ? "border-black"
-                        : "border-transparent"
-                    } ${color}`}
-                    title={value}
+                    onClick={() => setEventColor(color.name)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className={cn(
+                      "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0 transition-all select-none",
+                      eventColor === color.name
+                        ? "ring-2 ring-gray-900 ring-offset-1 sm:ring-offset-2"
+                        : "hover:ring-2 hover:ring-gray-300"
+                    )}
+                    style={{ backgroundColor: color.value }}
+                    title={color.label}
                   />
                 ))}
               </div>
@@ -3173,8 +3177,8 @@ export default function CalendarsPage() {
                     <CalendarComponent
                       mode="single"
                       selected={eventDate ? new Date(eventDate) : undefined}
-                      onSelect={(date) => {
-                        if (date && date instanceof Date) {
+                      onSelect={(date: Date | undefined) => {
+                        if (date) {
                           setEventDate(format(date, "yyyy-MM-dd"));
                         }
                       }}
