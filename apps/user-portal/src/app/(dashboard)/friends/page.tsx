@@ -549,7 +549,7 @@ export default function FriendsPage() {
                 className="flex items-center gap-1.5"
               >
                 <UserPlus className="h-4 w-4" />
-                <span className="hidden sm:inline">Invite</span>
+                <span>Send Invites</span>
               </Button>
               <Button
                 onClick={openAddAddressModal}
