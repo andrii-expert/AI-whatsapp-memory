@@ -737,14 +737,14 @@ function EventCard({
             <MoreVertIcon />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuContent align="end" className="w-40 rounded-lg">
           {onEdit && (
             <DropdownMenuItem
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 onEdit();
               }}
-              className="flex items-center gap-2 cursor-pointer"
+              className="flex items-center gap-2 cursor-pointer rounded-md"
             >
               <Edit3 className="h-4 w-4" />
               <span>Edit</span>
@@ -758,7 +758,7 @@ function EventCard({
                   e.stopPropagation();
                   onDelete();
                 }}
-                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md"
               >
                 <Trash2 className="h-4 w-4" />
                 <span>Delete</span>
