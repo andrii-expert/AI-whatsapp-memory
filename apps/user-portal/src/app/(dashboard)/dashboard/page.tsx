@@ -3227,7 +3227,7 @@ export default function DashboardPage() {
                       isEditing: false,
                     });
                   }}
-                  className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg"
+                  className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg mt-0"
                 >
                   Cancel
                 </AlertDialogCancel>
