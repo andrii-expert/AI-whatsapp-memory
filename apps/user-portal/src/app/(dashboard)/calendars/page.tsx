@@ -2866,7 +2866,7 @@ export default function CalendarsPage() {
         <div className="lg:col-span-1">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6">
             {/* Monthly Calendar */}
-            <div className="xl:col-span-1">
+            <div className="xl:col-span-1 bg-white rounded-xl shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
           <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 md:p-6 shadow-sm">
             {/* Event Creation Button - Hidden on mobile */}
             <div className="hidden md:block mb-3 sm:mb-4 md:mb-6 flex w-full justify-end">
@@ -5017,7 +5017,7 @@ export default function CalendarsPage() {
           </div>
 
           {/* Connected Calendars */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+          <div className="bg-white">
             {calendars.length === 0 ? (
               <div className="text-center py-8">
                 <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
