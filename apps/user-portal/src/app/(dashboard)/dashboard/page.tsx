@@ -1074,6 +1074,10 @@ export default function DashboardPage() {
                         borderColor={borderColor}
                         bgColor={bgColor}
                         event={event}
+                        onClick={() => {
+                          // Navigate to calendars page to view event details
+                          router.push("/calendars");
+                        }}
                       />
                     );
                   })
@@ -1588,7 +1592,7 @@ function ShoppingItem({ title, description, badge, date, badgeColor = "gray", ha
   );
 }
 
-function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgColor: string; event: any }) {
+function EventCard({ borderColor, bgColor, event, onClick }: { borderColor: string; bgColor: string; event: any; onClick?: () => void }) {
   // Normalize attendees - handle both string arrays and object arrays with email property
   const normalizedAttendees = useMemo(() => {
     if (!event?.attendees || !Array.isArray(event.attendees)) return [];
@@ -1651,8 +1655,20 @@ function EventCard({ borderColor, bgColor, event }: { borderColor: string; bgCol
     }
   };
 
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't trigger if clicking on interactive elements
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) {
+      return;
+    }
+    onClick?.();
+  };
+
   return (
-    <div className="flex justify-between items-start p-4 rounded-xl border shadow-[0_2px_24px_0_rgba(0,0,0,0.05)]" style={{ borderColor, background: bgColor }}>
+    <div 
+      className="flex justify-between items-start p-4 rounded-xl border shadow-[0_2px_24px_0_rgba(0,0,0,0.05)] cursor-pointer" 
+      style={{ borderColor, background: bgColor }}
+      onClick={handleCardClick}
+    >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1">

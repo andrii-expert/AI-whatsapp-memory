@@ -2399,6 +2399,30 @@ export default function CalendarsPage() {
     }
   };
 
+  const handleDeleteEvent = (calendarId: string, eventId: string) => {
+    deleteEventMutation.mutate(
+      { calendarId, eventId },
+      {
+        onSuccess: () => {
+          // Refetch events for all calendars
+          eventQueries.forEach((query) => query.refetch());
+          toast({
+            title: "Event deleted",
+            description: "Event has been deleted successfully.",
+            variant: "success",
+          });
+        },
+        onError: (error: any) => {
+          toast({
+            title: "Failed to delete event",
+            description: error?.message || "An error occurred while deleting the event.",
+            variant: "error",
+          });
+        },
+      }
+    );
+  };
+
   const handleEditEvent = () => {
     // Populate edit form fields with current event data
     if (eventDetailsModal.event) {
@@ -3087,6 +3111,18 @@ export default function CalendarsPage() {
                             borderColor={borderColor}
                             bgColor={bgColor}
                             event={event}
+                            onClick={() => handleEventClick(event)}
+                            onEdit={() => {
+                              handleEventClick(event);
+                              setTimeout(() => {
+                                handleEditEvent();
+                              }, 100);
+                            }}
+                            onDelete={() => {
+                              if (confirm(`Are you sure you want to delete "${event.title}"?`)) {
+                                handleDeleteEvent(event.calendarId, event.id);
+                              }
+                            }}
                           />
                         );
                       })}
