@@ -2930,7 +2930,7 @@ export default function CalendarsPage() {
                       <div
                         key={dayIdx}
                         className={cn(
-                          "min-h-[60px] md:min-h-[100px] p-1 md:p-2 flex flex-col",
+                          "min-h-[40px] md:min-h-[80px] p-1 md:p-2 flex flex-col",
                           !isCurrentMonth && "bg-gray-50/50"
                         )}
                       >
