@@ -4946,6 +4946,7 @@ export default function CalendarsPage() {
           "fixed top-0 left-0 h-full w-80 max-w-[85vw] bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto",
           isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
+        style={{ borderTopRightRadius: '12px' }}
       >
         <div className="p-4 space-y-4">
           {/* Close Button */}
