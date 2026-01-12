@@ -2480,15 +2480,15 @@ export default function DashboardPage() {
           }
         }}
       >
-        <AlertDialogContent className="w-[95vw] max-w-[640px] max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader className="relative">
+        <AlertDialogContent className="w-[95vw] sm:w-full max-w-[500px] max-h-[90vh] overflow-y-auto p-6">
+          <AlertDialogHeader className="pb-4 border-b border-gray-200 mb-4 px-0">
             <div className="flex items-center justify-between">
               <AlertDialogTitle className="text-lg sm:text-xl font-semibold text-black">
                 {processedIndividualEvent?.title || eventDetailsModal.event?.title || "Event Details"}
               </AlertDialogTitle>
             </div>
             {eventDetailsModal.isEditing && (
-              <AlertDialogDescription className="text-sm mt-2">
+              <AlertDialogDescription className="text-sm mt-2 text-gray-600">
                 Edit event details. Make changes below.
               </AlertDialogDescription>
             )}
@@ -3033,7 +3033,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 /* View Mode */
-                <div className="space-y-4 py-2">
+                <div className="px-0 py-2">
                   {(() => {
                     const event = processedIndividualEvent || eventDetailsModal.event;
                     if (!event) return null;
@@ -3102,7 +3102,7 @@ export default function DashboardPage() {
                     };
 
                     return (
-                      <>
+                      <div className="space-y-5">
                         {/* Time */}
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-gray-500">Time</span>
@@ -3113,7 +3113,7 @@ export default function DashboardPage() {
                         {displayAttendees.length > 0 && (
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-gray-500">Attendees</span>
-                            <div className="flex items-center gap-1 px-1 pr-2 py-1 rounded-[114px] border border-[#EBEBEB] bg-white w-fit">
+                            <div className="flex items-center gap-1 px-1 pr-2 py-1 rounded-[114px] border border-[#EBEBEB] bg-white">
                               <div className="flex items-center -space-x-1">
                                 {displayAttendees.map((attendee: string, idx: number) => (
                                   <div
@@ -3136,7 +3136,8 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-gray-500">Platform</span>
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 window.open(conferenceUrl, '_blank', 'noopener,noreferrer');
                               }}
                               className="flex items-center gap-1 px-[7px] py-1 rounded border border-black/10 bg-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -3144,11 +3145,11 @@ export default function DashboardPage() {
                               {isMicrosoftTeams ? (
                                 <MicrosoftIcon className="w-3 h-[10px]" />
                               ) : isGoogleMeet ? (
-                                <img src="/google_meet.png" alt="Google Meet" className="w-3 h-[10px]" />
+                                <img src="/google_meet.png" alt="Google Meet" className="w-3 h-[10px] object-contain" />
                               ) : (
                                 <Video className="w-3 h-[10px] text-[#9999A5]" />
                               )}
-                              <span className="text-[10px] font-medium text-[#9999A5]">
+                              <span className="text-[10px] font-medium text-[#9999A5] lowercase">
                                 {isMicrosoftTeams ? 'Microsoft Teams' : isGoogleMeet ? 'Google meet' : 'Meeting'}
                               </span>
                             </button>
@@ -3160,7 +3161,8 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-gray-500">Venue</span>
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 const location = event.location;
                                 if (location) {
                                   const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
@@ -3173,13 +3175,13 @@ export default function DashboardPage() {
                                   }
                                 }
                               }}
-                              className="text-sm font-normal text-black hover:text-blue-600 hover:underline text-right"
+                              className="text-sm font-normal text-black hover:text-blue-600 hover:underline text-right max-w-[60%] sm:max-w-none truncate"
                             >
                               {event.location}
                             </button>
                           </div>
                         )}
-                      </>
+                      </div>
                     );
                   })()}
                 </div>
@@ -3187,19 +3189,19 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+          <AlertDialogFooter className="flex-row gap-3 pt-4 border-t border-gray-200 mt-6 px-0">
             {eventDetailsModal.isEditing ? (
               <>
                 <AlertDialogCancel
                   onClick={handleCancelEdit}
-                  className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg w-full sm:w-auto order-2 sm:order-1"
+                  className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg"
                 >
                   Cancel
                 </AlertDialogCancel>
                 <Button
                   onClick={handleSaveEdit}
                   disabled={updateEventMutation.isPending || !editEventTitle.trim()}
-                  className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white rounded-lg order-1 sm:order-2"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-lg"
                 >
                   {updateEventMutation.isPending ? (
                     <>
@@ -3225,7 +3227,7 @@ export default function DashboardPage() {
                       isEditing: false,
                     });
                   }}
-                  className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg w-full sm:w-auto order-2 sm:order-1"
+                  className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg"
                 >
                   Cancel
                 </AlertDialogCancel>
@@ -3236,7 +3238,7 @@ export default function DashboardPage() {
                       setEventDetailsModal({ open: false, event: null, isEditing: false });
                     }
                   }}
-                  className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white rounded-lg order-1 sm:order-2"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
                 >
                   View in Events
                 </Button>
