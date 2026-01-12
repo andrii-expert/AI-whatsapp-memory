@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@imaginecalendar/ui/dropdown-menu";
 import {
@@ -40,12 +41,29 @@ import {
   MapPin,
   Video,
   Check,
+  Edit3,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { startOfDay, endOfDay, isSameDay, format } from "date-fns";
 import { WelcomeModal } from "@/components/welcome-modal";
+
+// Microsoft Icon Component
+const MicrosoftIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 23 23"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M0 0h11.5v11.5H0V0z" fill="#F25022" />
+    <path d="M11.5 0H23v11.5H11.5V0z" fill="#7FBA00" />
+    <path d="M0 11.5h11.5V23H0V11.5z" fill="#00A4EF" />
+    <path d="M11.5 11.5H23V23H11.5V11.5z" fill="#FFB900" />
+  </svg>
+);
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -1592,7 +1610,7 @@ function ShoppingItem({ title, description, badge, date, badgeColor = "gray", ha
   );
 }
 
-function EventCard({ borderColor, bgColor, event, onClick }: { borderColor: string; bgColor: string; event: any; onClick?: () => void }) {
+function EventCard({ borderColor, bgColor, event, onClick, onEdit, onDelete }: { borderColor: string; bgColor: string; event: any; onClick?: () => void; onEdit?: () => void; onDelete?: () => void }) {
   // Normalize attendees - handle both string arrays and object arrays with email property
   const normalizedAttendees = useMemo(() => {
     if (!event?.attendees || !Array.isArray(event.attendees)) return [];
@@ -1628,13 +1646,20 @@ function EventCard({ borderColor, bgColor, event, onClick }: { borderColor: stri
     return name.substring(0, 2).toUpperCase() || "??";
   };
 
-  // Handle Google Meet click
-  const handleGoogleMeetClick = (e: React.MouseEvent) => {
+  const handleConferenceClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (event?.conferenceUrl) {
       window.open(event.conferenceUrl, '_blank', 'noopener,noreferrer');
     }
   };
+
+  // Detect meeting type from conferenceUrl
+  const conferenceUrl = event?.conferenceUrl || '';
+  const isMicrosoftTeams = conferenceUrl.includes('teams.microsoft.com') || 
+                          conferenceUrl.includes('teams.live.com') ||
+                          conferenceUrl.includes('microsoft.com/meet');
+  const isGoogleMeet = conferenceUrl.includes('meet.google.com');
+  const meetingLabel = isMicrosoftTeams ? 'Microsoft Teams' : isGoogleMeet ? 'Google meet' : 'Meeting';
 
   // Handle location click
   const handleLocationClick = (e: React.MouseEvent) => {
@@ -1663,6 +1688,10 @@ function EventCard({ borderColor, bgColor, event, onClick }: { borderColor: stri
     onClick?.();
   };
 
+  const handleMoreClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+  };
+
   return (
     <div 
       className="flex justify-between items-start p-4 rounded-xl border shadow-[0_2px_24px_0_rgba(0,0,0,0.05)] cursor-pointer" 
@@ -1677,12 +1706,16 @@ function EventCard({ borderColor, bgColor, event, onClick }: { borderColor: stri
             </span>
             {event?.conferenceUrl && (
               <button
-                onClick={handleGoogleMeetClick}
+                onClick={handleConferenceClick}
                 className="flex items-center gap-1 px-[7px] py-1 rounded border border-black/10 bg-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
-                title="Join Google Meet"
+                title={`Join ${meetingLabel}`}
               >
-                <Video className="w-3 h-[10px] text-[#9999A5]" />
-                <span className="text-[10px] font-medium text-[#9999A5]">Google meet</span>
+                {isMicrosoftTeams ? (
+                  <MicrosoftIcon className="w-3 h-[10px]" />
+                ) : (
+                  <Video className="w-3 h-[10px] text-[#9999A5]" />
+                )}
+                <span className="text-[10px] font-medium text-[#9999A5]">{meetingLabel}</span>
               </button>
             )}
           </div>
@@ -1721,9 +1754,45 @@ function EventCard({ borderColor, bgColor, event, onClick }: { borderColor: stri
           </button>
         )}
       </div>
-      <button className="text-[#9B9BA7] hover:opacity-80 transition-opacity">
-        <MoreVertIcon />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button 
+            className="text-[#9B9BA7] hover:opacity-80 transition-opacity"
+            onClick={handleMoreClick}
+          >
+            <MoreVertIcon />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40 rounded-lg">
+          {onEdit && (
+            <DropdownMenuItem
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="flex items-center gap-2 cursor-pointer rounded-md"
+            >
+              <Edit3 className="h-4 w-4" />
+              <span>Edit</span>
+            </DropdownMenuItem>
+          )}
+          {onDelete && (
+            <>
+              {onEdit && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Delete</span>
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
