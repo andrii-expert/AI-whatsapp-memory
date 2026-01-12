@@ -518,9 +518,9 @@ export default function FriendsPage() {
   const isLoading = isLoadingAddresses;
 
   return (
-    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-0 md:space-y-6">
+    <div className="min-h-screen bg-white">
       {/* Breadcrumb Navigation */}
-      <div className="hidden lg:flex items-center gap-2 text-[13px] justify-between">
+      <div className="hidden lg:flex items-center gap-2 text-sm justify-between px-4 pt-6 pb-4">
         <div className="flex items-center justify-center gap-2">
           <Link
             href="/dashboard"
@@ -534,68 +534,76 @@ export default function FriendsPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="w-full space-y-4">
+      {/* Main Container */}
+      <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-[17px] font-bold text-gray-900">Your Friends</h2>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => setIsInviteModalOpen(true)}
-              variant="outline"
-              className="flex items-center gap-2 border-gray-300"
-            >
-              <UserPlus className="h-4 w-4" />
-              <span className="hidden sm:inline">Invite</span>
-            </Button>
-            <Button
-              onClick={openAddAddressModal}
-              className="hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Plus className="h-4 w-4" />
-              Add Contact
-            </Button>
+        <div className="px-4 pt-6 pb-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Friends</h1>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setIsInviteModalOpen(true)}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5"
+              >
+                <UserPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">Invite</span>
+              </Button>
+              <Button
+                onClick={openAddAddressModal}
+                variant="outline"
+                size="sm"
+                className="hidden lg:flex items-center gap-1.5"
+              >
+                <Plus className="h-4 w-4" />
+                Add Contact
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Search and Sort Bar */}
-        <div className="w-full flex gap-2">
-          <div className="relative flex-1">
-            <Input
-              placeholder="Search friends..."
-              value={searchQuery}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setSearchQuery(e.target.value)
-              }
-              className="pr-10 h-11"
-            />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <div className="px-4 pb-4">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9B9BA7] pointer-events-none" size={18} />
+              <Input
+                placeholder="Search friends..."
+                value={searchQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setSearchQuery(e.target.value)
+                }
+                className="w-full h-10 sm:h-11 bg-white border border-gray-200 rounded-lg pr-10 pl-4 text-sm"
+              />
+            </div>
+            <Select
+              value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
+              onValueChange={(value) => {
+                const [by, order] = value.split("-") as [
+                  "date" | "alphabetical",
+                  "asc" | "desc"
+                ];
+                setSortBy(by);
+                setSortOrder(order);
+              }}
+            >
+              <SelectTrigger className="w-[140px] h-10 sm:h-11 bg-white border border-gray-200">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="alphabetical-asc">A-Z</SelectItem>
+                <SelectItem value="alphabetical-desc">Z-A</SelectItem>
+                <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select
-            value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
-            onValueChange={(value) => {
-              const [by, order] = value.split("-") as [
-                "date" | "alphabetical",
-                "asc" | "desc"
-              ];
-              setSortBy(by);
-              setSortOrder(order);
-            }}
-          >
-            <SelectTrigger className="w-[140px] h-11">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="alphabetical-asc">A-Z</SelectItem>
-              <SelectItem value="alphabetical-desc">Z-A</SelectItem>
-              <SelectItem value="date-desc">Date (Newest)</SelectItem>
-              <SelectItem value="date-asc">Date (Oldest)</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         {/* Friends List */}
-        <div className="space-y-4 relative pb-20">
+        <div className="px-4 pb-20">
+          <div className="space-y-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -734,17 +742,19 @@ export default function FriendsPage() {
               </div>
             </div>
           )}
+          </div>
         </div>
-        
-        {/* Floating Action Button - Mobile Only */}
-        <button
-          onClick={() => openAddAddressModal()}
-          className="lg:hidden fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50"
-          title="Add Friend"
-        >
-          <Plus className="h-6 w-6" />
-        </button>
       </div>
+
+      {/* Floating Action Button - Mobile Only */}
+      <button
+        onClick={() => openAddAddressModal()}
+        className="lg:hidden fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50"
+        title="Add Friend"
+      >
+        <Plus className="h-6 w-6" />
+      </button>
+    </div>
 
       {/* Add/Edit Friend Modal */}
       <AlertDialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
