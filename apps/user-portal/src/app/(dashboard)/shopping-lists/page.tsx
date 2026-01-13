@@ -1410,7 +1410,7 @@ export default function ShoppingListPage() {
                   </div>
 
                   {/* Search Bar */}
-                  <div className="px-4 pb-4">
+                  <div className="px-4 pb-2">
                     <div className="relative">
                       <Input
                         placeholder="Search..."
@@ -1426,7 +1426,7 @@ export default function ShoppingListPage() {
                 </div>
 
                 {/* Lists */}
-                <div className="px-4 pb-20">
+                <div className="px-4 pb-20 pt-2">
                   <div className="space-y-2">
                 {/* All Items Card */}
                 <div
@@ -2086,146 +2086,148 @@ export default function ShoppingListPage() {
           "w-full min-w-0",
           (!selectedFolderId && !viewAllItems && !viewAllShared) ? "hidden lg:block" : "block"
         )}>
-          {/* Header with list name and shared info */}
-          <div className="px-4 pt-6 pb-4 lg:px-0 lg:pt-0">
-            <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              {/* Mobile Back Button */}
-              {(selectedFolder || viewAllItems || viewAllShared) && (
-                <button
-                  onClick={handleBackToLists}
-                  className="lg:hidden h-10 w-10 flex-shrink-0 bg-white rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-shadow"
-                >
-                  <ArrowLeft className="h-5 w-5 text-gray-800" />
-                </button>
-              )}
-              {viewAllItems ? (
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: "#FCE7F3" }}
-                  >
-                    <span className="text-lg">🎂</span>
-                  </div>
-                  <span className="font-bold text-gray-900 text-lg">All Items</span>
-                </div>
-              ) : viewAllShared ? (
-                <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-gray-600" />
-                  <span className="font-bold text-gray-900 text-lg">All Shared</span>
-                </div>
-              ) : selectedFolder ? (
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ 
-                      backgroundColor: selectedFolder.color 
-                        ? ICON_COLORS.find(c => c.name === selectedFolder.color)?.value || "#FCE7F3"
-                        : "#FCE7F3"
-                    }}
-                  >
-                    <span className="text-lg">{selectedFolder.icon || "🛒"}</span>
-                  </div>
-                  <span className="font-bold text-gray-900 text-lg">{selectedFolder.name}</span>
-                  <ChevronDown className="h-4 w-4 text-gray-400 hidden lg:block" />
-                </div>
-              ) : (
-                <div className="flex-1" />
-              )}
-            </div>
-            
-            {/* Shared button, avatars, and Add Item button (desktop) */}
-            <div className="flex items-center gap-2">
-              {selectedFolder && folderShares.length > 0 && (
-                <>
+          <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
+            {/* Header with list name and shared info */}
+            <div className="px-4 pt-6 pb-4 lg:px-0 lg:pt-0">
+              <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {/* Mobile Back Button */}
+                {(selectedFolder || viewAllItems || viewAllShared) && (
                   <button
-                    onClick={() => openShareDetails("shopping_list_folder", selectedFolder.id, selectedFolder.name)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
-                    title="View who this list is shared with"
+                    onClick={handleBackToLists}
+                    className="lg:hidden h-10 w-10 flex-shrink-0 bg-white rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-shadow"
                   >
-                    <span className="text-sm font-medium text-gray-700">Shared</span>
-                    <div className="flex items-center gap-1">
-                      {folderShares.slice(0, 2).map((share: any, idx: number) => {
-                        const sharedUser = share.sharedWithUser;
-                        if (!sharedUser) return null;
-                        return (
-                          <div
-                            key={share.id}
-                            className={cn(
-                              "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
-                              getAvatarColor(sharedUser.id)
-                            )}
-                            style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
-                            title={getSharedUserDisplayName(sharedUser)}
-                          >
-                            {getUserInitials(sharedUser)}
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <ArrowLeft className="h-5 w-5 text-gray-800" />
                   </button>
-                </>
-              )}
-              {/* Desktop Add Item Button */}
-              {(() => {
-                const isSharedFolder = selectedFolder?.isSharedWithMe || false;
-                const folderPermission = selectedFolder?.sharePermission;
-                const canAddToFolder = !isSharedFolder || folderPermission === "edit";
-                const isDisabled = Boolean(viewAllShared || (!selectedFolderId && !viewAllItems) || (selectedFolderId && !canAddToFolder));
-                
-                return (
-                  <Button
-                    onClick={() => !isDisabled && setIsAddModalOpen(true)}
-                    disabled={!!isDisabled}
-                    className={cn(
-                      "hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white",
-                      isDisabled && "opacity-50 cursor-not-allowed"
-                    )}
-                    title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : "Add Item"}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Item
-                  </Button>
-                );
-              })()}
+                )}
+                {viewAllItems ? (
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: "#FCE7F3" }}
+                    >
+                      <span className="text-lg">🎂</span>
+                    </div>
+                    <span className="font-bold text-gray-900 text-lg">All Items</span>
+                  </div>
+                ) : viewAllShared ? (
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-gray-600" />
+                    <span className="font-bold text-gray-900 text-lg">All Shared</span>
+                  </div>
+                ) : selectedFolder ? (
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ 
+                        backgroundColor: selectedFolder.color 
+                          ? ICON_COLORS.find(c => c.name === selectedFolder.color)?.value || "#FCE7F3"
+                          : "#FCE7F3"
+                      }}
+                    >
+                      <span className="text-lg">{selectedFolder.icon || "🛒"}</span>
+                    </div>
+                    <span className="font-bold text-gray-900 text-lg">{selectedFolder.name}</span>
+                    <ChevronDown className="h-4 w-4 text-gray-400 hidden lg:block" />
+                  </div>
+                ) : (
+                  <div className="flex-1" />
+                )}
+              </div>
+              
+              {/* Shared button, avatars, and Add Item button (desktop) */}
+              <div className="flex items-center gap-2">
+                {selectedFolder && folderShares.length > 0 && (
+                  <>
+                    <button
+                      onClick={() => openShareDetails("shopping_list_folder", selectedFolder.id, selectedFolder.name)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+                      title="View who this list is shared with"
+                    >
+                      <span className="text-sm font-medium text-gray-700">Shared</span>
+                      <div className="flex items-center gap-1">
+                        {folderShares.slice(0, 2).map((share: any, idx: number) => {
+                          const sharedUser = share.sharedWithUser;
+                          if (!sharedUser) return null;
+                          return (
+                            <div
+                              key={share.id}
+                              className={cn(
+                                "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                getAvatarColor(sharedUser.id)
+                              )}
+                              style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                              title={getSharedUserDisplayName(sharedUser)}
+                            >
+                              {getUserInitials(sharedUser)}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </button>
+                  </>
+                )}
+                {/* Desktop Add Item Button */}
+                {(() => {
+                  const isSharedFolder = selectedFolder?.isSharedWithMe || false;
+                  const folderPermission = selectedFolder?.sharePermission;
+                  const canAddToFolder = !isSharedFolder || folderPermission === "edit";
+                  const isDisabled = Boolean(viewAllShared || (!selectedFolderId && !viewAllItems) || (selectedFolderId && !canAddToFolder));
+                  
+                  return (
+                    <Button
+                      onClick={() => !isDisabled && setIsAddModalOpen(true)}
+                      disabled={!!isDisabled}
+                      className={cn(
+                        "hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white",
+                        isDisabled && "opacity-50 cursor-not-allowed"
+                      )}
+                      title={selectedFolderId && !canAddToFolder ? "View only - You cannot add items to this folder" : "Add Item"}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Item
+                    </Button>
+                  );
+                })()}
+              </div>
             </div>
-          </div>
-          </div>
+            </div>
 
-          {/* Search and Sort Bar */}
-          <div className="px-4 pb-4 lg:px-0 lg:pb-4 mb-4 w-full flex gap-3">
-            <div className="relative flex-1">
-              <Input
-                placeholder="Search items..."
-                value={searchQuery}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setSearchQuery(e.target.value)
-                }
-                className="pr-10 h-10 sm:h-11 bg-white border border-gray-200 rounded-lg"
-              />
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            {/* Search and Sort Bar */}
+            <div className="px-4 pb-4 lg:px-0 lg:pb-4 mb-4 w-full flex gap-3">
+              <div className="relative flex-1">
+                <Input
+                  placeholder="Search items..."
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="pr-10 h-10 sm:h-11 bg-white border border-gray-200 rounded-lg"
+                />
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              </div>
+              <Select
+                value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
+                onValueChange={(value) => {
+                  const [by, order] = value.split("-") as [
+                    "date" | "alphabetical",
+                    "asc" | "desc"
+                  ];
+                  setSortBy(by);
+                  setSortOrder(order);
+                }}
+              >
+                <SelectTrigger className="w-[150px] h-10 sm:h-11 bg-white border border-gray-200 rounded-lg">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                  <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                  <SelectItem value="alphabetical-asc">A-Z</SelectItem>
+                  <SelectItem value="alphabetical-desc">Z-A</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Select
-              value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
-              onValueChange={(value) => {
-                const [by, order] = value.split("-") as [
-                  "date" | "alphabetical",
-                  "asc" | "desc"
-                ];
-                setSortBy(by);
-                setSortOrder(order);
-              }}
-            >
-              <SelectTrigger className="w-[150px] h-10 sm:h-11 bg-white border border-gray-200 rounded-lg">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date-desc">Date (Newest)</SelectItem>
-                <SelectItem value="date-asc">Date (Oldest)</SelectItem>
-                <SelectItem value="alphabetical-asc">A-Z</SelectItem>
-                <SelectItem value="alphabetical-desc">Z-A</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           {/* Filter Tabs */}
