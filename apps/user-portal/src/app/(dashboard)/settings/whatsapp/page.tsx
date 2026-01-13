@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Home, ChevronLeft, CheckCircle2, Edit2, X, Check, Calendar } from "lucide-react";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,9 +17,10 @@ import { Checkbox } from "@imaginecalendar/ui/checkbox";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 
-export default function WhatsAppVerificationPage() {
+function WhatsAppVerificationPageContent() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectFrom = searchParams.get("from");
   const { toast } = useToast();
@@ -32,17 +33,66 @@ export default function WhatsAppVerificationPage() {
     trpc.user.me.queryOptions()
   );
 
-  // Fetch connected WhatsApp numbers
-  const { data: whatsappNumbers = [], isLoading: numbersLoading, error: numbersError, refetch: refetchNumbers } = useQuery(
-    trpc.whatsapp.getMyNumbers.queryOptions()
-  );
+  // Fetch connected WhatsApp numbers with polling to detect verification completion
+  const { data: whatsappNumbers = [], isLoading: numbersLoading, error: numbersError, refetch: refetchNumbers } = useQuery({
+    ...trpc.whatsapp.getMyNumbers.queryOptions(),
+    // Poll every 5 seconds if user has unverified WhatsApp number
+    refetchInterval: (query) => {
+      const data = query.state.data as any[] | undefined;
+      const hasUnverified = data?.some((num: any) => !num.isVerified);
+      return hasUnverified ? 5000 : false; // Poll every 5s if unverified, stop if all verified
+    },
+  });
 
   const isLoading = userLoading || numbersLoading;
   const hasError = userError || numbersError;
 
+  // Check onboarding status and redirect if needed (only if not already in onboarding flow)
+  useEffect(() => {
+    if (isLoading || !user || redirectFrom === "onboarding") return;
+
+    // If email not verified, redirect to email verification
+    if (!user.emailVerified) {
+      router.push("/verify-email");
+      return;
+    }
+
+    // If email verified but no WhatsApp number or timezone, redirect to onboarding
+    const hasVerifiedWhatsApp = whatsappNumbers?.some((num: any) => num.isVerified);
+    const hasPhone = user.phone;
+    const hasTimezone = user.timezone;
+
+    // Only redirect if completely missing (not just unverified)
+    // Allow users to be on settings page even if not verified, as long as they have a phone number
+    if (!hasPhone && !hasTimezone && !hasVerifiedWhatsApp) {
+      router.push("/onboarding/whatsapp");
+      return;
+    }
+  }, [user, whatsappNumbers, isLoading, router, redirectFrom]);
+
   // Find verified WhatsApp number
   const verifiedNumber = whatsappNumbers?.find((num: any) => num.isVerified) || whatsappNumbers?.[0];
   const displayPhone = isEditing ? editedPhone : (verifiedNumber?.phoneNumber || user?.phone || "");
+
+  // Track previous verification status to show success message
+  const [wasUnverified, setWasUnverified] = useState(false);
+  
+  useEffect(() => {
+    const isCurrentlyUnverified = !verifiedNumber?.isVerified && (verifiedNumber?.phoneNumber || user?.phone);
+    if (isCurrentlyUnverified) {
+      setWasUnverified(true);
+    } else if (wasUnverified && verifiedNumber?.isVerified) {
+      // Just verified!
+      toast({
+        title: "WhatsApp verified!",
+        description: "Your WhatsApp number has been successfully verified.",
+        variant: "success",
+      });
+      setWasUnverified(false);
+      // Refetch to get latest data
+      refetchNumbers();
+    }
+  }, [verifiedNumber?.isVerified, user?.phone, wasUnverified, toast, refetchNumbers]);
 
   // Fetch connected calendars
   const { data: calendars = [], isLoading: calendarsLoading } = useQuery(
@@ -181,7 +231,8 @@ export default function WhatsAppVerificationPage() {
     );
   }
 
-  if (!user?.phone) {
+  // Show phone number input if user doesn't have a phone number
+  if (!user?.phone && !verifiedNumber?.phoneNumber) {
     return (
       <div className="space-y-6">
         {/* Breadcrumb Navigation */}
@@ -204,17 +255,38 @@ export default function WhatsAppVerificationPage() {
           </p>
         </div>
 
-        <div className="text-center py-12">
-          <p className="text-muted-foreground mb-4">
-            Please add your WhatsApp phone number in your profile first.
-          </p>
-          <Link
-            href="/settings/profile"
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            Go to Profile Settings
-          </Link>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Add WhatsApp Number</CardTitle>
+            <CardDescription>
+              Enter your WhatsApp phone number to get started
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="phone-input">WhatsApp Phone Number *</Label>
+                <PhoneInput
+                  id="phone-input"
+                  value={editedPhone || ""}
+                  onChange={(value) => setEditedPhone(value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Include country code (e.g., +1 for US, +27 for South Africa)
+                </p>
+              </div>
+              {editedPhone && (
+                <div className="mt-4">
+                  <WhatsAppVerificationSection
+                    phoneNumber={normalizePhoneNumber(editedPhone)}
+                    alwaysGenerateNewCode={true}
+                  />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -498,13 +570,38 @@ export default function WhatsAppVerificationPage() {
       )}
 
       {/* WhatsApp Verification Section - Only show if not verified */}
-      {!verifiedNumber?.isVerified && (
-        <WhatsAppVerificationSection 
-          phoneNumber={phoneForVerification || (verifiedNumber?.phoneNumber || user?.phone || "")} 
-          redirectFrom={redirectFrom || "dashboard"}
-          shouldGenerateCode={!!phoneForVerification} // Only generate new code when phone was explicitly edited
-        />
+      {!verifiedNumber?.isVerified && (verifiedNumber?.phoneNumber || user?.phone) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Verify Your WhatsApp Number</CardTitle>
+            <CardDescription>
+              {phoneForVerification 
+                ? "A new verification code has been generated. Use it to verify your updated phone number."
+                : "Complete verification to enable WhatsApp calendar management. Click the button below to generate a verification code."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <WhatsAppVerificationSection 
+              phoneNumber={phoneForVerification || (verifiedNumber?.phoneNumber || user?.phone || "")} 
+              redirectFrom={redirectFrom || "settings"}
+              shouldGenerateCode={!!phoneForVerification} // Only generate new code when phone was explicitly edited
+              alwaysGenerateNewCode={!!phoneForVerification} // Auto-generate only if phone was just updated
+            />
+          </CardContent>
+        </Card>
       )}
     </div>
+  );
+}
+
+export default function WhatsAppVerificationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    }>
+      <WhatsAppVerificationPageContent />
+    </Suspense>
   );
 }

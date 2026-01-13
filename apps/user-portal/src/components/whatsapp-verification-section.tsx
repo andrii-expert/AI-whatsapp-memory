@@ -60,7 +60,7 @@ export function WhatsAppVerificationSection({
   // ALWAYS generate a new code on component mount when alwaysGenerateNewCode is true
   // This ensures a fresh code every time user visits the page
   useEffect(() => {
-    if (!phoneNumber) return;
+    if (!phoneNumber || !alwaysGenerateNewCode) return;
     
     // Only generate once on mount
     if (hasGeneratedOnMountRef.current) return;
@@ -71,7 +71,7 @@ export function WhatsAppVerificationSection({
     handleGenerateCode();
     
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phoneNumber]);
+  }, [phoneNumber, alwaysGenerateNewCode]);
 
   // Generate NEW code when explicitly requested via shouldGenerateCode prop
   // This happens when user edits and saves a new phone number

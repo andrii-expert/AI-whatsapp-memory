@@ -45,14 +45,22 @@ export async function POST(req: NextRequest) {
     });
 
     // Generate email verification code
-    const { code } = await generateEmailVerificationCode(db, userId, validated.email);
+    let code: string | undefined;
+    try {
+      const result = await generateEmailVerificationCode(db, userId, validated.email);
+      code = result.code;
 
-    // Send verification code email
-    await sendEmailVerificationCode({
-      to: validated.email,
-      code,
-      firstName: validated.firstName,
-    });
+      // Send verification code email
+      await sendEmailVerificationCode({
+        to: validated.email,
+        code,
+        firstName: validated.firstName,
+      });
+    } catch (emailError) {
+      // Log but don't fail signup if email verification fails
+      logger.error({ error: emailError, userId, email: validated.email }, "Failed to generate/send email verification code");
+      // Continue with signup even if email verification fails
+    }
 
     // Generate token
     const token = generateToken({
@@ -78,7 +86,14 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
-    logger.error({ error }, "Signup error");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    logger.error({ 
+      error: errorMessage,
+      errorStack,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    }, "Signup error");
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -87,8 +102,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Return more detailed error in development
     return NextResponse.json(
-      { error: "Internal server error" },
+      { 
+        error: "Internal server error",
+        details: process.env.NODE_ENV === "development" ? errorMessage : undefined,
+      },
       { status: 500 }
     );
   }
