@@ -1,5 +1,9 @@
 "use client";
 
+// Force dynamic rendering - this page requires authentication
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -404,14 +408,7 @@ function WhatsAppLinkingForm() {
 }
 
 export default function WhatsAppLinkingPage() {
-  return (
-    <Suspense fallback={
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    }>
-      <WhatsAppLinkingForm />
-    </Suspense>
-  );
+  // This page must be client-side only due to useAuth hook
+  return <WhatsAppLinkingForm />;
 }
 

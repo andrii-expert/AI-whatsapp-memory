@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
         firstName: user.firstName,
         lastName: user.lastName,
         name: user.name,
+        avatarUrl: user.avatarUrl,
         setupStep: user.setupStep ?? null,
       },
     });

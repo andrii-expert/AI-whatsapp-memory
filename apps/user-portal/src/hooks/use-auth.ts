@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { trpc } from "@/trpc/client";
 
 interface User {
   id: string;
@@ -30,37 +29,52 @@ export function useAuth() {
     isSignedIn: false,
   });
 
-  // Use tRPC to get user data (includes setupStep)
-  const { data: user, isLoading, error } = trpc.user.me.useQuery(undefined, {
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
+  // Use session API to get user data (works during SSR and client-side)
   useEffect(() => {
-    if (isLoading) return;
-    
-    if (error || !user) {
-      setAuthState({
-        user: null,
-        isLoaded: true,
-        isSignedIn: false,
+    let mounted = true;
+
+    fetch("/api/auth/session", {
+      credentials: 'include',
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!mounted) return;
+        
+        if (data.isAuthenticated && data.user) {
+          setAuthState({
+            user: {
+              id: data.user.id,
+              email: data.user.email,
+              firstName: data.user.firstName,
+              lastName: data.user.lastName,
+              name: data.user.name,
+              avatarUrl: data.user.avatarUrl,
+              setupStep: data.user.setupStep ?? undefined,
+            },
+            isLoaded: true,
+            isSignedIn: true,
+          });
+        } else {
+          setAuthState({
+            user: null,
+            isLoaded: true,
+            isSignedIn: false,
+          });
+        }
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setAuthState({
+          user: null,
+          isLoaded: true,
+          isSignedIn: false,
+        });
       });
-    } else {
-      setAuthState({
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          name: user.name,
-          avatarUrl: user.avatarUrl,
-          setupStep: user.setupStep ?? undefined,
-        },
-        isLoaded: true,
-        isSignedIn: true,
-      });
-    }
-  }, [user, isLoading, error]);
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const signOut = useCallback(async () => {
     try {
