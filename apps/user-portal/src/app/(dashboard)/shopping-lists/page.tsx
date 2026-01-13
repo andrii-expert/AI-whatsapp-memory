@@ -2382,8 +2382,8 @@ export default function ShoppingListPage() {
                             <div className="flex justify-between items-center w-full">
                               {/* Item Content */}
                               <div className="flex flex-col">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-start gap-2">
+                                  <div className="flex">
                                     <div
                                       className={cn(
                                         "font-semibold text-gray-900 text-[13px] sm:text-[14px]",
@@ -2408,7 +2408,7 @@ export default function ShoppingListPage() {
                                   )}
                                 </div>
                                 {item.description && (
-                                    <div className="w-full ml-[32px] mt-1 text-[13px] md:text-[14px] text-gray-500">
+                                    <div className="w-full text-[13px] md:text-[14px] text-gray-500">
                                       {item.description}
                                     </div>
                                   )}
