@@ -788,8 +788,15 @@ export default function ShoppingListPage() {
 
 
   const handleEditFolder = (folderId: string, folderName: string) => {
+    // Find the folder to get its icon and color
+    const folder = allOwnedFolders.find((f: any) => f.id === folderId) || 
+                   sharedFolders.find((f: any) => f.id === folderId);
+    
     setEditingFolderId(folderId);
     setEditFolderName(folderName);
+    setSelectedIcon(folder?.icon || "🎂");
+    setSelectedColor(folder?.color || "pink");
+    setIsEditListModalOpen(true);
   };
 
   const handleSaveFolder = (folderId: string) => {
@@ -2079,7 +2086,7 @@ export default function ShoppingListPage() {
         )}>
           {/* Header with list name and shared info */}
           <div className="px-4 pt-6 pb-4 lg:px-0 lg:pt-0">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               {/* Mobile Back Button */}
               {(selectedFolder || viewAllItems || viewAllShared) && (
