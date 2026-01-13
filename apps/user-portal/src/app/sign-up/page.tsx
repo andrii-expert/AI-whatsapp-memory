@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
@@ -258,120 +259,16 @@ function SignUpForm() {
           </h2>
         </div>
 
-        {/* WhatsApp Phone Mockup */}
-        <div className="relative mb-8">
-          <div className="w-64 h-[500px] bg-white rounded-[2.5rem] p-2 shadow-2xl">
-            <div className="w-full h-full bg-gray-50 rounded-[2rem] overflow-hidden">
-              {/* Phone Header */}
-              <div className="bg-green-600 text-white p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-lg">WhatsApp</h3>
-                  <div className="flex gap-2">
-                    <div className="w-1 h-1 bg-white rounded-full"></div>
-                    <div className="w-1 h-1 bg-white rounded-full"></div>
-                    <div className="w-1 h-1 bg-white rounded-full"></div>
-                  </div>
-                </div>
-                <div className="bg-white/20 rounded-lg px-3 py-2 text-sm">
-                  Q Ask Meta AI or Search
-                </div>
-              </div>
-
-              {/* Filter Tabs */}
-              <div className="bg-white border-b border-gray-200 px-4 py-2 flex gap-4 text-sm">
-                <span className="font-semibold text-green-600">All</span>
-                <span className="text-gray-600">Unread</span>
-                <span className="text-gray-600">Favourites</span>
-                <span className="text-gray-600">Groups</span>
-              </div>
-
-              {/* Chat List */}
-              <div className="bg-white flex-1 overflow-y-auto">
-                <div className="p-3 border-b border-gray-100 flex items-start gap-3 hover:bg-gray-50">
-                  <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                    C
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm">CrackOn</span>
-                      <span className="text-xs text-gray-500">14:00</span>
-                    </div>
-                    <p className="text-sm text-gray-600 truncate">Your event has been scheduled</p>
-                  </div>
-                </div>
-                <div className="p-3 border-b border-gray-100 flex items-start gap-3 hover:bg-gray-50">
-                  <div className="w-12 h-12 bg-gray-400 rounded-full"></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm">Grant</span>
-                      <span className="text-xs text-gray-500">26/09/2025</span>
-                    </div>
-                    <p className="text-sm text-gray-600 truncate">I will chat to you in the morning</p>
-                  </div>
-                </div>
-                <div className="p-3 border-b border-gray-100 flex items-start gap-3 hover:bg-gray-50">
-                  <div className="w-12 h-12 bg-gray-400 rounded-full"></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm">Paul</span>
-                      <span className="text-xs text-gray-500">14:08</span>
-                    </div>
-                    <p className="text-sm text-gray-600 truncate">I have set a reminder on CrackOn</p>
-                  </div>
-                </div>
-                <div className="p-3 border-b border-gray-100 flex items-start gap-3 hover:bg-gray-50">
-                  <div className="w-12 h-12 bg-gray-400 rounded-full"></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm">Talita</span>
-                      <span className="text-xs text-gray-500">10:20</span>
-                    </div>
-                    <p className="text-sm text-gray-600 truncate">Awesome! Will do!</p>
-                  </div>
-                </div>
-                <div className="p-3 border-b border-gray-100 flex items-start gap-3 hover:bg-gray-50">
-                  <div className="w-12 h-12 bg-gray-400 rounded-full"></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm">Jane</span>
-                      <span className="text-xs text-gray-500">11:07</span>
-                    </div>
-                    <p className="text-sm text-gray-600 truncate">No worries, I will have a look.</p>
-                  </div>
-                </div>
-                <div className="p-3 border-b border-gray-100 flex items-start gap-3 hover:bg-gray-50">
-                  <div className="w-12 h-12 bg-gray-400 rounded-full"></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm">Marie</span>
-                      <span className="text-xs text-gray-500">11:21</span>
-                    </div>
-                    <p className="text-sm text-gray-600 truncate">I think it should be fine.</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Navigation */}
-              <div className="bg-white border-t border-gray-200 flex items-center justify-around py-2">
-                <div className="flex flex-col items-center">
-                  <div className="w-6 h-6 bg-gray-400 rounded mb-1"></div>
-                  <span className="text-xs text-gray-600">Chats</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <div className="w-6 h-6 bg-gray-400 rounded mb-1"></div>
-                  <span className="text-xs text-gray-600">Updates</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <div className="w-6 h-6 bg-gray-400 rounded mb-1"></div>
-                  <span className="text-xs text-gray-600">Communities</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <div className="w-6 h-6 bg-gray-400 rounded mb-1"></div>
-                  <span className="text-xs text-gray-600">Calls</span>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* WhatsApp Phone Image */}
+        <div className="relative mb-8 flex justify-center">
+          <Image
+            src="/phone.png"
+            alt="WhatsApp Phone Mockup"
+            width={300}
+            height={600}
+            className="w-auto h-auto max-w-[300px] object-contain"
+            priority
+          />
         </div>
 
         {/* Description Text */}
