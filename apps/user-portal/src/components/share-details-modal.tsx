@@ -466,12 +466,18 @@ export function ShareDetailsModal({
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <AlertDialogTitle className="text-lg sm:text-xl font-semibold text-black">
-                  Share With Friends
+                  {activeTab === "friends" ? "Share With Friends" : "Share With Others"}
                 </AlertDialogTitle>
                 <AlertDialogDescription className="text-sm text-gray-500 mt-1">
                   People who have access to "{resourceName}"
                 </AlertDialogDescription>
               </div>
+              <button
+                onClick={onClose}
+                className="text-gray-500 hover:text-gray-700 transition-colors ml-4"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </AlertDialogHeader>
 
@@ -505,16 +511,39 @@ export function ShareDetailsModal({
               </div>
 
               {/* Search Bar */}
-              <div className="relative mb-4">
-                <Input
-                  placeholder="Search friends..."
-                  value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="pr-10 h-10 text-sm bg-white"
-                />
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              </div>
+              {activeTab === "friends" ? (
+                <div className="relative mb-4">
+                  <Input
+                    placeholder="Search friends..."
+                    value={searchTerm}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="pr-10 h-10 text-sm bg-white"
+                  />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                </div>
+              ) : (
+                <div className="flex gap-2 mb-4">
+                  <Input
+                    placeholder="Email or phone number"
+                    value={searchTerm}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="flex-1 h-10 text-sm bg-white"
+                  />
+                  <Button
+                    onClick={handleSearch}
+                    disabled={!searchTerm.trim() || isSearching}
+                    className="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {isSearching ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Invite"
+                    )}
+                  </Button>
+                </div>
+              )}
 
               {/* Live Search Results - Friends Tab */}
               {activeTab === "friends" && searchTerm.trim() && filteredFriends.length > 0 && (
@@ -753,8 +782,8 @@ export function ShareDetailsModal({
                   })()}
                 </div>
                 
-                {/* Search Results - show when there are search results */}
-                {searchResults.length > 0 && (
+                {/* Search Results - show when there are search results (Others tab only) */}
+                {activeTab === "others" && searchResults.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-black mb-3">Search Results</h4>
                     <div className="space-y-2">
