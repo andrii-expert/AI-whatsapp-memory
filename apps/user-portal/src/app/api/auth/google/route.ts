@@ -1,6 +1,6 @@
-import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
+import { google } from "googleapis";
 
 const GOOGLE_CLIENT_ID = "360121159847-q96hapdstepeqdb87jt70vvn95jtc48u.apps.googleusercontent.com";
 const GOOGLE_CLIENT_SECRET = "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";
@@ -8,12 +8,9 @@ const GOOGLE_CLIENT_SECRET = "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";
 // Generate OAuth authorization URL for Google sign-in
 export async function GET(request: NextRequest) {
   try {
-    // Dynamic import to reduce bundle size
-    const { google } = await import("googleapis");
-    
-    const { searchParams } = new URL(request.url);
-    const redirectUri = searchParams.get("redirect_uri") || 
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/google/callback`;
+    const url = new URL(request.url);
+    const redirectUri = url.searchParams.get("redirect_uri") || 
+      `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/api/auth/google/callback`;
 
     // Generate state for CSRF protection
     const state = randomBytes(32).toString("hex");
@@ -49,8 +46,15 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error: any) {
     console.error("Failed to generate Google OAuth URL:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     return NextResponse.json(
-      { error: "Failed to generate authorization URL" },
+      { 
+        error: "Failed to generate authorization URL",
+        details: process.env.NODE_ENV === "development" ? errorMessage : undefined,
+        stack: process.env.NODE_ENV === "development" ? errorStack : undefined,
+      },
       { status: 500 }
     );
   }

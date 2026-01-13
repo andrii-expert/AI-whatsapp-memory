@@ -1,18 +1,16 @@
-import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
 import { getUserByEmail, createUser } from "@imaginecalendar/database/queries";
 import { generateToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
 import { randomUUID } from "crypto";
+import { google } from "googleapis";
 
 const GOOGLE_CLIENT_ID = "360121159847-q96hapdstepeqdb87jt70vvn95jtc48u.apps.googleusercontent.com";
 const GOOGLE_CLIENT_SECRET = "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";
 
 export async function GET(request: NextRequest) {
   try {
-    // Dynamic import to reduce bundle size
-    const { google } = await import("googleapis");
     
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
@@ -23,13 +21,13 @@ export async function GET(request: NextRequest) {
     if (error) {
       logger.error({ error }, "Google OAuth error");
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/sign-in?error=${encodeURIComponent(error)}`
+        `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/sign-in?error=${encodeURIComponent(error)}`
       );
     }
 
     if (!code) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/sign-in?error=missing_code`
+        `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/sign-in?error=missing_code`
       );
     }
 
@@ -38,11 +36,11 @@ export async function GET(request: NextRequest) {
     if (!state || state !== storedState) {
       logger.error({ state, storedState }, "Invalid OAuth state");
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/sign-in?error=invalid_state`
+        `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/sign-in?error=invalid_state`
       );
     }
 
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/google/callback`;
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/api/auth/google/callback`;
 
     const oauth2Client = new google.auth.OAuth2(
       GOOGLE_CLIENT_ID,
@@ -60,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     if (!userInfo.data.email) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/sign-in?error=no_email`
+        `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/sign-in?error=no_email`
       );
     }
 
@@ -102,7 +100,7 @@ export async function GET(request: NextRequest) {
 
     // Redirect to dashboard with token in cookie
     const response = NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard`
+      `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/dashboard`
     );
 
     // Set auth token
@@ -121,7 +119,7 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     logger.error({ error }, "Google OAuth callback error");
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/sign-in?error=${encodeURIComponent(error.message || "oauth_error")}`
+      `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/sign-in?error=${encodeURIComponent(error.message || "oauth_error")}`
     );
   }
 }
