@@ -162,6 +162,7 @@ function SignUpForm() {
                   id="firstName"
                   type="text"
                   required
+                  placeholder="Enter your first name"
                   value={formData.firstName}
                   onChange={(e) =>
                     setFormData({ ...formData, firstName: e.target.value })
@@ -178,6 +179,7 @@ function SignUpForm() {
                   id="lastName"
                   type="text"
                   required
+                  placeholder="Enter your last name"
                   value={formData.lastName}
                   onChange={(e) =>
                     setFormData({ ...formData, lastName: e.target.value })
@@ -197,6 +199,7 @@ function SignUpForm() {
                 id="email"
                 type="email"
                 required
+                placeholder="Enter your email address"
                 value={formData.email}
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
@@ -217,6 +220,7 @@ function SignUpForm() {
                   type={showPassword ? "text" : "password"}
                   required
                   minLength={8}
+                  placeholder="Create a secure password (min. 8 characters)"
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })

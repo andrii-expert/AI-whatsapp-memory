@@ -7,6 +7,7 @@ import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
+import { Eye, EyeOff } from "lucide-react";
 
 function SignInForm() {
   const router = useRouter();
@@ -14,6 +15,7 @@ function SignInForm() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -75,84 +77,47 @@ function SignInForm() {
   };
 
   return (
-    <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
-          <Image 
-            src="/crackon_logo_pngs-16.png" 
-            alt="CrackOn" 
-            width={300} 
-            height={100}
-            className="w-full max-w-[300px] h-auto" 
-          />
-        </div>
+    <div className="flex min-h-screen">
+      {/* Left Side - Sign In Form */}
+      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-8 lg:p-12">
+        <div className="w-full max-w-md space-y-8">
+          {/* Title and Subtitle */}
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold text-gray-900">Sign up/Register</h1>
+            <p className="text-lg text-gray-600">Get started in 3 simple steps.</p>
+          </div>
 
-        {/* Sign In Form */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-2xl font-bold text-center mb-6">Sign In</h1>
-          
+          {/* Login/Signup Toggle */}
+          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            <button
+              className="flex-1 text-center py-2 px-4 rounded-md text-sm font-medium bg-white text-gray-900 shadow-sm"
+              disabled
+            >
+              Login
+            </button>
+            <Link
+              href="/sign-up"
+              className="flex-1 text-center py-2 px-4 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              Signup
+            </Link>
+          </div>
+
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                required
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                disabled={loading}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading || googleLoading}
-            >
-              {loading ? "Signing In..." : "Sign In"}
-            </Button>
-          </form>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Or continue with</span>
-            </div>
-          </div>
-
+          {/* Google Sign In Button */}
           <Button
             type="button"
             variant="outline"
-            className="w-full flex items-center justify-center gap-2"
+            className="w-full bg-white border-2 border-gray-300 hover:bg-gray-50 h-12 text-base font-medium"
             onClick={handleGoogleSignIn}
             disabled={loading || googleLoading}
           >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
               <path
                 fill="#4285F4"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -170,14 +135,109 @@ function SignInForm() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            {googleLoading ? "Connecting..." : "Continue with Google"}
+            Sign in with Google
           </Button>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
-            Don't have an account?{" "}
-            <Link href="/sign-up" className="text-blue-600 hover:underline">
-              Sign Up
-            </Link>
+          {/* OR Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500">OR</span>
+            </div>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                placeholder="Enter your email address"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+                disabled={loading}
+                className="h-11"
+              />
+            </div>
+
+            {/* Password */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  disabled={loading}
+                  className="h-11 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Sign In Button */}
+            <Button
+              type="submit"
+              className="w-full h-12 text-base font-medium bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={loading || googleLoading}
+            >
+              {loading ? "Signing In..." : "Sign In"}
+            </Button>
+          </form>
+        </div>
+      </div>
+
+      {/* Right Side - Promotional Content */}
+      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-12 relative overflow-hidden">
+        {/* Slogan */}
+        <div className="text-center mb-8">
+          <h2 className="text-4xl font-bold text-white tracking-wide mb-4">
+            REMIND. ORGANISE. CRACKON.
+          </h2>
+        </div>
+
+        {/* WhatsApp Phone Image */}
+        <div className="relative mb-8 flex justify-center">
+          <Image
+            src="/phone.png"
+            alt="WhatsApp Phone Mockup"
+            width={300}
+            height={600}
+            className="w-auto h-auto max-w-[300px] object-contain"
+            priority
+          />
+        </div>
+
+        {/* Description Text */}
+        <div className="text-center max-w-md">
+          <p className="text-white text-lg leading-relaxed">
+            CrackOn is your smart WhatsApp friend that helps you stay organised without leaving your favourite chat app.
           </p>
         </div>
       </div>
@@ -188,25 +248,11 @@ function SignInForm() {
 export default function SignInPage() {
   return (
     <Suspense fallback={
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-6">
-          <div className="flex justify-center mb-8">
-            <Image 
-              src="/crackon_logo_pngs-16.png" 
-              alt="CrackOn" 
-              width={300} 
-              height={100}
-              className="w-full max-w-[300px] h-auto" 
-            />
-          </div>
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <div className="text-center">Loading...</div>
-          </div>
-        </div>
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="text-center">Loading...</div>
       </div>
     }>
       <SignInForm />
     </Suspense>
   );
 }
-
