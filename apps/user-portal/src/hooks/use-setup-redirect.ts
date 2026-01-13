@@ -1,22 +1,35 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./use-auth";
 
 /**
  * Hook to redirect users to the appropriate onboarding step if setup is incomplete
  * Should be used in all dashboard pages
+ * 
+ * This hook must be called unconditionally at the top level of the component
  */
 export function useSetupRedirect() {
   const router = useRouter();
   const { user, isLoaded } = useAuth();
+  const hasRedirected = useRef(false);
+  const routerRef = useRef(router);
+
+  // Keep router ref updated
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   useEffect(() => {
+    // Prevent multiple redirects
+    if (hasRedirected.current) return;
+    
     if (!isLoaded) return;
     
     if (!user) {
-      router.push("/sign-in");
+      hasRedirected.current = true;
+      routerRef.current.push("/sign-in");
       return;
     }
 
@@ -25,12 +38,13 @@ export function useSetupRedirect() {
 
     // Redirect to appropriate onboarding step if setup is incomplete
     if (setupStep < 3) {
+      hasRedirected.current = true;
       if (setupStep === 1) {
-        router.push("/onboarding/whatsapp");
+        routerRef.current.push("/onboarding/whatsapp");
       } else if (setupStep === 2) {
-        router.push("/onboarding/calendar");
+        routerRef.current.push("/onboarding/calendar");
       }
     }
-  }, [user, isLoaded, router]);
+  }, [user, isLoaded]);
 }
 
