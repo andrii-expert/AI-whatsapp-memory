@@ -3,7 +3,7 @@ import { connectDb } from "@imaginecalendar/database/client";
 import { verifyToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
 import { getVerifiedWhatsappNumberByPhone, getUserWhatsAppNumbers, logOutgoingWhatsAppMessage } from "@imaginecalendar/database/queries";
-import { WhatsAppService } from "@imaginecalendar/whatsapp/service/whatsapp";
+import { WhatsAppService } from "@imaginecalendar/whatsapp";
 
 export async function POST(req: NextRequest) {
   try {

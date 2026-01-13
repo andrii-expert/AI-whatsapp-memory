@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { verifyEmailCode } from "@imaginecalendar/database/queries/email-verification";
+import { verifyEmailCode } from "@imaginecalendar/database/queries";
 import { verifyToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";

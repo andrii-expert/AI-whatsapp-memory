@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { resendEmailVerificationCode } from "@imaginecalendar/database/queries/email-verification";
+import { resendEmailVerificationCode } from "@imaginecalendar/database/queries";
 import { sendEmailVerificationCode } from "@api/utils/email";
 import { verifyToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
