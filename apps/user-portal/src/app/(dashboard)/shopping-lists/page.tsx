@@ -2391,11 +2391,6 @@ export default function ShoppingListPage() {
                                   >
                                     {item.name}
                                   </div>
-                                  {item.description && (
-                                    <div className="mt-1 text-[15px] text-gray-500">
-                                      {item.description}
-                                    </div>
-                                  )}
                                 </div>
                                 {item.createdAt && (
                                   <div className="flex-shrink-0">
@@ -2467,6 +2462,11 @@ export default function ShoppingListPage() {
                             </div>
                           </div>
                         </div>
+                        {item.description && (
+                                    <div className="mt-1 text-[15px] text-gray-500">
+                                      {item.description}
+                                    </div>
+                                  )}
                         {/* Divider - 90% width, only show if not last item */}
                         {index < filteredItems.length - 1 && (
                           <div className="w-[90%] mx-auto h-px bg-gray-100" />
