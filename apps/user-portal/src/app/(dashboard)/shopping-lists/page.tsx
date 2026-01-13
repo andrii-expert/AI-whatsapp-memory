@@ -1393,33 +1393,35 @@ export default function ShoppingListPage() {
             {!selectedFolderId && !viewAllItems && !viewAllShared && (
               <div className="lg:hidden w-full">
                 {/* Your Lists Header */}
-                <div className="px-4 pt-6 pb-4 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Shopping Lists</h2>
-                    <Button
-                      onClick={handleOpenCreateListModal}
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center gap-1.5"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add New
-                    </Button>
+                <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
+                  <div className="px-4 pt-6 pb-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Shopping Lists</h2>
+                      <Button
+                        onClick={handleOpenCreateListModal}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1.5"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add New
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                {/* Search Bar */}
-                <div className="px-4 pb-4 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
-                  <div className="relative">
-                    <Input
-                      placeholder="Search..."
-                      value={searchQuery}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setSearchQuery(e.target.value)
-                      }
-                      className="pr-10"
-                    />
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  {/* Search Bar */}
+                  <div className="px-4 pb-4">
+                    <div className="relative">
+                      <Input
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setSearchQuery(e.target.value)
+                        }
+                        className="pr-10"
+                      />
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
                   </div>
                 </div>
 
