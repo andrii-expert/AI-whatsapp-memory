@@ -2357,114 +2357,114 @@ export default function ShoppingListPage() {
                     return (
                       <div key={item.id}>
                         <div
-                          className="flex items-center gap-2.5 py-2.5 px-3 hover:bg-gray-50 transition-colors"
+                          className="flex flex-col items-center gap-2.5 py-2.5 px-3 hover:bg-gray-50 transition-colors"
                         >
-                          <div className="flex justify-between items-center w-full">
+                          <div className="flex justify-between items-center w-full gap-2">
                             {/* Checkbox */}
-                          <button
-                            onClick={() => canEditItem && handleToggleItem(item.id)}
-                            disabled={!canEditItem}
-                            className={cn(
-                              "flex-shrink-0 w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors",
-                              !canEditItem && "opacity-50 cursor-not-allowed",
-                              item.status === "completed"
-                                ? "bg-green-500 border-green-500 text-white"
-                                : "border-gray-300 hover:border-gray-400"
-                            )}
-                            style={{
-                              backgroundColor: item.status === "completed" ? undefined : "#FAFAFA"
-                            }}
-                            title={!canEditItem ? "View only - You cannot edit this item" : undefined}
-                          >
-                            {item.status === "completed" && <Check className="h-3 w-3" />}
-                          </button>
+                            <button
+                              onClick={() => canEditItem && handleToggleItem(item.id)}
+                              disabled={!canEditItem}
+                              className={cn(
+                                "flex-shrink-0 w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors",
+                                !canEditItem && "opacity-50 cursor-not-allowed",
+                                item.status === "completed"
+                                  ? "bg-green-500 border-green-500 text-white"
+                                  : "border-gray-300 hover:border-gray-400"
+                              )}
+                              style={{
+                                backgroundColor: item.status === "completed" ? undefined : "#FAFAFA"
+                              }}
+                              title={!canEditItem ? "View only - You cannot edit this item" : undefined}
+                            >
+                              {item.status === "completed" && <Check className="h-3 w-3" />}
+                            </button>
 
-                          <div className="flex justify-between items-center w-full">
-                            {/* Item Content */}
-                            <div className="flex">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div
-                                    className={cn(
-                                      "font-semibold text-gray-900 text-[15px] sm:text-[16px]",
-                                      item.status === "completed" && "line-through text-gray-400"
-                                    )}
-                                  >
-                                    {item.name}
-                                  </div>
-                                </div>
-                                {item.createdAt && (
-                                  <div className="flex-shrink-0">
-                                    <span 
-                                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-sm bg-gray-50 text-xs font-medium text-gray-600 shadow-sm"
+                            <div className="flex justify-between items-center w-full">
+                              {/* Item Content */}
+                              <div className="flex">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div
+                                      className={cn(
+                                        "font-semibold text-gray-900 text-[15px] sm:text-[16px]",
+                                        item.status === "completed" && "line-through text-gray-400"
+                                      )}
                                     >
-                                      <span className={cn(isCurrentUser ? "text-gray-700" : "text-pink-600 font-semibold")}>
-                                        {itemUserName}
-                                      </span>
-                                      <span className="text-gray-400">•</span>
-                                      <span>{formatShoppingListDate(item.createdAt)}</span>
-                                    </span>
+                                      {item.name}
+                                    </div>
                                   </div>
-                                )}
+                                  {item.createdAt && (
+                                    <div className="flex-shrink-0">
+                                      <span 
+                                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-sm bg-gray-50 text-xs font-medium text-gray-600 shadow-sm"
+                                      >
+                                        <span className={cn(isCurrentUser ? "text-gray-700" : "text-pink-600 font-semibold")}>
+                                          {itemUserName}
+                                        </span>
+                                        <span className="text-gray-400">•</span>
+                                        <span>{formatShoppingListDate(item.createdAt)}</span>
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Three dots menu */}
+                              <div className="flex items-center flex-shrink-0">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      disabled={!canEditItem}
+                                      className={cn(
+                                        "h-8 w-8 text-gray-500 hover:text-gray-700",
+                                        !canEditItem && "opacity-50 cursor-not-allowed"
+                                      )}
+                                      onClick={(e: React.MouseEvent) => {
+                                        if (!canEditItem) {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                        }
+                                      }}
+                                    >
+                                      <MoreVertical className="h-5 w-5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        if (canEditItem) {
+                                          handleEditItem(item);
+                                        }
+                                      }}
+                                      disabled={!canEditItem}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                      <span>Edit</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        if (canEditItem) {
+                                          handleDeleteItem(item.id, item.name);
+                                        }
+                                      }}
+                                      disabled={!canEditItem}
+                                      className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      <span>Delete</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </div>
-
-                            {/* Three dots menu */}
-                            <div className="flex items-center flex-shrink-0">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    disabled={!canEditItem}
-                                    className={cn(
-                                      "h-8 w-8 text-gray-500 hover:text-gray-700",
-                                      !canEditItem && "opacity-50 cursor-not-allowed"
-                                    )}
-                                    onClick={(e: React.MouseEvent) => {
-                                      if (!canEditItem) {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                      }
-                                    }}
-                                  >
-                                    <MoreVertical className="h-5 w-5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
-                                  <DropdownMenuItem
-                                    onClick={(e: React.MouseEvent) => {
-                                      e.stopPropagation();
-                                      if (canEditItem) {
-                                        handleEditItem(item);
-                                      }
-                                    }}
-                                    disabled={!canEditItem}
-                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
-                                  >
-                                    <Edit2 className="h-4 w-4" />
-                                    <span>Edit</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={(e: React.MouseEvent) => {
-                                      e.stopPropagation();
-                                      if (canEditItem) {
-                                        handleDeleteItem(item.id, item.name);
-                                      }
-                                    }}
-                                    disabled={!canEditItem}
-                                    className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    <span>Delete</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </div>
                           </div>
                           {item.description && (
-                                    <div className="mt-1 text-[15px] text-gray-500">
+                                    <div className="w-full ml-[32px] mt-1 text-[15px] text-gray-500">
                                       {item.description}
                                     </div>
                                   )}
