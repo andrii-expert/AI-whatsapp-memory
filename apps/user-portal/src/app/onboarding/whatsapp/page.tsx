@@ -311,6 +311,12 @@ function WhatsAppLinkingForm() {
                 onVerified={() => {
                   setIsVerified(true);
                   refetchNumbers();
+                  // Don't redirect - stay on page to show verification success
+                  toast({
+                    title: "WhatsApp verified!",
+                    description: "Your WhatsApp number has been successfully verified. You can continue to the next step.",
+                    variant: "success",
+                  });
                 }}
                 savePhoneMutation={savePhoneMutation}
               />

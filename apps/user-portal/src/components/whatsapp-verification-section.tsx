@@ -147,15 +147,8 @@ export function WhatsAppVerificationSection({
 
     window.open(whatsappUrl, '_blank');
 
-    // Redirect back to where user came from after 2 seconds
-    setTimeout(() => {
-      if (redirectFrom === 'profile') {
-        router.push('/settings/profile');
-      } else {
-        // Default to dashboard
-        router.push('/dashboard');
-      }
-    }, 2000);
+    // Don't redirect - stay on the page so user can see verification status
+    // The page will automatically update when verification is detected via polling
   };
 
   const copyToClipboard = async (text: string) => {
