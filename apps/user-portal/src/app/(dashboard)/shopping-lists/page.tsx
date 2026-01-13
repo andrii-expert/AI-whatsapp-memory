@@ -2088,7 +2088,7 @@ export default function ShoppingListPage() {
         )}>
           <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] px-4 pt-4">
             {/* Header with list name and shared info */}
-            <div className="px-4 pt-6 pb-4 lg:px-0 lg:pt-0">
+            <div className="pb-2">
               <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 {/* Mobile Back Button */}
@@ -2194,7 +2194,7 @@ export default function ShoppingListPage() {
             </div>
 
             {/* Search and Sort Bar */}
-            <div className="px-4 pb-4 lg:px-0 lg:pb-4 mb-4 w-full flex gap-3">
+            <div className="pb-4 lg:px-0 lg:pb-4 mb-4 w-full flex gap-3">
               <div className="relative flex-1">
                 <Input
                   placeholder="Search items..."
@@ -2357,7 +2357,7 @@ export default function ShoppingListPage() {
                     return (
                       <div key={item.id}>
                         <div
-                          className="flex items-center gap-2.5 py-2.5 px-3 hover:bg-gray-50 transition-colors"
+                          className="flex items-start gap-2.5 py-2.5 px-3 hover:bg-gray-50 transition-colors"
                         >
                           {/* Checkbox */}
                           <button
@@ -2384,27 +2384,31 @@ export default function ShoppingListPage() {
                               <div className="flex-1 min-w-0">
                                 <div
                                   className={cn(
-                                    "font-semibold text-gray-900 text-sm",
+                                    "font-semibold text-gray-900 text-[15px] sm:text-[16px]",
                                     item.status === "completed" && "line-through text-gray-400"
                                   )}
                                 >
                                   {item.name}
                                 </div>
                                 {item.description && (
-                                  <div className="mt-0.5 text-xs text-gray-500">
+                                  <div className="mt-1 text-[15px] text-gray-500">
                                     {item.description}
                                   </div>
                                 )}
-                                {item.createdAt && (
-                                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-500">
-                                    <span className={cn(isCurrentUser ? "text-gray-600" : "text-pink-600 font-medium")}>
+                              </div>
+                              {item.createdAt && (
+                                <div className="flex-shrink-0">
+                                  <span 
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-xs font-medium text-gray-600 shadow-sm"
+                                  >
+                                    <span className={cn(isCurrentUser ? "text-gray-700" : "text-pink-600 font-semibold")}>
                                       {itemUserName}
                                     </span>
                                     <span className="text-gray-400">•</span>
                                     <span>{formatShoppingListDate(item.createdAt)}</span>
-                                  </div>
-                                )}
-                              </div>
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
