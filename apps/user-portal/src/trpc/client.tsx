@@ -51,9 +51,11 @@ export function TRPCReactProvider(
           url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002'}/trpc`,
           transformer: superjson,
           fetch(url, options) {
+            // Ensure cookies are sent with cross-origin requests
             return fetch(url, {
               ...options,
               credentials: 'include', // Send cookies automatically
+              mode: 'cors', // Explicitly set CORS mode
             });
           },
           async headers() {

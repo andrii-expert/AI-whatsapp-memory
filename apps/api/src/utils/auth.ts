@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 import { verifyToken } from "./auth-helpers";
+import { logger } from "@imaginecalendar/logger";
 
 export type Session = {
   user: {
@@ -16,8 +17,35 @@ export async function verifyAccessToken(c: Context): Promise<Session | null> {
     ? authHeader.substring(7) 
     : null;
   
-  const tokenFromCookie = getCookie(c, "auth-token");
+  // Try to get cookie - getCookie from hono/cookie should work
+  let tokenFromCookie: string | undefined;
+  try {
+    tokenFromCookie = getCookie(c, "auth-token");
+  } catch (error) {
+    // If getCookie fails, try reading from raw cookie header
+    const cookieHeader = c.req.header("Cookie");
+    if (cookieHeader) {
+      const cookies = cookieHeader.split(";").reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split("=");
+        if (key && value) acc[key] = value;
+        return acc;
+      }, {} as Record<string, string>);
+      tokenFromCookie = cookies["auth-token"];
+    }
+  }
+  
   const token = tokenFromHeader || tokenFromCookie;
+  
+  // Log for debugging (only in development or when token is missing)
+  if (!token && process.env.NODE_ENV === "development") {
+    const cookieHeader = c.req.header("Cookie");
+    logger.debug({
+      hasAuthHeader: !!authHeader,
+      hasCookieHeader: !!cookieHeader,
+      cookieHeaderLength: cookieHeader?.length || 0,
+      cookieHeaderPreview: cookieHeader ? cookieHeader.substring(0, 100) : null,
+    }, "No auth token found");
+  }
   
   if (!token) {
     return null;
