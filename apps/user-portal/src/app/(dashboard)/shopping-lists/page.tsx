@@ -2400,7 +2400,7 @@ export default function ShoppingListPage() {
                                 {item.createdAt && (
                                   <div className="flex-shrink-0">
                                     <span 
-                                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-xs font-medium text-gray-600 shadow-sm"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-sm bg-gray-50 text-xs font-medium text-gray-600 shadow-sm"
                                     >
                                       <span className={cn(isCurrentUser ? "text-gray-700" : "text-pink-600 font-semibold")}>
                                         {itemUserName}
