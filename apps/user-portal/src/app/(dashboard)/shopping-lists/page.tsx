@@ -2239,7 +2239,7 @@ export default function ShoppingListPage() {
                   "px-4 py-2 rounded-full text-sm font-medium transition-colors",
                   filterStatus === "all"
                     ? "bg-gray-900 text-white"
-                    : "text-gray-600 hover:bg-gray-50"
+                    : "shadow-[0_0_12px_0_rgba(0,0,0,0.04)] hover:bg-gray-50"
                 )}
                 style={{
                   backgroundColor: filterStatus === "all" ? undefined : "#FAFAFA"
@@ -2253,7 +2253,7 @@ export default function ShoppingListPage() {
                   "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
                   filterStatus === "open"
                     ? "bg-gray-900 text-white"
-                    : "text-gray-600 hover:bg-gray-50"
+                    : "shadow-[0_0_12px_0_rgba(0,0,0,0.04)] hover:bg-gray-50"
                 )}
                 style={{
                   backgroundColor: filterStatus === "open" ? undefined : "#FAFAFA"
@@ -2272,7 +2272,7 @@ export default function ShoppingListPage() {
                   "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
                   filterStatus === "completed"
                     ? "bg-gray-900 text-white"
-                    : "text-gray-600 hover:bg-gray-50"
+                    : "shadow-[0_0_12px_0_rgba(0,0,0,0.04)] hover:bg-gray-50"
                 )}
                 style={{
                   backgroundColor: filterStatus === "completed" ? undefined : "#FAFAFA"
