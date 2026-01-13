@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
 import { getUserByEmail, createUser } from "@imaginecalendar/database/queries";
+import { generateEmailVerificationCode } from "@imaginecalendar/database/queries/email-verification";
+import { sendEmailVerificationCode } from "@api/utils/email";
 import { hashPassword, generateToken } from "@api/utils/auth-helpers";
 import { z } from "zod";
 import { logger } from "@imaginecalendar/logger";
@@ -43,6 +45,16 @@ export async function POST(req: NextRequest) {
       emailVerified: false,
     });
 
+    // Generate email verification code
+    const { code } = await generateEmailVerificationCode(db, userId, validated.email);
+
+    // Send verification code email
+    await sendEmailVerificationCode({
+      to: validated.email,
+      code,
+      firstName: validated.firstName,
+    });
+
     // Generate token
     const token = generateToken({
       userId,
@@ -51,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     // Set cookie
     const response = NextResponse.json(
-      { success: true, userId },
+      { success: true, userId, requiresVerification: true },
       { status: 201 }
     );
 
@@ -63,7 +75,7 @@ export async function POST(req: NextRequest) {
       path: "/",
     });
 
-    logger.info({ userId, email: validated.email }, "User signed up successfully");
+    logger.info({ userId, email: validated.email }, "User signed up successfully, verification code sent");
 
     return response;
   } catch (error) {

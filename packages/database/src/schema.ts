@@ -168,6 +168,9 @@ export const users = pgTable("users", {
   // Authentication
   passwordHash: text("password_hash"), // Nullable for backward compatibility with Clerk users
   emailVerified: boolean("email_verified").default(false).notNull(),
+  emailVerificationCode: text("email_verification_code"),
+  emailVerificationExpiresAt: timestamp("email_verification_expires_at", { withTimezone: true }),
+  emailVerificationAttempts: integer("email_verification_attempts").default(0).notNull(),
 
   // Name fields (split from single "name" field)
   firstName: text("first_name"),

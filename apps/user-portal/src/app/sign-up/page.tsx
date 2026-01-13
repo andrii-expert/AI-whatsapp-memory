@@ -47,8 +47,8 @@ function SignUpForm() {
         throw new Error(data.error || "Sign up failed");
       }
 
-      // Redirect to dashboard
-      router.push("/dashboard");
+      // Redirect to email verification page
+      router.push("/verify-email");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");

@@ -1795,3 +1795,245 @@ function getInviteEmailTemplate(friendName: string, inviterName: string, signupU
 </html>
   `.trim();
 }
+
+// ============================================
+// Email Verification Code
+// ============================================
+
+interface EmailVerificationCodeParams {
+  to: string;
+  code: string;
+  firstName?: string;
+}
+
+export async function sendEmailVerificationCode({ to, code, firstName }: EmailVerificationCodeParams) {
+  try {
+    // Validate inputs
+    if (!to || !to.trim()) {
+      logger.error({ to, code }, 'Cannot send email verification code: missing recipient email');
+      return null;
+    }
+
+    if (!code || code.length !== 6) {
+      logger.error({ to, code }, 'Cannot send email verification code: invalid code');
+      return null;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(to.trim())) {
+      logger.error({ to }, 'Cannot send email verification code: invalid email format');
+      return null;
+    }
+
+    // Check if Resend API key is configured
+    if (!process.env.RESEND_API_KEY) {
+      logger.error({ to }, 'Cannot send email verification code: RESEND_API_KEY is not configured');
+      return null;
+    }
+
+    // Get and validate FROM_EMAIL at runtime
+    const fromEmail = getFromEmail();
+    if (!fromEmail) {
+      logger.error({ 
+        to,
+        resendFromEmail: process.env.RESEND_FROM_EMAIL 
+      }, 'Cannot send email verification code: RESEND_FROM_EMAIL is invalid or not configured properly');
+      return null;
+    }
+
+    // Get Resend client
+    const resend = getResendClient();
+    if (!resend) {
+      logger.error({ to }, 'Cannot send email verification code: Failed to initialize Resend client');
+      return null;
+    }
+
+    const emailHtml = getEmailVerificationCodeTemplate(code, firstName);
+
+    logger.info({ 
+      to, 
+      firstName,
+      from: fromEmail,
+      hasApiKey: !!process.env.RESEND_API_KEY,
+    }, '[EMAIL_VERIFICATION] Attempting to send email verification code');
+
+    try {
+      const { data, error } = await resend.emails.send({
+        from: fromEmail,
+        to: to.trim(),
+        subject: 'Verify your email address - CrackOn',
+        html: emailHtml,
+      });
+
+      if (error) {
+        logger.error({ 
+          error, 
+          errorMessage: error.message,
+          to,
+          from: fromEmail,
+        }, '[EMAIL_VERIFICATION] Resend API returned an error when sending verification code');
+        throw error;
+      }
+
+      if (!data) {
+        logger.warn({ 
+          to,
+          from: fromEmail,
+        }, '[EMAIL_VERIFICATION] Resend API returned no data when sending verification code');
+        return null;
+      }
+
+      logger.info({ 
+        emailId: data.id, 
+        to,
+        from: fromEmail,
+      }, '[EMAIL_VERIFICATION] Email verification code sent successfully');
+      return data;
+    } catch (sendError) {
+      logger.error({
+        error: sendError instanceof Error ? sendError.message : String(sendError),
+        errorStack: sendError instanceof Error ? sendError.stack : undefined,
+        to,
+        from: fromEmail,
+      }, '[EMAIL_VERIFICATION] Exception caught while sending verification code');
+      throw sendError;
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error({ error: errorMessage, to }, '[EMAIL_VERIFICATION] Failed to send email verification code');
+    return null;
+  }
+}
+
+function getEmailVerificationCodeTemplate(code: string, firstName?: string): string {
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
+  
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify your email - CrackOn</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333333;
+      background-color: #f4f7fa;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .header-title {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .greeting {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a202c;
+      margin-bottom: 20px;
+    }
+    .message {
+      font-size: 16px;
+      color: #4a5568;
+      line-height: 1.8;
+      margin-bottom: 30px;
+    }
+    .code-container {
+      background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+      border: 2px dashed #667eea;
+      border-radius: 12px;
+      padding: 30px;
+      text-align: center;
+      margin: 30px 0;
+    }
+    .code-label {
+      font-size: 14px;
+      color: #667eea;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 15px;
+    }
+    .code {
+      font-size: 48px;
+      font-weight: 700;
+      color: #667eea;
+      letter-spacing: 8px;
+      font-family: 'Courier New', monospace;
+    }
+    .expiry-note {
+      font-size: 14px;
+      color: #718096;
+      margin-top: 20px;
+      text-align: center;
+    }
+    .footer {
+      padding: 30px;
+      text-align: center;
+      background-color: #f7fafc;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer-text {
+      font-size: 14px;
+      color: #718096;
+    }
+    @media only screen and (max-width: 600px) {
+      .content {
+        padding: 30px 20px;
+      }
+      .code {
+        font-size: 36px;
+        letter-spacing: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <h1 class="header-title">Verify Your Email</h1>
+    </div>
+    <div class="content">
+      <p class="greeting">${greeting}</p>
+      <p class="message">
+        Thank you for signing up for CrackOn! To complete your registration, please verify your email address by entering the code below:
+      </p>
+      <div class="code-container">
+        <div class="code-label">Verification Code</div>
+        <div class="code">${code}</div>
+      </div>
+      <p class="expiry-note">
+        This code will expire in 10 minutes. If you didn't request this code, please ignore this email.
+      </p>
+    </div>
+    <div class="footer">
+      <p class="footer-text">
+        This is an automated message from CrackOn. Please do not reply to this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+}

@@ -26,6 +26,7 @@ export * from "./user-file-folders";
 export * from "./addresses";
 export * from "./address-sharing";
 export * from "./friends";
+export * from "./email-verification";
 
 // Re-export utility functions
 export * from "../utils/plan-limits";
