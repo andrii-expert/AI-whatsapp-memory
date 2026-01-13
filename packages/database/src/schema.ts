@@ -162,8 +162,12 @@ export type PlanId = typeof plans.$inferSelect["id"];
 // ============================================
 
 export const users = pgTable("users", {
-  id: text("id").primaryKey(), // Clerk user ID
+  id: text("id").primaryKey(), // UUID or custom ID
   email: text("email").notNull().unique(),
+  
+  // Authentication
+  passwordHash: text("password_hash"), // Nullable for backward compatibility with Clerk users
+  emailVerified: boolean("email_verified").default(false).notNull(),
 
   // Name fields (split from single "name" field)
   firstName: text("first_name"),

@@ -1,6 +1,5 @@
 import "@/styles/globals.css";
 import "@imaginecalendar/ui/globals.css";
-import { ClerkProvider } from "@clerk/nextjs";
 import { cn } from "@imaginecalendar/ui/cn";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
@@ -23,20 +22,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider
-      signInFallbackRedirectUrl="/dashboard"
-      signUpFallbackRedirectUrl="/onboarding"
-    >
-      <html lang="en">
-        <body
-          className={cn(
-            `${GeistSans.variable} ${GeistMono.variable} font-sans`,
-            "whitespace-pre-line overscroll-none antialiased"
-          )}
-        >
-          <Providers>{children}</Providers>
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="en">
+      <body
+        className={cn(
+          `${GeistSans.variable} ${GeistMono.variable} font-sans`,
+          "whitespace-pre-line overscroll-none antialiased"
+        )}
+      >
+        <Providers>{children}</Providers>
+      </body>
+    </html>
   );
 }

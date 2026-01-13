@@ -1,5 +1,4 @@
 import { trpcServer } from "@hono/trpc-server";
-import { clerkMiddleware } from "@hono/clerk-auth";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
@@ -39,12 +38,6 @@ app.use(secureHeaders());
 
 // Bull Board UI - NO AUTH (for easy monitoring)
 app.route("/queues", serverAdapter.registerPlugin());
-
-// Apply Clerk authentication middleware (but NOT to /queues)
-app.use("*", clerkMiddleware({
-  secretKey: process.env.CLERK_SECRET_KEY,
-  publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-}));
 
 app.use(
   "*",

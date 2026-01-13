@@ -84,6 +84,8 @@ export async function createUser(
   data: {
     id: string;
     email: string;
+    passwordHash?: string;
+    emailVerified?: boolean;
     firstName?: string;
     lastName?: string;
     name?: string; // DEPRECATED - for backward compatibility

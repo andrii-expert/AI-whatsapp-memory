@@ -1,5 +1,5 @@
-import { getAuth } from "@hono/clerk-auth";
 import type { Context } from "hono";
+import { verifyToken } from "./auth-helpers";
 
 export type Session = {
   user: {
@@ -9,41 +9,28 @@ export type Session = {
 };
 
 export async function verifyAccessToken(c: Context): Promise<Session | null> {
-  const auth = getAuth(c);
+  // Get token from Authorization header or cookie
+  const authHeader = c.req.header("Authorization");
+  const tokenFromHeader = authHeader?.startsWith("Bearer ") 
+    ? authHeader.substring(7) 
+    : null;
   
-  if (!auth?.userId) {
+  const tokenFromCookie = c.req.cookie("auth-token");
+  const token = tokenFromHeader || tokenFromCookie;
+  
+  if (!token) {
     return null;
   }
 
-  // Get the Clerk client from context if we need full user details
-  const clerkClient = c.get('clerk');
-  
-  try {
-    if (clerkClient && auth.userId) {
-      console.log("verifyAccessToken - Fetching user with ID:", auth.userId);
-      const user = await clerkClient.users.getUser(auth.userId);
-      console.log("verifyAccessToken - User fetched successfully");
-      return {
-        user: {
-          id: user.id,
-          email: user.emailAddresses[0]?.emailAddress || null,
-        }
-      };
-    }
-  } catch (error) {
-    console.error("verifyAccessToken - Error fetching user details:", error);
-    if (error instanceof Error) {
-      console.error("verifyAccessToken - Error message:", error.message);
-      console.error("verifyAccessToken - Error stack:", error.stack);
-    }
+  const payload = verifyToken(token);
+  if (!payload) {
+    return null;
   }
 
-  // Return basic session info if we can't get full details
-  console.log("verifyAccessToken - Using fallback with userId:", auth.userId);
   return {
     user: {
-      id: auth.userId,
-      email: null,
+      id: payload.userId,
+      email: payload.email,
     }
   };
 }

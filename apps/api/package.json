@@ -25,17 +25,21 @@
     "@imaginecalendar/logger": "workspace:*",
     "@imaginecalendar/payments": "workspace:*",
     "@trpc/server": "^11.5.0",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.61.0",
     "date-fns": "^4.1.0",
     "hono": "^4.8.12",
     "hono-rate-limiter": "^0.4.2",
     "ioredis": "^5.8.1",
+    "jsonwebtoken": "^9.0.3",
     "postgres": "^3.4.7",
     "resend": "^4.6.0",
     "superjson": "^2.2.2",
     "zod": "4.1.6"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.16"
+    "@types/bcryptjs": "^3.0.0",
+    "@types/bun": "^1.2.16",
+    "@types/jsonwebtoken": "^9.0.10"
   }
 }

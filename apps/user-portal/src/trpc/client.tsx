@@ -1,7 +1,6 @@
 "use client";
 
 import type { AppRouter } from "@api/trpc/routers/_app";
-import { useAuth } from "@clerk/nextjs";
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider, isServer } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink, loggerLink } from "@trpc/client";
@@ -29,13 +28,21 @@ function getQueryClient() {
   return browserQueryClient;
 }
 
+// Helper to get cookie value
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
+  return null;
+}
+
 export function TRPCReactProvider(
   props: Readonly<{
     children: React.ReactNode;
   }>,
 ) {
   const queryClient = getQueryClient();
-  const { getToken } = useAuth();
   
   const [trpcClient] = useState(() =>
     createTRPCClient<AppRouter>({
@@ -44,7 +51,7 @@ export function TRPCReactProvider(
           url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002'}/trpc`,
           transformer: superjson,
           async headers() {
-            const token = await getToken();
+            const token = getCookie("auth-token");
             
             return {
               Authorization: token ? `Bearer ${token}` : "",

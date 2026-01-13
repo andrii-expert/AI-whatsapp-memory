@@ -1,14 +1,19 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { verifyToken } from "@/lib/auth";
 
 export default async function HomePage() {
   // If user is already authenticated, redirect to dashboard
-  const { userId } = await auth();
-  if (userId) {
-    redirect("/dashboard");
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth-token")?.value;
+  if (token) {
+    const payload = verifyToken(token);
+    if (payload) {
+      redirect("/dashboard");
+    }
   }
 
   return (

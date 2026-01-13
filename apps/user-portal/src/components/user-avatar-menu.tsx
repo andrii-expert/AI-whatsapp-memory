@@ -1,7 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useClerk, useUser } from "@clerk/nextjs";
 import { LogOut, User, CreditCard, FileText, Settings, ChevronDown, MessageCircle, BookOpen } from "lucide-react";
 import {
   DropdownMenu,
@@ -11,21 +9,22 @@ import {
   DropdownMenuTrigger,
 } from "@imaginecalendar/ui/dropdown-menu";
 import Link from "next/link";
+import { useAuth } from "@/hooks/use-auth";
 
 export function UserAvatarMenu() {
-  const router = useRouter();
-  const { signOut } = useClerk();
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded, signOut } = useAuth();
 
   const handleSignOut = async () => {
-    await signOut(() => router.push("/"));
+    await signOut();
   };
 
   // Get user initials for avatar
   const getInitials = () => {
     if (!user) return "U";
     
-    const name = user.fullName || user.firstName || user.emailAddresses[0]?.emailAddress || "User";
+    const name = user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user.firstName || user.name || user.email || "User";
     const parts = name.split(" ");
     
     if (parts.length >= 2 && parts[0] && parts[1]) {
@@ -53,8 +52,8 @@ export function UserAvatarMenu() {
     return colors[hash % colors.length];
   };
 
-  const userEmail = user?.emailAddresses[0]?.emailAddress || "";
-  const userName = user?.fullName || user?.firstName || "User";
+  const userEmail = user?.email || "";
+  const userName = user?.firstName || user?.name || "User";
 
   // Show skeleton loader while loading
   if (!isLoaded) {

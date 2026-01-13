@@ -1,20 +1,31 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyToken } from "@/lib/auth";
 
 // Define public routes that don't require authentication
-const isPublicRoute = createRouteMatcher([
+const publicRoutes = [
   "/",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/api/webhooks/clerk(.*)",
-  "/api/webhook/payfast(.*)",  // PayFast ITN webhook - no auth needed
-  "/api/webhook/whatsapp(.*)",  // WhatsApp webhook - no auth needed
-  "/api/cron/reminders(.*)",  // Cron job endpoint - uses CRON_SECRET for auth
-  "/api/cron/calendar-events(.*)",  // Calendar events cron job endpoint - uses CRON_SECRET for auth
-  "/api/calendars/callback",  // OAuth providers redirect here, no session cookie
-  "/api/payment/billing-cancel",  // PayFast redirects here after cancellation
-  "/api/payment/billing-success",  // PayFast redirects here after success
-]);
+  "/sign-in",
+  "/sign-up",
+  "/api/auth",
+  "/api/webhooks/clerk",
+  "/api/webhook/payfast",
+  "/api/webhook/whatsapp",
+  "/api/cron/reminders",
+  "/api/cron/calendar-events",
+  "/api/calendars/callback",
+  "/api/payment/billing-cancel",
+  "/api/payment/billing-success",
+];
+
+function isPublicRoute(pathname: string): boolean {
+  return publicRoutes.some((route) => {
+    if (route.endsWith("(.*)")) {
+      const baseRoute = route.replace("(.*)", "");
+      return pathname.startsWith(baseRoute);
+    }
+    return pathname === route || pathname.startsWith(route + "/");
+  });
+}
 
 // Get the correct host URL
 function getHost(req: NextRequest): string {
@@ -29,20 +40,40 @@ function getHost(req: NextRequest): string {
   return `${protocol}://${host}`;
 }
 
-export default clerkMiddleware(async (auth, req) => {
-  const { userId, redirectToSignIn } = await auth();
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
-  // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!userId && !isPublicRoute(req)) {
-    // Build the correct return URL using the actual host
-    const host = getHost(req);
-    const returnBackUrl = `${host}${req.nextUrl.pathname}${req.nextUrl.search}`;
-    return redirectToSignIn({ returnBackUrl });
+  // Allow public routes
+  if (isPublicRoute(pathname)) {
+    return NextResponse.next();
   }
 
-  // Let all authenticated requests through
-  // Onboarding checks will be handled by individual pages using Server Components
-});
+  // Check for auth token in cookie
+  const token = req.cookies.get("auth-token")?.value;
+
+  if (!token) {
+    // Redirect to sign-in if not authenticated
+    const host = getHost(req);
+    const signInUrl = new URL("/sign-in", host);
+    signInUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(signInUrl);
+  }
+
+  // Verify token
+  const payload = verifyToken(token);
+  if (!payload) {
+    // Invalid token, redirect to sign-in
+    const host = getHost(req);
+    const signInUrl = new URL("/sign-in", host);
+    signInUrl.searchParams.set("redirect", pathname);
+    const response = NextResponse.redirect(signInUrl);
+    response.cookies.delete("auth-token");
+    return response;
+  }
+
+  // Token is valid, allow request
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [
