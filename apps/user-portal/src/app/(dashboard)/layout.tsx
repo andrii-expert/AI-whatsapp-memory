@@ -1,4 +1,4 @@
-import { requireOnboarding } from "@/lib/check-onboarding";
+import { requireAuth } from "@/lib/check-auth";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
@@ -7,9 +7,8 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Check authentication and onboarding status
-  // This will redirect if user is not authenticated or not onboarded
-  await requireOnboarding();
+  // Check authentication - this will redirect if user is not authenticated
+  await requireAuth();
 
   return (
     <div className="min-h-screen bg-white">

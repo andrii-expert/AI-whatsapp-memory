@@ -37,8 +37,9 @@ export default function SignUpPage() {
         throw new Error(data.error || "Sign up failed");
       }
 
-      // Redirect to onboarding
-      router.push("/onboarding");
+      // Redirect to dashboard
+      router.push("/dashboard");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       setLoading(false);
