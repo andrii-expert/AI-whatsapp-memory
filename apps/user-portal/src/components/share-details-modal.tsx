@@ -140,65 +140,6 @@ export function ShareDetailsModal({
   const myPermission = sharedResourceInfo?.permission || "view";
   const isViewingShared = isError && ownerInfo;
 
-  // Live search for users (Others tab) - debounced API call
-  useEffect(() => {
-    if (!isOpen || activeTab !== "others" || !searchTerm.trim()) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    const timeoutId = setTimeout(async () => {
-      if (!isMounted) return;
-      
-      setIsSearching(true);
-      try {
-        const results = await queryClient.fetchQuery(
-          isNoteResource
-            ? trpc.noteSharing.searchUsers.queryOptions({
-                searchTerm: searchTerm.trim(),
-              })
-            : isFileResource
-            ? trpc.fileSharing.searchUsers.queryOptions({
-                searchTerm: searchTerm.trim(),
-              })
-            : isAddressResource
-            ? trpc.addresses.searchUsers.queryOptions({
-                searchTerm: searchTerm.trim(),
-              })
-            : trpc.taskSharing.searchUsers.queryOptions({
-                searchTerm: searchTerm.trim(),
-              })
-        );
-        
-        if (!isMounted) return;
-        
-        // Filter out users who are already shared with
-        const existingUserIds = (shares || []).map((s: any) => s?.sharedWithUser?.id).filter(Boolean);
-        const filteredResults = (results || []).filter(
-          (user: any) => user?.id && !existingUserIds.includes(user.id)
-        );
-        
-        setSearchResults(filteredResults);
-      } catch (error: any) {
-        if (!isMounted) return;
-        console.error('Search error:', error);
-        setSearchResults([]);
-      } finally {
-        if (isMounted) {
-          setIsSearching(false);
-        }
-      }
-    }, 300); // 300ms debounce
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
-  }, [isOpen, searchTerm, activeTab, isNoteResource, isFileResource, isAddressResource, queryClient, trpc, shares]);
-
   const createShareMutation = useMutation(
     (isNoteResource
       ? trpc.noteSharing.createShare.mutationOptions({
@@ -680,82 +621,6 @@ export function ShareDetailsModal({
                   <p className="text-sm text-gray-500">No friends found</p>
                 </div>
               )}
-
-              {/* Live Search Results - Others Tab */}
-              {activeTab === "others" && searchTerm.trim() && searchResults.length > 0 && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-xs font-semibold text-gray-700 mb-2">Users</h4>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {searchResults.map((user: any) => {
-                      const displayName = [user.firstName, user.lastName]
-                        .filter(Boolean)
-                        .join(' ') || user.email?.split('@')[0] || "Unknown User";
-                      
-                      // Get initials for avatar
-                      const getInitials = (name: string) => {
-                        if (!name) return "U";
-                        const parts = name.split(" ");
-                        if (parts.length >= 2 && parts[0] && parts[1]) {
-                          return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-                        }
-                        return name.substring(0, 2).toUpperCase();
-                      };
-                      
-                      const initials = getInitials(displayName);
-                      const existingUserIds = (shares || []).map((s: any) => s?.sharedWithUser?.id).filter(Boolean);
-                      const isAlreadyShared = existingUserIds.includes(user.id);
-                      
-                      return (
-                        <div
-                          key={user.id}
-                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-white transition-colors"
-                        >
-                          {/* Avatar with initials in pink */}
-                          <div className="w-10 h-10 rounded-full bg-pink-200 flex items-center justify-center flex-shrink-0">
-                            <span className="text-sm font-medium text-pink-700">
-                              {initials}
-                            </span>
-                          </div>
-                          
-                          {/* Name */}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-normal text-black">
-                              {displayName}
-                            </div>
-                            {user.email && (
-                              <div className="text-xs text-gray-500 truncate">
-                                {user.email}
-                              </div>
-                            )}
-                            {user.phoneNumber && (
-                              <div className="text-xs text-gray-500 truncate">
-                                {user.phoneNumber}
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Add Button */}
-                          <Button
-                            size="sm"
-                            onClick={() => handleAddUser(user, "edit")}
-                            disabled={createShareMutation.isPending || isAlreadyShared}
-                            className="h-9 px-4"
-                          >
-                            {isAlreadyShared ? "Added" : "Add"}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* No Results Message - Others Tab */}
-              {activeTab === "others" && searchTerm.trim() && !isSearching && searchResults.length === 0 && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                  <p className="text-sm text-gray-500">No users found</p>
-                </div>
-              )}
             </>
           )}
 
@@ -920,6 +785,69 @@ export function ShareDetailsModal({
                   })()}
                 </div>
                 
+                {/* Search Results - show when there are search results (Others tab only) */}
+                {activeTab === "others" && searchResults.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h4 className="text-sm font-semibold text-black mb-3">Search Results</h4>
+                    <div className="space-y-2">
+                      {searchResults.map((user: any) => {
+                        const displayName = [user.firstName, user.lastName]
+                          .filter(Boolean)
+                          .join(' ') || user.email?.split('@')[0] || "Unknown User";
+                        
+                        // Get initials for avatar
+                        const getInitials = (name: string) => {
+                          if (!name) return "U";
+                          const parts = name.split(" ");
+                          if (parts.length >= 2 && parts[0] && parts[1]) {
+                            return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+                          }
+                          return name.substring(0, 2).toUpperCase();
+                        };
+                        
+                        const initials = getInitials(displayName);
+                        const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
+                        const isAlreadyShared = existingUserIds.includes(user.id);
+                        
+                        return (
+                          <div
+                            key={user.id}
+                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50"
+                          >
+                            {/* Avatar with initials in pink */}
+                            <div className="w-10 h-10 rounded-full bg-pink-200 flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-medium text-pink-700">
+                                {initials}
+                              </span>
+                            </div>
+                            
+                            {/* Name */}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-normal text-black">
+                                {displayName}
+                              </div>
+                              {user.email && (
+                                <div className="text-xs text-gray-500 truncate">
+                                  {user.email}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Add Button */}
+                            <Button
+                              size="sm"
+                              onClick={() => handleAddUser(user, "edit")}
+                              disabled={createShareMutation.isPending || isAlreadyShared}
+                              className="h-9 px-4"
+                            >
+                              {isAlreadyShared ? "Added" : "Add"}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
