@@ -1393,7 +1393,7 @@ export default function ShoppingListPage() {
             {!selectedFolderId && !viewAllItems && !viewAllShared && (
               <div className="lg:hidden w-full">
                 {/* Your Lists Header */}
-                <div className="px-4 pt-6 pb-4">
+                <div className="px-4 pt-6 pb-4 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
                   <div className="flex items-center justify-between">
                     <h2 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Shopping Lists</h2>
                     <Button
@@ -1409,7 +1409,7 @@ export default function ShoppingListPage() {
                 </div>
 
                 {/* Search Bar */}
-                <div className="px-4 pb-4">
+                <div className="px-4 pb-4 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
                   <div className="relative">
                     <Input
                       placeholder="Search..."
