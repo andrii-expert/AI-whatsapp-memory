@@ -1,6 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { trpc, getQueryClient } from "@/trpc/server";
+import { verifyToken } from "@/lib/auth";
 
 /**
  * Server Component utility to check if user is authenticated and onboarded
@@ -9,11 +10,19 @@ import { trpc, getQueryClient } from "@/trpc/server";
  * @returns User data if fully onboarded
  */
 export async function requireOnboarding() {
-  const { userId } = await auth();
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth-token")?.value;
   
-  if (!userId) {
+  if (!token) {
     redirect("/sign-in");
   }
+  
+  const payload = verifyToken(token);
+  if (!payload) {
+    redirect("/sign-in");
+  }
+  
+  const userId = payload.userId;
   
   const queryClient = getQueryClient();
   
@@ -80,11 +89,19 @@ export async function requireOnboarding() {
  * Useful for conditional rendering or optional checks
  */
 export async function checkOnboardingStatus() {
-  const { userId } = await auth();
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth-token")?.value;
   
-  if (!userId) {
+  if (!token) {
     return { isAuthenticated: false, isOnboarded: false, user: null };
   }
+  
+  const payload = verifyToken(token);
+  if (!payload) {
+    return { isAuthenticated: false, isOnboarded: false, user: null };
+  }
+  
+  const userId = payload.userId;
   
   const queryClient = getQueryClient();
   

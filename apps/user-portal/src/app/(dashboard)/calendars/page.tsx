@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent } from "@imaginecalendar/ui/card";
 import { Badge } from "@imaginecalendar/ui/badge";
@@ -786,7 +786,7 @@ function EventCard({
 export default function CalendarsPage() {
   const trpc = useTRPC();
   const { toast } = useToast();
-  const { user } = useUser();
+  const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
@@ -2775,8 +2775,8 @@ export default function CalendarsPage() {
                       // Get user name from user object or use email
                       const userName = user?.firstName && user?.lastName
                         ? `${user.firstName} ${user.lastName}`
-                        : user?.fullName || group.email?.split('@')[0] || 'User';
-                      const userEmail = group.email || user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
+                        : user?.name || user?.firstName || group.email?.split('@')[0] || 'User';
+                      const userEmail = group.email || user?.email || '';
                       
                       return (
                         <div key={key}>
@@ -5160,8 +5160,8 @@ export default function CalendarsPage() {
                     // Get user name from user object or use email
                     const userName = user?.firstName && user?.lastName
                       ? `${user.firstName} ${user.lastName}`
-                      : user?.fullName || group.email?.split('@')[0] || 'User';
-                    const userEmail = group.email || user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
+                      : user?.name || user?.firstName || group.email?.split('@')[0] || 'User';
+                    const userEmail = group.email || user?.email || '';
                     
                     return (
                       <div key={key}>

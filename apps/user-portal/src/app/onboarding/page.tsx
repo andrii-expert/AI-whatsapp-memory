@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/nextjs";
-import { updateClerkOnboardingMetadata } from "@/app/actions/onboarding";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
 import { Input } from "@imaginecalendar/ui/input";
@@ -62,7 +61,7 @@ const formSchema = z.object({
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user, isLoaded } = useUser();
+  const { user, isLoaded } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);
@@ -94,7 +93,7 @@ export default function OnboardingPage() {
           duration: 2000,
         });
 
-        updateClerkOnboardingMetadata().catch(() => { });
+        // Onboarding complete
 
         setIsSubmitting(false);
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
 import { Label } from "@imaginecalendar/ui/label";
@@ -43,7 +43,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { user: clerkUser } = useUser();
+  const { user: clerkUser } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);
@@ -313,7 +313,7 @@ export default function ProfilePage() {
               <Input
                 id="email"
                 type="email"
-                value={clerkUser?.emailAddresses[0]?.emailAddress || ""}
+                value={clerkUser?.email || ""}
                 disabled
                 className="bg-muted"
               />

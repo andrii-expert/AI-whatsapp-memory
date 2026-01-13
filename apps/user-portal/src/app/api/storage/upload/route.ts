@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 // Cloudflare R2 configuration (must be provided via env)
@@ -27,13 +28,22 @@ function getS3Client() {
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const { userId } = await auth();
-    if (!userId) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth-token")?.value;
+    if (!token) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
+    const payload = verifyToken(token);
+    if (!payload) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+    const userId = payload.userId;
     const formData = await request.formData();
     const file = formData.get("file") as File;
 

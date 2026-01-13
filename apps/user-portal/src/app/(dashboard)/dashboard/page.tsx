@@ -36,7 +36,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/pop
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@imaginecalendar/ui/command";
 import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Calendar,
   MessageSquare,
@@ -499,7 +499,7 @@ function GoogleMap({
 export default function DashboardPage() {
   const router = useRouter();
   const trpc = useTRPC();
-  const { user } = useUser();
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedNote, setSelectedNote] = useState<any | null>(null);

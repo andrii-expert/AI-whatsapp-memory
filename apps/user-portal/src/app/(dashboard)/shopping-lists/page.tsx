@@ -17,7 +17,7 @@ import { Icons } from "@imaginecalendar/ui/icons";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@imaginecalendar/ui/cn";
 import {
   AlertDialog,
@@ -136,7 +136,7 @@ export default function ShoppingListPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const { user } = useUser();
+  const { user } = useAuth();
   const userId = user?.id;
 
   // State - default to folder list when landing on the page

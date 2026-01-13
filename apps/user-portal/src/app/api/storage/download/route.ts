@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -25,10 +26,16 @@ function getS3Client() {
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth-token")?.value;
+    if (!token) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
+    const payload = verifyToken(token);
+    if (!payload) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = payload.userId;
 
     const { searchParams } = new URL(request.url);
     const key = searchParams.get("key");
