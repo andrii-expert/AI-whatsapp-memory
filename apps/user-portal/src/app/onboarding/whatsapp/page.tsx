@@ -109,6 +109,8 @@ function WhatsAppLinkingForm() {
   const [timezones, setTimezones] = useState<string[]>([]);
   const [isVerified, setIsVerified] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
 
   // Fetch user data
   const { data: user } = useQuery(trpc.user.me.queryOptions());
@@ -248,19 +250,61 @@ function WhatsAppLinkingForm() {
             {/* Phone Number Input */}
             <div>
               <Label htmlFor="phone">WhatsApp Phone Number *</Label>
-              <PhoneInput
-                id="phone"
-                value={phoneNumber}
-                onChange={(value) => setPhoneNumber(value)}
-                className="mt-1"
-              />
+              <div className="flex gap-2 mt-1">
+                <PhoneInput
+                  id="phone"
+                  value={phoneNumber}
+                  onChange={(value) => {
+                    setPhoneNumber(value);
+                    setShowVerification(false);
+                  }}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    if (!phoneNumber) {
+                      toast({
+                        title: "Phone number required",
+                        description: "Please enter your phone number first.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    setIsSavingPhone(true);
+                    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+                    
+                    try {
+                      await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
+                      setShowVerification(true);
+                      toast({
+                        title: "Phone number saved",
+                        description: "Now verify your number to continue.",
+                        variant: "success",
+                      });
+                    } catch (error: any) {
+                      toast({
+                        title: "Error",
+                        description: error?.message || "Failed to save phone number",
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setIsSavingPhone(false);
+                    }
+                  }}
+                  disabled={!phoneNumber || isSavingPhone}
+                >
+                  {isSavingPhone ? "Saving..." : "Verify"}
+                </Button>
+              </div>
               <p className="text-xs text-gray-500 mt-1">
                 Include country code (e.g., +1 for US, +27 for South Africa)
               </p>
             </div>
 
-            {/* WhatsApp Verification - Save phone first if not saved */}
-            {phoneNumber && (
+            {/* WhatsApp Verification - Show after clicking Verify button */}
+            {showVerification && phoneNumber && (
               <PhoneVerificationFlow
                 phoneNumber={phoneNumber}
                 userPhone={user?.phone}

@@ -85,6 +85,8 @@ function WhatsAppVerificationPageContent() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedPhone, setEditedPhone] = useState("");
   const [phoneForVerification, setPhoneForVerification] = useState<string | null>(null);
+  const [showVerificationForNewPhone, setShowVerificationForNewPhone] = useState(false);
+  const [isSavingNewPhone, setIsSavingNewPhone] = useState(false);
 
   // Fetch current user data to get phone number
   const { data: user, isLoading: userLoading, error: userError } = useQuery(
@@ -324,24 +326,65 @@ function WhatsAppVerificationPageContent() {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="phone-input">WhatsApp Phone Number *</Label>
-                <PhoneInput
-                  id="phone-input"
-                  value={editedPhone || ""}
-                  onChange={(value) => setEditedPhone(value)}
-                  className="mt-1"
-                />
+                <div className="flex gap-2 mt-1">
+                  <PhoneInput
+                    id="phone-input"
+                    value={editedPhone || ""}
+                    onChange={(value) => {
+                      setEditedPhone(value);
+                      setShowVerificationForNewPhone(false);
+                    }}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      if (!editedPhone) {
+                        toast({
+                          title: "Phone number required",
+                          description: "Please enter your phone number first.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      setIsSavingNewPhone(true);
+                      const normalizedPhone = normalizePhoneNumber(editedPhone);
+                      
+                      try {
+                        await updateUserMutation.mutateAsync({ phone: normalizedPhone });
+                        setPhoneForVerification(normalizedPhone);
+                        setShowVerificationForNewPhone(true);
+                        toast({
+                          title: "Phone number saved",
+                          description: "Now verify your number to continue.",
+                          variant: "success",
+                        });
+                      } catch (error: any) {
+                        toast({
+                          title: "Error",
+                          description: error?.message || "Failed to save phone number",
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setIsSavingNewPhone(false);
+                      }
+                    }}
+                    disabled={!editedPhone || isSavingNewPhone}
+                  >
+                    {isSavingNewPhone ? "Saving..." : "Verify"}
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Include country code (e.g., +1 for US, +27 for South Africa)
                 </p>
               </div>
-              {editedPhone && (
+              {showVerificationForNewPhone && editedPhone && (
                 <div className="mt-4">
-                  <SavePhoneBeforeVerify
-                    phoneNumber={editedPhone}
-                    onSaved={() => {
-                      // Phone saved, verification section will show
-                    }}
-                    updateUserMutation={updateUserMutation}
+                  <WhatsAppVerificationSection
+                    phoneNumber={phoneForVerification || normalizePhoneNumber(editedPhone)}
+                    alwaysGenerateNewCode={true}
+                    redirectFrom="settings"
                   />
                 </div>
               )}
@@ -462,21 +505,65 @@ function WhatsAppVerificationPageContent() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="phone">Phone Number</Label>
-                  <PhoneInput
-                    id="phone"
-                    value={editedPhone}
-                    onChange={(value) => setEditedPhone(value)}
-                    className="mt-1"
-                  />
+                  <div className="flex gap-2 mt-1">
+                    <PhoneInput
+                      id="phone"
+                      value={editedPhone}
+                      onChange={(value) => {
+                        setEditedPhone(value);
+                        setPhoneForVerification(null);
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        if (!editedPhone) {
+                          toast({
+                            title: "Phone number required",
+                            description: "Please enter your phone number first.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+
+                        const normalizedPhone = normalizePhoneNumber(editedPhone);
+                        
+                        // Check if the phone number actually changed
+                        if (normalizedPhone === (verifiedNumber?.phoneNumber || user?.phone || "")) {
+                          toast({
+                            title: "No changes",
+                            description: "Phone number is the same as before.",
+                            variant: "default",
+                          });
+                          setIsEditing(false);
+                          return;
+                        }
+
+                        try {
+                          await updateUserMutation.mutateAsync({ phone: normalizedPhone });
+                          setPhoneForVerification(normalizedPhone);
+                          setIsEditing(false);
+                          toast({
+                            title: "Phone number updated",
+                            description: "A new verification code has been generated. Please verify the new number.",
+                            variant: "success",
+                          });
+                        } catch (error: any) {
+                          toast({
+                            title: "Update failed",
+                            description: error?.message || "Failed to update phone number. Please try again.",
+                            variant: "error",
+                          });
+                        }
+                      }}
+                      disabled={!editedPhone || updateUserMutation.isPending}
+                    >
+                      {updateUserMutation.isPending ? "Saving..." : "Verify"}
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    onClick={handleSave}
-                    disabled={!editedPhone || editedPhone === (verifiedNumber?.phoneNumber || whatsappNumbers?.[0]?.phoneNumber)}
-                  >
-                    <Check className="h-4 w-4 mr-2" />
-                    Save Changes
-                  </Button>
                   <Button
                     variant="outline"
                     onClick={handleCancel}
@@ -486,7 +573,7 @@ function WhatsAppVerificationPageContent() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Changing your phone number will require verification again.
+                  Click "Verify" to save and generate a verification code for your new number.
                 </p>
               </div>
             ) : (
