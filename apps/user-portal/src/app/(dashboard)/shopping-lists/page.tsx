@@ -2269,7 +2269,7 @@ export default function ShoppingListPage() {
               <button
                 onClick={() => setFilterStatus("completed")}
                 className={cn(
-                  "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2",
+                  "px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 border border-gray-200 border-1",
                   filterStatus === "completed"
                     ? "bg-gray-900 text-white"
                     : "shadow-[0_0_12px_0_rgba(0,0,0,0.04)] hover:bg-gray-50"
@@ -2315,7 +2315,7 @@ export default function ShoppingListPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_1px_3px_0_rgb(0,0,0,0.1),0_1px_2px_-1px_rgb(0,0,0,0.1)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] hover:shadow-[0_4px_6px_-1px_rgb(0,0,0,0.1),0_2px_4px_-2px_rgb(0,0,0,0.1)] transition-shadow duration-200">
             <div>
               {filteredItems.map((item, index) => {
                     // Check if item is shared and what permission the user has
