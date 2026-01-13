@@ -1379,20 +1379,6 @@ export default function ShoppingListPage() {
       <div className="min-h-screen bg-white">
         {/* Main Container */}
         <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
-          {/* Breadcrumb Navigation */}
-          <div className="hidden lg:flex items-center gap-2 text-sm justify-between px-4 pt-6 pb-4">
-            <div className="flex items-center justify-center gap-2">
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Home className="h-4 w-4" />
-                Dashboard
-              </Link>
-              <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-              <span className="font-medium">Your Shopping Lists</span>
-            </div>
-          </div>
 
           {/* Main Content - Three Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
