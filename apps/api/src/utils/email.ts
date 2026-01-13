@@ -932,7 +932,7 @@ interface ShareNotificationEmailParams {
   recipientLastName: string;
   ownerFirstName: string;
   ownerLastName: string;
-  resourceType: "task" | "task_folder" | "note" | "note_folder";
+  resourceType: "task" | "task_folder" | "note" | "note_folder" | "shopping_list_folder";
   resourceName: string;
   permission: "view" | "edit";
 }
@@ -998,6 +998,8 @@ export async function sendShareNotificationEmail({
     const ownerFullName = `${ownerFirstName} ${ownerLastName}`;
     const resourceTypeLabel = resourceType === "task" || resourceType === "note" 
       ? (resourceType === "task" ? "task" : "note")
+      : resourceType === "shopping_list_folder"
+      ? "shopping list"
       : "folder";
     const permissionLabel = permission === "edit" ? "edit" : "view";
     const emailHtml = getShareNotificationEmailTemplate({
@@ -1102,14 +1104,19 @@ function getShareNotificationEmailTemplate({
 }: {
   recipientFullName: string;
   ownerFullName: string;
-  resourceType: "task" | "task_folder" | "note" | "note_folder";
+  resourceType: "task" | "task_folder" | "note" | "note_folder" | "shopping_list_folder";
   resourceTypeLabel: string;
   resourceName: string;
   permissionLabel: string;
 }): string {
-  const resourceIcon = resourceType === "task" ? "✓" : resourceType === "note" ? "📝" : "📁";
+  const resourceIcon = resourceType === "task" ? "✓" 
+    : resourceType === "note" ? "📝" 
+    : resourceType === "shopping_list_folder" ? "📋"
+    : "📁";
   const dashboardLink = resourceType === "task" || resourceType === "task_folder"
     ? `https://dashboard.crackon.ai/tasks`
+    : resourceType === "shopping_list_folder"
+    ? `https://dashboard.crackon.ai/shopping-lists`
     : `https://dashboard.crackon.ai/notes`;
 
   return `
@@ -1117,8 +1124,14 @@ function getShareNotificationEmailTemplate({
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>${ownerFullName} Shared a ${resourceTypeLabel.charAt(0).toUpperCase() + resourceTypeLabel.slice(1)} with You</title>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {font-family: Arial, sans-serif !important;}
+  </style>
+  <![endif]-->
   <style>
     * {
       margin: 0;
@@ -1130,11 +1143,39 @@ function getShareNotificationEmailTemplate({
       line-height: 1.6;
       color: #333333;
       background-color: #f4f7fa;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    table {
+      border-collapse: collapse;
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      border: 0;
+      height: auto;
+      line-height: 100%;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+      max-width: 100%;
+    }
+    .email-wrapper {
+      width: 100%;
+      background-color: #f4f7fa;
+      padding: 20px 0;
     }
     .email-container {
       max-width: 600px;
+      width: 100%;
       margin: 0 auto;
       background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     .header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -1142,9 +1183,11 @@ function getShareNotificationEmailTemplate({
       text-align: center;
     }
     .logo {
-      max-width: 200px;
+      max-width: 180px;
+      width: 100%;
       height: auto;
       margin-bottom: 20px;
+      display: block;
     }
     .header-title {
       color: #ffffff;
@@ -1152,6 +1195,7 @@ function getShareNotificationEmailTemplate({
       font-weight: 700;
       margin: 0;
       text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      line-height: 1.3;
     }
     .content {
       padding: 40px 30px;
@@ -1161,12 +1205,14 @@ function getShareNotificationEmailTemplate({
       font-weight: 600;
       color: #1a202c;
       margin-bottom: 20px;
+      line-height: 1.4;
     }
     .message {
       font-size: 16px;
       color: #4a5568;
       line-height: 1.8;
       margin-bottom: 20px;
+      word-wrap: break-word;
     }
     .share-box {
       background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
@@ -1174,6 +1220,7 @@ function getShareNotificationEmailTemplate({
       padding: 25px;
       margin: 30px 0;
       border-radius: 8px;
+      width: 100%;
     }
     .share-title {
       font-size: 20px;
@@ -1183,6 +1230,7 @@ function getShareNotificationEmailTemplate({
       display: flex;
       align-items: center;
       gap: 10px;
+      flex-wrap: wrap;
     }
     .share-details {
       margin: 15px 0;
@@ -1190,8 +1238,10 @@ function getShareNotificationEmailTemplate({
     .share-row {
       display: flex;
       justify-content: space-between;
-      padding: 10px 0;
+      align-items: flex-start;
+      padding: 12px 0;
       border-bottom: 1px solid #e2e8f0;
+      gap: 15px;
     }
     .share-row:last-child {
       border-bottom: none;
@@ -1199,24 +1249,37 @@ function getShareNotificationEmailTemplate({
     .share-label {
       font-weight: 600;
       color: #4a5568;
+      font-size: 14px;
+      min-width: 100px;
+      flex-shrink: 0;
     }
     .share-value {
       color: #1a202c;
       font-weight: 500;
+      font-size: 14px;
+      text-align: right;
+      word-wrap: break-word;
+      flex: 1;
     }
     .permission-badge {
       display: inline-block;
-      padding: 4px 12px;
+      padding: 6px 14px;
       border-radius: 12px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       background: ${permissionLabel === "edit" ? "#10b981" : "#3b82f6"};
       color: white;
+      white-space: nowrap;
+    }
+    .cta-container {
+      text-align: center;
+      margin: 40px 0;
+      width: 100%;
     }
     .cta-button {
       display: inline-block;
       background: #446DE1;
-      color: #ffffff;
+      color: #ffffff !important;
       text-decoration: none;
       padding: 16px 40px;
       border-radius: 8px;
@@ -1224,10 +1287,12 @@ function getShareNotificationEmailTemplate({
       font-size: 16px;
       margin: 20px 0;
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-      transition: transform 0.2s;
+      transition: all 0.2s ease;
+      min-width: 200px;
+      text-align: center;
     }
     .cta-button:hover {
-      transform: translateY(-2px);
+      background: #3a5bc7;
       box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
     }
     .footer {
@@ -1239,116 +1304,242 @@ function getShareNotificationEmailTemplate({
     .footer-text {
       color: #718096;
       font-size: 14px;
-      margin: 5px 0;
+      margin: 8px 0;
+      line-height: 1.6;
+      word-wrap: break-word;
+    }
+    .footer-text a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    .footer-text a:hover {
+      text-decoration: underline;
     }
     .divider {
       height: 1px;
       background: linear-gradient(to right, transparent, #e2e8f0, transparent);
       margin: 30px 0;
+      width: 100%;
     }
+    .help-section {
+      font-size: 14px;
+      color: #718096;
+      line-height: 1.8;
+    }
+    .help-section a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    .help-section a:hover {
+      text-decoration: underline;
+    }
+    /* Mobile Responsive Styles */
     @media only screen and (max-width: 600px) {
-      .content {
-        padding: 30px 20px;
+      .email-wrapper {
+        padding: 0;
+      }
+      .email-container {
+        border-radius: 0;
+        box-shadow: none;
       }
       .header {
         padding: 30px 20px;
       }
+      .logo {
+        max-width: 150px;
+        margin-bottom: 15px;
+      }
+      .header-title {
+        font-size: 22px;
+        line-height: 1.3;
+      }
+      .content {
+        padding: 30px 20px;
+      }
       .greeting {
         font-size: 20px;
+        margin-bottom: 15px;
       }
-      .cta-button {
-        display: block;
-        text-align: center;
+      .message {
+        font-size: 15px;
+        line-height: 1.7;
+        margin-bottom: 15px;
+      }
+      .share-box {
+        padding: 20px;
+        margin: 25px 0;
+        border-left-width: 3px;
+      }
+      .share-title {
+        font-size: 18px;
+        gap: 8px;
+        margin-bottom: 12px;
       }
       .share-row {
         flex-direction: column;
+        padding: 10px 0;
+        gap: 5px;
+      }
+      .share-label {
+        min-width: auto;
+        font-size: 13px;
+        margin-bottom: 4px;
       }
       .share-value {
-        margin-top: 5px;
+        text-align: left;
+        font-size: 14px;
+        margin-top: 0;
+      }
+      .permission-badge {
+        font-size: 12px;
+        padding: 5px 12px;
+      }
+      .cta-container {
+        margin: 30px 0;
+      }
+      .cta-button {
+        display: block;
+        width: 100%;
+        padding: 18px 20px;
+        font-size: 16px;
+        margin: 0;
+        min-width: auto;
+      }
+      .footer {
+        padding: 25px 20px;
+      }
+      .footer-text {
+        font-size: 13px;
+        margin: 6px 0;
+      }
+      .divider {
+        margin: 25px 0;
+      }
+      .help-section {
+        font-size: 13px;
+      }
+    }
+    /* Extra small devices */
+    @media only screen and (max-width: 480px) {
+      .header {
+        padding: 25px 15px;
+      }
+      .header-title {
+        font-size: 20px;
+      }
+      .logo {
+        max-width: 120px;
+      }
+      .content {
+        padding: 25px 15px;
+      }
+      .greeting {
+        font-size: 18px;
+      }
+      .message {
+        font-size: 14px;
+      }
+      .share-box {
+        padding: 15px;
+      }
+      .share-title {
+        font-size: 16px;
+      }
+      .cta-button {
+        padding: 16px 15px;
+        font-size: 15px;
+      }
+    }
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      .email-container {
+        background-color: #ffffff;
       }
     }
   </style>
 </head>
 <body>
-  <div class="email-container">
-    <!-- Header -->
-    <div class="header">
-      <img src="https://dashboard.crackon.ai/crack-on-logo.png" alt="CrackOn Logo" class="logo" />
-      <h1 class="header-title">New Share Notification</h1>
-    </div>
-
-    <!-- Content -->
-    <div class="content">
-      <h2 class="greeting">Hi ${recipientFullName}! 👋</h2>
-      
-      <p class="message">
-        <strong>${ownerFullName}</strong> has shared a ${resourceTypeLabel} with you on CrackOn.
-      </p>
-
-      <div class="share-box">
-        <div class="share-title">
-          <span>${resourceIcon}</span>
-          <span>Shared ${resourceTypeLabel.charAt(0).toUpperCase() + resourceTypeLabel.slice(1)} Details</span>
-        </div>
-        <div class="share-details">
-          <div class="share-row">
-            <span class="share-label">${resourceType === "task" ? "Task" : resourceType === "note" ? "Note" : "Folder"} Name:</span>
-            <span class="share-value">${resourceName}</span>
-          </div>
-          <div class="share-row">
-            <span class="share-label">Shared By:</span>
-            <span class="share-value">${ownerFullName}</span>
-          </div>
-          <div class="share-row">
-            <span class="share-label">Permission:</span>
-            <span class="share-value">
-              <span class="permission-badge">${permissionLabel.charAt(0).toUpperCase() + permissionLabel.slice(1)}</span>
-            </span>
-          </div>
-        </div>
+  <div class="email-wrapper">
+    <div class="email-container">
+      <!-- Header -->
+      <div class="header">
+        <img src="https://dashboard.crackon.ai/crack-on-logo.png" alt="CrackOn Logo" class="logo" />
+        <h1 class="header-title">New Share Notification</h1>
       </div>
 
-      <p class="message">
-        ${permissionLabel === "edit" 
-          ? `You can now view and edit this ${resourceTypeLabel}. Any changes you make will be visible to ${ownerFullName} and other collaborators.`
-          : `You can now view this ${resourceTypeLabel}. If you need to make changes, ask ${ownerFullName} to grant you edit permissions.`}
-      </p>
+      <!-- Content -->
+      <div class="content">
+        <h2 class="greeting">Hi ${recipientFullName}! 👋</h2>
+        
+        <p class="message">
+          <strong>${ownerFullName}</strong> has shared a ${resourceTypeLabel} with you on CrackOn.
+        </p>
 
-      <!-- CTA Button -->
-      <div style="text-align: center; margin: 40px 0;">
-        <a href="${dashboardLink}" class="cta-button">
-          View ${resourceType === "task" ? "Task" : resourceType === "note" ? "Note" : "Folder"}
-        </a>
+        <div class="share-box">
+          <div class="share-title">
+            <span>${resourceIcon}</span>
+            <span>Shared ${resourceTypeLabel.charAt(0).toUpperCase() + resourceTypeLabel.slice(1)} Details</span>
+          </div>
+          <div class="share-details">
+            <div class="share-row">
+              <span class="share-label">${resourceType === "task" ? "Task" : resourceType === "note" ? "Note" : resourceType === "shopping_list_folder" ? "Shopping List" : "Folder"} Name:</span>
+              <span class="share-value">${resourceName}</span>
+            </div>
+            <div class="share-row">
+              <span class="share-label">Shared By:</span>
+              <span class="share-value">${ownerFullName}</span>
+            </div>
+            <div class="share-row">
+              <span class="share-label">Permission:</span>
+              <span class="share-value">
+                <span class="permission-badge">${permissionLabel.charAt(0).toUpperCase() + permissionLabel.slice(1)}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <p class="message">
+          ${permissionLabel === "edit" 
+            ? `You can now view and edit this ${resourceTypeLabel}. Any changes you make will be visible to ${ownerFullName} and other collaborators.`
+            : `You can now view this ${resourceTypeLabel}. If you need to make changes, ask ${ownerFullName} to grant you edit permissions.`}
+        </p>
+
+        <!-- CTA Button -->
+        <div class="cta-container">
+          <a href="${dashboardLink}" class="cta-button">
+            View ${resourceType === "task" ? "Task" : resourceType === "note" ? "Note" : resourceType === "shopping_list_folder" ? "Shopping List" : "Folder"}
+          </a>
+        </div>
+
+        <div class="divider"></div>
+
+        <p class="help-section">
+          <strong>Need Help?</strong><br>
+          If you have any questions about this share, visit our <a href="https://dashboard.crackon.ai/help">Help Center</a> or 
+          reach out to our support team at 
+          <a href="mailto:support@crackon.ai">support@crackon.ai</a>
+        </p>
       </div>
 
-      <div class="divider"></div>
-
-      <p class="message" style="font-size: 14px; color: #718096;">
-        <strong>Need Help?</strong><br>
-        If you have any questions about this share, visit our <a href="https://dashboard.crackon.ai/help" style="color: #667eea; text-decoration: none;">Help Center</a> or 
-        reach out to our support team at 
-        <a href="mailto:support@crackon.ai" style="color: #667eea; text-decoration: none;">support@crackon.ai</a>
-      </p>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-      <p class="footer-text" style="font-weight: 600; color: #4a5568; margin-bottom: 10px;">
-        Manage Your Shared Resources
-      </p>
-      <p class="footer-text">
-        You can view all shared ${resourceType === "task" || resourceType === "task_folder" ? "tasks" : "notes"} from your 
-        <a href="${dashboardLink}" style="color: #667eea; text-decoration: none;">${resourceType === "task" || resourceType === "task_folder" ? "Tasks" : "Notes"} Dashboard</a>
-      </p>
-      
-      <div class="divider" style="margin: 20px 0;"></div>
-      
-      <p class="footer-text">
-        © ${new Date().getFullYear()} CrackOn. All rights reserved.
-      </p>
-      <p class="footer-text" style="font-size: 12px; color: #a0aec0; margin-top: 10px;">
-        You're receiving this email because ${ownerFullName} shared a ${resourceTypeLabel} with you on CrackOn.
-      </p>
+      <!-- Footer -->
+      <div class="footer">
+        <p class="footer-text" style="font-weight: 600; color: #4a5568; margin-bottom: 10px;">
+          Manage Your Shared Resources
+        </p>
+        <p class="footer-text">
+          You can view all shared ${resourceType === "task" || resourceType === "task_folder" ? "tasks" : resourceType === "shopping_list_folder" ? "shopping lists" : "notes"} from your 
+          <a href="${dashboardLink}">${resourceType === "task" || resourceType === "task_folder" ? "Tasks" : resourceType === "shopping_list_folder" ? "Shopping Lists" : "Notes"} Dashboard</a>
+        </p>
+        
+        <div class="divider" style="margin: 20px 0;"></div>
+        
+        <p class="footer-text">
+          © ${new Date().getFullYear()} CrackOn. All rights reserved.
+        </p>
+        <p class="footer-text" style="font-size: 12px; color: #a0aec0; margin-top: 10px;">
+          You're receiving this email because ${ownerFullName} shared a ${resourceTypeLabel} with you on CrackOn.
+        </p>
+      </div>
     </div>
   </div>
 </body>
