@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
     // Check if user already exists
     let user = await getUserByEmail(db, email);
     let userId: string;
+    let isNewUser = false;
 
     if (user) {
       // User exists, log them in
@@ -94,8 +95,15 @@ export async function GET(request: NextRequest) {
         avatarUrl: picture || undefined,
         emailVerified: true, // Google emails are verified
       });
+      isNewUser = true;
       logger.info({ userId, email }, "Google OAuth signup - new user created");
     }
+
+    // Get updated user to check onboarding status
+    user = await getUserByEmail(db, email);
+    
+    // Check if user needs onboarding (phone and timezone)
+    const needsOnboarding = !user?.phone || !user?.timezone;
 
     // Generate JWT token
     const token = generateToken({
@@ -103,10 +111,13 @@ export async function GET(request: NextRequest) {
       email,
     });
 
-    // Redirect to dashboard with token in cookie
-    const response = NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/dashboard`
-    );
+    // Redirect based on onboarding status
+    // New users or users without phone/timezone go to onboarding
+    const redirectUrl = (isNewUser || needsOnboarding)
+      ? `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/onboarding/whatsapp`
+      : `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/dashboard`;
+
+    const response = NextResponse.redirect(redirectUrl);
 
     // Set auth token
     response.cookies.set("auth-token", token, {

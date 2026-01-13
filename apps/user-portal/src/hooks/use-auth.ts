@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface User {
   id: string;
@@ -9,6 +10,7 @@ interface User {
   firstName?: string | null;
   lastName?: string | null;
   name?: string | null;
+  avatarUrl?: string | null;
 }
 
 interface AuthState {
@@ -19,6 +21,7 @@ interface AuthState {
 
 export function useAuth() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isLoaded: false,
@@ -44,16 +47,39 @@ export function useAuth() {
       });
   }, []);
 
-  const signOut = async () => {
-    await fetch("/api/auth/signout", { method: "POST" });
-    setAuthState({
-      user: null,
-      isLoaded: true,
-      isSignedIn: false,
-    });
-    router.push("/");
-    router.refresh();
-  };
+  const signOut = useCallback(async () => {
+    try {
+      await fetch("/api/auth/signout", { 
+        method: "POST",
+        credentials: 'include', // Ensure cookies are sent
+      });
+      
+      // Clear all query cache
+      queryClient.clear();
+      
+      // Reset auth state
+      setAuthState({
+        user: null,
+        isLoaded: true,
+        isSignedIn: false,
+      });
+      
+      // Redirect to home
+      router.push("/sign-in");
+      router.refresh();
+    } catch (error) {
+      console.error("Sign out error:", error);
+      // Still clear cache and redirect even if request fails
+      queryClient.clear();
+      setAuthState({
+        user: null,
+        isLoaded: true,
+        isSignedIn: false,
+      });
+      router.push("/sign-in");
+      router.refresh();
+    }
+  }, [router, queryClient]);
 
   return {
     ...authState,
