@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { verifyToken } from "./auth-helpers";
 
 export type Session = {
@@ -15,7 +16,7 @@ export async function verifyAccessToken(c: Context): Promise<Session | null> {
     ? authHeader.substring(7) 
     : null;
   
-  const tokenFromCookie = c.req.cookie("auth-token");
+  const tokenFromCookie = getCookie(c, "auth-token");
   const token = tokenFromHeader || tokenFromCookie;
   
   if (!token) {

@@ -725,7 +725,7 @@ function WhatsAppVerificationPageContent() {
             <CardDescription>
               {phoneForVerification 
                 ? "A new verification code has been generated. Use it to verify your updated phone number."
-                : "Complete verification to enable WhatsApp calendar management. Click the button below to generate a verification code."}
+                : "Complete verification to enable WhatsApp calendar management. Click 'Generate New Code' below to start verification."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -733,7 +733,7 @@ function WhatsAppVerificationPageContent() {
               phoneNumber={phoneForVerification || (verifiedNumber?.phoneNumber || user?.phone || "")} 
               redirectFrom={redirectFrom || "settings"}
               shouldGenerateCode={!!phoneForVerification} // Only generate new code when phone was explicitly edited
-              alwaysGenerateNewCode={!!phoneForVerification} // Auto-generate only if phone was just updated
+              alwaysGenerateNewCode={false} // Don't auto-generate - user must click button
             />
           </CardContent>
         </Card>
