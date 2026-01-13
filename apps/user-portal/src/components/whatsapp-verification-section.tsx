@@ -9,6 +9,7 @@ import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useTRPC } from "@/trpc/client";
 import { useMutation } from "@tanstack/react-query";
 import { MessageSquare, Copy, Smartphone, RefreshCw } from "lucide-react";
+import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 
 interface WhatsAppVerificationSectionProps {
   phoneNumber: string;
@@ -184,8 +185,21 @@ export function WhatsAppVerificationSection({
       });
       return;
     }
+    
+    // Normalize the phone number before sending
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    
+    if (!normalizedPhone || normalizedPhone.length < 10) {
+      toast({
+        title: "Invalid phone number",
+        description: "Please enter a valid phone number with country code.",
+        variant: "error",
+      });
+      return;
+    }
+    
     setIsGenerating(true);
-    generateCodeMutation.mutate({ phoneNumber });
+    generateCodeMutation.mutate({ phoneNumber: normalizedPhone });
   };
 
   return (

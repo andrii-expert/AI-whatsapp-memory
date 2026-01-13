@@ -17,6 +17,64 @@ import { Checkbox } from "@imaginecalendar/ui/checkbox";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 
+// Component to save phone number before showing verification
+function SavePhoneBeforeVerify({
+  phoneNumber,
+  onSaved,
+  updateUserMutation,
+}: {
+  phoneNumber: string;
+  onSaved: () => void;
+  updateUserMutation: any;
+}) {
+  const normalizedPhone = normalizePhoneNumber(phoneNumber);
+  const [phoneSaved, setPhoneSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (normalizedPhone && !phoneSaved && !isSaving) {
+      setIsSaving(true);
+      updateUserMutation.mutate(
+        { phone: normalizedPhone },
+        {
+          onSuccess: () => {
+            setPhoneSaved(true);
+            setIsSaving(false);
+            onSaved();
+          },
+          onError: (error: any) => {
+            setIsSaving(false);
+            toast({
+              title: "Error",
+              description: error?.message || "Failed to save phone number",
+              variant: "destructive",
+            });
+          },
+        }
+      );
+    }
+  }, [normalizedPhone, phoneSaved, isSaving, updateUserMutation, onSaved, toast]);
+
+  if (!phoneSaved || isSaving) {
+    return (
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+        <p className="text-sm text-blue-800">
+          {isSaving ? "Saving phone number..." : "Preparing verification..."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <WhatsAppVerificationSection
+      phoneNumber={normalizedPhone}
+      alwaysGenerateNewCode={true}
+      redirectFrom="settings"
+    />
+  );
+}
+
 function WhatsAppVerificationPageContent() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -278,9 +336,12 @@ function WhatsAppVerificationPageContent() {
               </div>
               {editedPhone && (
                 <div className="mt-4">
-                  <WhatsAppVerificationSection
-                    phoneNumber={normalizePhoneNumber(editedPhone)}
-                    alwaysGenerateNewCode={true}
+                  <SavePhoneBeforeVerify
+                    phoneNumber={editedPhone}
+                    onSaved={() => {
+                      // Phone saved, verification section will show
+                    }}
+                    updateUserMutation={updateUserMutation}
                   />
                 </div>
               )}

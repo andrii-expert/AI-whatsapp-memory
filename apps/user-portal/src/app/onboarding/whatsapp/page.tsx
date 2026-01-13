@@ -6,12 +6,98 @@ import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
+import { PhoneInput } from "@imaginecalendar/ui/phone-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@imaginecalendar/ui/select";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
+
+// Component to handle phone saving and verification flow
+function PhoneVerificationFlow({
+  phoneNumber,
+  userPhone,
+  onVerified,
+  savePhoneMutation,
+}: {
+  phoneNumber: string;
+  userPhone?: string | null;
+  onVerified: () => void;
+  savePhoneMutation: any;
+}) {
+  const normalizedPhone = normalizePhoneNumber(phoneNumber);
+  const [phoneSaved, setPhoneSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const trpc = useTRPC();
+  
+  // Poll for verification status
+  const { data: whatsappNumbers = [], refetch } = useQuery(
+    trpc.whatsapp.getMyNumbers.queryOptions()
+  );
+
+  // Check if phone needs to be saved
+  useEffect(() => {
+    if (normalizedPhone && normalizedPhone !== userPhone && !phoneSaved && !isSaving) {
+      setIsSaving(true);
+      savePhoneMutation.mutate(
+        { phone: normalizedPhone },
+        {
+          onSuccess: () => {
+            setPhoneSaved(true);
+            setIsSaving(false);
+          },
+          onError: () => {
+            setIsSaving(false);
+          },
+        }
+      );
+    } else if (normalizedPhone === userPhone) {
+      setPhoneSaved(true);
+    }
+  }, [normalizedPhone, userPhone, phoneSaved, isSaving, savePhoneMutation]);
+
+  useEffect(() => {
+    const verified = whatsappNumbers.some((num: any) => num.isVerified);
+    if (verified) {
+      onVerified();
+    }
+  }, [whatsappNumbers, onVerified]);
+
+  // Poll every 3 seconds if not verified
+  useEffect(() => {
+    if (!phoneSaved) return;
+    
+    const interval = setInterval(() => {
+      const verified = whatsappNumbers.some((num: any) => num.isVerified);
+      if (!verified) {
+        refetch();
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [phoneSaved, whatsappNumbers, refetch]);
+
+  if (!phoneSaved || isSaving) {
+    return (
+      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+        <p className="text-sm text-blue-800">
+          {isSaving ? "Saving phone number..." : "Preparing verification..."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <WhatsAppVerificationSection
+        phoneNumber={normalizedPhone}
+        alwaysGenerateNewCode={true}
+        redirectFrom="onboarding"
+      />
+    </div>
+  );
+}
 
 function WhatsAppLinkingForm() {
   const router = useRouter();
@@ -65,7 +151,23 @@ function WhatsAppLinkingForm() {
     }
   }, [timezoneData]);
 
-  // Update user mutation
+  // Save phone number mutation
+  const savePhoneMutation = useMutation(
+    trpc.user.update.mutationOptions({
+      onSuccess: () => {
+        // Phone saved, verification section will handle the rest
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to save phone number",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
+  // Update user mutation for timezone
   const updateUserMutation = useMutation(
     trpc.user.update.mutationOptions({
       onSuccess: () => {
@@ -146,12 +248,10 @@ function WhatsAppLinkingForm() {
             {/* Phone Number Input */}
             <div>
               <Label htmlFor="phone">WhatsApp Phone Number *</Label>
-              <Input
+              <PhoneInput
                 id="phone"
-                type="tel"
-                placeholder="+1234567890"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(value) => setPhoneNumber(value)}
                 className="mt-1"
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -159,14 +259,17 @@ function WhatsAppLinkingForm() {
               </p>
             </div>
 
-            {/* WhatsApp Verification */}
+            {/* WhatsApp Verification - Save phone first if not saved */}
             {phoneNumber && (
-              <div className="mt-4">
-                <WhatsAppVerificationSection
-                  phoneNumber={normalizePhoneNumber(phoneNumber)}
-                  alwaysGenerateNewCode={true}
-                />
-              </div>
+              <PhoneVerificationFlow
+                phoneNumber={phoneNumber}
+                userPhone={user?.phone}
+                onVerified={() => {
+                  setIsVerified(true);
+                  refetchNumbers();
+                }}
+                savePhoneMutation={savePhoneMutation}
+              />
             )}
 
             {/* Timezone Selection */}
