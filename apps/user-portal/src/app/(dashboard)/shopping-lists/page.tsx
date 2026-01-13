@@ -2381,7 +2381,7 @@ export default function ShoppingListPage() {
 
                             <div className="flex justify-between items-center w-full">
                               {/* Item Content */}
-                              <div className="flex">
+                              <div className="flex flex-col">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="flex-1 min-w-0">
                                     <div
@@ -2407,6 +2407,11 @@ export default function ShoppingListPage() {
                                     </div>
                                   )}
                                 </div>
+                                {item.description && (
+                                    <div className="w-full ml-[32px] mt-1 text-[13px] md:text-[14px] text-gray-500">
+                                      {item.description}
+                                    </div>
+                                  )}
                               </div>
 
                               {/* Three dots menu */}
@@ -2463,11 +2468,6 @@ export default function ShoppingListPage() {
                               </div>
                             </div>
                           </div>
-                          {item.description && (
-                                    <div className="w-full ml-[32px] mt-1 text-[15px] text-gray-500">
-                                      {item.description}
-                                    </div>
-                                  )}
                         </div>
                         
                         {/* Divider - 90% width, only show if not last item */}
