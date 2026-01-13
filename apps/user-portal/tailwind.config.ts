@@ -7,4 +7,11 @@ export default {
     "../../packages/ui/src/**/*.{ts,tsx}",
   ],
   presets: [baseConfig],
+  theme: {
+    extend: {
+      colors: {
+        white: "rgb(252 252 252)",
+      },
+    },
+  },
 } satisfies Config;

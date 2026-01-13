@@ -2382,7 +2382,7 @@ export default function ShoppingListPage() {
                             <div className="flex justify-between items-center w-full">
                               {/* Item Content */}
                               <div className="flex">
-                                <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center justify-between gap-2">
                                   <div className="flex-1 min-w-0">
                                     <div
                                       className={cn(
