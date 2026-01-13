@@ -7,13 +7,40 @@ import { Button } from "@imaginecalendar/ui/button";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
 
 function CalendarConnectionForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isLoaded } = useAuth();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+
+  // Redirect if user has already completed this step or is on wrong step
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    if (!user) {
+      router.push("/sign-in");
+      return;
+    }
+
+    // If setupStep is 1, redirect to WhatsApp setup
+    if (user.setupStep === 1) {
+      router.push("/onboarding/whatsapp");
+    } else if (user.setupStep === 3) {
+      router.push("/dashboard");
+    }
+    // If setupStep is 2, stay on this page (correct step)
+  }, [user, isLoaded, router]);
+
+  if (!isLoaded || !user || user.setupStep !== 2) {
+    return (
+      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
 
   const handleConnectCalendar = async (provider: "google" | "microsoft") => {
     if (!user) {

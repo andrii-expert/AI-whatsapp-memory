@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "setup_step" integer DEFAULT 1 NOT NULL;

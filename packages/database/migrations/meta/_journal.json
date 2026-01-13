@@ -232,6 +232,13 @@
       "when": 1768330688365,
       "tag": "0032_omniscient_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1768338361229,
+      "tag": "0033_amazing_sersi",
+      "breakpoints": true
     }
   ]
 }

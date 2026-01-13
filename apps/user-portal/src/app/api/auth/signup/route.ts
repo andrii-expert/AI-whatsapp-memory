@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     // Hash password
     const passwordHash = await hashPassword(validated.password);
 
-    // Create user
+    // Create user with setupStep = 1 (WhatsApp setup required)
     const userId = randomUUID();
     await createUser(db, {
       id: userId,
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       lastName: validated.lastName,
       passwordHash: passwordHash,
       emailVerified: false,
+      setupStep: 1, // After signup, user must complete WhatsApp setup
     });
 
     // Generate email verification code

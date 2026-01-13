@@ -6,9 +6,11 @@ import { trpc, getQueryClient } from "@/trpc/server";
 /**
  * Server Component utility to check if user is authenticated
  * Redirects to sign-in if not authenticated
+ * Redirects to appropriate onboarding step if setup is incomplete
+ * @param allowOnboardingPages - If true, allows access to onboarding pages even if setup is incomplete
  * @returns User data if authenticated
  */
-export async function requireAuth() {
+export async function requireAuth(allowOnboardingPages: boolean = false) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth-token")?.value;
   
@@ -28,6 +30,20 @@ export async function requireAuth() {
     const user = await queryClient.fetchQuery(
       trpc.user.me.queryOptions()
     );
+    
+    // Redirect based on setup step
+    // setupStep 1 = WhatsApp setup required, 2 = Calendar setup required, 3 = Complete
+    if (user?.setupStep !== undefined && user.setupStep < 3) {
+      if (!allowOnboardingPages) {
+        // If user is trying to access dashboard pages, redirect to appropriate onboarding step
+        if (user.setupStep === 1) {
+          redirect("/onboarding/whatsapp");
+        } else if (user.setupStep === 2) {
+          redirect("/onboarding/calendar");
+        }
+      }
+    }
+    
     return user;
   } catch (error) {
     // If we can't get user data, still allow access (user is authenticated)

@@ -13,6 +13,8 @@ import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
+import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 
 // Component to handle phone saving and verification flow
 function PhoneVerificationFlow({
@@ -112,19 +114,46 @@ function WhatsAppLinkingForm() {
   const [showVerification, setShowVerification] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
 
-  // Fetch user data
-  const { data: user } = useQuery(trpc.user.me.queryOptions());
+  // Fetch user data using useAuth
+  const { user, isLoaded } = useAuth();
 
   // Fetch WhatsApp numbers
   const { data: whatsappNumbers = [], refetch: refetchNumbers } = useQuery(
     trpc.whatsapp.getMyNumbers.queryOptions()
   );
 
+  // Redirect if user has already completed this step or is on wrong step
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    if (!user) {
+      router.push("/sign-in");
+      return;
+    }
+
+    // If setupStep is 2 or 3, redirect to appropriate page
+    if (user.setupStep === 2) {
+      router.push("/onboarding/calendar");
+    } else if (user.setupStep === 3) {
+      router.push("/dashboard");
+    }
+    // If setupStep is 1, stay on this page (correct step)
+  }, [user, isLoaded, router]);
+
   // Check if user has verified WhatsApp
   useEffect(() => {
     const verified = whatsappNumbers.some((num: any) => num.isVerified);
     setIsVerified(verified);
   }, [whatsappNumbers]);
+
+  // Show loading if user data is not loaded or user is on wrong step
+  if (!isLoaded || !user || user.setupStep !== 1) {
+    return (
+      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
 
   // Fetch timezones
   useEffect(() => {
@@ -210,10 +239,11 @@ function WhatsAppLinkingForm() {
     setIsSubmitting(true);
 
     try {
-      // Update user timezone
+      // Update user timezone and set setupStep to 2 (Calendar setup required)
       await updateUserMutation.mutateAsync({
         timezone,
         utcOffset,
+        setupStep: 2, // Move to next step: Calendar setup
       });
 
       // Redirect to calendar connection page

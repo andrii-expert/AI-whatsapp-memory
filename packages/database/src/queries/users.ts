@@ -100,6 +100,7 @@ export async function createUser(
     avatarUrl?: string;
     timezone?: string;
     utcOffset?: string;
+    setupStep?: number; // 1 = WhatsApp setup, 2 = Calendar setup, 3 = Complete
     showWelcomeModal?: boolean;
   }
 ) {

@@ -195,6 +195,10 @@ export const users = pgTable("users", {
   timezone: text("timezone"), // e.g., "America/New_York"
   utcOffset: text("utc_offset"), // e.g., "-05:00"
 
+  // Onboarding setup step
+  // 1 = WhatsApp setup required, 2 = Calendar setup required, 3 = Setup complete
+  setupStep: integer("setup_step").default(1).notNull(),
+
   // Admin & metadata
   isAdmin: boolean("is_admin").default(false).notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

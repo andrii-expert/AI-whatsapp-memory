@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       userId = user.id;
       logger.info({ userId, email }, "Google OAuth login - existing user");
     } else {
-      // Create new user
+      // Create new user with setupStep = 1 (WhatsApp setup required)
       userId = randomUUID();
       await createUser(db, {
         id: userId,
@@ -94,28 +94,29 @@ export async function GET(request: NextRequest) {
         name: name || undefined,
         avatarUrl: picture || undefined,
         emailVerified: true, // Google emails are verified
+        setupStep: 1, // After signup, user must complete WhatsApp setup
       });
       isNewUser = true;
       logger.info({ userId, email }, "Google OAuth signup - new user created");
     }
 
-    // Get updated user to check onboarding status
+    // Get updated user to check setup step
     user = await getUserByEmail(db, email);
     
-    // Check if user needs onboarding (phone and timezone)
-    const needsOnboarding = !user?.phone || !user?.timezone;
-
     // Generate JWT token
     const token = generateToken({
       userId,
       email,
     });
 
-    // Redirect based on onboarding status
-    // New users or users without phone/timezone go to onboarding
-    const redirectUrl = (isNewUser || needsOnboarding)
-      ? `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/onboarding/whatsapp`
-      : `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/dashboard`;
+    // Redirect based on setup step
+    // setupStep 1 = WhatsApp setup, 2 = Calendar setup, 3 = Complete
+    let redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/dashboard`;
+    if (user?.setupStep === 1) {
+      redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/onboarding/whatsapp`;
+    } else if (user?.setupStep === 2) {
+      redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/onboarding/calendar`;
+    }
 
     const response = NextResponse.redirect(redirectUrl);
 

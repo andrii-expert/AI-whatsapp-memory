@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
 import { verifyToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
-import { getVerifiedWhatsappNumberByPhone, getUserWhatsAppNumbers, logOutgoingWhatsAppMessage } from "@imaginecalendar/database/queries";
+import { getVerifiedWhatsappNumberByPhone, getUserWhatsAppNumbers, logOutgoingWhatsAppMessage, updateUser } from "@imaginecalendar/database/queries";
 import { WhatsAppService } from "@imaginecalendar/whatsapp";
 
 export async function POST(req: NextRequest) {
@@ -24,6 +24,11 @@ export async function POST(req: NextRequest) {
     }
 
     const db = await connectDb();
+
+    // Update user setupStep to 3 (Complete)
+    await updateUser(db, decoded.userId, {
+      setupStep: 3, // Setup complete
+    });
 
     // Get user's verified WhatsApp numbers
     const whatsappNumbers = await getUserWhatsAppNumbers(db, decoded.userId);
