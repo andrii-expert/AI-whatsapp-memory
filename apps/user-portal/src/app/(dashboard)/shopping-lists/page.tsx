@@ -2357,7 +2357,7 @@ export default function ShoppingListPage() {
                     return (
                       <div key={item.id}>
                         <div
-                          className="flex flex-col items-center gap-2.5 py-2.5 px-3 hover:bg-gray-50 transition-colors"
+                          className="flex flex-col items-center py-2.5 px-3 hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex justify-between items-center w-full gap-2">
                             {/* Checkbox */}
@@ -2386,7 +2386,7 @@ export default function ShoppingListPage() {
                                   <div className="flex-1 min-w-0">
                                     <div
                                       className={cn(
-                                        "font-semibold text-gray-900 text-[15px] sm:text-[16px]",
+                                        "font-semibold text-gray-900 text-[13px] sm:text-[14px]",
                                         item.status === "completed" && "line-through text-gray-400"
                                       )}
                                     >
