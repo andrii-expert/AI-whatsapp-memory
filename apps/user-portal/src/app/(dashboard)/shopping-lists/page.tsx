@@ -2086,7 +2086,7 @@ export default function ShoppingListPage() {
           "w-full min-w-0",
           (!selectedFolderId && !viewAllItems && !viewAllShared) ? "hidden lg:block" : "block"
         )}>
-          <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
+          <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] px-4 pt-4">
             {/* Header with list name and shared info */}
             <div className="px-4 pt-6 pb-4 lg:px-0 lg:pt-0">
               <div className="flex items-center justify-between">
