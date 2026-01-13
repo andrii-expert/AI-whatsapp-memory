@@ -1,5 +1,5 @@
+import "server-only";
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
 import { randomBytes } from "crypto";
 
 const GOOGLE_CLIENT_ID = "360121159847-q96hapdstepeqdb87jt70vvn95jtc48u.apps.googleusercontent.com";
@@ -8,6 +8,9 @@ const GOOGLE_CLIENT_SECRET = "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";
 // Generate OAuth authorization URL for Google sign-in
 export async function GET(request: NextRequest) {
   try {
+    // Dynamic import to reduce bundle size
+    const { google } = await import("googleapis");
+    
     const { searchParams } = new URL(request.url);
     const redirectUri = searchParams.get("redirect_uri") || 
       `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/google/callback`;

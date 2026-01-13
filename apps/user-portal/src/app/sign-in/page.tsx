@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -8,7 +8,7 @@ import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -182,6 +182,31 @@ export default function SignInPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-6">
+          <div className="flex justify-center mb-8">
+            <Image 
+              src="/crackon_logo_pngs-16.png" 
+              alt="CrackOn" 
+              width={300} 
+              height={100}
+              className="w-full max-w-[300px] h-auto" 
+            />
+          </div>
+          <div className="bg-white rounded-lg shadow-lg p-8">
+            <div className="text-center">Loading...</div>
+          </div>
+        </div>
+      </div>
+    }>
+      <SignInForm />
+    </Suspense>
   );
 }
 

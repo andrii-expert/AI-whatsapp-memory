@@ -1,5 +1,5 @@
+import "server-only";
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
 import { connectDb } from "@imaginecalendar/database/client";
 import { getUserByEmail, createUser } from "@imaginecalendar/database/queries";
 import { generateToken } from "@api/utils/auth-helpers";
@@ -11,6 +11,9 @@ const GOOGLE_CLIENT_SECRET = "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";
 
 export async function GET(request: NextRequest) {
   try {
+    // Dynamic import to reduce bundle size
+    const { google } = await import("googleapis");
+    
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
     const state = searchParams.get("state");
