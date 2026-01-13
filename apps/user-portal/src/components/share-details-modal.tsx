@@ -23,7 +23,7 @@ import {
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
 import { cn } from "@imaginecalendar/ui/cn";
 
 interface ShareDetailsModalProps {
@@ -52,15 +52,6 @@ export function ShareDetailsModal({
   const [isSearching, setIsSearching] = useState(false);
   const [showFriendsList, setShowFriendsList] = useState(true);
   const [activeTab, setActiveTab] = useState<"friends" | "others">("friends");
-
-  // Reset search when modal closes or tab changes
-  useEffect(() => {
-    if (!isOpen) {
-      setSearchTerm("");
-      setSearchResults([]);
-      setIsSearching(false);
-    }
-  }, [isOpen]);
 
   // Fetch friends list
   const { data: friendsList = [] } = useQuery(trpc.friends.list.queryOptions());
@@ -440,100 +431,9 @@ export function ShareDetailsModal({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (activeTab === "others") {
-        handleSearch();
-      }
+      handleSearch();
     }
   };
-
-  // Live search for friends (Friends tab)
-  const filteredFriends = useMemo(() => {
-    if (!searchTerm.trim() || activeTab !== "friends") {
-      return [];
-    }
-    
-    const term = searchTerm.toLowerCase().trim();
-    return friendsWithAccounts.filter((friend: any) => {
-      const user = friend.connectedUser;
-      const friendName = friend.name?.toLowerCase() || "";
-      const userName = [user.firstName, user.lastName].filter(Boolean).join(' ').toLowerCase() || "";
-      const userEmail = user.email?.toLowerCase() || "";
-      const userPhone = user.phone?.toLowerCase() || "";
-      
-      return friendName.includes(term) || 
-             userName.includes(term) || 
-             userEmail.includes(term) || 
-             userPhone.includes(term);
-    });
-  }, [searchTerm, activeTab, friendsWithAccounts]);
-
-  // Reset search when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setSearchTerm("");
-      setSearchResults([]);
-      setIsSearching(false);
-    }
-  }, [isOpen]);
-
-  // Live search for users (Others tab) - debounced
-  useEffect(() => {
-    if (!isOpen || activeTab !== "others" || !searchTerm.trim()) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    const timeoutId = setTimeout(async () => {
-      if (!isMounted) return;
-      
-      setIsSearching(true);
-      try {
-        const results = await queryClient.fetchQuery(
-          isNoteResource
-            ? trpc.noteSharing.searchUsers.queryOptions({
-                searchTerm: searchTerm.trim(),
-              })
-            : isFileResource
-            ? trpc.fileSharing.searchUsers.queryOptions({
-                searchTerm: searchTerm.trim(),
-              })
-            : isAddressResource
-            ? trpc.addresses.searchUsers.queryOptions({
-                searchTerm: searchTerm.trim(),
-              })
-            : trpc.taskSharing.searchUsers.queryOptions({
-                searchTerm: searchTerm.trim(),
-              })
-        );
-        
-        if (!isMounted) return;
-        
-        // Filter out users who are already shared with
-        const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
-        const filteredResults = (results || []).filter(
-          (user: any) => !existingUserIds.includes(user.id)
-        );
-        
-        setSearchResults(filteredResults);
-      } catch (error: any) {
-        if (!isMounted) return;
-        console.error('Search error:', error);
-        setSearchResults([]);
-      } finally {
-        if (isMounted) {
-          setIsSearching(false);
-        }
-      }
-    }, 300); // 300ms debounce
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
-  }, [isOpen, searchTerm, activeTab, isNoteResource, isFileResource, isAddressResource, queryClient, trpc, shares]);
 
   return (
     <>
@@ -584,163 +484,14 @@ export function ShareDetailsModal({
               {/* Search Bar */}
               <div className="relative mb-4">
                 <Input
-                  placeholder={activeTab === "friends" ? "Search friends..." : "Search by email or phone..."}
+                  placeholder="Search friends..."
                   value={searchTerm}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
                   onKeyDown={handleKeyDown}
                   className="pr-10 h-10 text-sm bg-white"
                 />
-                {isSearching && activeTab === "others" ? (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 animate-spin" />
-                ) : (
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                )}
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               </div>
-
-              {/* Live Search Results - Friends Tab */}
-              {activeTab === "friends" && searchTerm.trim() && filteredFriends.length > 0 && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-xs font-semibold text-gray-700 mb-2">Friends</h4>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {filteredFriends.map((friend: any) => {
-                      const user = friend.connectedUser;
-                      const displayName = friend.name || [user.firstName, user.lastName]
-                        .filter(Boolean)
-                        .join(' ') || user.email?.split('@')[0] || "Unknown User";
-                      
-                      // Get initials for avatar
-                      const getInitials = (name: string) => {
-                        if (!name) return "U";
-                        const parts = name.split(" ");
-                        if (parts.length >= 2 && parts[0] && parts[1]) {
-                          return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-                        }
-                        return name.substring(0, 2).toUpperCase();
-                      };
-                      
-                      const initials = getInitials(displayName);
-                      const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
-                      const isAlreadyShared = existingUserIds.includes(user.id);
-                      
-                      return (
-                        <div
-                          key={friend.id}
-                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-white transition-colors"
-                        >
-                          {/* Avatar with initials in pink */}
-                          <div className="w-10 h-10 rounded-full bg-pink-200 flex items-center justify-center flex-shrink-0">
-                            <span className="text-sm font-medium text-pink-700">
-                              {initials}
-                            </span>
-                          </div>
-                          
-                          {/* Name */}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-normal text-black">
-                              {displayName}
-                            </div>
-                            {user.email && (
-                              <div className="text-xs text-gray-500 truncate">
-                                {user.email}
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Add Button */}
-                          <Button
-                            size="sm"
-                            onClick={() => handleAddFriend(friend, "edit")}
-                            disabled={createShareMutation.isPending || isAlreadyShared}
-                            className="h-9 px-4"
-                          >
-                            {isAlreadyShared ? "Added" : "Add"}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Live Search Results - Others Tab */}
-              {activeTab === "others" && searchTerm.trim() && searchResults.length > 0 && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-xs font-semibold text-gray-700 mb-2">Users</h4>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {searchResults.map((user: any) => {
-                      const displayName = [user.firstName, user.lastName]
-                        .filter(Boolean)
-                        .join(' ') || user.email?.split('@')[0] || "Unknown User";
-                      
-                      // Get initials for avatar
-                      const getInitials = (name: string) => {
-                        if (!name) return "U";
-                        const parts = name.split(" ");
-                        if (parts.length >= 2 && parts[0] && parts[1]) {
-                          return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-                        }
-                        return name.substring(0, 2).toUpperCase();
-                      };
-                      
-                      const initials = getInitials(displayName);
-                      
-                      return (
-                        <div
-                          key={user.id}
-                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-white transition-colors"
-                        >
-                          {/* Avatar with initials in pink */}
-                          <div className="w-10 h-10 rounded-full bg-pink-200 flex items-center justify-center flex-shrink-0">
-                            <span className="text-sm font-medium text-pink-700">
-                              {initials}
-                            </span>
-                          </div>
-                          
-                          {/* Name */}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-normal text-black">
-                              {displayName}
-                            </div>
-                            {user.email && (
-                              <div className="text-xs text-gray-500 truncate">
-                                {user.email}
-                              </div>
-                            )}
-                            {user.phoneNumber && (
-                              <div className="text-xs text-gray-500 truncate">
-                                {user.phoneNumber}
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Add Button */}
-                          <Button
-                            size="sm"
-                            onClick={() => handleAddUser(user, "edit")}
-                            disabled={createShareMutation.isPending}
-                            className="h-9 px-4"
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* No Results Message */}
-              {searchTerm.trim() && 
-               ((activeTab === "friends" && filteredFriends.length === 0) || 
-                (activeTab === "others" && !isSearching && searchResults.length === 0)) && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                  <p className="text-sm text-gray-500">
-                    {activeTab === "friends" 
-                      ? "No friends found"
-                      : "No users found"}
-                  </p>
-                </div>
-              )}
             </>
           )}
 
@@ -905,6 +656,69 @@ export function ShareDetailsModal({
                   })()}
                 </div>
                 
+                {/* Search Results - show when there are search results */}
+                {searchResults.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h4 className="text-sm font-semibold text-black mb-3">Search Results</h4>
+                    <div className="space-y-2">
+                      {searchResults.map((user: any) => {
+                        const displayName = [user.firstName, user.lastName]
+                          .filter(Boolean)
+                          .join(' ') || user.email?.split('@')[0] || "Unknown User";
+                        
+                        // Get initials for avatar
+                        const getInitials = (name: string) => {
+                          if (!name) return "U";
+                          const parts = name.split(" ");
+                          if (parts.length >= 2 && parts[0] && parts[1]) {
+                            return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+                          }
+                          return name.substring(0, 2).toUpperCase();
+                        };
+                        
+                        const initials = getInitials(displayName);
+                        const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
+                        const isAlreadyShared = existingUserIds.includes(user.id);
+                        
+                        return (
+                          <div
+                            key={user.id}
+                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50"
+                          >
+                            {/* Avatar with initials in pink */}
+                            <div className="w-10 h-10 rounded-full bg-pink-200 flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-medium text-pink-700">
+                                {initials}
+                              </span>
+                            </div>
+                            
+                            {/* Name */}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-normal text-black">
+                                {displayName}
+                              </div>
+                              {user.email && (
+                                <div className="text-xs text-gray-500 truncate">
+                                  {user.email}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Add Button */}
+                            <Button
+                              size="sm"
+                              onClick={() => handleAddUser(user, "edit")}
+                              disabled={createShareMutation.isPending || isAlreadyShared}
+                              className="h-9 px-4"
+                            >
+                              {isAlreadyShared ? "Added" : "Add"}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

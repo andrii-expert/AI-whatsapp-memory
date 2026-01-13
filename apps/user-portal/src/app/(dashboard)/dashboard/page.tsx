@@ -1312,10 +1312,10 @@ export default function DashboardPage() {
         nextAt: getNextOccurrenceTime(r, userTimezone),
       }))
       .filter((r: any) => {
-        if (!r.active) return false;
+      if (!r.active) return false;
         // Only include reminders that have a valid next occurrence time
         return r.nextAt !== null;
-      });
+    });
     
     // Sort by next occurrence time (earliest first)
     const sorted = [...filtered].sort((a, b) => {
@@ -1839,11 +1839,11 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-[3px]">
               <h1 className="text-[24px] font-semibold leading-[32px] tracking-[-0.48px] text-[#141718]">
                 {getGreeting()}, {userName}! 👋
-              </h1>
+            </h1>
               <p className="text-[14px] font-normal leading-[130%] text-[#9999A5]">
-                Here's what's happening with your workspace today
-              </p>
-            </div>
+              Here's what's happening with your workspace today
+            </p>
+          </div>
 
             {/* Action Buttons */}
             <div className="flex items-center gap-[10px] mt-4">
@@ -1858,42 +1858,42 @@ export default function DashboardPage() {
                     </Badge>
                   </div>
                 )}
-                <button
-                  onClick={() =>
-                    router.push(
-                      hasVerifiedWhatsApp
-                        ? "/settings/whatsapp"
-                        : "/settings/whatsapp?from=dashboard"
-                    )
-                  }
+            <button
+              onClick={() =>
+                router.push(
+                  hasVerifiedWhatsApp
+                    ? "/settings/whatsapp"
+                    : "/settings/whatsapp?from=dashboard"
+                )
+              }
                   className="w-full flex items-center justify-center gap-2 px-3 py-[10px] rounded-xl border border-[#D0D5DD] bg-white"
-                >
+              >
                   <WhatsappIcon />
                   <span className="text-[14px] font-medium text-[#344054]">Link Whatsapp</span>
-                </button>
+            </button>
               </div>
               <div className="flex-1 relative">
-                {hasCalendar && (
+              {hasCalendar && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
                     <Badge className="bg-green-100 text-green-700 border border-green-300 text-[11px] font-semibold px-2 py-0.5 h-auto rounded-full shadow-sm flex items-center gap-1">
                       <div className="w-3 h-3 rounded-full bg-green-600 flex items-center justify-center">
                         <Check className="h-2 w-2 text-white stroke-[3]" />
                       </div>
-                      Connected
-                    </Badge>
-                  </div>
+                  Connected
+                </Badge>
+          </div>
                 )}
-                <button
+              <button
                   onClick={() => router.push("/calendars")}
                   className="w-full flex items-center justify-center gap-2 px-3 py-[10px] rounded-xl border border-[#D0D5DD] bg-white"
-                >
+              >
                   <CalendarIcon />
                   <span className="text-[14px] font-medium text-[#344054]">Link Calendar</span>
-                </button>
-              </div>
-            </div>
+              </button>
           </div>
         </div>
+              </div>
+            </div>
 
         {/* Stats Grid */}
         <div className="px-4 py-4">
@@ -1907,7 +1907,7 @@ export default function DashboardPage() {
                 borderColor="#FCF3EC"
                 blurColor="#FFDEC5"
                 icon={<EventIcon />}
-                onClick={() => router.push("/calendars")}
+              onClick={() => router.push("/calendars")}
               />
               <StatCard
                 number={totalActiveReminders.toString()}
@@ -1960,7 +1960,7 @@ export default function DashboardPage() {
                 borderColor="#F0F4FF"
                 blurColor="#C5D2FF"
                 icon={<ArticleIcon />}
-                onClick={() => router.push("/notes")}
+              onClick={() => router.push("/notes")}
               />
             </div>
           </div>
@@ -1977,14 +1977,14 @@ export default function DashboardPage() {
               >
                 <span className="text-[14px] font-medium text-[#1D2228]">View All</span>
               </button>
-            </div>
+                  </div>
 
             <div className="rounded-2xl border border-[#EFEFEF] bg-white shadow-[0_2px_24px_0_rgba(0,0,0,0.05)]">
-              {filteredShoppingListItems.length === 0 ? (
+                    {filteredShoppingListItems.length === 0 ? (
                 <div className="px-4 py-8 text-center">
                   <p className="text-sm text-gray-500">No items in shopping list</p>
                 </div>
-              ) : (
+                    ) : (
                 <>
                   {filteredShoppingListItems.slice(0, 3).map((item: any, index: number) => {
                     const creatorName = item.user?.firstName || item.user?.name || "You";
@@ -1996,28 +1996,28 @@ export default function DashboardPage() {
                     
                     return (
                       <ShoppingItem
-                        key={item.id}
+                          key={item.id}
                         title={item.name}
                         description={item.description}
                         badge={creatorName}
                         date={formattedDate}
                         badgeColor={badgeColor}
                         hasBorder={index < Math.min(filteredShoppingListItems.length, 3) - 1}
-                        checked={item.status === "completed"}
+                            checked={item.status === "completed"}
                         onToggle={() => {
-                          toggleShoppingListItemMutation.mutate({ id: item.id });
-                        }}
-                        disabled={toggleShoppingListItemMutation.isPending}
+                              toggleShoppingListItemMutation.mutate({ id: item.id });
+                            }}
+                            disabled={toggleShoppingListItemMutation.isPending}
                       />
                     );
                   })}
                 </>
-              )}
+                            )}
+                          </div>
             </div>
-          </div>
 
           {/* Next Events */}
-          {shouldShowEvents && (
+              {shouldShowEvents && (
             <div className="mt-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-[16px] font-semibold leading-[130%] text-black">
@@ -2029,15 +2029,15 @@ export default function DashboardPage() {
                 >
                   <span className="text-[14px] font-medium text-[#1D2228]">View All</span>
                 </button>
-              </div>
+                  </div>
 
               <div className="flex flex-col gap-2">
-                {scheduledEvents.length === 0 ? (
+                    {scheduledEvents.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <p className="text-sm text-gray-500">No upcoming events</p>
                   </div>
-                ) : (
-                  scheduledEvents.map((event: any) => {
+                    ) : (
+                      scheduledEvents.map((event: any) => {
                     const borderColor = event.eventColor === "orange" ? "#D8A4FF" :
                                        event.eventColor === "purple" ? "#D8A4FF" :
                                        event.eventColor === "blue" ? "#D8A4FF" :
@@ -2047,9 +2047,9 @@ export default function DashboardPage() {
                                     event.eventColor === "blue" ? "#FDFAFF" :
                                     "#FFFEFA";
                     
-                    return (
+                        return (
                       <EventCard
-                        key={event.id}
+                            key={event.id}
                         borderColor={borderColor}
                         bgColor={bgColor}
                         event={event}
@@ -2064,15 +2064,15 @@ export default function DashboardPage() {
                           handleDeleteEvent(event.calendarId, event.id);
                         }}
                       />
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
+                        );
+                      })
+                    )}
+                  </div>
+                  </div>
+              )}
 
           {/* Next Reminders */}
-          {shouldShowReminders && (
+              {shouldShowReminders && (
             <div className="mt-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-[16px] font-semibold leading-[130%] text-black">
@@ -2084,28 +2084,28 @@ export default function DashboardPage() {
                 >
                   <span className="text-[14px] font-medium text-[#1D2228]">View All</span>
                 </button>
-              </div>
+                  </div>
 
               <div className="flex flex-col gap-2">
-                {activeReminders.length === 0 ? (
+                    {activeReminders.length === 0 ? (
                   <div className="px-4 py-8 text-center">
                     <p className="text-sm text-gray-500">No active reminders</p>
                   </div>
-                ) : (
+                    ) : (
                   activeReminders.map((reminder: any) => (
                     <ReminderCard
-                      key={reminder.id}
+                            key={reminder.id}
                       reminder={reminder}
                       subtitle={formatReminderSubtitle(reminder)}
-                      onClick={() => {
-                        setSelectedReminder(reminder);
-                        setIsReminderModalOpen(true);
-                      }}
+                            onClick={() => {
+                              setSelectedReminder(reminder);
+                              setIsReminderModalOpen(true);
+                            }}
                     />
-                  ))
-                )}
-              </div>
-            </div>
+                      ))
+                    )}
+                  </div>
+                  </div>
           )}
         </div>
       </div>

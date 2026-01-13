@@ -504,33 +504,33 @@ const TimePicker = ({
           >
             <SelectTrigger className="w-[70px] text-sm">
               <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+        </SelectTrigger>
+        <SelectContent>
               {hours12.map((h) => (
-                <SelectItem key={h} value={h}>
-                  {h}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
+            <SelectItem key={h} value={h}>
+              {h}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
           <span className="text-gray-500 font-semibold">:</span>
-          
+      
           <Select 
             value={selectedMinute} 
             onValueChange={(newMinute) => handleTimeChange(selectedHour, newMinute, selectedAmPm)}
           >
             <SelectTrigger className="w-[70px] text-sm">
               <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {minutes.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        </SelectTrigger>
+        <SelectContent>
+          {minutes.map((m) => (
+            <SelectItem key={m} value={m}>
+              {m}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
           <Select 
             value={selectedAmPm} 
@@ -547,7 +547,7 @@ const TimePicker = ({
               ))}
             </SelectContent>
           </Select>
-        </div>
+    </div>
       </PopoverContent>
     </Popover>
   );
@@ -1596,10 +1596,10 @@ export default function CalendarsPage() {
   
   const timeRange = useMemo(() => {
     // Only monthly view
-    return {
-      timeMin: startOfMonth(currentMonth).toISOString(),
-      timeMax: endOfMonth(currentMonth).toISOString(),
-    };
+      return {
+        timeMin: startOfMonth(currentMonth).toISOString(),
+        timeMax: endOfMonth(currentMonth).toISOString(),
+      };
   }, [currentMonth]);
 
   // Fetch events for each active calendar using useQueries
@@ -2677,7 +2677,7 @@ export default function CalendarsPage() {
 
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
-        {/* Page Header */}
+      {/* Page Header */}
         <div className="px-4 pt-4 pb-2 lg:my-4 lg:px-0 lg:pt-0 space-y-3 sm:space-y-4">
           {/* Mobile Header - Simple title with Link Calendar button */}
           <div className="lg:hidden flex items-center justify-between">
@@ -2695,64 +2695,64 @@ export default function CalendarsPage() {
           
           {/* Desktop Header */}
           <div className="hidden lg:flex flex-col gap-3 sm:gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary">
-                Calendar Connections
-              </h1>
-              <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">
-                Connect your Google and Microsoft calendars to manage events
-                through WhatsApp
-              </p>
-            </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary">
+              Calendar Connections
+            </h1>
+            <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">
+              Connect your Google and Microsoft calendars to manage events
+              through WhatsApp
+            </p>
+          </div>
 
-            <div className="hidden lg:flex lg:flex-row gap-3 w-full xl:w-auto">
-              <Button
-                onClick={() => handleConnectCalendar("google")}
-                disabled={connectingProvider === "google" || !canAddMore}
-                variant="outline"
-                size="default"
-                className={cn(
-                  "flex items-center justify-center gap-3 w-full sm:w-auto",
-                  "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
-                  "px-6 py-3 h-auto font-medium text-sm",
-                  "transition-all duration-200 shadow-sm hover:shadow-md",
-                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                )}
-              >
-                {connectingProvider === "google" ? (
-                  <Clock className="h-5 w-5 animate-spin text-gray-600" />
-                ) : (
-                  <GoogleIcon className="h-5 w-5 flex-shrink-0" />
-                )}
-                <span className="whitespace-nowrap text-gray-900">
-                  Connect Google Calendar
-                </span>
-              </Button>
-              <Button
-                onClick={() => handleConnectCalendar("microsoft")}
-                disabled={connectingProvider === "microsoft" || !canAddMore}
-                variant="outline"
-                size="default"
-                className={cn(
-                  "flex items-center justify-center gap-3 w-full sm:w-auto",
-                  "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
-                  "px-6 py-3 h-auto font-medium text-sm",
-                  "transition-all duration-200 shadow-sm hover:shadow-md",
-                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                )}
-              >
-                {connectingProvider === "microsoft" ? (
-                  <Clock className="h-5 w-5 animate-spin text-gray-600" />
-                ) : (
-                  <MicrosoftIcon className="h-5 w-5 flex-shrink-0" />
-                )}
-                <span className="whitespace-nowrap text-gray-900">
-                  Connect Microsoft Calendar
-                </span>
-              </Button>
-            </div>
+          <div className="hidden lg:flex lg:flex-row gap-3 w-full xl:w-auto">
+            <Button
+              onClick={() => handleConnectCalendar("google")}
+              disabled={connectingProvider === "google" || !canAddMore}
+              variant="outline"
+              size="default"
+              className={cn(
+                "flex items-center justify-center gap-3 w-full sm:w-auto",
+                "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
+                "px-6 py-3 h-auto font-medium text-sm",
+                "transition-all duration-200 shadow-sm hover:shadow-md",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              {connectingProvider === "google" ? (
+                <Clock className="h-5 w-5 animate-spin text-gray-600" />
+              ) : (
+                <GoogleIcon className="h-5 w-5 flex-shrink-0" />
+              )}
+              <span className="whitespace-nowrap text-gray-900">
+                Connect Google Calendar
+              </span>
+            </Button>
+            <Button
+              onClick={() => handleConnectCalendar("microsoft")}
+              disabled={connectingProvider === "microsoft" || !canAddMore}
+              variant="outline"
+              size="default"
+              className={cn(
+                "flex items-center justify-center gap-3 w-full sm:w-auto",
+                "bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-gray-300",
+                "px-6 py-3 h-auto font-medium text-sm",
+                "transition-all duration-200 shadow-sm hover:shadow-md",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              {connectingProvider === "microsoft" ? (
+                <Clock className="h-5 w-5 animate-spin text-gray-600" />
+              ) : (
+                <MicrosoftIcon className="h-5 w-5 flex-shrink-0" />
+              )}
+              <span className="whitespace-nowrap text-gray-900">
+                Connect Microsoft Calendar
+              </span>
+            </Button>
           </div>
         </div>
+      </div>
 
 
       {/* Two Column Layout */}
@@ -2784,7 +2784,7 @@ export default function CalendarsPage() {
                           <div className="mb-3">
                             <div className="font-semibold text-gray-900 text-sm mb-1">
                               {userName}
-                            </div>
+                              </div>
                             <div className="text-xs text-gray-600 mb-2">
                               {userEmail}
                             </div>
@@ -2836,34 +2836,34 @@ export default function CalendarsPage() {
                                         handleSetPrimaryCalendar(calendar.id);
                                       }
                                     }}
-                                    disabled={updateCalendarMutation.isPending}
+                                        disabled={updateCalendarMutation.isPending}
                                     className={cn(
                                       "p-1 hover:bg-gray-100 rounded transition-colors",
                                       calendar.isPrimary && "text-yellow-500"
                                     )}
                                     title={calendar.isPrimary ? "Primary calendar" : "Set as primary calendar"}
-                                  >
+                                      >
                                     <Star className={cn(
                                       "h-4 w-4",
                                       calendar.isPrimary ? "fill-yellow-500 stroke-yellow-500" : "stroke-gray-400"
                                     )} />
                                   </button>
-                                )}
+                                    )}
 
                                 {/* Trash icon */}
                                 {calendar.isActive && (
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      handleDisconnectCalendar(
-                                        calendar.id,
-                                        calendar.calendarName || calendar.email
-                                      )
-                                    }
-                                    disabled={disconnectCalendarMutation.isPending}
+                                      onClick={() =>
+                                        handleDisconnectCalendar(
+                                          calendar.id,
+                                          calendar.calendarName || calendar.email
+                                        )
+                                      }
+                                      disabled={disconnectCalendarMutation.isPending}
                                     className="p-1 hover:bg-red-50 rounded transition-colors text-gray-400 hover:text-red-600"
-                                    title="Disconnect calendar"
-                                  >
+                                      title="Disconnect calendar"
+                                    >
                                     <Trash2 className="h-4 w-4" />
                                   </button>
                                 )}
@@ -2874,8 +2874,8 @@ export default function CalendarsPage() {
                           {/* Separator between groups (except last) */}
                           {groupIndex < Object.entries(groupedCalendars).length - 1 && (
                             <div className="h-px bg-gray-200 my-4"></div>
-                          )}
-                        </div>
+                  )}
+                </div>
                       );
                     }
                   )}
@@ -2906,24 +2906,24 @@ export default function CalendarsPage() {
 
             {/* Calendar Header */}
             <div className="flex items-center justify-center gap-3 mb-4">
-              <button
+                          <button
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
                 aria-label="Previous month"
               >
                 <ChevronLeft className="h-4 w-4" />
-              </button>
+                          </button>
               <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900">
                 {format(currentMonth, "MMMM yyyy")}
               </h3>
-              <button
+                              <button
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
                 aria-label="Next month"
               >
                 <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+                              </button>
+                        </div>
 
             {/* Calendar Grid - Monthly View Only */}
               <div className="bg-white rounded-lg overflow-hidden">
@@ -2965,7 +2965,7 @@ export default function CalendarsPage() {
                               "text-xs md:text-sm font-medium transition-all duration-200 relative",
                               isSelected &&
                                 "h-7 w-7 md:h-8 md:w-8 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-sm",
-                              !isSelected &&
+                                !isSelected &&
                                 isCurrentMonth &&
                                 "text-gray-900 hover:bg-gray-100 rounded-full h-7 w-7 md:h-8 md:w-8 flex items-center justify-center",
                               !isCurrentMonth && "text-gray-400"
@@ -3015,7 +3015,7 @@ export default function CalendarsPage() {
                 </div>
               </div>
           </div>
-            </div>
+        </div>
 
             {/* Events List for Selected Date - Hidden on mobile, shown on xl+ */}
             <div className="hidden xl:block xl:col-span-1">
@@ -3150,7 +3150,7 @@ export default function CalendarsPage() {
         </div>
       </div>
 
-        {/* Mobile Day Details Section */}
+      {/* Mobile Day Details Section */}
         <div className="lg:hidden px-4 mt-6 pb-20">
         {(() => {
           // Show today's events by default, or selected date's events if one is selected
@@ -3299,10 +3299,10 @@ export default function CalendarsPage() {
                               }
                             }}
                           />
-                        );
-                      })}
-                  </div>
-                )}
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -3515,23 +3515,23 @@ export default function CalendarsPage() {
                 />
               </div>
             </div>
-            {/* Attendees Section */}
-            <div className="space-y-2">
+                        {/* Attendees Section */}
+                        <div className="space-y-2">
               <label className="text-sm font-semibold text-[#141718]">
                 Attendees <span className="text-gray-500 font-normal">(optional)</span>
               </label>
               <p className="text-xs text-gray-500">
                 Add people to invite to this event. Google calendar requires email addresses
               </p>
-              
+
               {/* Email/Phone Entry with Autocomplete */}
               <Popover open={attendeeSearchOpen} onOpenChange={setAttendeeSearchOpen}>
-                <PopoverTrigger asChild>
+                  <PopoverTrigger asChild>
                   <div className="relative">
-                    <Input
-                      type="text"
+                          <Input
+                            type="text"
                       placeholder="Type email or friend name..."
-                      value={manualAttendeeInput}
+                            value={manualAttendeeInput}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                           const value = e.target.value;
                           setManualAttendeeInput(value);
@@ -3554,9 +3554,9 @@ export default function CalendarsPage() {
                           }
                         }}
                       className="bg-gray-50 border-gray-200 text-sm"
-                    />
-                  </div>
-                </PopoverTrigger>
+                      />
+                    </div>
+                  </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                   <Command shouldFilter={false}>
                     <CommandInput
@@ -3695,13 +3695,13 @@ export default function CalendarsPage() {
               >
                 <img src="/google_meet.png" alt="Google Meet" className="h-5 w-5 mr-2" />
                 <span className="text-gray-700 font-normal">
-                  {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
+                {createGoogleMeet ? "Google Meet Added" : "Add Google Meet"}
                 </span>
               </Button>
               <div className="flex items-center justify-center my-2">
                 <span className="text-xs text-gray-500">OR</span>
-              </div>
-              
+                  </div>
+
               {/* Saved Addresses Dropdown */}
               {addresses.length > 0 && (
                 <div className="space-y-2">
@@ -3779,11 +3779,11 @@ export default function CalendarsPage() {
               {/* Address Input with Autocomplete */}
               <div className="space-y-2">
                 <div className="relative">
-                  <Input
+              <Input
                     id="event-address"
                     placeholder="Add location..."
                     value={eventAddress}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       handleAddressPaste(e.target.value)
                     }
                     className="bg-gray-50 border-gray-200 text-sm pr-10"
@@ -3796,18 +3796,18 @@ export default function CalendarsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (window.google?.maps?.places) {
-                        setEnableDropPin(true);
-                        toast({
-                          title: "Drop pin enabled",
-                          description: "Click anywhere on the map to drop a pin.",
-                        });
-                      } else {
-                        toast({
-                          title: "Google Maps not loaded",
+                        if (window.google?.maps?.places) {
+                          setEnableDropPin(true);
+                          toast({
+                            title: "Drop pin enabled",
+                            description: "Click anywhere on the map to drop a pin.",
+                          });
+                        } else {
+                          toast({
+                            title: "Google Maps not loaded",
                           description: "Please wait for Google Maps to load.",
-                          variant: "destructive",
-                        });
+                            variant: "destructive",
+                          });
                       }
                     }}
                     className="absolute right-3 top-1/2 -translate-y-1/2"
@@ -3824,7 +3824,7 @@ export default function CalendarsPage() {
                       <p className="text-xs text-gray-500">
                         The coordinates and address will be automatically filled in.
                       </p>
-                    </div>
+            </div>
                     <GoogleMap
                       lat={null}
                       lng={null}
@@ -3836,7 +3836,7 @@ export default function CalendarsPage() {
                 )}
               </div>
             </div>
-          </div>
+              </div>
           <AlertDialogFooter className="flex-row gap-3 pt-4">
             <AlertDialogCancel
               disabled={createEventMutation.isPending}
@@ -4099,12 +4099,12 @@ export default function CalendarsPage() {
             <div className="flex items-center justify-between">
               <AlertDialogTitle className="text-lg sm:text-xl font-semibold text-black">
                 {processedIndividualEvent?.title || eventDetailsModal.event?.title || "Event Details"}
-              </AlertDialogTitle>
+            </AlertDialogTitle>
             </div>
             {eventDetailsModal.isEditing && (
               <AlertDialogDescription className="text-sm mt-2 text-gray-600">
-                Edit event details. Make changes below.
-              </AlertDialogDescription>
+              Edit event details. Make changes below.
+            </AlertDialogDescription>
             )}
           </AlertDialogHeader>
 
@@ -4930,9 +4930,9 @@ export default function CalendarsPage() {
                               </div>
                               {additionalCount > 0 && (
                                 <span className="text-[12px] font-medium text-[#9999A5] ml-1">+{additionalCount}</span>
-                              )}
-                            </div>
-                          </div>
+                        )}
+                      </div>
+                    </div>
                         )}
 
                         {/* Platform */}
@@ -4965,34 +4965,34 @@ export default function CalendarsPage() {
                                 {isMicrosoftTeams ? 'Microsoft Teams' : isGoogleMeet ? 'Google meet' : 'Meeting'}
                               </span>
                             </button>
-                          </div>
+                  </div>
                         )}
 
                         {/* Venue */}
                         {event?.location && (
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-gray-500">Venue</span>
-                            <button
+                        <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const location = event.location;
-                                if (location) {
-                                  const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-                                  if (coordMatch) {
-                                    const lat = coordMatch[1];
-                                    const lng = coordMatch[2];
-                                    window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
-                                  } else {
-                                    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
-                                  }
-                                }
-                              }}
+                            const location = event.location;
+                            if (location) {
+                              const coordMatch = location.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+                              if (coordMatch) {
+                                const lat = coordMatch[1];
+                                const lng = coordMatch[2];
+                                window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+                              } else {
+                                window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`, '_blank');
+                              }
+                            }
+                          }}
                               className="text-sm font-normal text-black hover:text-blue-600 hover:underline text-right max-w-[60%] sm:max-w-none truncate"
-                            >
+                        >
                               {event.location}
-                            </button>
-                          </div>
-                        )}
+                        </button>
+                    </div>
+                  )}
                       </div>
                     );
                   })()}
@@ -5004,12 +5004,12 @@ export default function CalendarsPage() {
           <AlertDialogFooter className="flex-row gap-3 pt-4 border-t border-gray-200 mt-6 px-0">
             {eventDetailsModal.isEditing ? (
               <>
-                <AlertDialogCancel
+            <AlertDialogCancel
                   onClick={handleCancelEdit}
                   className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg"
-                >
+            >
                   Cancel
-                </AlertDialogCancel>
+            </AlertDialogCancel>
                 <Button
                   onClick={handleSaveEdit}
                   disabled={updateEventMutation.isPending || !editEventTitle.trim()}
@@ -5028,8 +5028,8 @@ export default function CalendarsPage() {
                   )}
                 </Button>
               </>
-            ) : (
-              <>
+              ) : (
+                <>
                 <AlertDialogCancel
                   onClick={() => {
                     resetEditFields();
@@ -5040,22 +5040,22 @@ export default function CalendarsPage() {
                     });
                   }}
                   className="flex-1 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg mt-0"
-                >
+                  >
                   Cancel
                 </AlertDialogCancel>
-                <Button
-                  onClick={() => {
-                    if (eventDetailsModal.event) {
-                      handleGoToCalendar(eventDetailsModal.event);
-                      setEventDetailsModal({ open: false, event: null, isEditing: false });
-                    }
-                  }}
+                  <Button
+                    onClick={() => {
+                      if (eventDetailsModal.event) {
+                        handleGoToCalendar(eventDetailsModal.event);
+                        setEventDetailsModal({ open: false, event: null, isEditing: false });
+                      }
+                    }}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                >
-                  Go to Calendar
-                </Button>
-              </>
-            )}
+                  >
+                    Go to Calendar
+                  </Button>
+                </>
+              )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -5169,7 +5169,7 @@ export default function CalendarsPage() {
                         <div className="mb-3">
                           <div className="font-semibold text-gray-900 text-sm mb-1">
                             {userName}
-                          </div>
+                            </div>
                           <div className="text-xs text-gray-600 mb-2">
                             {userEmail}
                           </div>
@@ -5221,34 +5221,34 @@ export default function CalendarsPage() {
                                       handleSetPrimaryCalendar(calendar.id);
                                     }
                                   }}
-                                  disabled={updateCalendarMutation.isPending}
+                                      disabled={updateCalendarMutation.isPending}
                                   className={cn(
                                     "p-1 hover:bg-gray-100 rounded transition-colors",
                                     calendar.isPrimary && "text-yellow-500"
                                   )}
                                   title={calendar.isPrimary ? "Primary calendar" : "Set as primary calendar"}
-                                >
+                                    >
                                   <Star className={cn(
                                     "h-4 w-4",
                                     calendar.isPrimary ? "fill-yellow-500 stroke-yellow-500" : "stroke-gray-400"
                                   )} />
                                 </button>
-                              )}
+                                  )}
 
                               {/* Trash icon */}
                               {calendar.isActive && (
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    handleDisconnectCalendar(
-                                      calendar.id,
-                                      calendar.calendarName || calendar.email
-                                    )
-                                  }
-                                  disabled={disconnectCalendarMutation.isPending}
+                                    onClick={() =>
+                                      handleDisconnectCalendar(
+                                        calendar.id,
+                                        calendar.calendarName || calendar.email
+                                      )
+                                    }
+                                    disabled={disconnectCalendarMutation.isPending}
                                   className="p-1 hover:bg-red-50 rounded transition-colors text-gray-400 hover:text-red-600"
-                                  title="Disconnect calendar"
-                                >
+                                    title="Disconnect calendar"
+                                  >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
                               )}
@@ -5259,8 +5259,8 @@ export default function CalendarsPage() {
                         {/* Separator between groups (except last) */}
                         {groupIndex < Object.entries(groupedCalendars).length - 1 && (
                           <div className="h-px bg-gray-200 my-4"></div>
-                        )}
-                      </div>
+                )}
+              </div>
                     );
                   }
                 )}
