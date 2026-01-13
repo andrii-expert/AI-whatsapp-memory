@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useSetupRedirect } from "@/hooks/use-setup-redirect";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
 import { Label } from "@imaginecalendar/ui/label";
@@ -40,6 +41,8 @@ const profileSchema = z.object({
 });
 
 export default function ProfilePage() {
+  // Redirect if setup is incomplete
+  useSetupRedirect();
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();

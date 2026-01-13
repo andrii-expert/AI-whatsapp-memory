@@ -18,6 +18,7 @@ import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useSetupRedirect } from "@/hooks/use-setup-redirect";
 import { cn } from "@imaginecalendar/ui/cn";
 import {
   AlertDialog,
@@ -138,6 +139,9 @@ export default function ShoppingListPage() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const userId = user?.id;
+  
+  // Redirect if setup is incomplete
+  useSetupRedirect();
 
   // State - default to folder list when landing on the page
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/rea
 import { useTRPC } from "@/trpc/client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { useSetupRedirect } from "@/hooks/use-setup-redirect";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent } from "@imaginecalendar/ui/card";
 import { Badge } from "@imaginecalendar/ui/badge";
@@ -788,6 +789,9 @@ export default function CalendarsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const router = useRouter();
+  
+  // Redirect if setup is incomplete
+  useSetupRedirect();
   const searchParams = useSearchParams();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());

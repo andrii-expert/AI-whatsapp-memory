@@ -37,6 +37,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
+import { useSetupRedirect } from "@/hooks/use-setup-redirect";
 import {
   Calendar,
   MessageSquare,
@@ -502,6 +503,9 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Redirect if setup is incomplete
+  useSetupRedirect();
   const [selectedNote, setSelectedNote] = useState<any | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
