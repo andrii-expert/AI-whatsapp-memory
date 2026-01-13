@@ -139,21 +139,9 @@ export default function ShoppingListPage() {
   const { user } = useUser();
   const userId = user?.id;
 
-  // State - Initialize from sessionStorage if available
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      const saved = sessionStorage.getItem("shopping-list-selected-folder-id");
-      return saved || null;
-    }
-    return null;
-  });
-  const [viewAllItems, setViewAllItems] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      const saved = sessionStorage.getItem("shopping-list-view-all-items");
-      return saved === "true";
-    }
-    return true; // Default to All Items view
-  });
+  // State - default to folder list when landing on the page
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [viewAllItems, setViewAllItems] = useState<boolean>(false);
   const [viewAllShared, setViewAllShared] = useState(false); // View all shared items
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "completed">("all");
   const [sortBy, setSortBy] = useState<"date" | "alphabetical" | undefined>(undefined);
@@ -183,7 +171,6 @@ export default function ShoppingListPage() {
   const colorScrollRef = useRef<HTMLDivElement>(null);
   const lastExpandedFolderRef = useRef<string | null>(null);
   const foldersRef = useRef<any[]>([]);
-  const hasRestoredFromSessionRef = useRef(false);
   const adContainerRef = useRef<HTMLDivElement>(null);
   const mobileAdContainerRef = useRef<HTMLDivElement>(null);
 
@@ -345,44 +332,9 @@ export default function ShoppingListPage() {
       if (folderExists) {
         setSelectedFolderId(folderIdFromUrl);
         setViewAllItems(false);
-        // Save to sessionStorage
-        sessionStorage.setItem("shopping-list-selected-folder-id", folderIdFromUrl);
-        sessionStorage.setItem("shopping-list-view-all-items", "false");
-        hasRestoredFromSessionRef.current = true;
       }
-    } else if (!hasRestoredFromSessionRef.current) {
-      // If no URL parameter, try to restore from sessionStorage (only once on initial load)
-      const savedFolderId = sessionStorage.getItem("shopping-list-selected-folder-id");
-      if (savedFolderId) {
-        const folderExists = allOwnedFolders.some((f: any) => f.id === savedFolderId) ||
-                            sharedFolders.some((f: any) => f.id === savedFolderId);
-        if (folderExists) {
-          setSelectedFolderId(savedFolderId);
-          const savedViewAll = sessionStorage.getItem("shopping-list-view-all-items");
-          setViewAllItems(savedViewAll !== "false");
-        } else {
-          // Folder no longer exists, clear sessionStorage
-          sessionStorage.removeItem("shopping-list-selected-folder-id");
-          sessionStorage.removeItem("shopping-list-view-all-items");
-        }
-      }
-      hasRestoredFromSessionRef.current = true;
     }
   }, [searchParams, allOwnedFolders, sharedFolders]);
-  
-  // Save selectedFolderId to sessionStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (selectedFolderId) {
-        sessionStorage.setItem("shopping-list-selected-folder-id", selectedFolderId);
-        sessionStorage.setItem("shopping-list-view-all-items", "false");
-      } else {
-        // When viewing all items, clear folder ID but save view state
-        sessionStorage.removeItem("shopping-list-selected-folder-id");
-        sessionStorage.setItem("shopping-list-view-all-items", viewAllItems ? "true" : "false");
-      }
-    }
-  }, [selectedFolderId, viewAllItems]);
 
   // Initialize Google Ads after script loads
   const initializeGoogleAds = () => {
@@ -2246,7 +2198,7 @@ export default function ShoppingListPage() {
           </div>
 
           {/* Search and Sort Bar */}
-          <div className="px-4 pb-4 lg:px-0 lg:pb-0 mb-4 w-full flex gap-2">
+          <div className="px-4 pb-4 lg:px-0 lg:pb-4 mb-4 w-full flex gap-3">
             <div className="relative flex-1">
               <Input
                 placeholder="Search items..."
@@ -2254,7 +2206,7 @@ export default function ShoppingListPage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setSearchQuery(e.target.value)
                 }
-                className="pr-10 h-11"
+                className="pr-10 h-10 sm:h-11 bg-white border border-gray-200 rounded-lg"
               />
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             </div>
@@ -2269,7 +2221,7 @@ export default function ShoppingListPage() {
                 setSortOrder(order);
               }}
             >
-              <SelectTrigger className="w-[140px] h-11">
+              <SelectTrigger className="w-[150px] h-10 sm:h-11 bg-white border border-gray-200 rounded-lg">
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
               <SelectContent>
@@ -2352,7 +2304,7 @@ export default function ShoppingListPage() {
 
           {/* Items List */}
           <div className="px-4 pb-20 lg:px-0">
-            <div className="space-y-4 relative">
+            <div className="space-y-3 relative">
               {filteredItems.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <ShoppingCart className="h-12 w-12 mx-auto text-gray-400" />
@@ -2408,14 +2360,14 @@ export default function ShoppingListPage() {
                     return (
                       <div key={item.id}>
                         <div
-                          className="flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors"
+                          className="flex items-center gap-2.5 py-2.5 px-3 hover:bg-gray-50 transition-colors"
                         >
                           {/* Checkbox */}
                           <button
                             onClick={() => canEditItem && handleToggleItem(item.id)}
                             disabled={!canEditItem}
                             className={cn(
-                              "flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                              "flex-shrink-0 w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors",
                               !canEditItem && "opacity-50 cursor-not-allowed",
                               item.status === "completed"
                                 ? "bg-green-500 border-green-500 text-white"
@@ -2435,33 +2387,27 @@ export default function ShoppingListPage() {
                               <div className="flex-1 min-w-0">
                                 <div
                                   className={cn(
-                                    "font-semibold text-gray-900 text-base",
+                                    "font-semibold text-gray-900 text-sm",
                                     item.status === "completed" && "line-through text-gray-400"
                                   )}
                                 >
                                   {item.name}
                                 </div>
                                 {item.description && (
-                                  <div className="mt-1 text-sm text-gray-500">
+                                  <div className="mt-0.5 text-xs text-gray-500">
                                     {item.description}
                                   </div>
                                 )}
+                                {item.createdAt && (
+                                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-500">
+                                    <span className={cn(isCurrentUser ? "text-gray-600" : "text-pink-600 font-medium")}>
+                                      {itemUserName}
+                                    </span>
+                                    <span className="text-gray-400">•</span>
+                                    <span>{formatShoppingListDate(item.createdAt)}</span>
+                                  </div>
+                                )}
                               </div>
-                              {/* Badge with user name and date */}
-                              {item.createdAt && (
-                                <div className="flex-shrink-0">
-                                  <span 
-                                    className={cn(
-                                      "px-2 py-1 rounded-md text-[10px] font-medium whitespace-nowrap",
-                                      isCurrentUser 
-                                        ? "bg-gray-50 text-gray-700"
-                                        : "bg-pink-100 text-pink-700"
-                                    )}
-                                  >
-                                    {itemUserName} • {formatShoppingListDate(item.createdAt)}
-                                  </span>
-                                </div>
-                              )}
                             </div>
                           </div>
 
