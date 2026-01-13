@@ -23,7 +23,7 @@ import {
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { cn } from "@imaginecalendar/ui/cn";
 
 interface ShareDetailsModalProps {
@@ -524,23 +524,26 @@ export function ShareDetailsModal({
                 </div>
               ) : (
                 <div className="flex gap-2 mb-4">
-                  <Input
-                    placeholder="Email or phone number"
-                    value={searchTerm}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="flex-1 h-10 text-sm bg-white"
-                  />
+                  <div className="relative flex-1">
+                    <Input
+                      placeholder="Email or phone number"
+                      value={searchTerm}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="pr-10 h-10 text-sm bg-white"
+                    />
+                    {isSearching ? (
+                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 animate-spin" />
+                    ) : (
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                    )}
+                  </div>
                   <Button
                     onClick={handleSearch}
                     disabled={!searchTerm.trim() || isSearching}
                     className="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    {isSearching ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Invite"
-                    )}
+                    Invite
                   </Button>
                 </div>
               )}
