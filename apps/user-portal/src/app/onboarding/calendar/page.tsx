@@ -25,16 +25,33 @@ function CalendarConnectionForm() {
       return;
     }
 
+    // Default to 1 if setupStep is null/undefined
+    const setupStep = user.setupStep ?? 1;
+
     // If setupStep is 1, redirect to WhatsApp setup
-    if (user.setupStep === 1) {
+    if (setupStep === 1) {
       router.push("/onboarding/whatsapp");
-    } else if (user.setupStep === 3) {
+      return;
+    } else if (setupStep === 3) {
       router.push("/dashboard");
+      return;
     }
     // If setupStep is 2, stay on this page (correct step)
   }, [user, isLoaded, router]);
 
-  if (!isLoaded || !user || user.setupStep !== 2) {
+  if (!isLoaded || !user) {
+    return (
+      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
+
+  // Default to 1 if setupStep is null/undefined
+  const setupStep = user.setupStep ?? 1;
+  
+  // If user is on wrong step, show loading (redirect will happen in useEffect)
+  if (setupStep !== 2) {
     return (
       <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
         <div className="text-center">Loading...</div>

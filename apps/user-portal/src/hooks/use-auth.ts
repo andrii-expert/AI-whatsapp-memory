@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { trpc } from "@/trpc/client";
 
 interface User {
   id: string;
@@ -11,6 +12,7 @@ interface User {
   lastName?: string | null;
   name?: string | null;
   avatarUrl?: string | null;
+  setupStep?: number | null;
 }
 
 interface AuthState {
@@ -28,24 +30,37 @@ export function useAuth() {
     isSignedIn: false,
   });
 
+  // Use tRPC to get user data (includes setupStep)
+  const { data: user, isLoading, error } = trpc.user.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
   useEffect(() => {
-    fetch("/api/auth/session")
-      .then((res) => res.json())
-      .then((data) => {
-        setAuthState({
-          user: data.user,
-          isLoaded: true,
-          isSignedIn: data.isAuthenticated,
-        });
-      })
-      .catch(() => {
-        setAuthState({
-          user: null,
-          isLoaded: true,
-          isSignedIn: false,
-        });
+    if (isLoading) return;
+    
+    if (error || !user) {
+      setAuthState({
+        user: null,
+        isLoaded: true,
+        isSignedIn: false,
       });
-  }, []);
+    } else {
+      setAuthState({
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          setupStep: user.setupStep ?? undefined,
+        },
+        isLoaded: true,
+        isSignedIn: true,
+      });
+    }
+  }, [user, isLoading, error]);
 
   const signOut = useCallback(async () => {
     try {

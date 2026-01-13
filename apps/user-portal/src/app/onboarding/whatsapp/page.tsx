@@ -130,11 +130,16 @@ function WhatsAppLinkingForm() {
       return;
     }
 
+    // Default to 1 if setupStep is null/undefined
+    const setupStep = user.setupStep ?? 1;
+
     // If setupStep is 2 or 3, redirect to appropriate page
-    if (user.setupStep === 2) {
+    if (setupStep === 2) {
       router.push("/onboarding/calendar");
-    } else if (user.setupStep === 3) {
+      return;
+    } else if (setupStep === 3) {
       router.push("/dashboard");
+      return;
     }
     // If setupStep is 1, stay on this page (correct step)
   }, [user, isLoaded, router]);
@@ -145,8 +150,20 @@ function WhatsAppLinkingForm() {
     setIsVerified(verified);
   }, [whatsappNumbers]);
 
-  // Show loading if user data is not loaded or user is on wrong step
-  if (!isLoaded || !user || user.setupStep !== 1) {
+  // Show loading if user data is not loaded
+  if (!isLoaded || !user) {
+    return (
+      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
+
+  // Default to 1 if setupStep is null/undefined
+  const setupStep = user.setupStep ?? 1;
+  
+  // If user is on wrong step, show loading (redirect will happen in useEffect)
+  if (setupStep !== 1) {
     return (
       <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
         <div className="text-center">Loading...</div>

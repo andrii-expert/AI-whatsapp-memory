@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
         firstName: user.firstName,
         lastName: user.lastName,
         name: user.name,
+        setupStep: user.setupStep ?? null,
       },
     });
   } catch (error) {
