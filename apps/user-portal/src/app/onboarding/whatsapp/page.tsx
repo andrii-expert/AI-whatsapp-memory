@@ -108,6 +108,8 @@ function WhatsAppLinkingForm() {
   const router = useRouter();
   const { toast } = useToast();
   const trpc = useTRPC();
+  
+  // ALL HOOKS MUST BE CALLED FIRST - before any conditional returns
   const [phoneNumber, setPhoneNumber] = useState("");
   const [timezone, setTimezone] = useState("");
   const [utcOffset, setUtcOffset] = useState("");
@@ -153,27 +155,6 @@ function WhatsAppLinkingForm() {
     const verified = whatsappNumbers.some((num: any) => num.isVerified);
     setIsVerified(verified);
   }, [whatsappNumbers]);
-
-  // Show loading if user data is not loaded
-  if (!isLoaded || !user) {
-    return (
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    );
-  }
-
-  // Default to 1 if setupStep is null/undefined
-  const setupStep = user.setupStep ?? 1;
-  
-  // If user is on wrong step, show loading (redirect will happen in useEffect)
-  if (setupStep !== 1) {
-    return (
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    );
-  }
 
   // Fetch timezones
   useEffect(() => {
@@ -236,6 +217,28 @@ function WhatsAppLinkingForm() {
       },
     })
   );
+
+  // NOW we can have conditional returns after all hooks are called
+  // Show loading if user data is not loaded
+  if (!isLoaded || !user) {
+    return (
+      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
+
+  // Default to 1 if setupStep is null/undefined
+  const setupStep = user.setupStep ?? 1;
+  
+  // If user is on wrong step, show loading (redirect will happen in useEffect)
+  if (setupStep !== 1) {
+    return (
+      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
 
   const handleNext = async () => {
     if (!isVerified) {
