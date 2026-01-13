@@ -2242,7 +2242,7 @@ export default function ShoppingListPage() {
                     : "shadow-[0_0_12px_0_rgba(0,0,0,0.04)] hover:bg-gray-50"
                 )}
                 style={{
-                  backgroundColor: filterStatus === "all" ? undefined : "#FAFAFA"
+                  backgroundColor: filterStatus === "all" ? undefined : "#FFFFFF"
                 }}
               >
                 All
@@ -2256,7 +2256,7 @@ export default function ShoppingListPage() {
                     : "shadow-[0_0_12px_0_rgba(0,0,0,0.04)] hover:bg-gray-50"
                 )}
                 style={{
-                  backgroundColor: filterStatus === "open" ? undefined : "#FAFAFA"
+                  backgroundColor: filterStatus === "open" ? undefined : "#FFFFFF"
                 }}
               >
                 Open
@@ -2275,7 +2275,7 @@ export default function ShoppingListPage() {
                     : "shadow-[0_0_12px_0_rgba(0,0,0,0.04)] hover:bg-gray-50"
                 )}
                 style={{
-                  backgroundColor: filterStatus === "completed" ? undefined : "#FAFAFA"
+                  backgroundColor: filterStatus === "completed" ? undefined : "#FFFFFF"
                 }}
               >
                 Closed
