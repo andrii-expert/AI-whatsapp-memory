@@ -85,20 +85,20 @@ function SignUpForm() {
         <div className="w-full max-w-md space-y-8">
           {/* Title and Subtitle */}
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold text-gray-900">Sign up/Register</h1>
-            <p className="text-lg text-gray-600">Get started in 3 simple steps.</p>
+            <h1 className="text-4xl font-bold text-gray-800">Sign Up</h1>
+            <p className="text-lg text-gray-500">Get started in 3 simple steps</p>
           </div>
 
-          {/* Login/Signup Toggle */}
-          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+          {/* Signin/Signup Toggle */}
+          <div className="flex items-center gap-0 bg-gray-100 rounded-lg p-1">
             <Link
               href="/sign-in"
-              className="flex-1 text-center py-2 px-4 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+              className="flex-1 text-center py-2 px-4 rounded-md text-sm font-medium text-gray-600 bg-transparent hover:text-gray-800 transition-colors"
             >
-              Login
+              Signin
             </Link>
             <button
-              className="flex-1 text-center py-2 px-4 rounded-md text-sm font-medium bg-white text-gray-900 shadow-sm"
+              className="flex-1 text-center py-2 px-4 rounded-md text-sm font-medium bg-white text-gray-800 shadow-sm"
               disabled
             >
               Signup
@@ -115,7 +115,7 @@ function SignUpForm() {
           <Button
             type="button"
             variant="outline"
-            className="w-full bg-white border-2 border-gray-300 hover:bg-gray-50 h-12 text-base font-medium"
+            className="w-full bg-white border-2 border-gray-300 hover:bg-gray-50 h-12 text-base font-medium text-black hover:text-blue-600"
             onClick={handleGoogleSignUp}
             disabled={loading || googleLoading}
           >
