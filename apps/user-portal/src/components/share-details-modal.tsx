@@ -53,6 +53,15 @@ export function ShareDetailsModal({
   const [showFriendsList, setShowFriendsList] = useState(true);
   const [activeTab, setActiveTab] = useState<"friends" | "others">("friends");
 
+  // Reset search when modal closes or tab changes
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm("");
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  }, [isOpen]);
+
   // Fetch friends list
   const { data: friendsList = [] } = useQuery(trpc.friends.list.queryOptions());
 
@@ -458,15 +467,28 @@ export function ShareDetailsModal({
     });
   }, [searchTerm, activeTab, friendsWithAccounts]);
 
+  // Reset search when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm("");
+      setSearchResults([]);
+      setIsSearching(false);
+    }
+  }, [isOpen]);
+
   // Live search for users (Others tab) - debounced
   useEffect(() => {
-    if (activeTab !== "others" || !searchTerm.trim()) {
+    if (!isOpen || activeTab !== "others" || !searchTerm.trim()) {
       setSearchResults([]);
       setIsSearching(false);
       return;
     }
 
+    let isMounted = true;
+
     const timeoutId = setTimeout(async () => {
+      if (!isMounted) return;
+      
       setIsSearching(true);
       try {
         const results = await queryClient.fetchQuery(
@@ -487,6 +509,8 @@ export function ShareDetailsModal({
               })
         );
         
+        if (!isMounted) return;
+        
         // Filter out users who are already shared with
         const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
         const filteredResults = (results || []).filter(
@@ -495,15 +519,21 @@ export function ShareDetailsModal({
         
         setSearchResults(filteredResults);
       } catch (error: any) {
+        if (!isMounted) return;
         console.error('Search error:', error);
         setSearchResults([]);
       } finally {
-        setIsSearching(false);
+        if (isMounted) {
+          setIsSearching(false);
+        }
       }
     }, 300); // 300ms debounce
 
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm, activeTab, isNoteResource, isFileResource, isAddressResource, queryClient, trpc, shares]);
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [isOpen, searchTerm, activeTab, isNoteResource, isFileResource, isAddressResource, queryClient, trpc, shares]);
 
   return (
     <>
