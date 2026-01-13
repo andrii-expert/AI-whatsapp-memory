@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { google } from "googleapis";
+
+// Force dynamic rendering to avoid bundling googleapis at build time
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 const GOOGLE_CLIENT_ID = "360121159847-q96hapdstepeqdb87jt70vvn95jtc48u.apps.googleusercontent.com";
 const GOOGLE_CLIENT_SECRET = "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";
@@ -8,6 +11,9 @@ const GOOGLE_CLIENT_SECRET = "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";
 // Generate OAuth authorization URL for Google sign-in
 export async function GET(request: NextRequest) {
   try {
+    // Dynamic import to avoid bundling at build time
+    const { google } = await import("googleapis");
+    
     const url = new URL(request.url);
     const redirectUri = url.searchParams.get("redirect_uri") || 
       `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/api/auth/google/callback`;

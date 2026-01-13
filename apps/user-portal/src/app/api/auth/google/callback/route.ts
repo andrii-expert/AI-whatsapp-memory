@@ -4,13 +4,18 @@ import { getUserByEmail, createUser } from "@imaginecalendar/database/queries";
 import { generateToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
 import { randomUUID } from "crypto";
-import { google } from "googleapis";
+
+// Force dynamic rendering to avoid bundling googleapis at build time
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 const GOOGLE_CLIENT_ID = "360121159847-q96hapdstepeqdb87jt70vvn95jtc48u.apps.googleusercontent.com";
 const GOOGLE_CLIENT_SECRET = "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";
 
 export async function GET(request: NextRequest) {
   try {
+    // Dynamic import to avoid bundling at build time
+    const { google } = await import("googleapis");
     
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
