@@ -76,11 +76,13 @@ export function ShareDetailsModal({
     
     const term = searchTerm.toLowerCase().trim();
     return friendsWithAccounts.filter((friend: any) => {
-      const user = friend.connectedUser;
-      const friendName = friend.name?.toLowerCase() || "";
-      const userName = [user.firstName, user.lastName].filter(Boolean).join(' ').toLowerCase() || "";
-      const userEmail = user.email?.toLowerCase() || "";
-      const userPhone = user.phone?.toLowerCase() || "";
+      const user = friend?.connectedUser;
+      if (!user) return false;
+      
+      const friendName = friend?.name?.toLowerCase() || "";
+      const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').toLowerCase() || "";
+      const userEmail = user?.email?.toLowerCase() || "";
+      const userPhone = user?.phone?.toLowerCase() || "";
       
       return friendName.includes(term) || 
              userName.includes(term) || 
@@ -503,9 +505,9 @@ export function ShareDetailsModal({
         if (!isMounted) return;
         
         // Filter out users who are already shared with
-        const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
+        const existingUserIds = (shares || []).map((s: any) => s?.sharedWithUser?.id).filter(Boolean);
         const filteredResults = (results || []).filter(
-          (user: any) => !existingUserIds.includes(user.id)
+          (user: any) => user?.id && !existingUserIds.includes(user.id)
         );
         
         setSearchResults(filteredResults);
@@ -610,12 +612,14 @@ export function ShareDetailsModal({
                       };
                       
                       const initials = getInitials(displayName);
-                      const existingUserIds = shares.map((s: any) => s.sharedWithUser.id);
-                      const isAlreadyShared = existingUserIds.includes(user.id);
+                      const existingUserIds = (shares || []).map((s: any) => s?.sharedWithUser?.id).filter(Boolean);
+                      const isAlreadyShared = existingUserIds.includes(user?.id);
+                      
+                      if (!user?.id) return null;
                       
                       return (
                         <div
-                          key={friend.id}
+                          key={friend?.id || user?.id}
                           className="flex items-center gap-3 p-2 rounded-lg hover:bg-white transition-colors"
                         >
                           {/* Avatar with initials in pink */}
