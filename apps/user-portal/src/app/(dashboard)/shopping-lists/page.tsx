@@ -2912,26 +2912,17 @@ export default function ShoppingListPage() {
 
       {/* Edit List Modal */}
       <AlertDialog open={isEditListModalOpen} onOpenChange={setIsEditListModalOpen}>
-        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-hidden p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">Edit List</AlertDialogTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 sm:h-8 sm:w-8"
-              onClick={() => {
-                setIsEditListModalOpen(false);
-                setEditingFolderId(null);
-                setEditFolderName("");
-                setSelectedIcon("🎂");
-                setSelectedColor("pink");
-                setIconSearchQuery("");
-                setShareWithInput("");
-                setSharePermission("edit");
-              }}
-            >
-              <X className="h-4 w-4 sm:h-5 sm:w-5" />
-            </Button>
+        <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+          <div className="relative">
+            {/* Centered Title and Subtitle */}
+            <div className="text-center">
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
+                Edit List
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-gray-500">
+                Update your shopping list
+              </AlertDialogDescription>
+            </div>
           </div>
           
           <form onSubmit={(e) => {
@@ -2939,7 +2930,7 @@ export default function ShoppingListPage() {
             if (editingFolderId) {
               handleSaveFolder(editingFolderId);
             }
-          }} className="space-y-4 sm:space-y-6">
+          }} className="space-y-4 sm:space-y-6 overflow-x-hidden">
             {/* List Name */}
             <div className="space-y-1.5 sm:space-y-2">
               <Label htmlFor="edit-list-name" className="text-sm font-medium text-gray-900">
@@ -2953,6 +2944,9 @@ export default function ShoppingListPage() {
                 }
                 placeholder="Grocery"
                 className="bg-gray-50 h-10 sm:h-11 w-full"
+                style={{
+                  border: 0
+                }}
                 autoFocus
               />
             </div>
@@ -2967,6 +2961,9 @@ export default function ShoppingListPage() {
                   setIconSearchQuery(e.target.value)
                 }
                 className="bg-gray-50 mb-2 sm:mb-3 h-10 sm:h-11 w-full"
+                style={{
+                  border: 0
+                }}
               />
               <div className="w-full overflow-hidden" style={{ overflowX: 'hidden' }}>
                 <div 
