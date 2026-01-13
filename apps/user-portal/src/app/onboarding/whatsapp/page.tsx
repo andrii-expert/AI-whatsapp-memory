@@ -14,7 +14,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useAuth } from "@/hooks/use-auth";
 
 // Component to handle phone saving and verification flow
 function PhoneVerificationFlow({
