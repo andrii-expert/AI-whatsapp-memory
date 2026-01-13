@@ -2359,7 +2359,8 @@ export default function ShoppingListPage() {
                         <div
                           className="flex items-center gap-2.5 py-2.5 px-3 hover:bg-gray-50 transition-colors"
                         >
-                          {/* Checkbox */}
+                          <div className="flex justify-between items-center w-full">
+                            {/* Checkbox */}
                           <button
                             onClick={() => canEditItem && handleToggleItem(item.id)}
                             disabled={!canEditItem}
@@ -2378,7 +2379,7 @@ export default function ShoppingListPage() {
                             {item.status === "completed" && <Check className="h-3 w-3" />}
                           </button>
 
-                          <div className="flex justify-between items-center">
+                          <div className="flex justify-between items-center w-full">
                             {/* Item Content */}
                             <div className="flex">
                               <div className="flex items-start justify-between gap-2">
@@ -2461,12 +2462,14 @@ export default function ShoppingListPage() {
                               </DropdownMenu>
                             </div>
                           </div>
-                        </div>
-                        {item.description && (
+                          </div>
+                          {item.description && (
                                     <div className="mt-1 text-[15px] text-gray-500">
                                       {item.description}
                                     </div>
                                   )}
+                        </div>
+                        
                         {/* Divider - 90% width, only show if not last item */}
                         {index < filteredItems.length - 1 && (
                           <div className="w-[90%] mx-auto h-px bg-gray-100" />
