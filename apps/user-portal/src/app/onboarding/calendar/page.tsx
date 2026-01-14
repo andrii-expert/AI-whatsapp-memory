@@ -14,6 +14,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useMutation } from "@tanstack/react-query";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 
 function CalendarConnectionForm() {
   const router = useRouter();
@@ -70,11 +71,7 @@ function CalendarConnectionForm() {
   }, [user, isLoaded, router]);
 
   if (!isLoaded || !user) {
-    return (
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    );
+    return <OnboardingLoading />;
   }
 
   // Default to 1 if setupStep is null/undefined
@@ -82,11 +79,7 @@ function CalendarConnectionForm() {
   
   // If user is on wrong step, show loading (redirect will happen in useEffect)
   if (setupStep !== 2) {
-    return (
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    );
+    return <OnboardingLoading />;
   }
 
   const handleConnectCalendar = async (provider: "google" | "microsoft") => {

@@ -113,7 +113,7 @@ export function PhoneInput({
             {selectedCountry ? (
               <span className="flex items-center gap-2">
                 <span className="text-lg">{selectedCountry.flag}</span>
-                <span className="text-sm">{selectedCountry.dial_code}</span>
+                <span className="text-sm hidden sm:inline">{selectedCountry.dial_code}</span>
               </span>
             ) : (
               <span>Select...</span>

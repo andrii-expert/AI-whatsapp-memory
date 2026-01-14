@@ -7,6 +7,7 @@ import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
 import { useToast } from "@imaginecalendar/ui/use-toast";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 
 function VerifyEmailForm() {
   const router = useRouter();
@@ -192,11 +193,7 @@ function VerifyEmailForm() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    }>
+    <Suspense fallback={<OnboardingLoading />}>
       <VerifyEmailForm />
     </Suspense>
   );

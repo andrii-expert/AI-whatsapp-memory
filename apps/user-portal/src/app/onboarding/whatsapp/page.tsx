@@ -18,6 +18,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 import { useAuth } from "@/hooks/use-auth";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 
 // Component to handle phone saving and verification flow
 function PhoneVerificationFlow({
@@ -156,10 +157,25 @@ function WhatsAppLinkingForm() {
     // If setupStep is 1, stay on this page (correct step)
   }, [user, isLoaded, router]);
 
+  // Initialize phone number from user data or verified WhatsApp number
+  useEffect(() => {
+    if (user?.phone && !phoneNumber) {
+      setPhoneNumber(user.phone);
+    }
+    const verifiedNumber = whatsappNumbers.find((num: any) => num.isVerified);
+    if (verifiedNumber?.phoneNumber && !phoneNumber) {
+      setPhoneNumber(verifiedNumber.phoneNumber);
+    }
+  }, [user?.phone, whatsappNumbers, phoneNumber]);
+
   // Check if user has verified WhatsApp
   useEffect(() => {
     const verified = whatsappNumbers.some((num: any) => num.isVerified);
     setIsVerified(verified);
+    // If already verified, hide verification section
+    if (verified) {
+      setShowVerification(false);
+    }
   }, [whatsappNumbers]);
 
   // Fetch timezones
@@ -227,11 +243,7 @@ function WhatsAppLinkingForm() {
   // NOW we can have conditional returns after all hooks are called
   // Show loading if user data is not loaded
   if (!isLoaded || !user) {
-    return (
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    );
+    return <OnboardingLoading />;
   }
 
   // Default to 1 if setupStep is null/undefined
@@ -239,11 +251,7 @@ function WhatsAppLinkingForm() {
   
   // If user is on wrong step, show loading (redirect will happen in useEffect)
   if (setupStep !== 1) {
-    return (
-      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    );
+    return <OnboardingLoading />;
   }
 
   const handleNext = async () => {
@@ -302,7 +310,7 @@ function WhatsAppLinkingForm() {
             {/* Phone Number Input */}
             <div>
               <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
-                Phone Number
+                WhatsApp Number
               </Label>
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
                 <PhoneInput
@@ -313,6 +321,7 @@ function WhatsAppLinkingForm() {
                     setShowVerification(false);
                   }}
                   className="flex-1 w-full"
+                  disabled={isVerified}
                 />
                 <Button
                   type="button"
@@ -347,21 +356,25 @@ function WhatsAppLinkingForm() {
                       setIsSavingPhone(false);
                     }
                   }}
-                  disabled={!phoneNumber || isSavingPhone}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 h-10 sm:h-auto whitespace-nowrap"
+                  disabled={!phoneNumber || isSavingPhone || isVerified}
+                  className={isVerified 
+                    ? "bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 h-10 sm:h-auto whitespace-nowrap cursor-default" 
+                    : "bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 h-10 sm:h-auto whitespace-nowrap"
+                  }
                 >
-                  {isSavingPhone ? "Saving..." : "Get code"}
+                  {isSavingPhone ? "Saving..." : isVerified ? "Verified" : "Get code"}
                 </Button>
               </div>
             </div>
 
-            {/* WhatsApp Verification - Show after clicking Verify button */}
-            {showVerification && phoneNumber && (
+            {/* WhatsApp Verification - Show after clicking Get code button, but hide when verified */}
+            {showVerification && phoneNumber && !isVerified && (
               <PhoneVerificationFlow
                 phoneNumber={phoneNumber}
                 userPhone={user?.phone}
                 onVerified={() => {
                   setIsVerified(true);
+                  setShowVerification(false); // Hide verification section when verified
                   refetchNumbers();
                   toast({
                     title: "WhatsApp verified!",

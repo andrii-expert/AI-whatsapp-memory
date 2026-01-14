@@ -23,6 +23,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { FALLBACK_PLANS, toDisplayPlan } from "@/utils/plans";
 import type { DisplayPlan, PlanRecordLike } from "@/utils/plans";
 import { cn } from "@imaginecalendar/ui/cn";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 
 function BillingOnboardingContent() {
   const router = useRouter();
@@ -165,11 +166,7 @@ function BillingOnboardingContent() {
 
   // If authentication is still loading
   if (!isLoaded || !user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
+    return <OnboardingLoading />;
   }
 
   return (
