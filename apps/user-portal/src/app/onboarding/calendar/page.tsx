@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-import { useState, Suspense } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
@@ -134,37 +134,30 @@ function CalendarConnectionForm() {
   };
 
   return (
-    <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-2xl space-y-6">
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
-          <Image 
-            src="/crackon_logo_pngs-16.png" 
-            alt="CrackOn" 
-            width={300} 
-            height={100}
-            className="w-full max-w-[300px] h-auto" 
-          />
-        </div>
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      {/* Left Side - Form */}
+      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
+        <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
+          {/* Title */}
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link Calendar</h1>
+            <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
+              In order to maximise CrackOn and all its features, link your calendars below.
+            </p>
+          </div>
 
-        {/* Calendar Connection Form */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-2xl font-bold text-center mb-2">Connect Your Calendar</h1>
-          <p className="text-center text-gray-600 mb-6">
-            Connect your calendar to sync events and receive reminders. You can skip this step and do it later.
-          </p>
-
-          <div className="space-y-4">
+          {/* Calendar Connection Buttons */}
+          <div className="space-y-4 sm:space-y-5">
             {/* Google Calendar */}
             <Button
               type="button"
               variant="outline"
-              className="w-full flex items-center justify-center gap-3 h-14"
+              className="w-full flex items-center justify-start gap-3 h-12 sm:h-14 bg-white border border-gray-300 rounded-lg px-4"
               onClick={() => handleConnectCalendar("google")}
               disabled={connectingProvider !== null}
             >
               {connectingProvider === "google" ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
               ) : (
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
@@ -185,49 +178,80 @@ function CalendarConnectionForm() {
                   />
                 </svg>
               )}
-              <span>Connect Google Calendar</span>
+              <span className="text-sm sm:text-base font-medium text-gray-800">
+                Connect to Google Calendar
+              </span>
             </Button>
 
             {/* Microsoft Calendar */}
             <Button
               type="button"
               variant="outline"
-              className="w-full flex items-center justify-center gap-3 h-14"
+              className="w-full flex items-center justify-start gap-3 h-12 sm:h-14 bg-white border border-gray-300 rounded-lg px-4"
               onClick={() => handleConnectCalendar("microsoft")}
               disabled={connectingProvider !== null}
             >
               {connectingProvider === "microsoft" ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
               ) : (
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#00A4EF">
-                  <path d="M0 0h11.377v11.372H0zm12.623 0H24v11.372H12.623zM0 12.628h11.377V24H0zm12.623 0H24V24H12.623z"/>
+                  <path d="M0 0h11.377v11.372H0zm12.623 0H24v11.372H12.623zM0 12.628h11.377V24H0zm12.623 0H24V24H12.623z" />
                 </svg>
               )}
-              <span>Connect Microsoft Calendar</span>
+              <span className="text-sm sm:text-base font-medium text-gray-800">
+                Connect to Microsoft Calendar
+              </span>
             </Button>
-
-            {/* Complete Setup Button */}
-            <div className="pt-4 space-y-2">
-              <Button
-                type="button"
-                className="w-full"
-                onClick={handleCompleteSetup}
-                disabled={isCompleting}
-              >
-                {isCompleting ? "Completing..." : "Complete Setup"}
-              </Button>
-              
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full"
-                onClick={handleSkip}
-                disabled={isCompleting}
-              >
-                Skip for Now
-              </Button>
-            </div>
           </div>
+
+          {/* Complete Setup Button */}
+          <div className="pt-4">
+            <Button
+              type="button"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-5 text-sm sm:text-base font-medium"
+              onClick={handleCompleteSetup}
+              disabled={isCompleting}
+            >
+              {isCompleting ? "Completing..." : "Complete Setup"}
+            </Button>
+            <button
+              type="button"
+              onClick={handleSkip}
+              disabled={isCompleting}
+              className="mt-3 w-full text-center text-xs sm:text-sm text-gray-500 hover:text-gray-700"
+            >
+              Skip for now
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Side - Promotional Content (same as other steps) */}
+      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-8 xl:p-12 relative overflow-hidden">
+        {/* Slogan */}
+        <div className="text-center mb-6 xl:mb-8">
+          <h2 className="text-3xl xl:text-4xl font-bold text-white tracking-wide mb-4">
+            REMIND. ORGANISE. CRACKON.
+          </h2>
+        </div>
+
+        {/* Phone Image */}
+        <div className="relative mb-6 xl:mb-8 flex justify-center">
+          <Image
+            src="/phone.png"
+            alt="CrackOn Phone Mockup"
+            width={300}
+            height={600}
+            className="w-auto h-auto max-w-[250px] xl:max-w-[300px] object-contain"
+            priority
+          />
+        </div>
+
+        {/* Description Text */}
+        <div className="text-center max-w-md px-4">
+          <p className="text-white text-base xl:text-lg leading-relaxed">
+            CrackOn is your smart WhatsApp friend that helps you stay organised without leaving your favourite chat app.
+          </p>
         </div>
       </div>
     </div>

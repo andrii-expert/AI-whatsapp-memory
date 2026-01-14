@@ -473,25 +473,9 @@ export default function BillingPage() {
     );
   }
 
-  // Error state
+  // If subscription query failed, log it and fall back to treating the user as on the free plan
   if (subscriptionError) {
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3 text-destructive">
-              <AlertCircle className="h-5 w-5" />
-              <div>
-                <h3 className="font-medium">Error Loading Subscription</h3>
-                <p className="text-sm text-muted-foreground">
-                  {subscriptionError.message || "Unable to load subscription details."}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    console.error("Billing subscription load error:", subscriptionError);
   }
 
   const isLoadingPlans = USE_DB_PLANS && plansQuery.isLoading && plans.length === 0;
