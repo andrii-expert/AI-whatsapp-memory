@@ -12,7 +12,7 @@ import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Check, Crown, MoreVertical } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FALLBACK_PLANS, getFallbackPlanById, toDisplayPlan } from "@/utils/plans";
 import type { DisplayPlan, PlanRecordLike } from "@/utils/plans";
 import {
@@ -80,6 +80,7 @@ function BillingOnboardingForm() {
   const { toast } = useToast();
   const { user, isLoaded } = useAuth();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const [isAnnual, setIsAnnual] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>("ZAR");
   const [exchangeRates, setExchangeRates] = useState<Record<Currency, number> | null>(null);
@@ -218,9 +219,73 @@ function BillingOnboardingForm() {
     error: subscriptionError
   } = useQuery(trpc.billing.getSubscription.queryOptions());
 
+  // Create subscription mutation (for users without subscription)
+  const createSubscriptionMutation = useMutation(
+    trpc.billing.createSubscription.mutationOptions({
+      onSuccess: (subscription) => {
+        // Invalidate subscription query to refresh data
+        queryClient.invalidateQueries({ queryKey: trpc.billing.getSubscription.queryKey() });
+        
+        // If user subscribed to a paid plan, redirect to payment
+        if (subscription.plan !== 'free' && !subscription.payfastToken) {
+          toast({
+            title: "Redirecting to Payment",
+            description: "Redirecting to payment provider to complete subscription",
+          });
+
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/api/payment/redirect';
+          form.style.display = 'none';
+
+          const planInput = document.createElement('input');
+          planInput.type = 'hidden';
+          planInput.name = 'plan';
+          planInput.value = subscription.plan;
+          form.appendChild(planInput);
+
+          // Use billing flow but redirect back to onboarding/billing after payment
+          const billingFlowInput = document.createElement('input');
+          billingFlowInput.type = 'hidden';
+          billingFlowInput.name = 'isBillingFlow';
+          billingFlowInput.value = 'true';
+          form.appendChild(billingFlowInput);
+          
+          // Add flag to indicate this is from onboarding
+          const onboardingFlowInput = document.createElement('input');
+          onboardingFlowInput.type = 'hidden';
+          onboardingFlowInput.name = 'isOnboardingFlow';
+          onboardingFlowInput.value = 'true';
+          form.appendChild(onboardingFlowInput);
+
+          document.body.appendChild(form);
+          form.submit();
+          return;
+        }
+
+        // If free plan or subscription already has token, complete setup
+        updateUserMutation.mutate({
+          setupStep: 4,
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to create subscription.",
+          variant: "destructive",
+        });
+        setIsSubscribing(false);
+      },
+    })
+  );
+
+  // Update subscription mutation (for users with existing subscription)
   const updateSubscriptionMutation = useMutation(
     trpc.billing.updateSubscription.mutationOptions({
       onSuccess: (result) => {
+        // Invalidate subscription query to refresh data
+        queryClient.invalidateQueries({ queryKey: trpc.billing.getSubscription.queryKey() });
+        
         if (result.type === "requiresPayment") {
           toast({
             title: "Redirecting to Payment",
@@ -265,6 +330,17 @@ function BillingOnboardingForm() {
         }
       },
       onError: (error) => {
+        // If subscription not found, try creating one instead
+        if (error.message?.includes("No subscription found") || error.message?.includes("NOT_FOUND")) {
+          // Fall back to createSubscription
+          if (premiumPlan) {
+            createSubscriptionMutation.mutate({
+              plan: premiumPlan.id as any,
+            });
+          }
+          return;
+        }
+        
         toast({
           title: "Error",
           description: error.message || "Failed to subscribe.",
@@ -304,13 +380,28 @@ function BillingOnboardingForm() {
   const premiumPlan = plans.find(p => p.id === premiumPlanId) || plans.find(p => p.id === 'gold-monthly');
 
   const handleSkip = async () => {
-    try {
-      await updateUserMutation.mutateAsync({
+    // If user doesn't have a subscription, create a free one first
+    if (!subscription) {
+      try {
+        await createSubscriptionMutation.mutateAsync({
+          plan: 'free' as any,
+        });
+        // After creating free subscription, complete setup
+        updateUserMutation.mutate({
+          setupStep: 4,
+        });
+      } catch (error) {
+        // If creating subscription fails, still try to complete setup
+        console.error('Skip - create subscription error:', error);
+        updateUserMutation.mutate({
+          setupStep: 4,
+        });
+      }
+    } else {
+      // User already has subscription, just complete setup
+      updateUserMutation.mutate({
         setupStep: 4,
       });
-    } catch (error) {
-      // Error is handled by mutation's onError
-      console.error('Skip error:', error);
     }
   };
 
@@ -324,14 +415,22 @@ function BillingOnboardingForm() {
       return;
     }
 
-    if (isSubscribing || updateSubscriptionMutation.isPending) {
+    if (isSubscribing || updateSubscriptionMutation.isPending || createSubscriptionMutation.isPending) {
       return; // Prevent double clicks
     }
 
     setIsSubscribing(true);
-    updateSubscriptionMutation.mutate({
-      plan: premiumPlan.id as any,
-    });
+    
+    // If user has no subscription, create one; otherwise update existing
+    if (!subscription) {
+      createSubscriptionMutation.mutate({
+        plan: premiumPlan.id as any,
+      });
+    } else {
+      updateSubscriptionMutation.mutate({
+        plan: premiumPlan.id as any,
+      });
+    }
   };
 
   return (
@@ -491,10 +590,18 @@ function BillingOnboardingForm() {
 
               <Button
                 onClick={handleSubscribe}
-                disabled={isSubscribing || isLoadingRates || !exchangeRates || isLoadingSubscription || (!isOnFreePlan && currentPlanId === premiumPlan.id)}
+                disabled={
+                  isSubscribing || 
+                  isLoadingRates || 
+                  !exchangeRates || 
+                  isLoadingSubscription || 
+                  updateSubscriptionMutation.isPending ||
+                  createSubscriptionMutation.isPending ||
+                  (!isOnFreePlan && currentPlanId === premiumPlan.id)
+                }
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white mb-4 sm:mb-6 py-2 sm:py-3 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubscribing ? (
+                {isSubscribing || updateSubscriptionMutation.isPending || createSubscriptionMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Processing...
@@ -523,10 +630,10 @@ function BillingOnboardingForm() {
           <Button
             variant="ghost"
             onClick={handleSkip}
-            disabled={updateUserMutation.isPending}
+            disabled={updateUserMutation.isPending || createSubscriptionMutation.isPending}
             className="text-gray-600 hover:text-gray-900"
           >
-            {updateUserMutation.isPending ? (
+            {updateUserMutation.isPending || createSubscriptionMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Completing...
