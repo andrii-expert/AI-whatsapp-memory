@@ -28,6 +28,18 @@ export const subscriptionSchema = z.object({
   updatedAt: z.date(),
 });
 
+export const createSubscriptionResponseSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("success"),
+    subscription: subscriptionSchema,
+  }),
+  z.object({
+    type: z.literal("requiresPayment"),
+    message: z.string(),
+    plan: planIdSchema,
+  }),
+]);
+
 export const updateSubscriptionResponseSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("success"),

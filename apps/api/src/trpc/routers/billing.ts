@@ -1,4 +1,4 @@
-import { createSubscriptionSchema, updateSubscriptionSchema, updateSubscriptionResponseSchema, subscriptionSchema } from "@api/schemas/billing";
+import { createSubscriptionSchema, updateSubscriptionSchema, updateSubscriptionResponseSchema, createSubscriptionResponseSchema, subscriptionSchema } from "@api/schemas/billing";
 import { createTRPCRouter, protectedProcedure } from "@api/trpc/init";
 import {
   getUserSubscription,
@@ -73,6 +73,7 @@ export const billingRouter = createTRPCRouter({
 
   createSubscription: protectedProcedure
     .input(createSubscriptionSchema)
+    .output(createSubscriptionResponseSchema)
     .mutation(async ({ ctx: { db, session }, input }) => {
       // Check if user already has an active subscription
       const existing = await getUserSubscription(db, session.user.id);
@@ -94,6 +95,26 @@ export const billingRouter = createTRPCRouter({
         });
       }
 
+      // Check if plan requires payment (not free plan)
+      const isFreePlan = normalizedPlanId === "free" || planRecord.amountCents === 0;
+      const requiresPayment = !isFreePlan && (planRecord.amountCents > 0 || planRecord.payfastConfig.recurring);
+
+      // If payment is required, redirect to payment instead of creating subscription
+      if (requiresPayment) {
+        logger.info({
+          userId: session.user.id,
+          plan: planRecord.id,
+          amountCents: planRecord.amountCents,
+        }, 'Paid plan selected - redirecting to payment');
+
+        return {
+          type: "requiresPayment" as const,
+          message: "Redirecting to payment provider to complete subscription",
+          plan: planRecord.id,
+        };
+      }
+
+      // For free plans, create subscription directly
       const { currentPeriodStart, currentPeriodEnd, trialEndsAt } = computeSubscriptionPeriods(planRecord);
 
       const subscription = await createSubscription(db, {
@@ -105,64 +126,72 @@ export const billingRouter = createTRPCRouter({
         trialEndsAt: trialEndsAt ?? undefined,
       });
 
+      if (!subscription) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create subscription",
+        });
+      }
+
       // Send subscription confirmation email
-      if (subscription) {
-        try {
-          const user = await getUserById(db, session.user.id);
-          if (user && user.email && user.firstName && user.lastName) {
-            sendSubscriptionEmail({
-              to: user.email,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              planName: planRecord.name,
-              planAmount: planRecord.amountCents,
-              currency: 'ZAR',
-              currentPeriodStart: subscription.currentPeriodStart,
-              currentPeriodEnd: subscription.currentPeriodEnd,
-              isNewSubscription: true,
-            })
-              .then((result) => {
-                if (result && result.id) {
-                  logger.info({
-                    userId: session.user.id,
-                    email: user.email,
-                    emailId: result.id,
-                    planName: planRecord.name,
-                  }, '[SUBSCRIPTION_EMAIL] Subscription confirmation email sent successfully');
-                } else {
-                  logger.warn({
-                    userId: session.user.id,
-                    email: user.email,
-                    planName: planRecord.name,
-                  }, '[SUBSCRIPTION_EMAIL] Subscription email returned null result');
-                }
-              })
-              .catch((error) => {
-                logger.error({
-                  error: error instanceof Error ? error.message : String(error),
-                  errorStack: error instanceof Error ? error.stack : undefined,
+      try {
+        const user = await getUserById(db, session.user.id);
+        if (user && user.email && user.firstName && user.lastName) {
+          sendSubscriptionEmail({
+            to: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            planName: planRecord.name,
+            planAmount: planRecord.amountCents,
+            currency: 'ZAR',
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+            isNewSubscription: true,
+          })
+            .then((result) => {
+              if (result && result.id) {
+                logger.info({
+                  userId: session.user.id,
+                  email: user.email,
+                  emailId: result.id,
+                  planName: planRecord.name,
+                }, '[SUBSCRIPTION_EMAIL] Subscription confirmation email sent successfully');
+              } else {
+                logger.warn({
                   userId: session.user.id,
                   email: user.email,
                   planName: planRecord.name,
-                }, '[SUBSCRIPTION_EMAIL] Failed to send subscription confirmation email');
-              });
-          } else {
-            logger.warn({
-              userId: session.user.id,
-              hasEmail: !!user?.email,
-              hasFirstName: !!user?.firstName,
-              hasLastName: !!user?.lastName,
-            }, '[SUBSCRIPTION_EMAIL] Skipping subscription email - missing user data');
-          }
-        } catch (emailError) {
-          logger.error({
-            error: emailError instanceof Error ? emailError.message : String(emailError),
+                }, '[SUBSCRIPTION_EMAIL] Subscription email returned null result');
+              }
+            })
+            .catch((error) => {
+              logger.error({
+                error: error instanceof Error ? error.message : String(error),
+                errorStack: error instanceof Error ? error.stack : undefined,
+                userId: session.user.id,
+                email: user.email,
+                planName: planRecord.name,
+              }, '[SUBSCRIPTION_EMAIL] Failed to send subscription confirmation email');
+            });
+        } else {
+          logger.warn({
             userId: session.user.id,
-          }, '[SUBSCRIPTION_EMAIL] Error attempting to send subscription email');
+            hasEmail: !!user?.email,
+            hasFirstName: !!user?.firstName,
+            hasLastName: !!user?.lastName,
+          }, '[SUBSCRIPTION_EMAIL] Skipping subscription email - missing user data');
         }
+      } catch (emailError) {
+        logger.error({
+          error: emailError instanceof Error ? emailError.message : String(emailError),
+          userId: session.user.id,
+        }, '[SUBSCRIPTION_EMAIL] Error attempting to send subscription email');
       }
 
-      return subscription;
+      return {
+        type: "success" as const,
+        subscription,
+      };
     }),
 
   updateSubscription: protectedProcedure

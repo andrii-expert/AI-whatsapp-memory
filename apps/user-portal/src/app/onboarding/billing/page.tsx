@@ -93,30 +93,64 @@ function BillingOnboardingContent() {
 
   const createSubscriptionMutation = useMutation(
     trpc.billing.createSubscription.mutationOptions({
-      onSuccess: async (sub) => {
-        // After creating subscription, complete onboarding
-        try {
-          const res = await fetch("/api/onboarding/complete", {
-            method: "POST",
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            throw new Error(data?.error || "Failed to complete setup");
-          }
+      onSuccess: async (result) => {
+        // Handle payment redirect for paid plans
+        if (result.type === "requiresPayment") {
           toast({
-            title: "Setup complete!",
-            description: "Your subscription has been created and setup is finished.",
+            title: "Redirecting to Payment",
+            description: result.message,
           });
-          // After subscription + onboarding complete, show success screen
-          router.push("/onboarding/success");
-        } catch (error: any) {
-          toast({
-            title: "Error",
-            description: error.message || "Failed to complete setup",
-            variant: "destructive",
-          });
-        } finally {
+
+          // Create form and submit to payment redirect endpoint
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/api/payment/redirect';
+          form.style.display = 'none';
+
+          const planInput = document.createElement('input');
+          planInput.type = 'hidden';
+          planInput.name = 'plan';
+          planInput.value = result.plan;
+          form.appendChild(planInput);
+
+          // Add billing flow flag (false for onboarding flow)
+          const billingFlowInput = document.createElement('input');
+          billingFlowInput.type = 'hidden';
+          billingFlowInput.name = 'isBillingFlow';
+          billingFlowInput.value = 'false';
+          form.appendChild(billingFlowInput);
+
+          document.body.appendChild(form);
+          form.submit();
           setIsSubscribing(false);
+          return;
+        }
+
+        // For free plans, subscription is created directly - complete onboarding
+        if (result.type === "success") {
+          try {
+            const res = await fetch("/api/onboarding/complete", {
+              method: "POST",
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              throw new Error(data?.error || "Failed to complete setup");
+            }
+            toast({
+              title: "Setup complete!",
+              description: "Your subscription has been created and setup is finished.",
+            });
+            // After subscription + onboarding complete, show success screen
+            router.push("/onboarding/success");
+          } catch (error: any) {
+            toast({
+              title: "Error",
+              description: error.message || "Failed to complete setup",
+              variant: "destructive",
+            });
+          } finally {
+            setIsSubscribing(false);
+          }
         }
       },
       onError: (error) => {
