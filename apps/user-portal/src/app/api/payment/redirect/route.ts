@@ -44,22 +44,69 @@ export async function POST(req: NextRequest) {
     }
 
     if (!planId) {
-      logger.error({ userId, planId }, 'Invalid plan provided');
+      logger.error({ userId, planId, contentType, hasFormData: contentType.includes('form') }, 'Invalid plan provided - planId is empty');
       return NextResponse.json(
-        { error: 'Invalid plan' },
+        { error: 'Invalid plan: Plan ID is required' },
         { status: 400 }
       );
     }
 
+    logger.info({ userId, planId, normalizedPlanId: planId.toLowerCase() }, 'Processing payment redirect for plan');
+
+    // Try both normalized and original plan ID (case-sensitive database)
     const normalizedPlanId = planId.toLowerCase();
 
-    const db = await connectDb();
-    const planRecord = await getPlanById(db, normalizedPlanId);
-
-    if (!planRecord || planRecord.status !== 'active') {
-      logger.error({ userId, planId: normalizedPlanId }, 'Requested plan not available');
+    let db;
+    try {
+      db = await connectDb();
+      logger.info({ userId }, 'Database connection established');
+    } catch (dbError) {
+      logger.error({ 
+        error: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+        userId 
+      }, 'Database connection failed');
       return NextResponse.json(
-        { error: 'Selected plan is not available' },
+        { error: 'Database connection error. Please try again later.' },
+        { status: 500 }
+      );
+    }
+
+    let planRecord;
+    try {
+      planRecord = await getPlanById(db, normalizedPlanId);
+    
+      // If not found with lowercase, try original case
+      if (!planRecord) {
+        logger.info({ userId, planId, normalizedPlanId }, 'Plan not found with normalized ID, trying original case');
+        planRecord = await getPlanById(db, planId);
+      }
+    } catch (queryError) {
+      logger.error({ 
+        error: queryError instanceof Error ? queryError.message : String(queryError),
+        stack: queryError instanceof Error ? queryError.stack : undefined,
+        userId,
+        planId,
+        normalizedPlanId
+      }, 'Error querying plan from database');
+      return NextResponse.json(
+        { error: 'Error retrieving plan information. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    if (!planRecord) {
+      logger.error({ userId, planId, normalizedPlanId }, 'Plan not found in database');
+      return NextResponse.json(
+        { error: `Plan "${planId}" not found. Please contact support.` },
+        { status: 404 }
+      );
+    }
+
+    if (planRecord.status !== 'active') {
+      logger.error({ userId, planId: planRecord.id, status: planRecord.status }, 'Requested plan is not active');
+      return NextResponse.json(
+        { error: 'Selected plan is not currently available' },
         { status: 400 }
       );
     }
@@ -97,19 +144,38 @@ export async function POST(req: NextRequest) {
     // Generate PayFast form data server-side
     logger.info({ userId }, 'Initializing PayFast service');
     
+    // Validate plan has required payment configuration
+    if (!planRecord.payfastConfig) {
+      logger.error({ userId, planId: planRecord.id }, 'Plan missing PayFast configuration');
+      return NextResponse.json(
+        { error: 'Plan configuration error. Please contact support.' },
+        { status: 500 }
+      );
+    }
+
+    if (planRecord.amountCents <= 0 && !planRecord.payfastConfig.recurring) {
+      logger.error({ userId, planId: planRecord.id, amountCents: planRecord.amountCents }, 'Plan has invalid amount for payment');
+      return NextResponse.json(
+        { error: 'This plan does not require payment. Please select a paid plan.' },
+        { status: 400 }
+      );
+    }
+
     let payfast: PayFastService;
     try {
       payfast = new PayFastService();
     } catch (configError) {
       logger.error({ 
         error: configError instanceof Error ? configError.message : String(configError),
-        userId 
+        stack: configError instanceof Error ? configError.stack : undefined,
+        userId,
+        planId: planRecord.id
       }, 'PayFast configuration error');
       
       return NextResponse.json(
         { 
           error: 'Payment service configuration error',
-          details: configError instanceof Error ? configError.message : 'Invalid PayFast credentials'
+          details: configError instanceof Error ? configError.message : 'Invalid PayFast credentials. Please contact support.'
         },
         { status: 500 }
       );
@@ -117,7 +183,11 @@ export async function POST(req: NextRequest) {
     
     logger.info({ 
       userId, 
-      plan: planRecord.id, 
+      plan: planRecord.id,
+      planName: planRecord.name,
+      amountCents: planRecord.amountCents,
+      recurring: planRecord.payfastConfig.recurring,
+      frequency: planRecord.payfastConfig.frequency,
       userEmail
     }, 'Calling PayFast createPaymentRequest');
     
@@ -167,6 +237,21 @@ export async function POST(req: NextRequest) {
     }, 'PayFast payment form generated');
 
     // Return HTML form that auto-submits to PayFast
+    // Escape HTML to prevent XSS
+    const escapeHtml = (str: string) => {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    const formFields = Object.entries(paymentData.fields)
+      .map(([key, value]) => 
+        `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(String(value))}" />`
+      ).join('\n            ');
+
     const formHtml = `
       <!DOCTYPE html>
       <html>
@@ -218,11 +303,8 @@ export async function POST(req: NextRequest) {
             <h2>Redirecting to PayFast</h2>
             <p>Please wait while we connect you to our payment provider...</p>
           </div>
-          <form id="payfast-form" action="${paymentData.action}" method="POST" style="display: none;">
-            ${Object.entries(paymentData.fields)
-              .map(([key, value]) => 
-                `<input type="hidden" name="${key}" value="${value}" />`
-              ).join('\n')}
+          <form id="payfast-form" action="${escapeHtml(paymentData.action)}" method="POST" style="display: none;">
+            ${formFields}
           </form>
           <script>
             setTimeout(function() {
@@ -238,10 +320,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     // Comprehensive error logging
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     logger.error({ 
       error: {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+        message: errorMessage,
+        stack: errorStack,
         name: error instanceof Error ? error.name : undefined,
         cause: error instanceof Error ? error.cause : undefined,
         code: (error as any)?.code,
@@ -251,14 +336,21 @@ export async function POST(req: NextRequest) {
       },
       errorType: typeof error,
       errorConstructor: error?.constructor?.name,
-      fullError: JSON.stringify(error, null, 2)
     }, 'Error creating payment session - detailed error info');
     
     // Also log the error directly for comparison
-    console.error('Raw error object:', error);
+    console.error('Payment redirect error:', error);
     
+    // Return more specific error message for debugging
     return NextResponse.json(
-      { error: 'Failed to create payment session' },
+      { 
+        error: 'Failed to create payment session',
+        message: errorMessage,
+        // Only include details in development
+        ...(process.env.NODE_ENV === 'development' && {
+          details: errorStack?.split('\n').slice(0, 5).join('\n')
+        })
+      },
       { status: 500 }
     );
   }
