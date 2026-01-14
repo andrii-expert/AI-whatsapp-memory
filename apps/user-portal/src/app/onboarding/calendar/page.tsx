@@ -133,18 +133,13 @@ function CalendarConnectionForm() {
         <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
           {/* Title */}
           <div>
-            <p className="text-[11px] sm:text-xs font-medium tracking-wide text-gray-400 mb-1 text-center sm:text-left">
+            <p className="text-md font-medium tracking-wide text-gray-400 mb-1 text-center sm:text-left">
               Step 3 of 4
             </p>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link Calendar</h1>
-            <p className="text-gray-600 text-xs sm:text-sm leading-relaxed mb-3">
-              Connect your Google or Microsoft calendar to sync events, create new appointments via WhatsApp, and keep all your schedules in one place.
+            <p className="text-gray-600 text-md leading-relaxed mb-3">
+              Link CrackOn to create meetings directly in your work or personal calendar.
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4">
-              <p className="text-xs sm:text-sm text-blue-900 leading-relaxed">
-                <strong className="font-semibold">Why connect a calendar?</strong> When you link your calendar, CrackOn can create events directly from your WhatsApp messages, sync your existing appointments, and send you smart reminders. You can connect multiple calendars and choose which ones to use for WhatsApp-created events.
-              </p>
-            </div>
           </div>
 
           {/* Calendar Connection Buttons */}
