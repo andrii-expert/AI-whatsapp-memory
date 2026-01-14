@@ -49,10 +49,7 @@ export default function OnboardingSuccessPage() {
           <Button
             className="w-full bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 font-semibold"
             variant="outline"
-            onClick={() => {
-              // Placeholder: adjust when you have a real tutorials route
-              router.push("/voice-testing");
-            }}
+            
           >
             View Tutorials
           </Button>
