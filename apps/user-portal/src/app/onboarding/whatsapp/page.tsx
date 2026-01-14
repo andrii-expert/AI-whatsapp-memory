@@ -404,9 +404,11 @@ function WhatsAppLinkingForm() {
                         variant: "success",
                       });
                     } catch (error: any) {
+                      // Extract error message from tRPC error
+                      const errorMessage = error?.message || error?.data?.message || "Failed to save phone number";
                       toast({
                         title: "Error",
-                        description: error?.message || "Failed to save phone number",
+                        description: errorMessage,
                         variant: "destructive",
                       });
                     } finally {

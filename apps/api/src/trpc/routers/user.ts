@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { updateUserSchema } from "@api/schemas/users";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "@api/trpc/init";
 import {
@@ -6,6 +7,9 @@ import {
   getUserById,
   updateUser,
 } from "@imaginecalendar/database/queries";
+import { whatsappNumbers } from "@imaginecalendar/database/schema";
+import { eq, and, ne } from "drizzle-orm";
+import { normalizePhoneNumber } from "@imaginecalendar/database/queries/whatsapp-verification";
 
 export const userRouter = createTRPCRouter({
   me: protectedProcedure.query(async ({ ctx: { db, session } }) => {
@@ -19,12 +23,28 @@ export const userRouter = createTRPCRouter({
       let updateData = { ...input };
       
       if (input.phone) {
+        // Normalize the phone number
+        const normalizedPhone = normalizePhoneNumber(input.phone);
+        
         // Get current user to compare phone numbers
         const currentUser = await getUserById(db, session.user.id);
         const currentPhone = currentUser?.phone;
         
-        // Only set phoneVerified to false if the phone number actually changed
-        if (currentPhone !== input.phone) {
+        // Check if phone number is actually changing
+        if (currentPhone !== normalizedPhone) {
+          // Check if this phone number is already in use by another user
+          const existingWhatsAppNumber = await db.query.whatsappNumbers.findFirst({
+            where: eq(whatsappNumbers.phoneNumber, normalizedPhone),
+          });
+          
+          if (existingWhatsAppNumber && existingWhatsAppNumber.userId !== session.user.id) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: 'This phone number is already registered to another account. Please use a different number.',
+            });
+          }
+          
+          // Only set phoneVerified to false if the phone number actually changed
           updateData = {
             ...updateData,
             phoneVerified: false,
