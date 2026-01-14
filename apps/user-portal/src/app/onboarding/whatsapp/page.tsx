@@ -34,6 +34,7 @@ function PhoneVerificationFlow({
   const normalizedPhone = normalizePhoneNumber(phoneNumber);
   const [phoneSaved, setPhoneSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasNotifiedVerified, setHasNotifiedVerified] = useState(false);
   const trpc = useTRPC();
   
   // Poll for verification status
@@ -64,10 +65,12 @@ function PhoneVerificationFlow({
 
   useEffect(() => {
     const verified = whatsappNumbers.some((num: any) => num.isVerified);
-    if (verified) {
+    // Call onVerified only once, when we first detect verification
+    if (verified && !hasNotifiedVerified) {
+      setHasNotifiedVerified(true);
       onVerified();
     }
-  }, [whatsappNumbers, onVerified]);
+  }, [whatsappNumbers, onVerified, hasNotifiedVerified]);
 
   // Poll every 3 seconds if not verified
   useEffect(() => {

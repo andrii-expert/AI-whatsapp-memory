@@ -33,6 +33,11 @@ function SavePhoneBeforeVerify({
   const { toast } = useToast();
 
   useEffect(() => {
+    // Basic validation: require at least 10 digits after normalization
+    if (!normalizedPhone || normalizedPhone.length < 10) {
+      return;
+    }
+
     if (normalizedPhone && !phoneSaved && !isSaving) {
       setIsSaving(true);
       updateUserMutation.mutate(
@@ -348,8 +353,19 @@ function WhatsAppVerificationPageContent() {
                         return;
                       }
 
-                      setIsSavingNewPhone(true);
                       const normalizedPhone = normalizePhoneNumber(editedPhone);
+
+                      // Stricter validation: require at least 10 digits (country code + number)
+                      if (!normalizedPhone || normalizedPhone.length < 10) {
+                        toast({
+                          title: "Invalid phone number",
+                          description: "Please enter a valid WhatsApp number including country code (at least 10 digits).",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      setIsSavingNewPhone(true);
                       
                       try {
                         await updateUserMutation.mutateAsync({ phone: normalizedPhone });
@@ -421,7 +437,16 @@ function WhatsAppVerificationPageContent() {
     }
 
     try {
-      
+      // Stricter validation: require at least 10 digits (country code + number)
+      if (!normalizedPhone || normalizedPhone.length < 10) {
+        toast({
+          title: "Invalid phone number",
+          description: "Please enter a valid WhatsApp number including country code (at least 10 digits).",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Update user profile phone number
       await updateUserMutation.mutateAsync({
         phone: normalizedPhone,
