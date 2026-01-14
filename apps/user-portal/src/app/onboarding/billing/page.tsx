@@ -461,14 +461,6 @@ function BillingOnboardingContent() {
                 )}
               </Button>
             )}
-            <button
-              type="button"
-              onClick={handleCompleteWithoutChange}
-              disabled={isCompleting || isSubscribing}
-              className="w-full text-center text-sm text-gray-600 hover:text-gray-900"
-            >
-              Skip for now
-            </button>
           </div>
         </div>
       </div>
