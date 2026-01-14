@@ -159,6 +159,18 @@ export default function BillingPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [isAnnual, setIsAnnual] = useState(false);
+  
+  const handleSelectPlan = (planId: string) => {
+    // Gold plan is not yet available
+    if (planId.startsWith("gold")) {
+      toast({
+        title: "Gold plan coming soon",
+        description: "The Gold package will be available soon. Please select the Free or Silver plan for now.",
+      });
+      return;
+    }
+    setSelectedPlanForChange(planId);
+  };
 
   const plansQueryOptions = trpc.plans.listActive.queryOptions();
   const plansQuery = useQuery(plansQueryOptions);
@@ -356,7 +368,7 @@ export default function BillingPage() {
   }, [selectedCurrency]);
 
   const handlePlanSelect = (planId: string) => {
-    setSelectedPlanForChange(planId);
+    handleSelectPlan(planId);
   };
 
   const confirmPlanChange = () => {
@@ -506,7 +518,7 @@ export default function BillingPage() {
       {/* Current Subscription and Plan Features - Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Current Subscription */}
-        <Card className="border border-gray-200">
+        <Card className="rounded-md border border-gray-200">
           <CardHeader>
             <CardTitle className="font-bold">Current Subscription</CardTitle>
             <CardDescription className="text-sm text-gray-600">
@@ -582,7 +594,7 @@ export default function BillingPage() {
         </Card>
 
         {/* Plan Features */}
-        <Card className="border border-gray-200">
+        <Card className="rounded-md border border-gray-200">
           <CardHeader>
             <CardTitle className="font-bold">Plan Features</CardTitle>
             <CardDescription className="text-sm text-gray-600">
@@ -603,7 +615,7 @@ export default function BillingPage() {
       </div>
 
       {/* Available Plans */}
-      <Card>
+      <Card className="rounded-md">
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
@@ -681,11 +693,12 @@ export default function BillingPage() {
           {isLoadingPlans ? (
             <div className="text-center text-muted-foreground py-8">Loading available plans...</div>
           ) : (
-            <RadioGroup
-              value={selectedPlanForChange || currentPlanId}
-              onValueChange={handlePlanSelect}
-              className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4"
-            >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+              <RadioGroup
+                value={selectedPlanForChange && !selectedPlanForChange.startsWith("gold") ? selectedPlanForChange : (currentPlanId && !currentPlanId.startsWith("gold") ? currentPlanId : undefined)}
+                onValueChange={handlePlanSelect}
+                className="contents"
+              >
               {/* Free Plan */}
               {(() => {
                 const freePlan = plans.find(p => p.id === 'free');
@@ -698,10 +711,10 @@ export default function BillingPage() {
                     key="free"
                     htmlFor="plan-free"
                     className={cn(
-                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                      "relative flex flex-col p-6 rounded-2xl border-2 cursor-pointer transition-all hover:shadow-xl",
                       isSelected
                         ? "border-gray-500 bg-gray-500 shadow-xl scale-105"
-                        : "border-gray-300 hover:border-gray-400 bg-white"
+                        : "border-gray-200 bg-gray-50 hover:border-gray-300"
                     )}
                   >
                     <RadioGroupItem
@@ -713,51 +726,41 @@ export default function BillingPage() {
                       )}
                     />
 
-                    <div className={cn("text-center mb-6", isCurrentPlan && !isSelected && "mt-6")}>
-                      <div className={cn(
-                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
-                        isSelected ? "bg-white/20" : "bg-gray-100"
-                      )}>
-                        <Sparkles className={cn("h-6 w-6", isSelected ? "text-white" : "text-gray-600")} />
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className={cn("h-5 w-5", isSelected ? "text-white" : "text-gray-600")} />
+                        <span className="font-semibold text-lg">{freePlan.name}</span>
                       </div>
-                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
-                        {freePlan.name}
-                      </h4>
-                      <div className="mb-3">
-                        {isLoadingRates || !exchangeRates ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-primary")} />
-                            <span className={cn("text-sm", isSelected ? "text-white/90" : "text-primary/80")}>Loading price...</span>
-                          </div>
-                        ) : (
-                          <>
-                            <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
-                              {formatCurrency(freePlan.amountCents, selectedCurrency, exchangeRates)}
-                            </span>
-                            <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
-                              /{freePlan.billingPeriod}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                      <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : "text-primary/80")}>
-                        {freePlan.description}
-                      </p>
+                      {isCurrentPlan && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          Current Plan
+                        </span>
+                      )}
                     </div>
-
-                    <div className={cn(
-                      "pt-4 flex-1",
-                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
-                    )}>
-                      <ul className="space-y-3">
-                        {freePlan.features.map((feature, i) => (
-                          <li key={i} className="flex items-start gap-3 text-sm">
-                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
-                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className={cn("text-3xl font-bold", isSelected ? "text-white" : "text-gray-900")}>
+                      {isLoadingRates || !exchangeRates ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-gray-600")} />
+                          <span className={cn("text-sm", isSelected ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                        </div>
+                      ) : (
+                        <>
+                          {formatCurrency(freePlan.amountCents, selectedCurrency, exchangeRates)}
+                          <span className="text-sm text-gray-600 ml-1"> / {freePlan.billingPeriod}</span>
+                        </>
+                      )}
                     </div>
+                    <p className={cn("mt-1 text-xs", isSelected ? "text-white/80" : "text-gray-500")}>
+                      {freePlan.description}
+                    </p>
+                    <ul className="mt-4 space-y-2 text-sm">
+                      {freePlan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <Check className={cn("h-4 w-4 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                          <span className={isSelected ? "text-white" : "text-gray-700"}>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </label>
                 );
               })()}
@@ -781,12 +784,17 @@ export default function BillingPage() {
                     key={planId}
                     htmlFor={`plan-${planId}`}
                     className={cn(
-                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
+                      "relative flex flex-col p-6 rounded-2xl border-2 cursor-pointer transition-all hover:shadow-xl",
                       isSelected
-                        ? "border-purple-500 bg-purple-500 shadow-xl scale-105"
-                        : "border-gray-300 hover:border-purple-400 bg-white"
+                        ? "border-purple-500 bg-purple-500 text-white shadow-xl scale-105"
+                        : "border-gray-200 bg-white hover:border-purple-300"
                     )}
                   >
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-accent text-white shadow-md">
+                        Most Popular
+                      </span>
+                    </div>
                     <RadioGroupItem
                       value={planId}
                       id={`plan-${planId}`}
@@ -796,7 +804,7 @@ export default function BillingPage() {
                       )}
                     />
 
-                    <div className="text-center mb-6 mt-4">
+                    <div className={cn("text-center mb-6", isCurrentPlan && !isSelected && "mt-6")}>
                       <div className={cn(
                         "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
                         isSelected ? "bg-white/20" : "bg-purple-100"
@@ -806,153 +814,102 @@ export default function BillingPage() {
                       <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
                         {silverPlan.name.replace(' Annual', '')}
                       </h4>
-                      <div className="mb-1">
+                      <div className={cn("text-3xl font-bold", isSelected ? "text-white" : "text-gray-900")}>
                         {isLoadingRates || !exchangeRates ? (
                           <div className="flex items-center justify-center gap-2">
-                            <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-primary")} />
-                            <span className={cn("text-sm", isSelected ? "text-white/90" : "text-primary/80")}>Loading price...</span>
+                            <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-gray-600")} />
+                            <span className={cn("text-sm", isSelected ? "text-white/90" : "text-gray-500")}>Loading...</span>
                           </div>
                         ) : (
                           <>
-                            <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
-                              {formatCurrency(silverPlan.amountCents, selectedCurrency, exchangeRates)}
-                            </span>
-                            <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
-                              /{silverPlan.billingPeriod}
-                            </span>
+                            {formatCurrency(silverPlan.amountCents, selectedCurrency, exchangeRates)}
+                            <span className="text-sm text-gray-600 ml-1"> / {silverPlan.billingPeriod}</span>
                           </>
                         )}
                       </div>
-                      {!isLoadingRates && exchangeRates && isAnnual && monthlyEquivalent && (
-                        <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
-                          {formatCurrency(Math.round(monthlyEquivalent * 100), selectedCurrency, exchangeRates)}/month when paid annually
+                      {!isLoadingRates && exchangeRates && isAnnual && silverPlan.monthlyPriceCents > 0 && (
+                        <p className={cn("text-xs mt-1", isSelected ? "text-white/80" : "text-purple-700")}>
+                          {silverPlan.monthlyPriceCents / 100}/month when paid annually
                         </p>
                       )}
-                      {!isLoadingRates && exchangeRates && (
-                        <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
-                          {isAnnual && savings > 0 ? `💰 Save ${formatCurrency(Math.round(savings * 100), selectedCurrency, exchangeRates)}/year` : silverPlan.description}
-                        </p>
-                      )}
+                      <p className={cn("mt-1 text-xs", isSelected ? "text-white/80" : "text-gray-500")}>
+                        {silverPlan.description}
+                      </p>
                     </div>
 
-                    <div className={cn(
-                      "pt-4 flex-1",
-                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
-                    )}>
-                      <ul className="space-y-3">
-                        {silverPlan.features.map((feature, i) => (
-                          <li key={i} className="flex items-start gap-3 text-sm">
-                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
-                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <ul className="mt-4 space-y-2 text-sm">
+                      {silverPlan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <Check className={cn("h-4 w-4 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                          <span className={isSelected ? "text-white" : "text-gray-700"}>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </label>
                 );
               })()}
 
-              {/* Gold Plan */}
+              </RadioGroup>
+              {/* Gold Plan (disabled / coming soon) - Outside RadioGroup */}
               {(() => {
                 const planId = isAnnual ? 'gold-annual' : 'gold-monthly';
                 const goldPlan = plans.find(p => p.id === planId);
                 if (!goldPlan) return null;
-                const isSelected = (selectedPlanForChange || currentPlanId) === planId;
                 const isCurrentPlan = currentPlanId === planId;
-                
-                const goldMonthly = plans.find(p => p.id === 'gold-monthly');
-                const monthlyEquivalent = goldPlan.monthlyPriceCents / 100;
-                const savings = goldMonthly && isAnnual 
-                  ? (goldMonthly.amountCents * 12 - goldPlan.amountCents) / 100
-                  : 0;
 
                 return (
-                  <label
+                  <div
                     key={planId}
-                    htmlFor={`plan-${planId}`}
                     className={cn(
-                      "relative flex flex-col p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-xl",
-                      isSelected
-                        ? "border-blue-500 bg-blue-500 shadow-xl scale-105"
-                        : "border-gray-300 hover:border-blue-400 bg-white"
+                      "relative flex flex-col p-6 rounded-2xl border-2 cursor-not-allowed opacity-70 transition-all",
+                      "border-gray-200 bg-white hover:border-blue-300"
                     )}
+                    onClick={() => handleSelectPlan(planId)}
                   >
-                    <RadioGroupItem
-                      value={planId}
-                      id={`plan-${planId}`}
-                      className={cn(
-                        "absolute top-4 right-4",
-                        isSelected && "!border-white !text-white [&_svg]:!fill-white"
-                      )}
-                    />
-
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <span className={cn(
-                        "text-xs font-bold px-4 py-1.5 rounded-full shadow-md",
-                        isCurrentPlan && !isSelected 
-                          ? "bg-green-500 text-white"
-                          : "bg-accent text-white"
-                      )}>
-                        {isCurrentPlan && !isSelected ? "Your Current Plan" : "Most Popular"}
-                      </span>
-                    </div>
-
-                    <div className={cn("text-center mb-6", isCurrentPlan && !isSelected && "mt-6")}>
-                      <div className={cn(
-                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
-                        isSelected ? "bg-white/20" : "bg-blue-100"
-                      )}>
-                        <Crown className={cn("h-6 w-6", isSelected ? "text-white" : "text-blue-600")} />
+                    <div className="flex items-center justify-between mb-2 mt-2">
+                      <div className="flex items-center gap-2">
+                        <Crown className="h-5 w-5 text-blue-600" />
+                        <span className="font-semibold text-lg">{goldPlan.name.replace(' Annual', '')}</span>
                       </div>
-                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
-                        {goldPlan.name.replace(' Annual', '')}
-                      </h4>
-                      <div className="mb-1">
-                        {isLoadingRates || !exchangeRates ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-primary")} />
-                            <span className={cn("text-sm", isSelected ? "text-white/90" : "text-primary/80")}>Loading price...</span>
-                          </div>
-                        ) : (
-                          <>
-                            <span className={cn("text-4xl font-bold", isSelected ? "text-white" : "text-primary")}>
-                              {formatCurrency(goldPlan.amountCents, selectedCurrency, exchangeRates)}
-                            </span>
-                            <span className={cn("text-base ml-1", isSelected ? "text-white/90" : "text-primary/80")}>
-                              /{goldPlan.billingPeriod}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                      {!isLoadingRates && exchangeRates && isAnnual && monthlyEquivalent && (
-                        <p className={cn("text-xs mb-1", isSelected ? "text-white/80" : "text-muted-foreground")}>
-                          {formatCurrency(Math.round(monthlyEquivalent * 100), selectedCurrency, exchangeRates)}/month when paid annually
-                        </p>
-                      )}
-                      {!isLoadingRates && exchangeRates && (
-                        <p className={cn("text-sm font-medium", isSelected ? "text-white/90" : isAnnual && savings > 0 ? "text-green-600" : "text-primary/80")}>
-                          {isAnnual && savings > 0 ? `💰 Save ${formatCurrency(Math.round(savings * 100), selectedCurrency, exchangeRates)}/year` : goldPlan.description}
-                        </p>
+                      {isCurrentPlan && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                          Current Plan
+                        </span>
                       )}
                     </div>
-
-                    <div className={cn(
-                      "pt-4 flex-1",
-                      isSelected ? "border-t-2 border-white/30" : "border-t-2 border-gray-200"
-                    )}>
-                      <ul className="space-y-3">
-                        {goldPlan.features.map((feature, i) => (
-                          <li key={i} className="flex items-start gap-3 text-sm">
-                            <Check className={cn("w-5 h-5 mt-0.5 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
-                            <span className={cn(isSelected ? "text-white" : "text-foreground")}>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="text-3xl font-bold text-gray-900">
+                      {isLoadingRates || !exchangeRates ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="h-6 w-6 animate-spin text-gray-600" />
+                          <span className="text-sm text-gray-500">Loading...</span>
+                        </div>
+                      ) : (
+                        <>
+                          {formatCurrency(goldPlan.amountCents, selectedCurrency, exchangeRates)}
+                          <span className="text-sm text-gray-600 ml-1"> / {goldPlan.billingPeriod}</span>
+                        </>
+                      )}
                     </div>
-                  </label>
+                    {!isLoadingRates && exchangeRates && isAnnual && goldPlan.monthlyPriceCents > 0 && (
+                      <p className="text-xs mt-1 text-blue-700">
+                        {goldPlan.monthlyPriceCents / 100}/month when paid annually
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-gray-500">
+                      {goldPlan.description}
+                    </p>
+                    <ul className="mt-4 space-y-2 text-sm">
+                      {goldPlan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <Check className="h-4 w-4 flex-shrink-0 text-green-600" />
+                          <span className="text-gray-700">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 );
               })()}
-            </RadioGroup>
+            </div>
           )}
 
           {/* Confirm Plan Change Button */}
@@ -987,7 +944,7 @@ export default function BillingPage() {
       </Card>
 
       {/* Subscription Management */}
-      <Card>
+      <Card className="rounded-md">
         <CardHeader>
           <CardTitle>Subscription Actions</CardTitle>
           <CardDescription>
