@@ -16,6 +16,21 @@ import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { OnboardingLoading } from "@/components/onboarding-loading";
 
+// Microsoft Icon Component
+const MicrosoftIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 23 23"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M0 0h11.5v11.5H0V0z" fill="#F25022" />
+    <path d="M11.5 0H23v11.5H11.5V0z" fill="#7FBA00" />
+    <path d="M0 11.5h11.5V23H0V11.5z" fill="#00A4EF" />
+    <path d="M11.5 11.5H23V23H11.5V11.5z" fill="#FFB900" />
+  </svg>
+);
+
 function CalendarConnectionForm() {
   const router = useRouter();
   const { toast } = useToast();
