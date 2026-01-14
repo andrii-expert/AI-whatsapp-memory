@@ -264,9 +264,17 @@ function WhatsAppLinkingForm() {
         // Phone saved, verification section will handle the rest
       },
       onError: (error) => {
+        const errorMessage = error.message || "Failed to save phone number";
+        // Check if it's a phone number conflict error
+        const isPhoneConflict = errorMessage.toLowerCase().includes("phone number") || 
+                                 errorMessage.toLowerCase().includes("already registered") ||
+                                 errorMessage.toLowerCase().includes("already in use");
+        
         toast({
-          title: "Error",
-          description: error.message || "Failed to save phone number",
+          title: isPhoneConflict ? "Phone Number Already in Use" : "Error",
+          description: isPhoneConflict 
+            ? "This phone number is already registered to another account. Please use a different number."
+            : errorMessage,
           variant: "destructive",
         });
       },
@@ -406,9 +414,17 @@ function WhatsAppLinkingForm() {
                     } catch (error: any) {
                       // Extract error message from tRPC error
                       const errorMessage = error?.message || error?.data?.message || "Failed to save phone number";
+                      
+                      // Check if it's a phone number conflict error
+                      const isPhoneConflict = errorMessage.toLowerCase().includes("phone number") || 
+                                               errorMessage.toLowerCase().includes("already registered") ||
+                                               errorMessage.toLowerCase().includes("already in use");
+                      
                       toast({
-                        title: "Error",
-                        description: errorMessage,
+                        title: isPhoneConflict ? "Phone Number Already in Use" : "Error",
+                        description: isPhoneConflict 
+                          ? "This phone number is already registered to another account. Please use a different number."
+                          : errorMessage,
                         variant: "destructive",
                       });
                     } finally {

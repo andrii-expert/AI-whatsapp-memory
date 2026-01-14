@@ -41,7 +41,10 @@ export function Toaster() {
                           )}
                           {props?.variant === "success" && <Icons.Check />}
                           {props?.variant === "error" && (
-                            <Icons.Error className="text-[#FF3638]" />
+                            <Icons.Error className="text-white" />
+                          )}
+                          {props?.variant === "destructive" && (
+                            <Icons.Error className="text-white" />
                           )}
                           {props?.variant === "progress" && (
                             <Spinner className="h-4 w-4 animate-spin" />
