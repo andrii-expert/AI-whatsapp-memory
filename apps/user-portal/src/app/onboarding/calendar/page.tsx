@@ -161,7 +161,7 @@ function CalendarConnectionForm() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full flex items-center justify-between gap-3 h-12 sm:h-14 bg-white border border-gray-300 rounded-lg px-4"
+                className="w-full flex items-center justify-center gap-3 h-12 sm:h-14 bg-white border border-gray-300 rounded-lg px-4"
                 onClick={() => handleConnectCalendar("google")}
                 disabled={connectingProvider !== null}
               >
@@ -208,7 +208,7 @@ function CalendarConnectionForm() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full flex items-center justify-between gap-3 h-12 sm:h-14 bg-white border border-gray-300 rounded-lg px-4"
+                className="w-full flex items-center justify-center gap-3 h-12 sm:h-14 bg-white border border-gray-300 rounded-lg px-4"
                 onClick={() => handleConnectCalendar("microsoft")}
                 disabled={connectingProvider !== null}
               >
@@ -216,9 +216,7 @@ function CalendarConnectionForm() {
                   {connectingProvider === "microsoft" ? (
                     <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
                   ) : (
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#00A4EF">
-                      <path d="M0 0h11.377v11.372H0zm12.623 0H24v11.372H12.623zM0 12.628h11.377V24H0zm12.623 0H24V24H12.623z" />
-                    </svg>
+                    <MicrosoftIcon className="h-5 w-5 flex-shrink-0" />
                   )}
                   <span className="text-sm sm:text-base font-medium text-gray-800">
                     Connect to Microsoft Calendar
