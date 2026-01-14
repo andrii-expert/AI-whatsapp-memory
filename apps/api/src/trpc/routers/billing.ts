@@ -1,4 +1,4 @@
-import { createSubscriptionSchema, updateSubscriptionSchema, updateSubscriptionResponseSchema } from "@api/schemas/billing";
+import { createSubscriptionSchema, updateSubscriptionSchema, updateSubscriptionResponseSchema, subscriptionSchema } from "@api/schemas/billing";
 import { createTRPCRouter, protectedProcedure } from "@api/trpc/init";
 import {
   getUserSubscription,
@@ -62,9 +62,14 @@ function isTrialPlan(plan: PlanRecord) {
 }
 
 export const billingRouter = createTRPCRouter({
-  getSubscription: protectedProcedure.query(async ({ ctx: { db, session } }) => {
-    return getUserSubscription(db, session.user.id);
-  }),
+  // Return the user's latest subscription, or null if they don't have one yet.
+  getSubscription: protectedProcedure
+    .output(subscriptionSchema.nullable())
+    .query(async ({ ctx: { db, session } }) => {
+      const subscription = await getUserSubscription(db, session.user.id);
+      // tRPC procedures must not return undefined; return null when no subscription exists
+      return subscription ?? null;
+    }),
 
   createSubscription: protectedProcedure
     .input(createSubscriptionSchema)
