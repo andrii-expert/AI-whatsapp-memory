@@ -36,6 +36,20 @@ function BillingOnboardingContent() {
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
+  const handleSelectPlan = (planId: string) => {
+    // Gold plan is not yet available in onboarding
+    if (planId.startsWith("gold")) {
+      toast({
+        title: "Gold plan coming soon",
+        description:
+          "The Gold package will be available soon. Please select the Free or Silver plan for now.",
+      });
+      return;
+    }
+
+    setSelectedPlanId(planId);
+  };
+
   // Ensure user is on the correct onboarding step
   useEffect(() => {
     if (!isLoaded) return;
@@ -275,7 +289,7 @@ function BillingOnboardingContent() {
                     ? "border-gray-500 bg-gray-500 text-white"
                     : "border-gray-200 bg-gray-50 hover:border-gray-300"
                 )}
-                onClick={() => setSelectedPlanId("free")}
+                onClick={() => handleSelectPlan("free")}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -315,7 +329,7 @@ function BillingOnboardingContent() {
                     ? "border-purple-500 bg-purple-500 text-white shadow-xl"
                     : "border-gray-200 bg-white hover:border-purple-300"
                 )}
-                onClick={() => setSelectedPlanId(silverPlan.id)}
+                onClick={() => handleSelectPlan(silverPlan.id)}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -351,16 +365,16 @@ function BillingOnboardingContent() {
               </div>
             )}
 
-            {/* Gold plan */}
+            {/* Gold plan (disabled / coming soon) */}
             {goldPlan && (
               <div
                 className={cn(
-                  "rounded-2xl border-2 p-5 cursor-pointer transition-all relative",
+                  "rounded-2xl border-2 p-5 cursor-not-allowed opacity-70 transition-all relative",
                   selectedPlanId === goldPlan.id
                     ? "border-blue-500 bg-blue-500 text-white shadow-xl"
                     : "border-gray-200 bg-white hover:border-blue-300"
                 )}
-                onClick={() => setSelectedPlanId(goldPlan.id)}
+                onClick={() => handleSelectPlan(goldPlan.id)}
               >
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-accent text-white shadow-md">

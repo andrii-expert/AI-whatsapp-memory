@@ -15,7 +15,7 @@ export default function OnboardingSuccessPage() {
       <div className="w-full max-w-sm text-center space-y-6">
         {/* Logo / Icon */}
         <div className="flex justify-center">
-          <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center shadow-sm">
+          <div className="h-20 w-20 rounded-full bg-blue-600 flex items-center justify-center shadow-sm">
             <Image
               src="/crack-on-logo-icon.png"
               alt="CrackOn"
