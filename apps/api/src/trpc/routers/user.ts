@@ -6,10 +6,10 @@ import {
   deleteUser,
   getUserById,
   updateUser,
+  normalizePhoneNumber,
 } from "@imaginecalendar/database/queries";
 import { whatsappNumbers } from "@imaginecalendar/database/schema";
 import { eq, and, ne } from "drizzle-orm";
-import { normalizePhoneNumber } from "@imaginecalendar/database/queries/whatsapp-verification";
 
 export const userRouter = createTRPCRouter({
   me: protectedProcedure.query(async ({ ctx: { db, session } }) => {
