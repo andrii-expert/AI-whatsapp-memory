@@ -80,9 +80,9 @@ function SignInForm() {
     <div className="flex min-h-screen">
       {/* Left Side - Sign In Form */}
       <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-8 lg:p-12">
-        <div className="space-y-2 flex flex-col items-center justify-center">
+        <div className="w-full max-w-md space-y-8">
           {/* Title and Subtitle */}
-          <div className="space-y-2 justify-center flex">
+          <div className="space-y-2 flex flex-col items-center justify-center">
             <h1 className="text-4xl font-bold text-gray-800">Sign In</h1>
             <p className="text-lg text-gray-500">Welcome back! Sign in to continue</p>
           </div>
