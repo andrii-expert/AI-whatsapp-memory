@@ -99,8 +99,8 @@ function BillingOnboardingContent() {
             title: "Setup complete!",
             description: "Your subscription has been created and setup is finished.",
           });
-          router.push("/dashboard");
-          router.refresh();
+          // After subscription + onboarding complete, show success screen
+          router.push("/onboarding/success");
         } catch (error: any) {
           toast({
             title: "Error",
@@ -136,8 +136,8 @@ function BillingOnboardingContent() {
         title: "Setup complete!",
         description: "You can manage your billing at any time from the dashboard.",
       });
-      router.push("/dashboard");
-      router.refresh();
+      // After completing onboarding without changing plan, show success screen
+      router.push("/onboarding/success");
     } catch (error: any) {
       toast({
         title: "Error",
