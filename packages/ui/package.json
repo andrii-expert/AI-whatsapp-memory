@@ -55,6 +55,7 @@
     "./use-toast": "./src/components/use-toast.tsx",
     "./cn": "./src/utils/cn.ts",
     "./phone-utils": "./src/utils/phone-utils.ts",
+    "./country-codes": "./src/utils/country-codes.ts",
     "./hooks": "./src/hooks/index.ts"
   },
   "dependencies": {

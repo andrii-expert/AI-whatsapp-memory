@@ -20,9 +20,7 @@ import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 import { useAuth } from "@/hooks/use-auth";
 import { OnboardingLoading } from "@/components/onboarding-loading";
 import { cn } from "@imaginecalendar/ui/cn";
-// Import country codes directly from the source file
-// @ts-ignore - internal import
-import { countryCodes, type CountryCode } from "@imaginecalendar/ui/src/utils/country-codes";
+import { countryCodes, type CountryCode } from "@imaginecalendar/ui/country-codes";
 import { getTimezonesForCountry, getCountryFromTimezone } from "@/utils/country-timezones";
 import {
   Popover,
