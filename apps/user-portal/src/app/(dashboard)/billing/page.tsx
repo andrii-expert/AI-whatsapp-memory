@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useTRPC } from "@/trpc/client";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -156,6 +156,7 @@ const USE_DB_PLANS = process.env.NEXT_PUBLIC_USE_DB_PLANS !== "false";
 export default function BillingPage() {
   const { toast } = useToast();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
   const [isAnnual, setIsAnnual] = useState(false);
@@ -194,6 +195,63 @@ export default function BillingPage() {
     isLoading: isLoadingSubscription,
     error: subscriptionError
   } = useQuery(trpc.billing.getSubscription.queryOptions());
+
+  const createSubscriptionMutation = useMutation(
+    trpc.billing.createSubscription.mutationOptions({
+      onSuccess: async (result) => {
+        // Handle payment redirect for paid plans
+        if (result.type === "requiresPayment") {
+          toast({
+            title: "Redirecting to Payment",
+            description: result.message,
+          });
+
+          // Create form and submit to payment redirect endpoint
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/api/payment/redirect';
+          form.style.display = 'none';
+
+          const planInput = document.createElement('input');
+          planInput.type = 'hidden';
+          planInput.name = 'plan';
+          planInput.value = result.plan;
+          form.appendChild(planInput);
+
+          // Add billing flow flag to use billing-specific return URLs
+          const billingFlowInput = document.createElement('input');
+          billingFlowInput.type = 'hidden';
+          billingFlowInput.name = 'isBillingFlow';
+          billingFlowInput.value = 'true';
+          form.appendChild(billingFlowInput);
+
+          document.body.appendChild(form);
+          form.submit();
+          return;
+        }
+
+        // Handle successful subscription creation (free plans)
+        if (result.type === "success") {
+          toast({
+            title: "Plan Updated",
+            description: "Your plan has been updated successfully.",
+          });
+          setSelectedPlanForChange(null);
+          // Invalidate queries to refresh subscription data
+          queryClient.invalidateQueries({ queryKey: trpc.billing.getSubscription.queryKey() });
+          queryClient.invalidateQueries({ queryKey: trpc.plans.listActive.queryKey() });
+        }
+      },
+      onError: (error) => {
+        console.error("Create subscription error:", error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to create subscription.",
+          variant: "destructive",
+        });
+      },
+    })
+  );
 
   const updateSubscriptionMutation = useMutation(
     trpc.billing.updateSubscription.mutationOptions({
@@ -235,10 +293,33 @@ export default function BillingPage() {
             title: "Plan Updated",
             description: "Your plan has been updated successfully.",
           });
+          setSelectedPlanForChange(null);
+          // Invalidate queries to refresh subscription data
+          queryClient.invalidateQueries({ queryKey: trpc.billing.getSubscription.queryKey() });
+          queryClient.invalidateQueries({ queryKey: trpc.plans.listActive.queryKey() });
         }
-        // Note: invalidate is handled by React Query
       },
       onError: (error) => {
+        console.error("Update subscription error:", error);
+        
+        // If error is "No subscription found", try creating a new subscription instead
+        if (error.message?.includes("No subscription found") || error.data?.code === "NOT_FOUND") {
+          // User doesn't have a subscription yet, use createSubscription instead
+          if (selectedPlanForChange) {
+            console.log("No subscription found, creating new subscription for plan:", selectedPlanForChange);
+            createSubscriptionMutation.mutate({
+              plan: selectedPlanForChange as any,
+            });
+          } else {
+            toast({
+              title: "Error",
+              description: "No plan selected. Please select a plan first.",
+              variant: "destructive",
+            });
+          }
+          return;
+        }
+        
         toast({
           title: "Error",
           description: error.message || "Failed to update plan.",
@@ -372,12 +453,38 @@ export default function BillingPage() {
   };
 
   const confirmPlanChange = () => {
-    if (!subscription || updateSubscriptionMutation.isPending || !selectedPlanForChange) return;
+    if ((updateSubscriptionMutation.isPending || createSubscriptionMutation.isPending) || !selectedPlanForChange) {
+      if (!selectedPlanForChange) {
+        toast({
+          title: "No plan selected",
+          description: "Please select a plan to change to.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
 
-    // Use tRPC for all plan changes - it will handle the different scenarios
-    updateSubscriptionMutation.mutate({
-      plan: selectedPlanForChange as any,
-    });
+    // Prevent gold plan selection
+    if (selectedPlanForChange.startsWith("gold")) {
+      toast({
+        title: "Gold plan coming soon",
+        description: "The Gold package will be available soon. Please select the Free or Silver plan for now.",
+      });
+      return;
+    }
+
+    // If user has no subscription, use createSubscription
+    // Otherwise, use updateSubscription
+    if (!subscription) {
+      createSubscriptionMutation.mutate({
+        plan: selectedPlanForChange as any,
+      });
+    } else {
+      // User has existing subscription, use updateSubscription
+      updateSubscriptionMutation.mutate({
+        plan: selectedPlanForChange as any,
+      });
+    }
   };
 
   const handleCancelSubscription = async () => {
@@ -918,24 +1025,24 @@ export default function BillingPage() {
               <Button
                 variant="outline"
                 onClick={() => setSelectedPlanForChange(null)}
-                disabled={updateSubscriptionMutation.isPending}
+                disabled={updateSubscriptionMutation.isPending || createSubscriptionMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 onClick={confirmPlanChange}
-                disabled={updateSubscriptionMutation.isPending}
+                disabled={updateSubscriptionMutation.isPending || createSubscriptionMutation.isPending}
                 variant="outline"
                 size="lg"
                 className="border-orange-500 text-orange-600 hover:bg-orange-50"
               >
-                {updateSubscriptionMutation.isPending ? (
+                {(updateSubscriptionMutation.isPending || createSubscriptionMutation.isPending) ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
+                    {subscription ? "Updating..." : "Creating..."}
                   </>
                 ) : (
-                  'Confirm Plan Change'
+                  subscription ? 'Confirm Plan Change' : 'Subscribe to Plan'
                 )}
               </Button>
             </div>
