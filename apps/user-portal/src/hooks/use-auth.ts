@@ -10,6 +10,7 @@ interface User {
   firstName?: string | null;
   lastName?: string | null;
   name?: string | null;
+  phone?: string | null;
   avatarUrl?: string | null;
   setupStep?: number | null;
 }
@@ -48,6 +49,7 @@ export function useAuth() {
               firstName: data.user.firstName,
               lastName: data.user.lastName,
               name: data.user.name,
+              phone: data.user.phone,
               avatarUrl: data.user.avatarUrl,
               setupStep: data.user.setupStep ?? undefined,
             },

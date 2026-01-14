@@ -23,11 +23,35 @@ export const userRouter = createTRPCRouter({
       let updateData = { ...input };
       
       if (input.phone) {
+        // Validate phone number is not empty
+        const trimmedPhone = input.phone.trim();
+        if (!trimmedPhone) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Phone number cannot be empty.',
+          });
+        }
+
         // Normalize the phone number
-        const normalizedPhone = normalizePhoneNumber(input.phone);
+        const normalizedPhone = normalizePhoneNumber(trimmedPhone);
+        
+        // Validate normalized phone number is valid (at least 8 characters including +)
+        if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid phone number format. Please enter a valid phone number.',
+          });
+        }
         
         // Get current user to compare phone numbers
         const currentUser = await getUserById(db, session.user.id);
+        if (!currentUser) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'User not found.',
+          });
+        }
+        
         const currentPhone = currentUser?.phone;
         
         // Check if phone number is actually changing
@@ -47,13 +71,28 @@ export const userRouter = createTRPCRouter({
           // Only set phoneVerified to false if the phone number actually changed
           updateData = {
             ...updateData,
+            phone: normalizedPhone,
             phoneVerified: false,
+          };
+        } else {
+          // Phone didn't change, but ensure we use normalized version
+          updateData = {
+            ...updateData,
+            phone: normalizedPhone,
           };
         }
         // If phone didn't change, don't modify phoneVerified - keep existing value
       }
       
-      return updateUser(db, session.user.id, updateData);
+      try {
+        return await updateUser(db, session.user.id, updateData);
+      } catch (error) {
+        console.error('Error updating user:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to update user. Please try again.',
+        });
+      }
     }),
 
   delete: protectedProcedure.mutation(async ({ ctx: { db, session } }) => {

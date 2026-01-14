@@ -240,15 +240,13 @@ function WhatsAppLinkingForm() {
   }, [selectedCountry]);
 
   // Fetch UTC offset when timezone changes
-  const timezoneQueryOptions = timezone 
-    ? trpc.user.getTimezoneDetails.queryOptions({ timezone })
-    : null;
   const { data: timezoneData } = useQuery(
-    timezoneQueryOptions || {
-      queryKey: ["timezone-details"],
-      queryFn: async () => ({ timezone: null, utcOffset: null }),
-      enabled: false,
-    }
+    timezone 
+      ? trpc.user.getTimezoneDetails.queryOptions({ timezone })
+      : {
+          ...trpc.user.getTimezoneDetails.queryOptions({ timezone: "" }),
+          enabled: false,
+        }
   );
 
   useEffect(() => {
@@ -383,7 +381,7 @@ function WhatsAppLinkingForm() {
                 <Button
                   type="button"
                   onClick={async () => {
-                    if (!phoneNumber) {
+                    if (!phoneNumber || !phoneNumber.trim()) {
                       toast({
                         title: "Phone number required",
                         description: "Please enter your phone number first.",
@@ -392,8 +390,30 @@ function WhatsAppLinkingForm() {
                       return;
                     }
 
+                    // Validate phone number has at least some digits
+                    const digitsOnly = phoneNumber.replace(/\D/g, '');
+                    if (digitsOnly.length < 7) {
+                      toast({
+                        title: "Invalid phone number",
+                        description: "Please enter a valid phone number with at least 7 digits.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
                     setIsSavingPhone(true);
                     const normalizedPhone = normalizePhoneNumber(phoneNumber);
+                    
+                    // Double-check normalized phone is valid
+                    if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
+                      setIsSavingPhone(false);
+                      toast({
+                        title: "Invalid phone number",
+                        description: "Please enter a valid phone number.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
                     
                     try {
                       await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
@@ -404,9 +424,11 @@ function WhatsAppLinkingForm() {
                         variant: "success",
                       });
                     } catch (error: any) {
+                      console.error("Error saving phone number:", error);
+                      const errorMessage = error?.message || error?.data?.message || "Failed to save phone number. Please try again.";
                       toast({
                         title: "Error",
-                        description: error?.message || "Failed to save phone number",
+                        description: errorMessage,
                         variant: "destructive",
                       });
                     } finally {
