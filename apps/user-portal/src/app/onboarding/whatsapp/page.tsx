@@ -19,6 +19,7 @@ import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 import { useAuth } from "@/hooks/use-auth";
 import { OnboardingLoading } from "@/components/onboarding-loading";
+import { cn } from "@imaginecalendar/ui/cn";
 
 // Component to handle phone saving and verification flow
 function PhoneVerificationFlow({
@@ -301,7 +302,7 @@ function WhatsAppLinkingForm() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link WhatsApp</h1>
             <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
-              In order to maximise CrackOn and all its features, link and verify your WhatsApp number below
+              Set your WhatsApp number and timezone to receive reminders and notifications.
             </p>
           </div>
 
@@ -312,17 +313,19 @@ function WhatsAppLinkingForm() {
               <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
                 WhatsApp Number
               </Label>
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
-                <PhoneInput
-                  id="phone"
-                  value={phoneNumber}
-                  onChange={(value) => {
-                    setPhoneNumber(value);
-                    setShowVerification(false);
-                  }}
-                  className="flex-1 w-full"
-                  disabled={isVerified}
-                />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <PhoneInput
+                    id="phone"
+                    value={phoneNumber}
+                    onChange={(value) => {
+                      setPhoneNumber(value);
+                      setShowVerification(false);
+                    }}
+                    className="w-full"
+                    disabled={isVerified}
+                  />
+                </div>
                 <Button
                   type="button"
                   onClick={async () => {
@@ -357,10 +360,12 @@ function WhatsAppLinkingForm() {
                     }
                   }}
                   disabled={!phoneNumber || isSavingPhone || isVerified}
-                  className={isVerified 
-                    ? "bg-green-600 hover:bg-green-700 text-white px-4 sm:px-6 h-10 sm:h-auto whitespace-nowrap cursor-default" 
-                    : "bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 h-10 sm:h-auto whitespace-nowrap"
-                  }
+                  className={cn(
+                    "whitespace-nowrap h-10 px-4 sm:px-6",
+                    isVerified 
+                      ? "bg-green-600 hover:bg-green-700 text-white cursor-default" 
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  )}
                 >
                   {isSavingPhone ? "Saving..." : isVerified ? "Verified" : "Get code"}
                 </Button>

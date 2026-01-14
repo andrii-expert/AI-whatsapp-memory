@@ -95,15 +95,15 @@ export function PhoneInput({
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex items-center gap-0 border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant="outline"
+            variant="ghost"
             role="combobox"
             aria-expanded={open}
             className={cn(
-              "w-[120px] justify-between font-normal",
+              "h-full px-3 py-2 border-0 border-r border-gray-300 rounded-none font-normal hover:bg-gray-50 focus:ring-0",
               error && "border-red-500",
               disabled && "opacity-50 cursor-not-allowed"
             )}
@@ -111,14 +111,14 @@ export function PhoneInput({
             type="button"
           >
             {selectedCountry ? (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5">
                 <span className="text-lg">{selectedCountry.flag}</span>
-                <span className="text-sm hidden sm:inline">{selectedCountry.dial_code}</span>
+                <span className="text-sm hidden sm:inline text-gray-700">{selectedCountry.dial_code}</span>
               </span>
             ) : (
               <span>Select...</span>
             )}
-            <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <ChevronDownIcon className="ml-1 h-3 w-3 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0" align="start">
@@ -165,7 +165,7 @@ export function PhoneInput({
         value={phoneNumber}
         onChange={handlePhoneNumberChange}
         className={cn(
-          "flex-1 placeholder:italic placeholder:text-white/60",
+          "flex-1 border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0",
           error && "border-red-500"
         )}
         disabled={disabled}
