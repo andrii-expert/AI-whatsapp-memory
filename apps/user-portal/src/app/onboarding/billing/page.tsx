@@ -6,6 +6,7 @@ export const runtime = 'nodejs';
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Button } from "@imaginecalendar/ui/button";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -498,6 +499,16 @@ function BillingOnboardingForm() {
 }
 
 export default function BillingOnboardingPage() {
-  return <BillingOnboardingForm />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      }
+    >
+      <BillingOnboardingForm />
+    </Suspense>
+  );
 }
 
