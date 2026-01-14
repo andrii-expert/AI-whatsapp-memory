@@ -21,7 +21,14 @@ import { useAuth } from "@/hooks/use-auth";
 import { OnboardingLoading } from "@/components/onboarding-loading";
 import { cn } from "@imaginecalendar/ui/cn";
 import { countryCodes, type CountryCode } from "@imaginecalendar/ui/country-codes";
-import { getTimezonesForCountry, getCountryFromTimezone } from "@/utils/country-timezones";
+import { 
+  getTimezonesForCountry, 
+  getCountryFromTimezone,
+  getTimezoneDetailsForCountry,
+  getTimezoneDisplayName,
+  getTimezoneUtcOffset,
+  type TimezoneInfo
+} from "@/utils/country-timezones";
 import {
   Popover,
   PopoverContent,
@@ -226,13 +233,22 @@ function WhatsAppLinkingForm() {
       // If current timezone is not in the new country's timezones, clear it
       if (timezone && !timezones.includes(timezone)) {
         setTimezone("");
+        setUtcOffset("");
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry]);
 
   // Fetch UTC offset when timezone changes
+  const timezoneQueryOptions = timezone 
+    ? trpc.user.getTimezoneDetails.queryOptions({ timezone })
+    : null;
   const { data: timezoneData } = useQuery(
-    timezone ? trpc.user.getTimezoneDetails.queryOptions({ timezone }) : { enabled: false }
+    timezoneQueryOptions || {
+      queryKey: ["timezone-details"],
+      queryFn: async () => ({ timezone: null, utcOffset: null }),
+      enabled: false,
+    }
   );
 
   useEffect(() => {
@@ -496,8 +512,15 @@ function WhatsAppLinkingForm() {
 
                 {/* Timezone Selector */}
                 <Select 
-                  value={timezone} 
-                  onValueChange={setTimezone}
+                  value={timezone || undefined} 
+                  onValueChange={(value) => {
+                    // Only set timezone if value is not empty
+                    if (value && value.trim() !== "") {
+                      setTimezone(value);
+                    } else {
+                      setTimezone("");
+                    }
+                  }}
                   disabled={!selectedCountry || availableTimezones.length === 0}
                 >
                   <SelectTrigger className="flex-1 border-0 rounded-none focus:ring-0">
@@ -505,21 +528,30 @@ function WhatsAppLinkingForm() {
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
                     {availableTimezones.length > 0 ? (
-                      availableTimezones.map((tz) => {
-                        // Format timezone for display (e.g., "Africa/Johannesburg" -> "South Africa (Johannesburg)")
-                        const parts = tz.split("/");
-                        const city = parts[parts.length - 1]?.replace(/_/g, " ") || "";
-                        const region = parts[0]?.replace(/_/g, " ") || "";
-                        const displayName = parts.length > 1 
-                          ? `${region} (${city})`
-                          : tz.replace(/_/g, " ");
-                        
-                        return (
-                          <SelectItem key={tz} value={tz}>
-                            {displayName}
-                          </SelectItem>
-                        );
-                      })
+                      availableTimezones
+                        .filter((tz) => tz && tz.trim() !== "") // Filter out empty or invalid timezones
+                        .map((tz) => {
+                          // Double-check we have a valid non-empty value
+                          if (!tz || tz.trim() === "") {
+                            return null;
+                          }
+                          
+                          // Use detailed timezone information if available
+                          const tzDetails = getTimezoneDetailsForCountry(selectedCountry?.code || "");
+                          const tzInfo = tzDetails?.timezones.find((info) => info.timezone === tz);
+                          
+                          // Get display name with UTC offset if available
+                          const displayName = tzInfo 
+                            ? `${tzInfo.displayName} (${tzInfo.utcOffset})`
+                            : getTimezoneDisplayName(tz);
+                          
+                          return (
+                            <SelectItem key={tz} value={tz}>
+                              {displayName}
+                            </SelectItem>
+                          );
+                        })
+                        .filter(Boolean) // Remove any null values
                     ) : (
                       <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
                         {selectedCountry ? "No timezones available for this country" : "Please select a country first"}
@@ -581,4 +613,5 @@ export default function WhatsAppLinkingPage() {
   // This page must be client-side only due to useAuth hook
   return <WhatsAppLinkingForm />;
 }
+
 

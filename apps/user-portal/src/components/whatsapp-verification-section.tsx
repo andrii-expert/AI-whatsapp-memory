@@ -102,6 +102,14 @@ export function WhatsAppVerificationSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneNumber, shouldGenerateCode]);
 
+  // Ensure QR code is generated if we have a verification code but no QR code URL
+  useEffect(() => {
+    if (verificationCode && !qrCodeUrl && !isGenerating) {
+      generateQRCode(verificationCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verificationCode, qrCodeUrl]);
+
   const generateQRCode = async (code: string) => {
     try {
       setIsGenerating(true);
@@ -207,6 +215,34 @@ export function WhatsAppVerificationSection({
             <span className="font-semibold">Test</span> to receive a message on WhatsApp.
           </p>
         </div>
+
+        {/* QR Code - Hidden on mobile */}
+        {verificationCode && (
+          <div className="space-y-2 hidden md:block">
+            <h3 className="text-xs sm:text-sm font-medium text-gray-700">Scan QR Code</h3>
+            <div className="flex justify-center">
+              {qrCodeUrl ? (
+                <div className="p-3 sm:p-4 bg-white border border-gray-200 rounded-lg">
+                  <img
+                    src={qrCodeUrl}
+                    alt="WhatsApp Verification QR Code"
+                    className="w-40 h-40 sm:w-48 sm:h-48"
+                  />
+                </div>
+              ) : (
+                <div className="w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center border border-gray-200 rounded-lg bg-gray-50">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-xs sm:text-sm text-gray-500">Generating...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 text-center">
+              Scan with your phone camera or WhatsApp scanner
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label className="text-xs sm:text-sm font-medium text-gray-700">
