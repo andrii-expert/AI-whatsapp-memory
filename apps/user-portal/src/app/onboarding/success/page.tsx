@@ -17,10 +17,10 @@ export default function OnboardingSuccessPage() {
         <div className="flex justify-center">
           <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center shadow-sm">
             <Image
-              src="/crackon_logo_pngs-16.png"
+              src="/crack-on-logo-icon.png"
               alt="CrackOn"
-              width={64}
-              height={64}
+              width={80}
+              height={80}
               className="h-12 w-12 object-contain"
             />
           </div>
