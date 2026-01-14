@@ -20,6 +20,24 @@ import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 import { useAuth } from "@/hooks/use-auth";
 import { OnboardingLoading } from "@/components/onboarding-loading";
 import { cn } from "@imaginecalendar/ui/cn";
+// Import country codes directly from the source file
+// @ts-ignore - internal import
+import { countryCodes, type CountryCode } from "@imaginecalendar/ui/src/utils/country-codes";
+import { getTimezonesForCountry, getCountryFromTimezone } from "@/utils/country-timezones";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@imaginecalendar/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@imaginecalendar/ui/command";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 
 // Component to handle phone saving and verification flow
 function PhoneVerificationFlow({
@@ -116,13 +134,15 @@ function WhatsAppLinkingForm() {
   
   // ALL HOOKS MUST BE CALLED FIRST - before any conditional returns
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode | null>(null);
   const [timezone, setTimezone] = useState("");
   const [utcOffset, setUtcOffset] = useState("");
-  const [timezones, setTimezones] = useState<string[]>([]);
+  const [availableTimezones, setAvailableTimezones] = useState<string[]>([]);
   const [isVerified, setIsVerified] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
+  const [countrySelectorOpen, setCountrySelectorOpen] = useState(false);
 
   // Fetch user data using useAuth
   const { user, isLoaded } = useAuth();
@@ -179,21 +199,38 @@ function WhatsAppLinkingForm() {
     }
   }, [whatsappNumbers]);
 
-  // Fetch timezones
+  // Initialize country from existing timezone or default to South Africa
   useEffect(() => {
-    const fetchTimezones = async () => {
-      try {
-        const response = await fetch("https://worldtimeapi.org/api/timezone");
-        if (response.ok) {
-          const data = await response.json();
-          setTimezones(data);
+    if (timezone && !selectedCountry) {
+      const countryCode = getCountryFromTimezone(timezone);
+      if (countryCode) {
+        const country = countryCodes.find((c: CountryCode) => c.code === countryCode);
+        if (country) {
+          setSelectedCountry(country);
+          setAvailableTimezones(getTimezonesForCountry(countryCode));
         }
-      } catch (error) {
-        console.error("Failed to fetch timezones:", error);
       }
-    };
-    fetchTimezones();
-  }, []);
+    } else if (!selectedCountry) {
+      // Default to South Africa
+      const defaultCountry = countryCodes.find((c: CountryCode) => c.code === "ZA");
+      if (defaultCountry) {
+        setSelectedCountry(defaultCountry);
+        setAvailableTimezones(getTimezonesForCountry("ZA"));
+      }
+    }
+  }, [timezone, selectedCountry]);
+
+  // Update available timezones when country changes
+  useEffect(() => {
+    if (selectedCountry) {
+      const timezones = getTimezonesForCountry(selectedCountry.code);
+      setAvailableTimezones(timezones);
+      // If current timezone is not in the new country's timezones, clear it
+      if (timezone && !timezones.includes(timezone)) {
+        setTimezone("");
+      }
+    }
+  }, [selectedCountry]);
 
   // Fetch UTC offset when timezone changes
   const { data: timezoneData } = useQuery(
@@ -364,7 +401,7 @@ function WhatsAppLinkingForm() {
                   }}
                   disabled={!phoneNumber || isSavingPhone || isVerified}
                   className={cn(
-                    "whitespace-nowrap h-10 px-4 sm:px-8 absolute right-[2px] top-[7px]",
+                    "whitespace-nowrap h-8 px-4 sm:px-8 absolute right-[2px] top-[7px]",
                     isVerified 
                       ? "bg-green-600 hover:bg-green-700 text-white cursor-default" 
                       : "bg-blue-600 hover:bg-blue-700 text-white"
@@ -399,18 +436,100 @@ function WhatsAppLinkingForm() {
               <Label htmlFor="timezone" className="text-sm font-medium text-gray-700 mb-2 block">
                 Timezone
               </Label>
-              <Select value={timezone} onValueChange={setTimezone}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select your timezone" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px]">
-                  {timezones.map((tz) => (
-                    <SelectItem key={tz} value={tz}>
-                      {tz.replace(/_/g, " ")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-0 border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                {/* Country Selector */}
+                <Popover open={countrySelectorOpen} onOpenChange={setCountrySelectorOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      role="combobox"
+                      aria-expanded={countrySelectorOpen}
+                      className={cn(
+                        "h-10 px-3 py-2 border-0 border-r border-gray-300 rounded-none font-normal hover:bg-gray-50 focus:ring-0",
+                        !selectedCountry && "text-muted-foreground"
+                      )}
+                      type="button"
+                    >
+                      {selectedCountry ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-lg">{selectedCountry.flag}</span>
+                          <span className="text-sm hidden sm:inline text-gray-700">{selectedCountry.name}</span>
+                        </span>
+                      ) : (
+                        <span>Select country...</span>
+                      )}
+                      <ChevronDownIcon className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search country..." className="h-9" />
+                      <CommandEmpty>No country found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandList className="max-h-[300px] overflow-y-auto">
+                          {countryCodes.map((country: CountryCode) => (
+                            <CommandItem
+                              key={country.code}
+                              value={`${country.name} ${country.code}`}
+                              onSelect={() => {
+                                setSelectedCountry(country);
+                                setCountrySelectorOpen(false);
+                              }}
+                            >
+                              <span className="flex items-center gap-2 flex-1">
+                                <span className="text-lg">{country.flag}</span>
+                                <span className="flex-1">{country.name}</span>
+                              </span>
+                              <CheckIcon
+                                className={cn(
+                                  "ml-2 h-4 w-4",
+                                  selectedCountry?.code === country.code
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandList>
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Timezone Selector */}
+                <Select 
+                  value={timezone} 
+                  onValueChange={setTimezone}
+                  disabled={!selectedCountry || availableTimezones.length === 0}
+                >
+                  <SelectTrigger className="flex-1 border-0 rounded-none focus:ring-0">
+                    <SelectValue placeholder={selectedCountry ? "Select timezone" : "Select country first"} />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {availableTimezones.length > 0 ? (
+                      availableTimezones.map((tz) => {
+                        // Format timezone for display (e.g., "Africa/Johannesburg" -> "South Africa (Johannesburg)")
+                        const parts = tz.split("/");
+                        const city = parts[parts.length - 1]?.replace(/_/g, " ") || "";
+                        const region = parts[0]?.replace(/_/g, " ") || "";
+                        const displayName = parts.length > 1 
+                          ? `${region} (${city})`
+                          : tz.replace(/_/g, " ");
+                        
+                        return (
+                          <SelectItem key={tz} value={tz}>
+                            {displayName}
+                          </SelectItem>
+                        );
+                      })
+                    ) : (
+                      <SelectItem value="" disabled>
+                        No timezones available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Next Step Button */}

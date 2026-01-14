@@ -212,7 +212,7 @@ export function WhatsAppVerificationSection({
           <Label className="text-xs sm:text-sm font-medium text-gray-700">
             Verification Code
           </Label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 relative">
             <Input
               readOnly
               value={verificationCode}
@@ -222,7 +222,7 @@ export function WhatsAppVerificationSection({
             <Button
               type="button"
               size="sm"
-              className="px-4 text-sm"
+              className="px-4 text-sm absolute right-[2px]"
               onClick={handleOpenWhatsApp}
               disabled={!verificationCode}
             >
