@@ -85,8 +85,8 @@ function PhoneVerificationFlow({
 
   if (!phoneSaved || isSaving) {
     return (
-      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-        <p className="text-sm text-blue-800">
+      <div className="mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <p className="text-xs sm:text-sm text-blue-800">
           {isSaving ? "Saving phone number..." : "Preparing verification..."}
         </p>
       </div>
@@ -279,26 +279,26 @@ function WhatsAppLinkingForm() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Left Side - Form */}
-      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-8 lg:p-12">
-        <div className="w-full max-w-md space-y-8">
+      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
+        <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
           {/* Title */}
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">Link WhatsApp</h1>
-            <p className="text-gray-600 text-sm leading-relaxed">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link WhatsApp</h1>
+            <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
               In order to maximise CrackOn and all its features, link and verify your WhatsApp number below
             </p>
           </div>
 
           {/* Form */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Phone Number Input */}
             <div>
               <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
                 Phone Number
               </Label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
                 <PhoneInput
                   id="phone"
                   value={phoneNumber}
@@ -306,7 +306,7 @@ function WhatsAppLinkingForm() {
                     setPhoneNumber(value);
                     setShowVerification(false);
                   }}
-                  className="flex-1"
+                  className="flex-1 w-full"
                 />
                 <Button
                   type="button"
@@ -342,7 +342,7 @@ function WhatsAppLinkingForm() {
                     }
                   }}
                   disabled={!phoneNumber || isSavingPhone}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 h-10 sm:h-auto whitespace-nowrap"
                 >
                   {isSavingPhone ? "Saving..." : "Verify"}
                 </Button>
@@ -390,7 +390,7 @@ function WhatsAppLinkingForm() {
             <div className="pt-2">
               <Button
                 type="button"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-base font-medium"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-6 text-sm sm:text-base font-medium"
                 onClick={handleNext}
                 disabled={!isVerified || !timezone || isSubmitting}
               >
@@ -402,29 +402,29 @@ function WhatsAppLinkingForm() {
       </div>
 
       {/* Right Side - Promotional Content */}
-      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-12 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-8 xl:p-12 relative overflow-hidden">
         {/* Slogan */}
-        <div className="text-center mb-8">
-          <h2 className="text-4xl font-bold text-white tracking-wide mb-4">
+        <div className="text-center mb-6 xl:mb-8">
+          <h2 className="text-3xl xl:text-4xl font-bold text-white tracking-wide mb-4">
             REMIND. ORGANISE. CRACKON.
           </h2>
         </div>
 
         {/* WhatsApp Phone Image */}
-        <div className="relative mb-8 flex justify-center">
+        <div className="relative mb-6 xl:mb-8 flex justify-center">
           <Image
             src="/phone.png"
             alt="WhatsApp Phone Mockup"
             width={300}
             height={600}
-            className="w-auto h-auto max-w-[300px] object-contain"
+            className="w-auto h-auto max-w-[250px] xl:max-w-[300px] object-contain"
             priority
           />
         </div>
 
         {/* Description Text */}
-        <div className="text-center max-w-md">
-          <p className="text-white text-lg leading-relaxed">
+        <div className="text-center max-w-md px-4">
+          <p className="text-white text-base xl:text-lg leading-relaxed">
             CrackOn is your smart WhatsApp friend that helps you stay organised without leaving your favourite chat app.
           </p>
         </div>

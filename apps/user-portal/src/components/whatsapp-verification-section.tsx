@@ -196,26 +196,26 @@ export function WhatsAppVerificationSection({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Verification content */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {/* QR Code - Hidden on mobile */}
-        <div className="space-y-3 hidden md:block">
+        <div className="space-y-2 sm:space-y-3 hidden md:block">
           <h3 className="text-sm font-medium text-gray-700">Scan QR Code</h3>
           <div className="flex justify-center">
             {qrCodeUrl ? (
-              <div className="p-4 bg-white border border-gray-200 rounded-lg">
+              <div className="p-3 sm:p-4 bg-white border border-gray-200 rounded-lg">
                 <img
                   src={qrCodeUrl}
                   alt="WhatsApp Verification QR Code"
-                  className="w-48 h-48"
+                  className="w-40 h-40 sm:w-48 sm:h-48"
                 />
               </div>
             ) : (
-              <div className="w-48 h-48 flex items-center justify-center border border-gray-200 rounded-lg bg-gray-50">
+              <div className="w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center border border-gray-200 rounded-lg bg-gray-50">
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                  <p className="text-sm text-gray-500">Generating...</p>
+                  <p className="text-xs sm:text-sm text-gray-500">Generating...</p>
                 </div>
               </div>
             )}
@@ -232,14 +232,14 @@ export function WhatsAppVerificationSection({
               Verification Code
             </Label>
             <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="flex-1">
-                <p className="text-xl font-mono text-gray-900">{verificationCode}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-lg sm:text-xl font-mono text-gray-900 break-all">{verificationCode}</p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => copyToClipboard(verificationCode)}
-                className="border-gray-300"
+                className="border-gray-300 flex-shrink-0"
               >
                 <Copy className="h-4 w-4" />
               </Button>
@@ -249,10 +249,10 @@ export function WhatsAppVerificationSection({
 
         {/* Instructions */}
         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800 font-medium mb-1">
+          <p className="text-xs sm:text-sm text-blue-800 font-medium mb-1">
             How to verify:
           </p>
-          <ol className="text-sm text-blue-700 ml-4 list-decimal space-y-1">
+          <ol className="text-xs sm:text-sm text-blue-700 ml-4 list-decimal space-y-1">
             <li>Tap "Open WhatsApp" button below</li>
             <li>Send the pre-filled message with your verification code</li>
             <li>Wait for confirmation from our system</li>
@@ -263,12 +263,12 @@ export function WhatsAppVerificationSection({
         <div className="space-y-2">
           <Button
             onClick={handleOpenWhatsApp}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-            size="lg"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-base py-3 sm:py-4"
             disabled={!verificationCode}
           >
             <Smartphone className="h-4 w-4 mr-2" />
-            Open WhatsApp & Send Message
+            <span className="hidden sm:inline">Open WhatsApp & Send Message</span>
+            <span className="sm:hidden">Open WhatsApp</span>
           </Button>
 
           <Button
@@ -276,7 +276,7 @@ export function WhatsAppVerificationSection({
             variant="outline"
             disabled={isGenerating}
             size="sm"
-            className="w-full border-gray-300"
+            className="w-full border-gray-300 text-sm"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isGenerating ? 'animate-spin' : ''}`} />
             {isGenerating ? "Generating..." : "Generate New Code"}
