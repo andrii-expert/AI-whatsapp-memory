@@ -17,6 +17,7 @@ import {
   FolderOpen,
   BookOpen,
   ShoppingCart,
+  Users,
 } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
 import { Button } from "@imaginecalendar/ui/button";
@@ -33,13 +34,14 @@ import { useQuery } from "@tanstack/react-query";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Shopping", href: "/shopping-lists", icon: ShoppingCart },
   { name: "Calendar", href: "/calendars", icon: Calendar },
-  { name: "Tasks", href: "/tasks", icon: CheckSquare },
+  { name: "Shopping", href: "/shopping-lists", icon: ShoppingCart },
+  // { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Reminders", href: "/reminders", icon: Bell },
-  { name: "Notes", href: "/notes", icon: StickyNote },
-  { name: "Documents", href: "/document", icon: FolderOpen },
-  { name: "Address", href: "/address", icon: BookOpen },
+  { name: "Friends", href: "/friends", icon: Users },
+  // { name: "Notes", href: "/notes", icon: StickyNote },
+  // { name: "Documents", href: "/document", icon: FolderOpen },
+  // { name: "Address", href: "/address", icon: BookOpen },
 ];
 
 export function DashboardNav() {
@@ -143,7 +145,7 @@ export function DashboardNav() {
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center gap-2">
             <UserAvatarMenu />
-            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            {/* <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
@@ -158,7 +160,6 @@ export function DashboardNav() {
                 className="p-0 !right-0 !w-[300px] !max-w-[300px]"
               >
                 <div className="flex flex-col h-full">
-                  {/* Header */}
                   <div className="px-6 py-4 border-b flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-foreground">Menu</h2>
                     <Button
@@ -171,7 +172,6 @@ export function DashboardNav() {
                     </Button>
                   </div>
                   
-                  {/* Navigation Items */}
                   <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                     <nav className="space-y-2">
                       {navigation.map((item) => {
@@ -223,7 +223,6 @@ export function DashboardNav() {
                       })}
                     </nav>
 
-                    {/* Getting Started Card */}
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-base">Getting Started</CardTitle>
@@ -254,7 +253,7 @@ export function DashboardNav() {
                   </div>
                 </div>
               </SheetContent>
-            </Sheet>
+            </Sheet> */}
           </div>
         </div>
       </div>

@@ -99,7 +99,7 @@ export function UserAvatarMenu() {
             </Link>
           </DropdownMenuItem>
           
-          <DropdownMenuItem asChild>
+          {/* <DropdownMenuItem asChild>
             <Link 
               href="/friends" 
               className="flex items-center gap-3 px-3 py-1.5 rounded-md cursor-pointer transition-colors hover:bg-accent"
@@ -109,7 +109,7 @@ export function UserAvatarMenu() {
               </div>
               <span className="text-sm font-medium">My Friends</span>
             </Link>
-          </DropdownMenuItem>
+          </DropdownMenuItem> */}
           
           <DropdownMenuItem asChild>
             <Link 
