@@ -176,6 +176,9 @@ function BillingOnboardingContent() {
         <div className="w-full max-w-md space-y-8">
           {/* Title */}
           <div>
+            <p className="text-[11px] sm:text-xs font-medium tracking-wide text-gray-400 mb-1 text-center sm:text-left">
+              Step 4 of 4
+            </p>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Billing and Subscription</h1>
             <p className="text-sm text-gray-600 mb-3">
               Select the perfect plan for your needs. Start with our free plan or unlock unlimited features with Premium.

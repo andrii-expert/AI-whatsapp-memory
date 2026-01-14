@@ -300,8 +300,11 @@ function WhatsAppLinkingForm() {
         <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
           {/* Title */}
           <div className="text-center">
+            <p className="text-[11px] sm:text-xs font-medium tracking-wide text-gray-400 mb-1">
+              Step 2 of 4
+            </p>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link WhatsApp</h1>
-            <p className="text-gray-600 text-xs sm:text-sm leading-relaxed mb-3">
+            <p className="text-gray-600 text-md leading-relaxed mb-3">
               Maximise CrackOn and all its features, link and verify your WhatsApp number below
             </p>
           </div>
