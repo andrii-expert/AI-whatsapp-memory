@@ -134,9 +134,14 @@ function CalendarConnectionForm() {
           {/* Title */}
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link Calendar</h1>
-            <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
-              In order to maximise CrackOn and all its features, link your calendars below.
+            <p className="text-gray-600 text-xs sm:text-sm leading-relaxed mb-3">
+              Connect your Google or Microsoft calendar to sync events, create new appointments via WhatsApp, and keep all your schedules in one place.
             </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4">
+              <p className="text-xs sm:text-sm text-blue-900 leading-relaxed">
+                <strong className="font-semibold">Why connect a calendar?</strong> When you link your calendar, CrackOn can create events directly from your WhatsApp messages, sync your existing appointments, and send you smart reminders. You can connect multiple calendars and choose which ones to use for WhatsApp-created events.
+              </p>
+            </div>
           </div>
 
           {/* Calendar Connection Buttons */}

@@ -299,10 +299,10 @@ function WhatsAppLinkingForm() {
       <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
         <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
           {/* Title */}
-          <div>
+          <div className="text-center">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link WhatsApp</h1>
-            <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
-              Set your WhatsApp number and timezone to receive reminders and notifications.
+            <p className="text-gray-600 text-xs sm:text-sm leading-relaxed mb-3">
+              Maximise CrackOn and all its features, link and verify your WhatsApp number below
             </p>
           </div>
 

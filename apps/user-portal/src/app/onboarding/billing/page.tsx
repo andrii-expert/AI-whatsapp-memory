@@ -177,9 +177,14 @@ function BillingOnboardingContent() {
           {/* Title */}
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Billing and Subscription</h1>
-            <p className="text-sm text-gray-600">
-              Choose a plan to get started with CrackOn. You can always change or cancel later.
+            <p className="text-sm text-gray-600 mb-3">
+              Select the perfect plan for your needs. Start with our free plan or unlock unlimited features with Premium.
             </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4">
+              <p className="text-xs sm:text-sm text-blue-900 leading-relaxed">
+                <strong className="font-semibold">What's included?</strong> The Free plan gives you a great start with essential features. Upgrade to Premium for unlimited calendar events, shopping lists, reminders, and contacts. You can change or cancel your subscription anytime from your dashboard.
+              </p>
+            </div>
           </div>
 
           {/* Billing cycle toggle */}
