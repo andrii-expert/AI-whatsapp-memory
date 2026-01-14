@@ -4,11 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { Button } from "@imaginecalendar/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
+import { Label } from "@imaginecalendar/ui/label";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useTRPC } from "@/trpc/client";
 import { useMutation } from "@tanstack/react-query";
-import { MessageSquare, Copy, Smartphone, RefreshCw } from "lucide-react";
+import { Copy, Smartphone, RefreshCw } from "lucide-react";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
 
 interface WhatsAppVerificationSectionProps {
@@ -196,127 +196,93 @@ export function WhatsAppVerificationSection({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5" />
-          WhatsApp Verification Required
-        </CardTitle>
-        <CardDescription>
-          Verify your WhatsApp number to start managing your calendar with voice commands
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Why verify section */}
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-sm text-blue-800 font-medium mb-2">
-            Once verified, you'll be able to:
-          </p>
-          <ul className="text-sm text-blue-700 ml-4 list-disc space-y-1">
-            <li>Send voice notes to create and manage calendar events</li>
-            <li>Use natural language to schedule appointments</li>
-            <li>Receive calendar notifications and reminders via WhatsApp</li>
-            <li>Update or cancel events through voice messages</li>
-          </ul>
-        </div>
-
-        {/* Verification content */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* QR Code - Hidden on mobile */}
-          <div className="space-y-4 hidden md:block">
-            <h3 className="font-medium text-center">Scan QR Code</h3>
-            <div className="flex justify-center">
-              {qrCodeUrl ? (
-                <div className="p-4 bg-white border rounded-lg shadow-sm">
-                  <img
-                    src={qrCodeUrl}
-                    alt="WhatsApp Verification QR Code"
-                    className="w-48 h-48"
-                  />
+    <div className="space-y-6">
+      {/* Verification content */}
+      <div className="space-y-4">
+        {/* QR Code - Hidden on mobile */}
+        <div className="space-y-3 hidden md:block">
+          <h3 className="text-sm font-medium text-gray-700">Scan QR Code</h3>
+          <div className="flex justify-center">
+            {qrCodeUrl ? (
+              <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                <img
+                  src={qrCodeUrl}
+                  alt="WhatsApp Verification QR Code"
+                  className="w-48 h-48"
+                />
+              </div>
+            ) : (
+              <div className="w-48 h-48 flex items-center justify-center border border-gray-200 rounded-lg bg-gray-50">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-500">Generating...</p>
                 </div>
-              ) : (
-                <div className="w-48 h-48 flex items-center justify-center border rounded-lg bg-muted">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                    <p className="text-sm text-muted-foreground">Generating...</p>
-                  </div>
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Scan with your phone camera or WhatsApp scanner
-            </p>
-          </div>
-
-          {/* Action options */}
-          <div className="space-y-4 md:col-span-1 col-span-2">
-            <h3 className="font-medium text-center md:text-left">
-              <span className="md:hidden">Complete Verification</span>
-              <span className="hidden md:inline">Or Use These Options</span>
-            </h3>
-
-            {/* Verification Code */}
-            {verificationCode && (
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Your verification code:</p>
-                      <p className="text-xl font-mono text-primary">{verificationCode}</p>
-                    </div>
-                    {/* Copy button - Hidden on mobile */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => copyToClipboard(verificationCode)}
-                      className="hidden md:flex"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              </div>
             )}
+          </div>
+          <p className="text-xs text-gray-500 text-center">
+            Scan with your phone camera or WhatsApp scanner
+          </p>
+        </div>
 
-            {/* Instructions */}
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm text-blue-800 font-medium mb-1">
-                How to verify:
-              </p>
-              <ol className="text-sm text-blue-700 ml-4 list-decimal space-y-1">
-                <li>Tap "Open WhatsApp" button below</li>
-                <li>Send the pre-filled message with your verification code</li>
-                <li>Wait for confirmation from our system</li>
-              </ol>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="space-y-2">
+        {/* Verification Code */}
+        {verificationCode && (
+          <div>
+            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+              Verification Code
+            </Label>
+            <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex-1">
+                <p className="text-xl font-mono text-gray-900">{verificationCode}</p>
+              </div>
               <Button
-                onClick={handleOpenWhatsApp}
-                className="w-full"
-                variant="blue-primary"
-                size="lg"
-                disabled={!verificationCode}
-              >
-                <Smartphone className="h-4 w-4 mr-2" />
-                Open WhatsApp & Send Message
-              </Button>
-
-              <Button
-                onClick={handleGenerateCode}
                 variant="outline"
-                disabled={isGenerating}
                 size="sm"
-                className="w-full"
+                onClick={() => copyToClipboard(verificationCode)}
+                className="border-gray-300"
               >
-                <RefreshCw className={`h-4 w-4 mr-2 ${isGenerating ? 'animate-spin' : ''}`} />
-                {isGenerating ? "Generating..." : "Generate New Code"}
+                <Copy className="h-4 w-4" />
               </Button>
             </div>
           </div>
+        )}
+
+        {/* Instructions */}
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800 font-medium mb-1">
+            How to verify:
+          </p>
+          <ol className="text-sm text-blue-700 ml-4 list-decimal space-y-1">
+            <li>Tap "Open WhatsApp" button below</li>
+            <li>Send the pre-filled message with your verification code</li>
+            <li>Wait for confirmation from our system</li>
+          </ol>
         </div>
-      </CardContent>
-    </Card>
+
+        {/* Action Buttons */}
+        <div className="space-y-2">
+          <Button
+            onClick={handleOpenWhatsApp}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            size="lg"
+            disabled={!verificationCode}
+          >
+            <Smartphone className="h-4 w-4 mr-2" />
+            Open WhatsApp & Send Message
+          </Button>
+
+          <Button
+            onClick={handleGenerateCode}
+            variant="outline"
+            disabled={isGenerating}
+            size="sm"
+            className="w-full border-gray-300"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isGenerating ? 'animate-spin' : ''}`} />
+            {isGenerating ? "Generating..." : "Generate New Code"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

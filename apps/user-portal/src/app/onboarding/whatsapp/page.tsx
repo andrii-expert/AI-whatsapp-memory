@@ -279,9 +279,9 @@ function WhatsAppLinkingForm() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
+    <div className="flex min-h-screen">
       {/* Left Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 lg:p-12">
+      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-8 lg:p-12">
         <div className="w-full max-w-md space-y-8">
           {/* Title */}
           <div>
@@ -402,126 +402,28 @@ function WhatsAppLinkingForm() {
       </div>
 
       {/* Right Side - Promotional Content */}
-      <div className="hidden lg:flex lg:flex-1 bg-blue-600 items-center justify-center p-12 relative overflow-hidden">
-        <div className="max-w-lg space-y-8 z-10">
-          {/* Main Heading */}
-          <h2 className="text-5xl font-bold text-white leading-tight">
-            REMIND.<br />
-            ORGANISE.<br />
-            CRACKON.
+      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-12 relative overflow-hidden">
+        {/* Slogan */}
+        <div className="text-center mb-8">
+          <h2 className="text-4xl font-bold text-white tracking-wide mb-4">
+            REMIND. ORGANISE. CRACKON.
           </h2>
+        </div>
 
-          {/* Phone Illustration */}
-          <div className="relative">
-            <div className="bg-white rounded-[2.5rem] p-4 shadow-2xl transform rotate-3">
-              <div className="bg-gray-100 rounded-[2rem] overflow-hidden">
-                {/* WhatsApp Interface Mockup */}
-                <div className="bg-white h-[500px] flex flex-col">
-                  {/* Header */}
-                  <div className="bg-green-600 text-white p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold">WhatsApp</h3>
-                    </div>
-                    <div className="bg-white/20 rounded-lg px-3 py-2 text-sm">
-                      Q Ask Meta AI or Search
-                    </div>
-                  </div>
-                  
-                  {/* Filter Tabs */}
-                  <div className="flex gap-2 p-3 bg-gray-50 border-b">
-                    <span className="px-3 py-1 bg-white rounded-full text-xs font-medium">All</span>
-                    <span className="px-3 py-1 text-xs text-gray-600">Unread</span>
-                    <span className="px-3 py-1 text-xs text-gray-600">Favourites</span>
-                    <span className="px-3 py-1 text-xs text-gray-600">Groups</span>
-                  </div>
-                  
-                  {/* Chat List */}
-                  <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                    <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-xl">⚙️</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-sm">CrackOn</span>
-                          <span className="text-xs text-gray-500">13:34</span>
-                        </div>
-                        <p className="text-xs text-gray-500">Scheduled event</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                      <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-sm">Grant</span>
-                          <span className="text-xs text-gray-500">12:15</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                      <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-sm">Paul</span>
-                          <span className="text-xs text-gray-500">11:22</span>
-                        </div>
-                        <p className="text-xs text-gray-500">Reminder</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                      <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-sm">Talita</span>
-                          <span className="text-xs text-gray-500">Yesterday</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                      <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-sm">Jane</span>
-                          <span className="text-xs text-gray-500">Yesterday</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                      <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-sm">Marie</span>
-                          <span className="text-xs text-gray-500">2 days ago</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Bottom Navigation */}
-                  <div className="flex justify-around border-t bg-gray-50 p-2">
-                    <div className="flex flex-col items-center">
-                      <div className="w-6 h-6 bg-green-600 rounded-full mb-1"></div>
-                      <span className="text-xs text-green-600 font-medium">Chats</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <div className="w-6 h-6 bg-gray-400 rounded-full mb-1"></div>
-                      <span className="text-xs text-gray-500">Updates</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <div className="w-6 h-6 bg-gray-400 rounded-full mb-1"></div>
-                      <span className="text-xs text-gray-500">Communities</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <div className="w-6 h-6 bg-gray-400 rounded-full mb-1"></div>
-                      <span className="text-xs text-gray-500">Calls</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* WhatsApp Phone Image */}
+        <div className="relative mb-8 flex justify-center">
+          <Image
+            src="/phone.png"
+            alt="WhatsApp Phone Mockup"
+            width={300}
+            height={600}
+            className="w-auto h-auto max-w-[300px] object-contain"
+            priority
+          />
+        </div>
 
-          {/* Description */}
+        {/* Description Text */}
+        <div className="text-center max-w-md">
           <p className="text-white text-lg leading-relaxed">
             CrackOn is your smart WhatsApp friend that helps you stay organised without leaving your favourite chat app.
           </p>
