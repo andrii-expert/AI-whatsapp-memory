@@ -324,13 +324,18 @@ function BillingOnboardingContent() {
             {silverPlan && (
               <div
                 className={cn(
-                  "rounded-2xl border-2 p-5 cursor-pointer transition-all",
+                  "rounded-2xl border-2 p-5 cursor-pointer transition-all relative",
                   selectedPlanId === silverPlan.id
                     ? "border-purple-500 bg-purple-500 text-white shadow-xl"
                     : "border-gray-200 bg-white hover:border-purple-300"
                 )}
                 onClick={() => handleSelectPlan(silverPlan.id)}
               >
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-accent text-white shadow-md">
+                    Most Popular
+                  </span>
+                </div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Zap className={cn("h-5 w-5", selectedPlanId === silverPlan.id ? "text-white" : "text-purple-600")} />
@@ -376,11 +381,6 @@ function BillingOnboardingContent() {
                 )}
                 onClick={() => handleSelectPlan(goldPlan.id)}
               >
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-accent text-white shadow-md">
-                    Most Popular
-                  </span>
-                </div>
                 <div className="flex items-center justify-between mb-2 mt-2">
                   <div className="flex items-center gap-2">
                     <Crown className={cn("h-5 w-5", selectedPlanId === goldPlan.id ? "text-white" : "text-blue-600")} />
