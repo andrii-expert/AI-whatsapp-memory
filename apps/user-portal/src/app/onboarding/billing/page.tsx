@@ -55,12 +55,9 @@ function BillingOnboardingContent() {
   }, [isLoaded, user, router]);
 
   // Fetch current subscription data (used to detect existing plan, but never blocks UI)
+  // Use the single-argument tRPC helper form to avoid server-side defaultQueryOptions issues.
   const { data: subscription } = useQuery(
-    trpc.billing.getSubscription.queryOptions(),
-    {
-      // Do not retry endlessly; onboarding should still work without subscription data
-      retry: 1,
-    }
+    trpc.billing.getSubscription.queryOptions()
   );
 
   // Load plans (with fallback)
