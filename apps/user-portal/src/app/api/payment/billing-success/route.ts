@@ -19,8 +19,18 @@ export async function GET(req: NextRequest) {
       message: 'Payment successful! Your subscription has been updated.',
     });
 
+    // Check if user is in onboarding flow (check setupStep from database)
+    // For now, we'll check the referer or use a cookie/session to determine
+    // If coming from onboarding, redirect to onboarding/billing
+    const referer = req.headers.get('referer') || '';
+    const isOnboardingFlow = referer.includes('/onboarding/billing') || 
+                             req.nextUrl.searchParams.get('onboarding') === 'true';
+
     // If user is not authenticated, redirect to home page with message
-    const redirectPath = userId ? '/billing' : '/';
+    let redirectPath = userId ? '/billing' : '/';
+    if (isOnboardingFlow && userId) {
+      redirectPath = '/onboarding/billing';
+    }
 
     // Use the app URL from environment variable for production
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get('host')}`;

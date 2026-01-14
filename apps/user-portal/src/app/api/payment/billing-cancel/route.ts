@@ -19,8 +19,16 @@ export async function GET(req: NextRequest) {
       message: 'Payment was cancelled. You can try again or continue with your current plan.',
     });
 
+    // Check if user is in onboarding flow
+    const referer = req.headers.get('referer') || '';
+    const isOnboardingFlow = referer.includes('/onboarding/billing') || 
+                             req.nextUrl.searchParams.get('onboarding') === 'true';
+
     // If user is not authenticated, redirect to home page with message
-    const redirectPath = userId ? '/billing' : '/';
+    let redirectPath = userId ? '/billing' : '/';
+    if (isOnboardingFlow && userId) {
+      redirectPath = '/onboarding/billing';
+    }
 
     // Use the app URL from environment variable for production
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get('host')}`;

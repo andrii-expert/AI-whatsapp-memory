@@ -209,6 +209,15 @@ function BillingOnboardingForm() {
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
   }, [plansQuery.data]);
 
+  const planMap = useMemo(() => new Map(plans.map((plan) => [plan.id, plan])), [plans]);
+
+  // Fetch subscription data from database
+  const {
+    data: subscription,
+    isLoading: isLoadingSubscription,
+    error: subscriptionError
+  } = useQuery(trpc.billing.getSubscription.queryOptions());
+
   const updateSubscriptionMutation = useMutation(
     trpc.billing.updateSubscription.mutationOptions({
       onSuccess: (result) => {
@@ -229,6 +238,14 @@ function BillingOnboardingForm() {
           planInput.value = result.plan;
           form.appendChild(planInput);
 
+          // Use billing flow but redirect back to onboarding/billing after payment
+          const billingFlowInput = document.createElement('input');
+          billingFlowInput.type = 'hidden';
+          billingFlowInput.name = 'isBillingFlow';
+          billingFlowInput.value = 'true';
+          form.appendChild(billingFlowInput);
+          
+          // Add flag to indicate this is from onboarding
           const onboardingFlowInput = document.createElement('input');
           onboardingFlowInput.type = 'hidden';
           onboardingFlowInput.name = 'isOnboardingFlow';
@@ -258,7 +275,7 @@ function BillingOnboardingForm() {
     })
   );
 
-  if (!isLoaded || !user) {
+  if (!isLoaded || !user || isLoadingSubscription) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -276,14 +293,25 @@ function BillingOnboardingForm() {
     );
   }
 
+  // Determine current plan from subscription
+  const currentPlanId = subscription?.plan ?? 'free';
+  const fallbackPlan = getFallbackPlanById(currentPlanId);
+  const currentPlan = planMap.get(currentPlanId) ?? (fallbackPlan ? toDisplayPlan(fallbackPlan) : undefined);
+  const isOnFreePlan = currentPlanId === 'free' || !subscription;
+
   const freePlan = plans.find(p => p.id === 'free');
   const premiumPlanId = isAnnual ? 'gold-annual' : 'gold-monthly';
   const premiumPlan = plans.find(p => p.id === premiumPlanId) || plans.find(p => p.id === 'gold-monthly');
 
   const handleSkip = async () => {
-    updateUserMutation.mutate({
-      setupStep: 4,
-    });
+    try {
+      await updateUserMutation.mutateAsync({
+        setupStep: 4,
+      });
+    } catch (error) {
+      // Error is handled by mutation's onError
+      console.error('Skip error:', error);
+    }
   };
 
   const handleSubscribe = async () => {
@@ -294,6 +322,10 @@ function BillingOnboardingForm() {
         variant: "destructive",
       });
       return;
+    }
+
+    if (isSubscribing || updateSubscriptionMutation.isPending) {
+      return; // Prevent double clicks
     }
 
     setIsSubscribing(true);
@@ -380,9 +412,11 @@ function BillingOnboardingForm() {
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 sm:p-6">
               <div className="flex items-start justify-between mb-4">
                 <h3 className="text-lg sm:text-xl font-bold text-gray-900">Free</h3>
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 border border-blue-200 rounded-full text-xs sm:text-sm font-medium">
-                  Current Plan
-                </span>
+                {isOnFreePlan && (
+                  <span className="px-3 py-1 bg-blue-100 text-blue-800 border border-blue-200 rounded-full text-xs sm:text-sm font-medium">
+                    Current Plan
+                  </span>
+                )}
               </div>
               
               <div className="mb-4">
@@ -417,9 +451,16 @@ function BillingOnboardingForm() {
           {/* Premium Plan Card */}
           {premiumPlan && (
             <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 sm:p-6 relative">
-              <div className="flex items-center gap-2 mb-4">
-                <Crown className="h-5 w-5 text-orange-600" />
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900">Premium Plan</h3>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-orange-600" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">Premium Plan</h3>
+                </div>
+                {!isOnFreePlan && currentPlanId === premiumPlan.id && (
+                  <span className="px-3 py-1 bg-orange-100 text-orange-800 border border-orange-200 rounded-full text-xs sm:text-sm font-medium">
+                    Current Plan
+                  </span>
+                )}
               </div>
               
               <div className="mb-2">
@@ -450,14 +491,16 @@ function BillingOnboardingForm() {
 
               <Button
                 onClick={handleSubscribe}
-                disabled={isSubscribing || isLoadingRates || !exchangeRates}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white mb-4 sm:mb-6 py-2 sm:py-3 text-sm sm:text-base font-medium"
+                disabled={isSubscribing || isLoadingRates || !exchangeRates || isLoadingSubscription || (!isOnFreePlan && currentPlanId === premiumPlan.id)}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white mb-4 sm:mb-6 py-2 sm:py-3 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubscribing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Processing...
                   </>
+                ) : !isOnFreePlan && currentPlanId === premiumPlan.id ? (
+                  "Current Plan"
                 ) : (
                   "Subscribe"
                 )}
