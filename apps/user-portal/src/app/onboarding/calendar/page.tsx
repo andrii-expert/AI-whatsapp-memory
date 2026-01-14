@@ -259,14 +259,6 @@ function CalendarConnectionForm() {
             >
               {isCompleting ? "Completing..." : "Complete Setup"}
             </Button>
-            <button
-              type="button"
-              onClick={handleSkip}
-              disabled={isCompleting}
-              className="mt-3 w-full text-center text-xs sm:text-sm text-gray-500 hover:text-gray-700"
-            >
-              Skip for now
-            </button>
           </div>
         </div>
       </div>
