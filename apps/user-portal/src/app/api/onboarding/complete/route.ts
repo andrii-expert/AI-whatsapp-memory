@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
 
     const db = await connectDb();
 
-    // Update user setupStep to 3 (Complete)
+    // Update user setupStep to 4 (Complete)
     await updateUser(db, decoded.userId, {
-      setupStep: 3, // Setup complete
+      setupStep: 4, // Setup complete
     });
 
     // Get user's verified WhatsApp numbers

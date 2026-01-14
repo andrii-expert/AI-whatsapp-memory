@@ -139,11 +139,14 @@ function WhatsAppLinkingForm() {
     // Default to 1 if setupStep is null/undefined
     const setupStep = user.setupStep ?? 1;
 
-    // If setupStep is 2 or 3, redirect to appropriate page
+    // If setupStep is 2, 3, or 4, redirect to appropriate page
     if (setupStep === 2) {
       router.push("/onboarding/calendar");
       return;
     } else if (setupStep === 3) {
+      router.push("/onboarding/billing");
+      return;
+    } else if (setupStep === 4) {
       router.push("/dashboard");
       return;
     }

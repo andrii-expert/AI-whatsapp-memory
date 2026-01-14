@@ -38,14 +38,17 @@ export function useSetupRedirect() {
     const setupStep = user.setupStep ?? 1;
 
     // Redirect to appropriate onboarding step if setup is incomplete
-    // setupStep: 1 = WhatsApp setup, 2 = Calendar setup, 3 = Complete
-    if (setupStep < 3) {
+    // setupStep: 1 = WhatsApp setup, 2 = Calendar setup, 3 = Billing setup, 4 = Complete
+    if (setupStep < 4) {
       hasRedirected.current = true;
       if (setupStep === 1) {
         routerRef.current.push("/onboarding/whatsapp");
         routerRef.current.refresh();
       } else if (setupStep === 2) {
         routerRef.current.push("/onboarding/calendar");
+        routerRef.current.refresh();
+      } else if (setupStep === 3) {
+        routerRef.current.push("/onboarding/billing");
         routerRef.current.refresh();
       }
     }

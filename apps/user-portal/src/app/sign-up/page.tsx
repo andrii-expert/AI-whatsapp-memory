@@ -86,7 +86,7 @@ function SignUpForm() {
           {/* Title and Subtitle */}
           <div className="space-y-2">
             <h1 className="text-4xl font-bold text-gray-800">Sign Up</h1>
-            <p className="text-lg text-gray-500">Get started in 3 simple steps</p>
+            <p className="text-lg text-gray-500">Get started in 4 simple steps</p>
           </div>
 
           {/* Signin/Signup Toggle */}

@@ -12,13 +12,36 @@ import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
+import { useTRPC } from "@/trpc/client";
+import { useMutation } from "@tanstack/react-query";
 
 function CalendarConnectionForm() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, isLoaded } = useAuth();
+  const trpc = useTRPC();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+
+  const updateUserMutation = useMutation(
+    trpc.user.update.mutationOptions({
+      onSuccess: () => {
+        toast({
+          title: "Calendar setup complete!",
+          description: "Moving to billing setup...",
+        });
+        router.push("/onboarding/billing");
+        router.refresh();
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update setup step",
+          variant: "destructive",
+        });
+      },
+    })
+  );
 
   // Redirect if user has already completed this step or is on wrong step
   useEffect(() => {
@@ -37,6 +60,9 @@ function CalendarConnectionForm() {
       router.push("/onboarding/whatsapp");
       return;
     } else if (setupStep === 3) {
+      router.push("/onboarding/billing");
+      return;
+    } else if (setupStep === 4) {
       router.push("/dashboard");
       return;
     }
@@ -97,35 +123,10 @@ function CalendarConnectionForm() {
 
   const handleCompleteSetup = async () => {
     setIsCompleting(true);
-
-    try {
-      const response = await fetch("/api/onboarding/complete", {
-        method: "POST",
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to complete setup");
-      }
-
-      toast({
-        title: "Setup complete!",
-        description: "Your account has been set up successfully.",
-      });
-
-      // Redirect to dashboard
-      router.push("/dashboard");
-      router.refresh();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to complete setup",
-        variant: "destructive",
-      });
-    } finally {
-      setIsCompleting(false);
-    }
+    updateUserMutation.mutate({
+      setupStep: 3, // Move to next step: Billing setup
+    });
+    setIsCompleting(false);
   };
 
   const handleSkip = async () => {

@@ -32,17 +32,19 @@ export async function requireAuth(allowOnboardingPages: boolean = false) {
     );
     
     // Redirect based on setup step
-    // setupStep 1 = WhatsApp setup required, 2 = Calendar setup required, 3 = Complete
+    // setupStep 1 = WhatsApp setup required, 2 = Calendar setup required, 3 = Billing setup required, 4 = Complete
     // Default to 1 if setupStep is null/undefined (for existing users without setupStep)
     const setupStep = user?.setupStep ?? 1;
     
-    if (setupStep < 3) {
+    if (setupStep < 4) {
       if (!allowOnboardingPages) {
         // If user is trying to access dashboard pages, redirect to appropriate onboarding step
         if (setupStep === 1) {
           redirect("/onboarding/whatsapp");
         } else if (setupStep === 2) {
           redirect("/onboarding/calendar");
+        } else if (setupStep === 3) {
+          redirect("/onboarding/billing");
         }
       }
     }

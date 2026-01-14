@@ -110,12 +110,14 @@ export async function GET(request: NextRequest) {
     });
 
     // Redirect based on setup step
-    // setupStep 1 = WhatsApp setup, 2 = Calendar setup, 3 = Complete
+    // setupStep 1 = WhatsApp setup, 2 = Calendar setup, 3 = Billing setup, 4 = Complete
     let redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/dashboard`;
     if (user?.setupStep === 1) {
       redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/onboarding/whatsapp`;
     } else if (user?.setupStep === 2) {
       redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/onboarding/calendar`;
+    } else if (user?.setupStep === 3) {
+      redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/onboarding/billing`;
     }
 
     const response = NextResponse.redirect(redirectUrl);
