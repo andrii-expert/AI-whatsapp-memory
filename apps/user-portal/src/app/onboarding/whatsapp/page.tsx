@@ -521,9 +521,9 @@ function WhatsAppLinkingForm() {
                         );
                       })
                     ) : (
-                      <SelectItem value="" disabled>
-                        No timezones available
-                      </SelectItem>
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground text-center">
+                        {selectedCountry ? "No timezones available for this country" : "Please select a country first"}
+                      </div>
                     )}
                   </SelectContent>
                 </Select>
