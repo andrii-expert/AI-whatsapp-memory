@@ -316,7 +316,7 @@ function WhatsAppLinkingForm() {
               <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
                 WhatsApp Number
               </Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 relative">
                 <div className="flex-1">
                   <PhoneInput
                     id="phone"
@@ -364,7 +364,7 @@ function WhatsAppLinkingForm() {
                   }}
                   disabled={!phoneNumber || isSavingPhone || isVerified}
                   className={cn(
-                    "whitespace-nowrap h-10 px-4 sm:px-6",
+                    "whitespace-nowrap h-10 px-4 sm:px-6 absolute right-[2px] top-[3px]",
                     isVerified 
                       ? "bg-green-600 hover:bg-green-700 text-white cursor-default" 
                       : "bg-blue-600 hover:bg-blue-700 text-white"
