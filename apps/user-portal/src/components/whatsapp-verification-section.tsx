@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { Button } from "@imaginecalendar/ui/button";
 import { Label } from "@imaginecalendar/ui/label";
+import { Input } from "@imaginecalendar/ui/input";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useTRPC } from "@/trpc/client";
 import { useMutation } from "@tanstack/react-query";
@@ -195,6 +196,45 @@ export function WhatsAppVerificationSection({
     generateCodeMutation.mutate({ phoneNumber: normalizedPhone });
   };
 
+  // Onboarding step 2: simplified UI matching design (Next Step + Verification Code input)
+  if (redirectFrom === "onboarding") {
+    return (
+      <div className="space-y-4 sm:space-y-5">
+        <div className="space-y-1">
+          <p className="text-xs sm:text-sm font-semibold text-blue-700">Next Step:</p>
+          <p className="text-xs sm:text-sm text-blue-700">
+            Once your number is verified, a verification code will be shown below. Click{" "}
+            <span className="font-semibold">Test</span> to receive a message on WhatsApp.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs sm:text-sm font-medium text-gray-700">
+            Verification Code
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              readOnly
+              value={verificationCode}
+              placeholder="Please verify your number"
+              className="flex-1 text-sm sm:text-base"
+            />
+            <Button
+              type="button"
+              size="sm"
+              className="px-4 text-sm"
+              onClick={handleOpenWhatsApp}
+              disabled={!verificationCode}
+            >
+              Test
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Default UI (used on settings page): full QR + instructions + actions
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Verification content */}

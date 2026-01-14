@@ -350,7 +350,7 @@ function WhatsAppLinkingForm() {
                   disabled={!phoneNumber || isSavingPhone}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 h-10 sm:h-auto whitespace-nowrap"
                 >
-                  {isSavingPhone ? "Saving..." : "Verify"}
+                  {isSavingPhone ? "Saving..." : "Get code"}
                 </Button>
               </div>
             </div>
