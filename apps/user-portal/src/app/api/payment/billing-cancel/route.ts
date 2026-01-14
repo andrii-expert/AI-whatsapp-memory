@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { logger } from '@imaginecalendar/logger';
+import { verifyToken } from '@api/utils/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
     // Try to get userId but don't require it since PayFast redirects here
-    const { userId } = await auth();
+    const token = req.cookies.get('auth-token')?.value;
+    const userId = token ? verifyToken(token)?.userId : null;
 
     if (userId) {
       logger.info({ userId }, 'Billing payment cancelled by authenticated user');

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { logger } from '@imaginecalendar/logger';
+import { verifyToken } from '@api/utils/auth-helpers';
 
 export async function GET(req: NextRequest) {
   try {
-    const { userId } = await auth();
+    // Get auth token from cookie (optional since PayFast redirects here)
+    const token = req.cookies.get('auth-token')?.value;
+    const userId = token ? verifyToken(token)?.userId : null;
 
     // Use the app URL from environment variable for production
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${req.headers.get('host')}`;

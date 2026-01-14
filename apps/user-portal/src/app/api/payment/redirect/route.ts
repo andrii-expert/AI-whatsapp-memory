@@ -1,24 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { PayFastService } from '@imaginecalendar/payments';
 import { logger } from '@imaginecalendar/logger';
 import { connectDb } from '@imaginecalendar/database/client';
-import { getPlanById } from '@imaginecalendar/database/queries';
+import { getPlanById, getUserById } from '@imaginecalendar/database/queries';
+import { verifyToken } from '@api/utils/auth-helpers';
 
 export async function POST(req: NextRequest) {
   logger.info('Payment redirect endpoint called');
   
   try {
-    const { userId } = await auth();
-    logger.info({ userId }, 'Auth check completed');
+    // Get auth token from cookie
+    const token = req.cookies.get('auth-token')?.value;
     
-    if (!userId) {
-      logger.warn('Payment redirect accessed without authentication');
+    if (!token) {
+      logger.warn('Payment redirect accessed without authentication token');
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized - Please sign in to continue' },
         { status: 401 }
       );
     }
+
+    // Verify token
+    const payload = verifyToken(token);
+    if (!payload) {
+      logger.warn('Payment redirect accessed with invalid token');
+      return NextResponse.json(
+        { error: 'Unauthorized - Invalid session. Please sign in again.' },
+        { status: 401 }
+      );
+    }
+
+    const userId = payload.userId;
+    logger.info({ userId }, 'Auth check completed');
 
     logger.info({ userId }, 'Parsing request body');
     
@@ -111,19 +124,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get user details from Clerk
-    logger.info({ userId }, 'Fetching user from Clerk');
-    const clerkUser = await currentUser();
+    // Get user details from database
+    logger.info({ userId }, 'Fetching user from database');
+    const user = await getUserById(db, userId);
     
-    if (!clerkUser) {
-      logger.error({ userId }, 'Could not fetch user from Clerk');
+    if (!user) {
+      logger.error({ userId }, 'Could not fetch user from database');
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
       );
     }
     
-    const userEmail = clerkUser.emailAddresses[0]?.emailAddress;
+    const userEmail = user.email;
     
     logger.info({ 
       userId, 
@@ -134,7 +147,7 @@ export async function POST(req: NextRequest) {
     if (!userEmail) {
       logger.error({ userId }, 'User has no email address');
       return NextResponse.json(
-        { error: 'User email required for payment' },
+        { error: 'User email required for payment. Please update your profile.' },
         { status: 400 }
       );
     }
