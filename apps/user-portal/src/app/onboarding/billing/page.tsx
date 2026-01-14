@@ -17,7 +17,7 @@ import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Check, Crown } from "lucide-react";
+import { Loader2, Check, Crown, Sparkles, Zap } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { FALLBACK_PLANS, toDisplayPlan } from "@/utils/plans";
@@ -34,6 +34,7 @@ function BillingOnboardingContent() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
   // Ensure user is on the correct onboarding step
   useEffect(() => {
@@ -76,13 +77,19 @@ function BillingOnboardingContent() {
   }, [plansQuery.data, plansQuery.isSuccess]);
 
   const freePlan = plans.find((p) => p.id === "free");
-  const premiumPlanId = isAnnual ? "gold-annual" : "gold-monthly";
-  const premiumPlan =
-    plans.find((p) => p.id === premiumPlanId) ||
-    plans.find((p) => p.id === "gold-monthly") ||
-    plans.find((p) => p.id !== "free");
+  const silverPlanId = isAnnual ? "silver-annual" : "silver-monthly";
+  const silverPlan = plans.find((p) => p.id === silverPlanId) || plans.find((p) => p.id === "silver-monthly");
+  const goldPlanId = isAnnual ? "gold-annual" : "gold-monthly";
+  const goldPlan = plans.find((p) => p.id === goldPlanId) || plans.find((p) => p.id === "gold-monthly");
 
   const currentPlanId = subscription?.plan ?? freePlan?.id ?? "free";
+  
+  // Initialize selected plan to current plan or free
+  useEffect(() => {
+    if (!selectedPlanId && currentPlanId) {
+      setSelectedPlanId(currentPlanId);
+    }
+  }, [currentPlanId, selectedPlanId]);
 
   const createSubscriptionMutation = useMutation(
     trpc.billing.createSubscription.mutationOptions({
@@ -150,18 +157,27 @@ function BillingOnboardingContent() {
     }
   };
 
-  const handleSubscribe = () => {
-    if (!premiumPlan) {
+  const handleSubscribe = (planId: string) => {
+    if (!planId || planId === "free") {
+      // For free plan, just complete setup without subscription
+      handleCompleteWithoutChange();
+      return;
+    }
+    
+    const plan = plans.find((p) => p.id === planId);
+    if (!plan) {
       toast({
         title: "Plan not available",
-        description: "No premium plan is configured. Please contact support.",
+        description: "Selected plan is not available. Please try another plan.",
         variant: "destructive",
       });
       return;
     }
-    if (isSubscribing) return;
+    
+    if (isSubscribing || planId === currentPlanId) return;
+    
     setIsSubscribing(true);
-    createSubscriptionMutation.mutate({ plan: premiumPlan.id as any });
+    createSubscriptionMutation.mutate({ plan: planId as any });
   };
 
   // If authentication is still loading
@@ -218,113 +234,185 @@ function BillingOnboardingContent() {
           <div className="space-y-4">
             {/* Free plan */}
             {freePlan && (
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <div
+                className={cn(
+                  "rounded-2xl border-2 p-5 cursor-pointer transition-all",
+                  selectedPlanId === "free"
+                    ? "border-gray-500 bg-gray-500 text-white"
+                    : "border-gray-200 bg-gray-50 hover:border-gray-300"
+                )}
+                onClick={() => setSelectedPlanId("free")}
+              >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-gray-900">Free</span>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className={cn("h-5 w-5", selectedPlanId === "free" ? "text-white" : "text-gray-600")} />
+                    <span className="font-semibold text-lg">{freePlan.name}</span>
+                  </div>
                   {currentPlanId === "free" && (
                     <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
                       Current Plan
                     </span>
                   )}
                 </div>
-                <div className="text-3xl font-bold text-gray-900">
-                  R0<span className="text-base font-normal">.00</span>
-                  <span className="text-sm text-gray-600"> / month</span>
+                <div className={cn("text-3xl font-bold", selectedPlanId === "free" ? "text-white" : "text-gray-900")}>
+                  {freePlan.displayPrice}
+                  <span className="text-sm text-gray-600 ml-1"> / {freePlan.billingPeriod}</span>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Trying it out</p>
-                <ul className="mt-4 space-y-1 text-sm text-gray-700">
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600" /> 15 calendar entries per month
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600" /> 2 shopping lists
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600" /> 15 reminders per month
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h4 w-4 text-green-600" /> 2 friends
-                  </li>
+                <p className={cn("mt-1 text-xs", selectedPlanId === "free" ? "text-white/80" : "text-gray-500")}>
+                  {freePlan.description}
+                </p>
+                <ul className="mt-4 space-y-2 text-sm">
+                  {freePlan.features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === "free" ? "text-white" : "text-green-600")} />
+                      <span className={selectedPlanId === "free" ? "text-white" : "text-gray-700"}>{feature}</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
 
-            {/* Premium plan */}
-            {premiumPlan && (
-              <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Crown className="h-5 w-5 text-orange-600" />
-                  <span className="font-semibold text-gray-900">Premium Plan</span>
+            {/* Silver plan */}
+            {silverPlan && (
+              <div
+                className={cn(
+                  "rounded-2xl border-2 p-5 cursor-pointer transition-all",
+                  selectedPlanId === silverPlan.id
+                    ? "border-purple-500 bg-purple-500 text-white shadow-xl"
+                    : "border-gray-200 bg-white hover:border-purple-300"
+                )}
+                onClick={() => setSelectedPlanId(silverPlan.id)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Zap className={cn("h-5 w-5", selectedPlanId === silverPlan.id ? "text-white" : "text-purple-600")} />
+                    <span className="font-semibold text-lg">{silverPlan.name.replace(" Annual", "")}</span>
+                  </div>
+                  {currentPlanId === silverPlan.id && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                      Current Plan
+                    </span>
+                  )}
                 </div>
-                <div className="text-3xl font-bold text-gray-900">
-                  R75<span className="text-base font-normal">.00</span>
-                  <span className="text-sm text-gray-600"> / month</span>
+                <div className={cn("text-3xl font-bold", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-900")}>
+                  {silverPlan.displayPrice}
+                  <span className="text-sm text-gray-600 ml-1"> / {silverPlan.billingPeriod}</span>
                 </div>
-                {isAnnual && (
-                  <p className="text-xs text-orange-700">
-                    Save R25.00 for yearly subscription
+                {isAnnual && silverPlan.monthlyPriceCents > 0 && (
+                  <p className={cn("text-xs mt-1", selectedPlanId === silverPlan.id ? "text-white/80" : "text-purple-700")}>
+                    {silverPlan.monthlyPriceCents / 100}/month when paid annually
                   </p>
                 )}
-                <Button
-                  type="button"
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white mt-2"
-                  disabled={
-                    isSubscribing ||
-                    isCompleting ||
-                    currentPlanId === premiumPlan.id
-                  }
-                  onClick={handleSubscribe}
-                >
-                  {isSubscribing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : currentPlanId === premiumPlan.id ? (
-                    "Current Plan"
-                  ) : (
-                    "Subscribe"
-                  )}
-                </Button>
+                <p className={cn("mt-1 text-xs", selectedPlanId === silverPlan.id ? "text-white/80" : "text-gray-500")}>
+                  {silverPlan.description}
+                </p>
+                <ul className="mt-4 space-y-2 text-sm">
+                  {silverPlan.features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === silverPlan.id ? "text-white" : "text-green-600")} />
+                      <span className={selectedPlanId === silverPlan.id ? "text-white" : "text-gray-700"}>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-                <ul className="mt-4 space-y-1 text-sm text-gray-700">
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600" /> Unlimited calendar events
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600" /> Multiple calendars & sub-calendars
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600" /> Unlimited reminders
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600" /> Unlimited shopping lists
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600" /> Unlimited contacts & sharing
-                  </li>
+            {/* Gold plan */}
+            {goldPlan && (
+              <div
+                className={cn(
+                  "rounded-2xl border-2 p-5 cursor-pointer transition-all relative",
+                  selectedPlanId === goldPlan.id
+                    ? "border-blue-500 bg-blue-500 text-white shadow-xl"
+                    : "border-gray-200 bg-white hover:border-blue-300"
+                )}
+                onClick={() => setSelectedPlanId(goldPlan.id)}
+              >
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-accent text-white shadow-md">
+                    Most Popular
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mb-2 mt-2">
+                  <div className="flex items-center gap-2">
+                    <Crown className={cn("h-5 w-5", selectedPlanId === goldPlan.id ? "text-white" : "text-blue-600")} />
+                    <span className="font-semibold text-lg">{goldPlan.name.replace(" Annual", "")}</span>
+                  </div>
+                  {currentPlanId === goldPlan.id && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                      Current Plan
+                    </span>
+                  )}
+                </div>
+                <div className={cn("text-3xl font-bold", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-900")}>
+                  {goldPlan.displayPrice}
+                  <span className="text-sm text-gray-600 ml-1"> / {goldPlan.billingPeriod}</span>
+                </div>
+                {isAnnual && goldPlan.monthlyPriceCents > 0 && (
+                  <p className={cn("text-xs mt-1", selectedPlanId === goldPlan.id ? "text-white/80" : "text-blue-700")}>
+                    {goldPlan.monthlyPriceCents / 100}/month when paid annually
+                  </p>
+                )}
+                <p className={cn("mt-1 text-xs", selectedPlanId === goldPlan.id ? "text-white/80" : "text-gray-500")}>
+                  {goldPlan.description}
+                </p>
+                <ul className="mt-4 space-y-2 text-sm">
+                  {goldPlan.features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === goldPlan.id ? "text-white" : "text-green-600")} />
+                      <span className={selectedPlanId === goldPlan.id ? "text-white" : "text-gray-700"}>{feature}</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
           </div>
-
-          {/* Complete / Skip */}
+          
+          {/* Action buttons */}
           <div className="pt-4 space-y-3">
-            <Button
-              type="button"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-sm font-medium"
-              onClick={handleCompleteWithoutChange}
-              disabled={isCompleting || isSubscribing}
-            >
-              {isCompleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Completing...
-                </>
-              ) : (
-                "Complete Setup"
-              )}
-            </Button>
+            {/* Subscribe button for selected plan (if different from current) */}
+            {selectedPlanId && selectedPlanId !== currentPlanId ? (
+              <Button
+                type="button"
+                className={cn(
+                  "w-full text-white py-3 text-sm font-medium",
+                  selectedPlanId === "free" 
+                    ? "bg-gray-600 hover:bg-gray-700"
+                    : selectedPlanId?.includes("silver")
+                    ? "bg-purple-600 hover:bg-purple-700"
+                    : "bg-blue-600 hover:bg-blue-700"
+                )}
+                disabled={isSubscribing || isCompleting}
+                onClick={() => handleSubscribe(selectedPlanId)}
+              >
+                {isSubscribing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : selectedPlanId === "free" ? (
+                  "Continue with Free Plan"
+                ) : (
+                  `Subscribe to ${plans.find(p => p.id === selectedPlanId)?.name.replace(" Annual", "") || "Plan"}`
+                )}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-sm font-medium"
+                onClick={handleCompleteWithoutChange}
+                disabled={isCompleting || isSubscribing}
+              >
+                {isCompleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Completing...
+                  </>
+                ) : (
+                  "Complete Setup"
+                )}
+              </Button>
+            )}
             <button
               type="button"
               onClick={handleCompleteWithoutChange}
