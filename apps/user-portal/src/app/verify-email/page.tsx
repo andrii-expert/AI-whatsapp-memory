@@ -146,7 +146,7 @@ function VerifyEmailForm() {
 
           <div className="space-y-6">
             {/* Code Input */}
-            <div className="flex justify-center gap-2">
+            <div className="flex justify-center gap-1 sm:gap-2">
               {code.map((digit, index) => (
                 <Input
                   key={index}
@@ -158,7 +158,7 @@ function VerifyEmailForm() {
                   onChange={(e) => handleCodeChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
                   onPaste={handlePaste}
-                  className="w-12 h-14 text-center text-2xl font-bold"
+                  className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold"
                   disabled={loading}
                 />
               ))}

@@ -84,7 +84,7 @@ function SignUpForm() {
       <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-8 lg:p-12">
         <div className="w-full max-w-md space-y-8">
           {/* Title and Subtitle */}
-          <div className="space-y-2">
+          <div className="space-y-2 flex flex-col items-center justify-center">
             <h1 className="text-4xl font-bold text-gray-800">Sign Up</h1>
             <p className="text-lg text-gray-500">Get started in 4 simple steps</p>
           </div>
