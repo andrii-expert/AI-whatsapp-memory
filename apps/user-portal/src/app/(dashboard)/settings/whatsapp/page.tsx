@@ -3,6 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import { Home, ChevronLeft, CheckCircle2, Edit2, X, Check, Calendar } from "lucide-react";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,55 +17,79 @@ import { PhoneInput } from "@imaginecalendar/ui/phone-input";
 import { Checkbox } from "@imaginecalendar/ui/checkbox";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
+import { cn } from "@imaginecalendar/ui/cn";
 
-// Component to save phone number before showing verification
-function SavePhoneBeforeVerify({
+// Component to handle phone saving and verification flow
+function PhoneVerificationFlow({
   phoneNumber,
-  onSaved,
-  updateUserMutation,
+  userPhone,
+  onVerified,
+  savePhoneMutation,
 }: {
   phoneNumber: string;
-  onSaved: () => void;
-  updateUserMutation: any;
+  userPhone?: string | null;
+  onVerified: () => void;
+  savePhoneMutation: any;
 }) {
   const normalizedPhone = normalizePhoneNumber(phoneNumber);
   const [phoneSaved, setPhoneSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const { toast } = useToast();
+  const [hasNotifiedVerified, setHasNotifiedVerified] = useState(false);
+  const trpc = useTRPC();
+  
+  // Poll for verification status
+  const { data: whatsappNumbers = [], refetch } = useQuery(
+    trpc.whatsapp.getMyNumbers.queryOptions()
+  );
 
+  // Check if phone needs to be saved
   useEffect(() => {
-    // Basic validation: require at least 10 digits after normalization
-    if (!normalizedPhone || normalizedPhone.length < 10) {
-      return;
-    }
-
-    if (normalizedPhone && !phoneSaved && !isSaving) {
+    if (normalizedPhone && normalizedPhone !== userPhone && !phoneSaved && !isSaving) {
       setIsSaving(true);
-      updateUserMutation.mutate(
+      savePhoneMutation.mutate(
         { phone: normalizedPhone },
         {
           onSuccess: () => {
             setPhoneSaved(true);
             setIsSaving(false);
-            onSaved();
           },
-          onError: (error: any) => {
+          onError: () => {
             setIsSaving(false);
-            toast({
-              title: "Error",
-              description: error?.message || "Failed to save phone number",
-              variant: "destructive",
-            });
           },
         }
       );
+    } else if (normalizedPhone === userPhone) {
+      setPhoneSaved(true);
     }
-  }, [normalizedPhone, phoneSaved, isSaving, updateUserMutation, onSaved, toast]);
+  }, [normalizedPhone, userPhone, phoneSaved, isSaving, savePhoneMutation]);
+
+  useEffect(() => {
+    const verified = whatsappNumbers.some((num: any) => num.isVerified);
+    // Call onVerified only once, when we first detect verification
+    if (verified && !hasNotifiedVerified) {
+      setHasNotifiedVerified(true);
+      onVerified();
+    }
+  }, [whatsappNumbers, onVerified, hasNotifiedVerified]);
+
+  // Poll every 3 seconds if not verified
+  useEffect(() => {
+    if (!phoneSaved) return;
+    
+    const interval = setInterval(() => {
+      const verified = whatsappNumbers.some((num: any) => num.isVerified);
+      if (!verified) {
+        refetch();
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [phoneSaved, whatsappNumbers, refetch]);
 
   if (!phoneSaved || isSaving) {
     return (
-      <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-        <p className="text-sm text-blue-800">
+      <div className="mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <p className="text-xs sm:text-sm text-blue-800">
           {isSaving ? "Saving phone number..." : "Preparing verification..."}
         </p>
       </div>
@@ -72,11 +97,13 @@ function SavePhoneBeforeVerify({
   }
 
   return (
-    <WhatsAppVerificationSection
-      phoneNumber={normalizedPhone}
-      alwaysGenerateNewCode={true}
-      redirectFrom="settings"
-    />
+    <div className="mt-4">
+      <WhatsAppVerificationSection
+        phoneNumber={normalizedPhone}
+        alwaysGenerateNewCode={true}
+        redirectFrom="settings"
+      />
+    </div>
   );
 }
 
@@ -87,11 +114,10 @@ function WhatsAppVerificationPageContent() {
   const searchParams = useSearchParams();
   const redirectFrom = searchParams.get("from");
   const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedPhone, setEditedPhone] = useState("");
-  const [phoneForVerification, setPhoneForVerification] = useState<string | null>(null);
-  const [showVerificationForNewPhone, setShowVerificationForNewPhone] = useState(false);
-  const [isSavingNewPhone, setIsSavingNewPhone] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [isVerified, setIsVerified] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
 
   // Fetch current user data to get phone number
   const { data: user, isLoading: userLoading, error: userError } = useQuery(
@@ -137,27 +163,27 @@ function WhatsAppVerificationPageContent() {
 
   // Find verified WhatsApp number
   const verifiedNumber = whatsappNumbers?.find((num: any) => num.isVerified) || whatsappNumbers?.[0];
-  const displayPhone = isEditing ? editedPhone : (verifiedNumber?.phoneNumber || user?.phone || "");
 
-  // Track previous verification status to show success message
-  const [wasUnverified, setWasUnverified] = useState(false);
-  
+  // Initialize phone number from user data or verified WhatsApp number
   useEffect(() => {
-    const isCurrentlyUnverified = !verifiedNumber?.isVerified && (verifiedNumber?.phoneNumber || user?.phone);
-    if (isCurrentlyUnverified) {
-      setWasUnverified(true);
-    } else if (wasUnverified && verifiedNumber?.isVerified) {
-      // Just verified!
-      toast({
-        title: "WhatsApp verified!",
-        description: "Your WhatsApp number has been successfully verified.",
-        variant: "success",
-      });
-      setWasUnverified(false);
-      // Refetch to get latest data
-      refetchNumbers();
+    if (user?.phone && !phoneNumber) {
+      setPhoneNumber(user.phone);
     }
-  }, [verifiedNumber?.isVerified, user?.phone, wasUnverified, toast, refetchNumbers]);
+    const verifiedNum = whatsappNumbers.find((num: any) => num.isVerified);
+    if (verifiedNum?.phoneNumber && !phoneNumber) {
+      setPhoneNumber(verifiedNum.phoneNumber);
+    }
+  }, [user?.phone, whatsappNumbers, phoneNumber]);
+
+  // Check if user has verified WhatsApp
+  useEffect(() => {
+    const verified = whatsappNumbers.some((num: any) => num.isVerified);
+    setIsVerified(verified);
+    // If already verified, hide verification section
+    if (verified) {
+      setShowVerification(false);
+    }
+  }, [whatsappNumbers]);
 
   // Fetch connected calendars
   const { data: calendars = [], isLoading: calendarsLoading } = useQuery(
@@ -227,14 +253,15 @@ function WhatsAppVerificationPageContent() {
     });
   };
 
-  // Update user profile mutation
-  const updateUserMutation = useMutation(
+  // Save phone number mutation
+  const savePhoneMutation = useMutation(
     trpc.user.update.mutationOptions({
-      onSuccess: async () => {
-        await queryClient.invalidateQueries({
-          queryKey: trpc.user.me.queryKey(),
-        });
-        await refetchNumbers();
+      onSuccess: () => {
+        // Phone saved, verification section will handle the rest
+      },
+      onError: (error) => {
+        // Error handling without toast
+        console.error("Failed to save phone number:", error);
       },
     })
   );
@@ -249,30 +276,10 @@ function WhatsAppVerificationPageContent() {
 
   if (hasError) {
     return (
-      <div className="space-y-6">
-        {/* Breadcrumb Navigation */}
-        <div className="flex items-center gap-2 text-sm">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Home className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">WhatsApp Verification</span>
-        </div>
-
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-primary">WhatsApp Settings</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your WhatsApp connection and verify your number
-          </p>
-        </div>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center py-8">
+      <div className="flex min-h-screen flex-col lg:flex-row">
+        <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
+          <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
+            <div className="text-center">
               <p className="text-destructive mb-4">
                 {userError ? "Failed to load user data." : "Failed to load WhatsApp numbers."}
               </p>
@@ -290,479 +297,279 @@ function WhatsAppVerificationPageContent() {
                 Try Again
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+        <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-8 xl:p-12 relative overflow-hidden">
+          <div className="text-center mb-6 xl:mb-8">
+            <h2 className="text-3xl xl:text-4xl font-bold text-white tracking-wide mb-4">
+              REMIND. ORGANISE. CRACKON.
+            </h2>
+          </div>
+          <div className="relative mb-6 xl:mb-8 flex justify-center">
+            <Image
+              src="/phone.png"
+              alt="WhatsApp Phone Mockup"
+              width={300}
+              height={600}
+              className="w-auto h-auto max-w-[250px] xl:max-w-[300px] object-contain"
+              priority
+            />
+          </div>
+          <div className="text-center max-w-md px-4">
+            <p className="text-white text-base xl:text-lg leading-relaxed">
+              CrackOn is your smart WhatsApp friend that helps you stay organised without leaving your favourite chat app.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Show phone number input if user doesn't have a phone number
-  if (!user?.phone && !verifiedNumber?.phoneNumber) {
-    return (
-      <div className="space-y-6">
-        {/* Breadcrumb Navigation */}
-        <div className="flex items-center gap-2 text-sm">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Home className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">WhatsApp Verification</span>
-        </div>
+  return (
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      {/* Left Side - Form */}
+      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
+        <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
+          {/* Title */}
+          <div className="text-center">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link WhatsApp</h1>
+            <p className="text-gray-600 text-md leading-relaxed mb-3">
+              Maximise CrackOn and all its features, link and verify your WhatsApp number below
+            </p>
+          </div>
 
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight text-primary">WhatsApp Verification</h1>
-          <p className="text-muted-foreground mt-2">
-            Verify your WhatsApp number to start managing your calendar
-          </p>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Add WhatsApp Number</CardTitle>
-            <CardDescription>
-              Enter your WhatsApp phone number to get started
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          {/* Form */}
+          <div className="space-y-4 sm:space-y-6">
+            {/* Phone Number Input - Hide when verified */}
+            {!isVerified && (
               <div>
-                <Label htmlFor="phone-input">WhatsApp Phone Number *</Label>
-                <div className="flex gap-2 mt-1">
-                  <PhoneInput
-                    id="phone-input"
-                    value={editedPhone || ""}
-                    onChange={(value) => {
-                      setEditedPhone(value);
-                      setShowVerificationForNewPhone(false);
-                    }}
-                    className="flex-1"
-                  />
+                <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
+                  WhatsApp Number
+                </Label>
+                <div className="flex gap-2 relative">
+                  <div className="flex-1">
+                    <PhoneInput
+                      id="phone"
+                      value={phoneNumber}
+                      onChange={(value) => {
+                        setPhoneNumber(value);
+                        setShowVerification(false);
+                      }}
+                      className="w-full"
+                      disabled={isVerified}
+                    />
+                  </div>
                   <Button
                     type="button"
                     onClick={async () => {
-                      if (!editedPhone) {
-                        toast({
-                          title: "Phone number required",
-                          description: "Please enter your phone number first.",
-                          variant: "destructive",
-                        });
+                      if (!phoneNumber || !phoneNumber.trim()) {
                         return;
                       }
 
-                      const normalizedPhone = normalizePhoneNumber(editedPhone);
-
-                      // Stricter validation: require at least 10 digits (country code + number)
-                      if (!normalizedPhone || normalizedPhone.length < 10) {
-                        toast({
-                          title: "Invalid phone number",
-                          description: "Please enter a valid WhatsApp number including country code (at least 10 digits).",
-                          variant: "destructive",
-                        });
+                      // Validate phone number has at least some digits
+                      const digitsOnly = phoneNumber.replace(/\D/g, '');
+                      if (digitsOnly.length < 7) {
                         return;
                       }
 
-                      setIsSavingNewPhone(true);
+                      setIsSavingPhone(true);
+                      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+                      
+                      // Double-check normalized phone is valid
+                      if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
+                        setIsSavingPhone(false);
+                        return;
+                      }
                       
                       try {
-                        await updateUserMutation.mutateAsync({ phone: normalizedPhone });
-                        setPhoneForVerification(normalizedPhone);
-                        setShowVerificationForNewPhone(true);
-                        toast({
-                          title: "Phone number saved",
-                          description: "Now verify your number to continue.",
-                          variant: "success",
-                        });
+                        await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
+                        setShowVerification(true);
                       } catch (error: any) {
-                        toast({
-                          title: "Error",
-                          description: error?.message || "Failed to save phone number",
-                          variant: "destructive",
-                        });
+                        console.error("Error saving phone number:", error);
                       } finally {
-                        setIsSavingNewPhone(false);
+                        setIsSavingPhone(false);
                       }
                     }}
-                    disabled={!editedPhone || isSavingNewPhone}
+                    disabled={!phoneNumber || isSavingPhone || isVerified}
+                    className={cn(
+                      "whitespace-nowrap h-8 px-4 sm:px-8 absolute right-[2px] top-[7px]",
+                      isVerified 
+                        ? "bg-green-600 hover:bg-green-700 text-white cursor-default" 
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                    )}
                   >
-                    {isSavingNewPhone ? "Saving..." : "Verify"}
+                    {isSavingPhone ? "Saving..." : isVerified ? "Verified" : "Get code"}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Include country code (e.g., +1 for US, +27 for South Africa)
-                </p>
               </div>
-              {showVerificationForNewPhone && editedPhone && (
-                <div className="mt-4">
-                  <WhatsAppVerificationSection
-                    phoneNumber={phoneForVerification || normalizePhoneNumber(editedPhone)}
-                    alwaysGenerateNewCode={true}
-                    redirectFrom="settings"
-                  />
+            )}
+
+            {/* WhatsApp Verification - Show after clicking Get code button, but hide when verified */}
+            {showVerification && phoneNumber && !isVerified && (
+              <PhoneVerificationFlow
+                phoneNumber={phoneNumber}
+                userPhone={user?.phone}
+                onVerified={() => {
+                  setIsVerified(true);
+                  setShowVerification(false); // Hide verification section when verified
+                  refetchNumbers();
+                }}
+                savePhoneMutation={savePhoneMutation}
+              />
+            )}
+
+            {/* WhatsApp Verification Success Message - Show only when verified */}
+            {isVerified && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm text-green-800 leading-relaxed">
+                      Congratulations, WhatsApp is now connected.
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const handleEdit = () => {
-    setEditedPhone(displayPhone);
-    setIsEditing(true);
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-    setEditedPhone("");
-  };
-
-  const handleSave = async () => {
-    if (!editedPhone) {
-      setIsEditing(false);
-      return;
-    }
-
-    // Normalize the phone number for comparison
-    const normalizedPhone = normalizePhoneNumber(editedPhone);
-    
-    // Check if the phone number actually changed (compare normalized values)
-    if (normalizedPhone === (verifiedNumber?.phoneNumber || user?.phone || "")) {
-      setIsEditing(false);
-      return;
-    }
-
-    try {
-      // Stricter validation: require at least 10 digits (country code + number)
-      if (!normalizedPhone || normalizedPhone.length < 10) {
-        toast({
-          title: "Invalid phone number",
-          description: "Please enter a valid WhatsApp number including country code (at least 10 digits).",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Update user profile phone number
-      await updateUserMutation.mutateAsync({
-        phone: normalizedPhone,
-      });
-
-      // Set the phone for verification section to generate a new code
-      setPhoneForVerification(normalizedPhone);
-      setIsEditing(false);
-
-      toast({
-        title: "Phone number updated",
-        description: "A new verification code has been generated. Please verify the new number.",
-        variant: "success",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Update failed",
-        description: error?.message || "Failed to update phone number. Please try again.",
-        variant: "error",
-      });
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Home className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <span className="font-medium">WhatsApp Verification</span>
-      </div>
-
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">WhatsApp Settings</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage your WhatsApp connection and verify your number
-        </p>
-      </div>
-
-      {/* Connected WhatsApp Number Section */}
-      {(verifiedNumber || whatsappNumbers?.length > 0) && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  WhatsApp Number
-                  {verifiedNumber?.isVerified && (
-                    <Badge className="bg-green-100 text-green-700 border-green-200">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Verified
-                    </Badge>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  {verifiedNumber?.isVerified 
-                    ? "Your connected WhatsApp number for calendar management"
-                    : "Your WhatsApp number needs verification to enable calendar management"}
-                </CardDescription>
               </div>
-              {!isEditing && (verifiedNumber || whatsappNumbers?.[0]) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleEdit}
-                >
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isEditing ? (
+            )}
+
+            {/* WhatsApp Calendar Selection - Only show when verified */}
+            {isVerified && (
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <div className="flex gap-2 mt-1">
-                    <PhoneInput
-                      id="phone"
-                      value={editedPhone}
-                      onChange={(value) => {
-                        setEditedPhone(value);
-                        setPhoneForVerification(null);
-                      }}
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      onClick={async () => {
-                        if (!editedPhone) {
-                          toast({
-                            title: "Phone number required",
-                            description: "Please enter your phone number first.",
-                            variant: "destructive",
-                          });
-                          return;
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                    WhatsApp Calendar Selection
+                  </Label>
+                  <p className="text-xs text-gray-600 mb-3">
+                    Choose which calendars you want to use for creating events via WhatsApp.
+                  </p>
+                  {calendarsLoading || preferencesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-pulse text-sm text-gray-500">Loading calendars...</div>
+                    </div>
+                  ) : calendars.filter((cal: any) => cal.isActive).length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground border border-gray-200 rounded-lg">
+                      <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No active calendars found.</p>
+                      <p className="text-xs mt-1">Please connect a calendar first.</p>
+                      <Link
+                        href="/calendars"
+                        className="text-blue-600 hover:text-blue-700 font-medium mt-2 inline-block text-sm"
+                      >
+                        Go to Calendar Settings
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {calendars
+                        .filter((cal: any) => cal.isActive)
+                        .map((calendar: any) => (
+                          <div
+                            key={calendar.id}
+                            className={`flex items-start space-x-3 p-3 rounded-lg border-2 transition-colors cursor-pointer ${
+                              selectedWhatsAppCalendars.includes(calendar.id)
+                                ? "border-blue-500 bg-blue-50"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                            onClick={() => {
+                              if (selectedWhatsAppCalendars.includes(calendar.id)) {
+                                setSelectedWhatsAppCalendars(prev => prev.filter(id => id !== calendar.id));
+                              } else {
+                                setSelectedWhatsAppCalendars(prev => [...prev, calendar.id]);
+                              }
+                            }}
+                          >
+                            <Checkbox
+                              id={`whatsapp-calendar-${calendar.id}`}
+                              checked={selectedWhatsAppCalendars.includes(calendar.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedWhatsAppCalendars(prev => [...prev, calendar.id]);
+                                } else {
+                                  setSelectedWhatsAppCalendars(prev => prev.filter(id => id !== calendar.id));
+                                }
+                              }}
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <Label
+                                htmlFor={`whatsapp-calendar-${calendar.id}`}
+                                className="flex items-center gap-2 font-medium cursor-pointer text-sm"
+                              >
+                                {calendar.calendarName || calendar.email}
+                                {selectedWhatsAppCalendars.includes(calendar.id) && (
+                                  <Check className="h-4 w-4 text-blue-600" />
+                                )}
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {calendar.email}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge variant="secondary" className="text-xs">
+                                  {calendar.provider === "google" ? "Google" : "Microsoft"}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                  {calendars.filter((cal: any) => cal.isActive).length > 0 && (
+                    <div className="flex justify-end pt-4 border-t">
+                      <Button
+                        onClick={handleUpdateWhatsAppCalendars}
+                        disabled={
+                          selectedWhatsAppCalendars.length === 0 ||
+                          isUpdatingCalendars ||
+                          updateWhatsAppCalendarsMutation.isPending
                         }
-
-                        const normalizedPhone = normalizePhoneNumber(editedPhone);
-                        
-                        // Check if the phone number actually changed
-                        if (normalizedPhone === (verifiedNumber?.phoneNumber || user?.phone || "")) {
-                          toast({
-                            title: "No changes",
-                            description: "Phone number is the same as before.",
-                            variant: "default",
-                          });
-                          setIsEditing(false);
-                          return;
-                        }
-
-                        try {
-                          await updateUserMutation.mutateAsync({ phone: normalizedPhone });
-                          setPhoneForVerification(normalizedPhone);
-                          setIsEditing(false);
-                          toast({
-                            title: "Phone number updated",
-                            description: "A new verification code has been generated. Please verify the new number.",
-                            variant: "success",
-                          });
-                        } catch (error: any) {
-                          toast({
-                            title: "Update failed",
-                            description: error?.message || "Failed to update phone number. Please try again.",
-                            variant: "error",
-                          });
-                        }
-                      }}
-                      disabled={!editedPhone || updateUserMutation.isPending}
-                    >
-                      {updateUserMutation.isPending ? "Saving..." : "Verify"}
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Click "Verify" to save and generate a verification code for your new number.
-                </p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-muted-foreground mb-1">
-                    Phone Number
-                  </div>
-                  <div className="text-lg font-semibold">
-                    {(verifiedNumber || whatsappNumbers?.[0])?.phoneNumber}
-                  </div>
-                  {(verifiedNumber || whatsappNumbers?.[0])?.displayName && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {(verifiedNumber || whatsappNumbers?.[0])?.displayName}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {isUpdatingCalendars || updateWhatsAppCalendarsMutation.isPending ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Saving...
+                          </>
+                        ) : (
+                          "Save Calendar Selection"
+                        )}
+                      </Button>
                     </div>
                   )}
                 </div>
-                <div className="text-right">
-                  <div className="text-sm text-muted-foreground mb-1">
-                    Status
-                  </div>
-                  <Badge variant={(verifiedNumber || whatsappNumbers?.[0])?.isVerified ? "default" : "secondary"}>
-                    {(verifiedNumber || whatsappNumbers?.[0])?.isVerified ? "Verified" : "Pending Verification"}
-                  </Badge>
-                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </div>
+      </div>
 
-      {/* WhatsApp Calendar Selection - Only show if verified */}
-      {verifiedNumber?.isVerified && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              WhatsApp Calendar Selection
-            </CardTitle>
-            <CardDescription>
-              Choose which calendars you want to use for creating events via WhatsApp.
-              {calendars.filter((cal: any) => cal.isActive).length > 0 && ` Found ${calendars.filter((cal: any) => cal.isActive).length} active calendar(s).`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {calendarsLoading || preferencesLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-pulse">Loading calendars...</div>
-              </div>
-            ) : calendars.filter((cal: any) => cal.isActive).length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No active calendars found.</p>
-                <p className="text-sm mt-1">Please connect a calendar first.</p>
-                <Link
-                  href="/calendars"
-                  className="text-blue-600 hover:text-blue-700 font-medium mt-2 inline-block"
-                >
-                  Go to Calendar Settings
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  {calendars
-                    .filter((cal: any) => cal.isActive)
-                    .filter((cal: any) => selectedWhatsAppCalendars.includes(cal.id) || true)
-                    .map((calendar: any) => (
-                      <div
-                        key={calendar.id}
-                        className={`flex items-start space-x-3 p-4 rounded-lg border-2 transition-colors cursor-pointer ${
-                          selectedWhatsAppCalendars.includes(calendar.id)
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                        onClick={() => {
-                          if (selectedWhatsAppCalendars.includes(calendar.id)) {
-                            setSelectedWhatsAppCalendars(prev => prev.filter(id => id !== calendar.id));
-                          } else {
-                            setSelectedWhatsAppCalendars(prev => [...prev, calendar.id]);
-                          }
-                        }}
-                      >
-                        <Checkbox
-                          id={`whatsapp-calendar-${calendar.id}`}
-                          checked={selectedWhatsAppCalendars.includes(calendar.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedWhatsAppCalendars(prev => [...prev, calendar.id]);
-                            } else {
-                              setSelectedWhatsAppCalendars(prev => prev.filter(id => id !== calendar.id));
-                            }
-                          }}
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <Label
-                            htmlFor={`whatsapp-calendar-${calendar.id}`}
-                            className="flex items-center gap-2 font-medium cursor-pointer"
-                          >
-                            {calendar.calendarName || calendar.email}
-                            {selectedWhatsAppCalendars.includes(calendar.id) && (
-                              <Check className="h-4 w-4 text-blue-600" />
-                            )}
-                          </Label>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {calendar.email}
-                          </p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {calendar.provider === "google" ? "Google" : "Microsoft"}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
+      {/* Right Side - Promotional Content */}
+      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-8 xl:p-12 relative overflow-hidden">
+        {/* Slogan */}
+        <div className="text-center mb-6 xl:mb-8">
+          <h2 className="text-3xl xl:text-4xl font-bold text-white tracking-wide mb-4">
+            REMIND. ORGANISE. CRACKON.
+          </h2>
+        </div>
 
-                <div className="flex justify-end pt-4 border-t">
-                  <Button
-                    onClick={handleUpdateWhatsAppCalendars}
-                    disabled={
-                      selectedWhatsAppCalendars.length === 0 ||
-                      isUpdatingCalendars ||
-                      updateWhatsAppCalendarsMutation.isPending
-                    }
-                  >
-                    {isUpdatingCalendars || updateWhatsAppCalendarsMutation.isPending ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Saving...
-                      </>
-                    ) : (
-                      "Save Calendar Selection"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+        {/* WhatsApp Phone Image */}
+        <div className="relative mb-6 xl:mb-8 flex justify-center">
+          <Image
+            src="/phone.png"
+            alt="WhatsApp Phone Mockup"
+            width={300}
+            height={600}
+            className="w-auto h-auto max-w-[250px] xl:max-w-[300px] object-contain"
+            priority
+          />
+        </div>
 
-      {/* WhatsApp Verification Section - Only show if not verified */}
-      {!verifiedNumber?.isVerified && (verifiedNumber?.phoneNumber || user?.phone) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Verify Your WhatsApp Number</CardTitle>
-            <CardDescription>
-              {phoneForVerification 
-                ? "A new verification code has been generated. Use it to verify your updated phone number."
-                : "Complete verification to enable WhatsApp calendar management. Click 'Generate New Code' below to start verification."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <WhatsAppVerificationSection 
-              phoneNumber={phoneForVerification || (verifiedNumber?.phoneNumber || user?.phone || "")} 
-              redirectFrom={redirectFrom || "settings"}
-              shouldGenerateCode={!!phoneForVerification} // Only generate new code when phone was explicitly edited
-              alwaysGenerateNewCode={false} // Don't auto-generate - user must click button
-            />
-          </CardContent>
-        </Card>
-      )}
+        {/* Description Text */}
+        <div className="text-center max-w-md px-4">
+          <p className="text-white text-base xl:text-lg leading-relaxed">
+            CrackOn is your smart WhatsApp friend that helps you stay organised without leaving your favourite chat app.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
