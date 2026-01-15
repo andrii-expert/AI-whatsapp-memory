@@ -96,7 +96,7 @@ function PhoneVerificationFlow({
   }
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 px-4 sm:px-6">
       <WhatsAppVerificationSection
         phoneNumber={normalizedPhone}
         alwaysGenerateNewCode={true}
