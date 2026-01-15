@@ -428,13 +428,15 @@ function WhatsAppVerificationPageContent() {
 
         {/* WhatsApp Verification Success Message - Show only when verified */}
         {isVerified && displayPhone && (
-          <div className="mb-8 px-4 sm:px-6 bg-green-50 border border-green-200 rounded-md">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm text-green-800 leading-relaxed">
-                  Congratulations, WhatsApp is now connected.
-                </p>
+          <div className="px-4 sm:px-6">
+            <div className="mb-8 p-4 sm:p-6 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-green-800 leading-relaxed">
+                    Congratulations, WhatsApp is now connected.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
