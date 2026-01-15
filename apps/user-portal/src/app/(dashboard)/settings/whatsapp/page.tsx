@@ -58,13 +58,16 @@ function PhoneVerificationFlow({
   }, [normalizedPhone, userPhone, phoneSaved, isSaving, savePhoneMutation]);
 
   useEffect(() => {
-    const verified = whatsappNumbers.some((num: any) => num.isVerified);
-    // Call onVerified only once, when we first detect verification
+    // Check if the specific phone number is verified
+    const verified = whatsappNumbers.some((num: any) => 
+      num.isVerified && normalizePhoneNumber(num.phoneNumber) === normalizedPhone
+    );
+    // Call onVerified only once, when we first detect verification for this specific number
     if (verified && !hasNotifiedVerified) {
       setHasNotifiedVerified(true);
       onVerified();
     }
-  }, [whatsappNumbers, onVerified, hasNotifiedVerified]);
+  }, [whatsappNumbers, onVerified, hasNotifiedVerified, normalizedPhone]);
 
   // Poll every 3 seconds if not verified
   useEffect(() => {
@@ -112,8 +115,8 @@ function WhatsAppVerificationPageContent() {
   const [isVerified, setIsVerified] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
-  const [isChangingNumber, setIsChangingNumber] = useState(false);
   const [showChangeNumberForm, setShowChangeNumberForm] = useState(false);
+  const [newPhoneNumber, setNewPhoneNumber] = useState<string | null>(null);
 
   // Fetch current user data to get phone number
   const { data: user, isLoading: userLoading, error: userError } = useQuery(
@@ -171,15 +174,39 @@ function WhatsAppVerificationPageContent() {
     }
   }, [user?.phone, whatsappNumbers, phoneNumber]);
 
-  // Check if user has verified WhatsApp
+  // Check if user has verified WhatsApp - only for the current phone number
   useEffect(() => {
-    const verified = whatsappNumbers.some((num: any) => num.isVerified);
+    // If we have a new phone number that was just saved, always require verification
+    if (newPhoneNumber) {
+      const newPhoneNormalized = normalizePhoneNumber(newPhoneNumber);
+      const verified = whatsappNumbers.some((num: any) => 
+        num.isVerified && normalizePhoneNumber(num.phoneNumber) === newPhoneNormalized
+      );
+      setIsVerified(verified);
+      // Always show verification if we have a new phone number that's not verified yet
+      if (!verified) {
+        setShowVerification(true);
+      }
+      return;
+    }
+
+    // Otherwise, check verification for the current phone number
+    const currentPhone = verifiedNumber?.phoneNumber || user?.phone || "";
+    if (!currentPhone) {
+      setIsVerified(false);
+      return;
+    }
+
+    const currentPhoneNormalized = normalizePhoneNumber(currentPhone);
+    const verified = whatsappNumbers.some((num: any) => 
+      num.isVerified && normalizePhoneNumber(num.phoneNumber) === currentPhoneNormalized
+    );
     setIsVerified(verified);
-    // If already verified, hide verification section
+    // If already verified for current number, hide verification section
     if (verified) {
       setShowVerification(false);
     }
-  }, [whatsappNumbers]);
+  }, [whatsappNumbers, verifiedNumber, user?.phone, newPhoneNumber]);
 
   // Save phone number mutation
   const savePhoneMutation = useMutation(
@@ -340,14 +367,33 @@ function WhatsAppVerificationPageContent() {
                     });
                     return;
                   }
+
+                  // Check if the phone number is actually different
+                  const currentPhone = normalizePhoneNumber(displayPhone);
+                  if (normalizedPhone === currentPhone) {
+                    setIsSavingPhone(false);
+                    toast({
+                      title: "No change",
+                      description: "This is already your current phone number.",
+                      variant: "default",
+                    });
+                    setShowChangeNumberForm(false);
+                    return;
+                  }
                   
                   try {
                     await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
+                    // Set the new phone number and reset verification status
+                    setNewPhoneNumber(normalizedPhone);
+                    setIsVerified(false);
                     setShowVerification(true);
                     setShowChangeNumberForm(false);
+                    // Invalidate queries to get fresh data
+                    await queryClient.invalidateQueries({ queryKey: trpc.user.me.queryKey() });
+                    await refetchNumbers();
                     toast({
                       title: "Phone number updated",
-                      description: "Please verify your new number.",
+                      description: "Please verify your new number to continue.",
                       variant: "success",
                     });
                   } catch (error: any) {
@@ -371,7 +417,8 @@ function WhatsAppVerificationPageContent() {
               size="sm"
               onClick={() => {
                 setShowChangeNumberForm(false);
-                setPhoneNumber("");
+                setPhoneNumber(displayPhone);
+                setNewPhoneNumber(null);
               }}
               className="text-sm text-gray-600"
             >
@@ -380,15 +427,26 @@ function WhatsAppVerificationPageContent() {
           </div>
         )}
 
-        {/* WhatsApp Verification - Show after changing number */}
-        {showVerification && phoneNumber && !isVerified && (
+        {/* WhatsApp Verification - Show after changing number or if not verified */}
+        {showVerification && (newPhoneNumber || phoneNumber) && !isVerified && (
           <div className="mb-8">
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 font-medium mb-1">Verification Required</p>
+              <p className="text-xs text-blue-700">
+                {newPhoneNumber 
+                  ? "Your phone number has been updated. Please verify your new number to continue using WhatsApp features."
+                  : "Please verify your phone number to continue using WhatsApp features."}
+              </p>
+            </div>
             <PhoneVerificationFlow
-              phoneNumber={phoneNumber}
+              phoneNumber={newPhoneNumber || phoneNumber}
               userPhone={user?.phone}
               onVerified={() => {
                 setIsVerified(true);
                 setShowVerification(false);
+                setNewPhoneNumber(null);
+                // Invalidate queries to get fresh data
+                queryClient.invalidateQueries({ queryKey: trpc.user.me.queryKey() });
                 refetchNumbers();
                 toast({
                   title: "WhatsApp verified!",
@@ -401,24 +459,46 @@ function WhatsAppVerificationPageContent() {
           </div>
         )}
 
-        {/* Change/Add Number Button */}
-        <div className="flex justify-center">
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (showChangeNumberForm) {
-                setShowChangeNumberForm(false);
-                setPhoneNumber("");
-              } else {
-                setShowChangeNumberForm(true);
+        {/* Show verification prompt if user has unverified number */}
+        {!showVerification && displayPhone && !isVerified && !showChangeNumberForm && (
+          <div className="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800 font-medium mb-1">Verification Required</p>
+            <p className="text-xs text-yellow-700 mb-3">
+              Your phone number is not verified. Please verify it to continue using WhatsApp features.
+            </p>
+            <Button
+              onClick={() => {
+                setShowVerification(true);
                 setPhoneNumber(displayPhone);
-              }
-            }}
-            className="w-full sm:w-auto min-w-[200px] border-gray-300 text-gray-900 hover:bg-gray-50"
-          >
-            {showChangeNumberForm ? "Cancel" : displayPhone ? "Change number" : "Add number"}
-          </Button>
-        </div>
+              }}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white text-sm"
+            >
+              Verify Now
+            </Button>
+          </div>
+        )}
+
+        {/* Change/Add Number Button - Hide if verification is in progress */}
+        {!showVerification && (
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (showChangeNumberForm) {
+                  setShowChangeNumberForm(false);
+                  setPhoneNumber(displayPhone);
+                  setNewPhoneNumber(null);
+                } else {
+                  setShowChangeNumberForm(true);
+                  setPhoneNumber(displayPhone);
+                }
+              }}
+              className="w-full sm:w-auto min-w-[200px] border-gray-300 text-gray-900 hover:bg-gray-50"
+            >
+              {showChangeNumberForm ? "Cancel" : displayPhone ? "Change number" : "Add number"}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
