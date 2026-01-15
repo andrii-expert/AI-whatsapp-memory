@@ -519,85 +519,73 @@ export default function FriendsPage() {
   return (
     <>
     <div className="bg-white">
-      {/* Breadcrumb Navigation */}
-      <div className="hidden lg:flex items-center gap-2 text-sm justify-between px-4 pt-6 pb-4">
-        <div className="flex items-center justify-center gap-2">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Home className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">My Friends</span>
-        </div>
-      </div>
 
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
-        {/* Header */}
-        <div className="px-4 pt-6 pb-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Friends</h1>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setIsInviteModalOpen(true)}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-1.5"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span>Send Invites</span>
-              </Button>
-              <Button
-                onClick={openAddAddressModal}
-                variant="outline"
-                size="sm"
-                className="hidden lg:flex items-center gap-1.5"
-              >
-                <Plus className="h-4 w-4" />
-                Add Contact
-              </Button>
+        <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
+          {/* Header */}
+          <div className="px-4 pt-6 pb-4">
+            <div className="flex items-center justify-between">
+              <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Friends</h1>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setIsInviteModalOpen(true)}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1.5"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  <span>Send Invites</span>
+                </Button>
+                <Button
+                  onClick={openAddAddressModal}
+                  variant="outline"
+                  size="sm"
+                  className="hidden lg:flex items-center gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Contact
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Search and Sort Bar */}
-        <div className="px-4 pb-4">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9B9BA7] pointer-events-none" size={18} />
-              <Input
-                placeholder="Search friends..."
-                value={searchQuery}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setSearchQuery(e.target.value)
-                }
-                className="w-full h-10 sm:h-11 bg-white border border-gray-200 rounded-lg pr-10 pl-4 text-sm"
-              />
+          {/* Search and Sort Bar */}
+          <div className="px-4 pb-4">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9B9BA7] pointer-events-none" size={18} />
+                <Input
+                  placeholder="Search friends..."
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSearchQuery(e.target.value)
+                  }
+                  className="w-full h-10 sm:h-11 bg-white border border-gray-200 rounded-lg pr-10 pl-4 text-sm"
+                />
+              </div>
+              <Select
+                value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
+                onValueChange={(value) => {
+                  const [by, order] = value.split("-") as [
+                    "date" | "alphabetical",
+                    "asc" | "desc"
+                  ];
+                  setSortBy(by);
+                  setSortOrder(order);
+                }}
+              >
+                <SelectTrigger className="w-[140px] h-10 sm:h-11 bg-white border border-gray-200">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alphabetical-asc">A-Z</SelectItem>
+                  <SelectItem value="alphabetical-desc">Z-A</SelectItem>
+                  <SelectItem value="date-desc">Date (Newest)</SelectItem>
+                  <SelectItem value="date-asc">Date (Oldest)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Select
-              value={sortBy && sortOrder ? `${sortBy}-${sortOrder}` : undefined}
-              onValueChange={(value) => {
-                const [by, order] = value.split("-") as [
-                  "date" | "alphabetical",
-                  "asc" | "desc"
-                ];
-                setSortBy(by);
-                setSortOrder(order);
-              }}
-            >
-              <SelectTrigger className="w-[140px] h-10 sm:h-11 bg-white border border-gray-200">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="alphabetical-asc">A-Z</SelectItem>
-                <SelectItem value="alphabetical-desc">Z-A</SelectItem>
-                <SelectItem value="date-desc">Date (Newest)</SelectItem>
-                <SelectItem value="date-asc">Date (Oldest)</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
 
