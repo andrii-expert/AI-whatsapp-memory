@@ -165,6 +165,9 @@ function WhatsAppVerificationPageContent() {
   // Find verified WhatsApp number
   const verifiedNumber = whatsappNumbers?.find((num: any) => num.isVerified) || whatsappNumbers?.[0];
 
+  // Calculate display phone number (must be defined before useEffects that use it)
+  const displayPhone = verifiedNumber?.phoneNumber || user?.phone || "";
+
   // Initialize phone number from user data or verified WhatsApp number
   useEffect(() => {
     if (user?.phone && !phoneNumber) {
@@ -241,7 +244,6 @@ function WhatsAppVerificationPageContent() {
     return cleaned;
   };
 
-  const displayPhone = verifiedNumber?.phoneNumber || user?.phone || "";
   const formattedPhone = formatPhoneForDisplay(displayPhone);
 
   if (isLoading) {
