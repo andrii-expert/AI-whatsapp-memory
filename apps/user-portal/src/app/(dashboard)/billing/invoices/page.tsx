@@ -15,7 +15,7 @@ import {
 } from "@imaginecalendar/ui/table";
 import { Badge } from "@imaginecalendar/ui/badge";
 import { useToast } from "@imaginecalendar/ui/use-toast";
-import { Download, FileText, Loader2, Receipt, Home, ChevronLeft } from "lucide-react";
+import { Download, FileText, Loader2, Receipt, Home, ChevronLeft, CheckCircle2, Clock, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 
@@ -136,65 +136,42 @@ export default function InvoicesPage() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Invoices
-              </CardTitle>
-              <Receipt className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.counts.total}</div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            number={stats.counts.total.toString()}
+            label="Total Invoices"
+            iconBg="#F2FBFF"
+            borderColor="#ECF7FC"
+            blurColor="#C5EEFF"
+            icon={<ReceiptIcon />}
+          />
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Paid
-              </CardTitle>
-              <FileText className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.counts.completed}</div>
-              <p className="text-xs text-muted-foreground">
-                {formatCurrency(stats.amounts.totalPaid, 'ZAR')}
-              </p>
-            </CardContent>
-          </Card>
+          <StatCard
+            number={stats.counts.completed.toString()}
+            label="Paid"
+            iconBg="#FFF7F1"
+            borderColor="#FCF3EC"
+            blurColor="#FFDEC5"
+            icon={<CheckCircleIcon />}
+          />
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Pending
-              </CardTitle>
-              <FileText className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.counts.pending}</div>
-              <p className="text-xs text-muted-foreground">
-                {formatCurrency(stats.amounts.totalPending, 'ZAR')}
-              </p>
-            </CardContent>
-          </Card>
+          <StatCard
+            number={stats.counts.pending.toString()}
+            label="Pending"
+            iconBg="#F2FBFF"
+            borderColor="#ECF7FC"
+            blurColor="#C5EEFF"
+            icon={<ClockIcon />}
+          />
           
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Amount
-              </CardTitle>
-              <Receipt className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {formatCurrency(stats.amounts.totalAmount, 'ZAR')}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Incl. VAT: {formatCurrency(stats.amounts.totalVat, 'ZAR')}
-              </p>
-            </CardContent>
-          </Card>
+          <StatCard
+            number={formatCurrency(stats.amounts.totalAmount, 'ZAR')}
+            label="Total per month"
+            iconBg="#FFF7F1"
+            borderColor="#FCF3EC"
+            blurColor="#FFDEC5"
+            icon={<DollarIcon />}
+          />
         </div>
       )}
 
@@ -313,5 +290,67 @@ export default function InvoicesPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// StatCard component matching dashboard design
+function StatCard({ number, label, iconBg, borderColor, blurColor, icon }: {
+  number: string;
+  label: string;
+  iconBg: string;
+  borderColor: string;
+  blurColor: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div
+      className="relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden"
+      style={{ borderColor }}
+    >
+      <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: blurColor, filter: 'blur(50px)' }} />
+      <div className="relative flex items-start">
+        <div className="flex-1 flex flex-col gap-2">
+          <div className="flex items-center justify-between w-full gap-2">
+            <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
+              {number}
+            </div>
+            <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: iconBg }}>
+              {icon}
+            </div>
+          </div>
+          <div className="text-[12px] font-normal tracking-[-0.48px] text-[#4C4C4C]">
+            {label}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Icon components
+function ReceiptIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 2H13C13.5523 2 14 2.44772 14 3V13C14 13.5523 13.5523 14 13 14H3C2.44772 14 2 13.5523 2 13V3C2 2.44772 2.44772 2 3 2Z" stroke="#4C4C4C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 6H11M5 9H11M5 12H9" stroke="#4C4C4C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function CheckCircleIcon() {
+  return (
+    <CheckCircle2 className="h-4 w-4 text-[#4C4C4C]" />
+  );
+}
+
+function ClockIcon() {
+  return (
+    <Clock className="h-4 w-4 text-[#4C4C4C]" />
+  );
+}
+
+function DollarIcon() {
+  return (
+    <DollarSign className="h-4 w-4 text-[#4C4C4C]" />
   );
 }
