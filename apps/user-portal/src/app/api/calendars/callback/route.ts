@@ -63,8 +63,17 @@ export async function GET(request: NextRequest) {
       }
     }, "[OAUTH_CALLBACK_DEBUG] OAuth callback received with full headers");
 
-    // Extract provider early to determine response type
-    const provider = state?.split(":")[0] as "google" | "microsoft";
+    // Extract provider and check if this is from onboarding
+    const stateParts = state?.split(":") || [];
+    const isFromOnboarding = stateParts[0] === "onboarding";
+    const provider = isFromOnboarding 
+      ? (stateParts[1] as "google" | "microsoft")
+      : (stateParts[0] as "google" | "microsoft");
+    
+    // Determine redirect URL based on whether this is from onboarding
+    const redirectUrl = isFromOnboarding 
+      ? `${hostUrl}/onboarding/calendar`
+      : `${hostUrl}/calendars`;
 
     // Handle OAuth errors
     if (error) {
@@ -220,9 +229,9 @@ export async function GET(request: NextRequest) {
           <script>
             // Set the OAuth callback cookie
             document.cookie = "oauth_callback=${encodeURIComponent(cookieData)}; path=/; max-age=60; samesite=lax${process.env.NODE_ENV === 'production' ? '; secure' : ''}";
-            // Redirect to settings page
+            // Redirect back to onboarding or calendars page
             setTimeout(() => {
-              window.location.href = "${hostUrl}/calendars";
+              window.location.href = "${redirectUrl}";
             }, 100);
           </script>
         </body>
@@ -235,7 +244,7 @@ export async function GET(request: NextRequest) {
       });
     } else {
       // For Google and others, use standard redirect
-      response = NextResponse.redirect(`${hostUrl}/calendars`);
+      response = NextResponse.redirect(redirectUrl);
 
       // Store the OAuth data in a cookie
       response.cookies.set('oauth_callback', JSON.stringify({
@@ -254,7 +263,8 @@ export async function GET(request: NextRequest) {
     // Log response details for debugging
     logger.info({
       provider,
-      redirectingTo: `${hostUrl}/calendars`,
+      isFromOnboarding,
+      redirectingTo: redirectUrl,
       dataStoredInCookie: true,
       usingClientSideRedirect: isMicrosoft,
       responseType: isMicrosoft ? 'html' : 'redirect'
@@ -267,7 +277,13 @@ export async function GET(request: NextRequest) {
     }, "OAuth callback processing failed");
 
     const hostUrl = getHostUrl(request);
-    const response = NextResponse.redirect(`${hostUrl}/calendars`);
+    // Try to determine if this was from onboarding based on state if available
+    const stateParts = request.nextUrl.searchParams.get("state")?.split(":") || [];
+    const isFromOnboarding = stateParts[0] === "onboarding";
+    const errorRedirectUrl = isFromOnboarding 
+      ? `${hostUrl}/onboarding/calendar`
+      : `${hostUrl}/calendars`;
+    const response = NextResponse.redirect(errorRedirectUrl);
 
     response.cookies.set('oauth_error', JSON.stringify({
       error: 'callback_failed'

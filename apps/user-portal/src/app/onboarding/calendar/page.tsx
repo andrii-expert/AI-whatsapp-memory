@@ -40,9 +40,89 @@ function CalendarConnectionForm() {
   const [isCompleting, setIsCompleting] = useState(false);
 
   // Fetch user's calendar connections to check sync status
-  const { data: calendars = [] } = useQuery(
+  const { data: calendars = [], refetch: refetchCalendars } = useQuery(
     trpc.calendar.list.queryOptions()
   );
+
+  // Connect calendar mutation for OAuth callback handling
+  const connectCalendarMutation = useMutation(
+    trpc.calendar.connect.mutationOptions({
+      onSuccess: async () => {
+        toast({
+          title: "Calendar connected",
+          description: "Your calendar has been connected successfully.",
+          variant: "success",
+        });
+        setConnectingProvider(null);
+        // Refetch calendars to update the UI immediately
+        await refetchCalendars();
+      },
+      onError: (error) => {
+        toast({
+          title: "Connection failed",
+          description: error.message || "Failed to connect calendar. Please try again.",
+          variant: "destructive",
+          duration: 3500,
+        });
+        setConnectingProvider(null);
+      },
+    })
+  );
+
+  // Handle OAuth callback from cookies (when redirected back from OAuth provider)
+  useEffect(() => {
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) {
+        const cookieValue = parts.pop()?.split(';').shift();
+        return cookieValue ? decodeURIComponent(cookieValue) : null;
+      }
+      return null;
+    };
+
+    const deleteCookie = (name: string) => {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+    };
+
+    const oauthCallbackCookie = getCookie('oauth_callback');
+    const oauthErrorCookie = getCookie('oauth_error');
+
+    if (oauthErrorCookie) {
+      try {
+        const errorData = JSON.parse(oauthErrorCookie);
+        toast({
+          title: "Authorization failed",
+          description: errorData.error_description || errorData.error || "Failed to authorize calendar",
+          variant: "destructive",
+          duration: 5000,
+        });
+        deleteCookie('oauth_error');
+        setConnectingProvider(null);
+      } catch (e) {
+        deleteCookie('oauth_error');
+        setConnectingProvider(null);
+      }
+      return;
+    }
+
+    if (oauthCallbackCookie && user) {
+      try {
+        const callbackData = JSON.parse(oauthCallbackCookie);
+        const redirectUri = `${window.location.origin}/api/calendars/callback`;
+        connectCalendarMutation.mutate({
+          provider: callbackData.provider,
+          code: callbackData.code,
+          redirectUri,
+        });
+        deleteCookie('oauth_callback');
+      } catch (e) {
+        deleteCookie('oauth_callback');
+        setConnectingProvider(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Check if a calendar provider is connected and synced
   const isCalendarSynced = (provider: "google" | "microsoft") => {
@@ -122,7 +202,8 @@ function CalendarConnectionForm() {
     setConnectingProvider(provider);
 
     try {
-      const state = `${provider}:${user.id}`;
+      // Include "onboarding" flag in state to indicate we're in onboarding flow
+      const state = `onboarding:${provider}:${user.id}`;
       const response = await fetch(`/api/calendars/auth?provider=${provider}&state=${encodeURIComponent(state)}`);
       
       if (!response.ok) {
@@ -141,7 +222,7 @@ function CalendarConnectionForm() {
     }
   };
 
-  const handleCompleteSetup = async () => {
+  const handleNextStep = async () => {
     setIsCompleting(true);
     updateUserMutation.mutate({
       setupStep: 3, // Move to next step: Billing setup
@@ -150,8 +231,17 @@ function CalendarConnectionForm() {
   };
 
   const handleSkip = async () => {
-    await handleCompleteSetup();
+    setIsCompleting(true);
+    updateUserMutation.mutate({
+      setupStep: 3, // Move to next step: Billing setup
+    });
+    setIsCompleting(false);
   };
+
+  // Check if any calendar is connected
+  const hasConnectedCalendar = calendars.some(
+    (cal) => cal.isActive && cal.accessToken
+  );
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
@@ -249,15 +339,24 @@ function CalendarConnectionForm() {
             </div>
           </div>
 
-          {/* Complete Setup Button */}
-          <div className="pt-4">
+          {/* Next Step and Skip Buttons */}
+          <div className="pt-4 space-y-3">
             <Button
               type="button"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-5 text-sm sm:text-base font-medium"
-              onClick={handleCompleteSetup}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-6 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleNextStep}
+              disabled={isCompleting || !hasConnectedCalendar}
+            >
+              {isCompleting ? "Saving..." : "Next Step"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-gray-600 hover:text-gray-900 hover:bg-gray-50 py-3 text-sm font-medium"
+              onClick={handleSkip}
               disabled={isCompleting}
             >
-              {isCompleting ? "Completing..." : "Complete Setup"}
+              Skip
             </Button>
           </div>
         </div>
