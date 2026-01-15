@@ -104,19 +104,20 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header - Centered */}
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-black">Invoices & Payments</h1>
-      </div>
+    <div className="bg-white">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6 p-4 sm:p-6 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] rounded-xl">
+          <h1 className="text-xl font-bold text-gray-900">Invoices & Payments</h1>
+        </div>
 
-      {/* Invoices Section */}
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-black mb-4">Invoices</h2>
-        
-        {/* Stats Cards - 2x2 Grid */}
-        {stats && (
-          <div className="grid grid-cols-2 gap-4">
+        {/* Invoices Section */}
+        <div className="mb-8 px-4 sm:px-6">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Invoices</h2>
+          
+          {/* Stats Cards - 2x2 Grid */}
+          {stats && (
+            <div className="grid grid-cols-2 gap-4 mb-6">
           <StatCard
             number={stats.counts.total.toString()}
             label="Total Invoices"
@@ -152,12 +153,13 @@ export default function InvoicesPage() {
             blurColor="#FFDEC5"
             icon={<DollarIcon />}
           />
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
 
-      {/* Invoices Table */}
-      <Card>
+        {/* Invoices Table */}
+        <div className="px-4 sm:px-6">
+          <Card>
         <CardHeader>
           <CardTitle>Invoice History</CardTitle>
           <CardDescription>
@@ -269,7 +271,9 @@ export default function InvoicesPage() {
             </>
           )}
         </CardContent>
-      </Card>
+        </Card>
+        </div>
+      </div>
     </div>
   );
 }

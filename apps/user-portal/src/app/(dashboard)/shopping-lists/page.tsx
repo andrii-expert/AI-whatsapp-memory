@@ -177,6 +177,7 @@ export default function ShoppingListPage() {
   const foldersRef = useRef<any[]>([]);
   const adContainerRef = useRef<HTMLDivElement>(null);
   const mobileAdContainerRef = useRef<HTMLDivElement>(null);
+  const adsInitializedRef = useRef({ desktop: false, mobile: false });
 
   // Folder states
   const [newFolderName, setNewFolderName] = useState("");
@@ -342,56 +343,86 @@ export default function ShoppingListPage() {
 
   // Initialize Google Ads after script loads
   const initializeGoogleAds = () => {
-    if (typeof window !== "undefined" && (window as any).adsbygoogle) {
-      try {
-        // Initialize desktop ad
-        if (adContainerRef.current) {
-          const adElement = adContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
-          if (adElement && !adElement.dataset.adsbygoogleStatus) {
+    if (typeof window === "undefined" || !(window as any).adsbygoogle) {
+      return;
+    }
+
+    try {
+      // Initialize desktop ad
+      if (adContainerRef.current && !adsInitializedRef.current.desktop) {
+        const adElement = adContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
+        if (adElement) {
+          // Check if already initialized by Google
+          const status = adElement.getAttribute('data-adsbygoogle-status');
+          if (!status) {
             try {
               ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+              adsInitializedRef.current.desktop = true;
             } catch (e) {
               console.error("Error initializing desktop ad:", e);
             }
+          } else {
+            adsInitializedRef.current.desktop = true;
           }
         }
-        // Initialize mobile ad
-        if (mobileAdContainerRef.current) {
-          const mobileAdElement = mobileAdContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
-          if (mobileAdElement && !mobileAdElement.dataset.adsbygoogleStatus) {
+      }
+      
+      // Initialize mobile ad
+      if (mobileAdContainerRef.current && !adsInitializedRef.current.mobile) {
+        const mobileAdElement = mobileAdContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
+        if (mobileAdElement) {
+          // Check if already initialized by Google
+          const status = mobileAdElement.getAttribute('data-adsbygoogle-status');
+          if (!status) {
             try {
               ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+              adsInitializedRef.current.mobile = true;
             } catch (e) {
               console.error("Error initializing mobile ad:", e);
             }
+          } else {
+            adsInitializedRef.current.mobile = true;
           }
         }
-      } catch (e) {
-        console.error("Error initializing Google Ads:", e);
       }
+    } catch (e) {
+      console.error("Error initializing Google Ads:", e);
     }
   };
 
-  // Fallback: Try to initialize ads if script already loaded
+  // Initialize ads when script loads
   useEffect(() => {
-    // Check if script is already loaded
-    if (typeof window !== "undefined" && (window as any).adsbygoogle) {
-      // Small delay to ensure DOM is ready
-      const timer = setTimeout(() => {
-        initializeGoogleAds();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
+    const checkAndInit = () => {
+      if (typeof window !== "undefined" && (window as any).adsbygoogle) {
+        // Wait a bit for DOM to be ready
+        setTimeout(() => {
+          initializeGoogleAds();
+        }, 100);
+      }
+    };
+
+    // Check immediately
+    checkAndInit();
+
+    // Also check periodically in case script loads later
+    const interval = setInterval(() => {
+      if (typeof window !== "undefined" && (window as any).adsbygoogle) {
+        checkAndInit();
+        clearInterval(interval);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
   }, []);
 
-  // Initialize ads when containers are rendered
+  // Re-initialize ads when containers become available or page state changes
   useEffect(() => {
     if (adContainerRef.current || mobileAdContainerRef.current) {
       const timer = setTimeout(() => {
         if (typeof window !== "undefined" && (window as any).adsbygoogle) {
           initializeGoogleAds();
         }
-      }, 1000);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [selectedFolderId, viewAllItems]);
@@ -1401,11 +1432,17 @@ export default function ShoppingListPage() {
     <>
       {/* Google Ads Script */}
       <Script
+        id="adsbygoogle-init"
         async
         src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7722576468912568"
         crossOrigin="anonymous"
-        strategy="lazyOnload"
-        onLoad={initializeGoogleAds}
+        strategy="afterInteractive"
+        onLoad={() => {
+          // Initialize ads after script loads
+          setTimeout(() => {
+            initializeGoogleAds();
+          }, 100);
+        }}
       />
       <div className="min-h-screen bg-white">
         {/* Main Container */}
