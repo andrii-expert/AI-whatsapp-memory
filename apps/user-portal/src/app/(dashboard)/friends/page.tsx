@@ -522,7 +522,7 @@ export default function FriendsPage() {
 
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
-        <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
+        <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] rounded-xl">
           {/* Header */}
           <div className="px-4 pt-6 pb-4">
             <div className="flex items-center justify-between">
