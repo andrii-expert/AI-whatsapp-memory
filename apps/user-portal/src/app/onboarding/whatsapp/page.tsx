@@ -12,7 +12,6 @@ import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
 import { PhoneInput } from "@imaginecalendar/ui/phone-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@imaginecalendar/ui/select";
-import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
@@ -134,7 +133,6 @@ function PhoneVerificationFlow({
 
 function WhatsAppLinkingForm() {
   const router = useRouter();
-  const { toast } = useToast();
   const trpc = useTRPC();
   
   // ALL HOOKS MUST BE CALLED FIRST - before any conditional returns
@@ -262,11 +260,8 @@ function WhatsAppLinkingForm() {
         // Phone saved, verification section will handle the rest
       },
       onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to save phone number",
-          variant: "destructive",
-        });
+        // Error handling without toast
+        console.error("Failed to save phone number:", error);
       },
     })
   );
@@ -275,17 +270,11 @@ function WhatsAppLinkingForm() {
   const updateUserMutation = useMutation(
     trpc.user.update.mutationOptions({
       onSuccess: () => {
-        toast({
-          title: "Settings saved!",
-          description: "Your WhatsApp number and timezone have been saved.",
-        });
+        // Settings saved successfully
       },
       onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to save settings",
-          variant: "destructive",
-        });
+        // Error handling without toast
+        console.error("Failed to save settings:", error);
       },
     })
   );
@@ -306,20 +295,10 @@ function WhatsAppLinkingForm() {
 
   const handleNext = async () => {
     if (!isVerified) {
-      toast({
-        title: "WhatsApp not verified",
-        description: "Please verify your WhatsApp number before continuing.",
-        variant: "destructive",
-      });
       return;
     }
 
     if (!timezone) {
-      toast({
-        title: "Timezone required",
-        description: "Please select your timezone.",
-        variant: "destructive",
-      });
       return;
     }
 
@@ -383,22 +362,12 @@ function WhatsAppLinkingForm() {
                     type="button"
                     onClick={async () => {
                       if (!phoneNumber || !phoneNumber.trim()) {
-                        toast({
-                          title: "Phone number required",
-                          description: "Please enter your phone number first.",
-                          variant: "destructive",
-                        });
                         return;
                       }
 
                       // Validate phone number has at least some digits
                       const digitsOnly = phoneNumber.replace(/\D/g, '');
                       if (digitsOnly.length < 7) {
-                        toast({
-                          title: "Invalid phone number",
-                          description: "Please enter a valid phone number with at least 7 digits.",
-                          variant: "destructive",
-                        });
                         return;
                       }
 
@@ -408,30 +377,14 @@ function WhatsAppLinkingForm() {
                       // Double-check normalized phone is valid
                       if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
                         setIsSavingPhone(false);
-                        toast({
-                          title: "Invalid phone number",
-                          description: "Please enter a valid phone number.",
-                          variant: "destructive",
-                        });
                         return;
                       }
                       
                       try {
                         await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
                         setShowVerification(true);
-                        toast({
-                          title: "Phone number saved",
-                          description: "Now verify your number to continue.",
-                          variant: "success",
-                        });
                       } catch (error: any) {
                         console.error("Error saving phone number:", error);
-                        const errorMessage = error?.message || error?.data?.message || "Failed to save phone number. Please try again.";
-                        toast({
-                          title: "Error",
-                          description: errorMessage,
-                          variant: "destructive",
-                        });
                       } finally {
                         setIsSavingPhone(false);
                       }
@@ -459,11 +412,6 @@ function WhatsAppLinkingForm() {
                   setIsVerified(true);
                   setShowVerification(false); // Hide verification section when verified
                   refetchNumbers();
-                  toast({
-                    title: "WhatsApp verified!",
-                    description: "Your WhatsApp number has been successfully verified. You can continue to the next step.",
-                    variant: "success",
-                  });
                 }}
                 savePhoneMutation={savePhoneMutation}
               />

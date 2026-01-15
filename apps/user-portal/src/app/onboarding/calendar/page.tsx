@@ -8,7 +8,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
-import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Check } from "lucide-react";
 import { useEffect } from "react";
@@ -33,7 +32,6 @@ const MicrosoftIcon = ({ className }: { className?: string }) => (
 
 function CalendarConnectionForm() {
   const router = useRouter();
-  const { toast } = useToast();
   const { user, isLoaded } = useAuth();
   const trpc = useTRPC();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
@@ -48,22 +46,12 @@ function CalendarConnectionForm() {
   const connectCalendarMutation = useMutation(
     trpc.calendar.connect.mutationOptions({
       onSuccess: async () => {
-        toast({
-          title: "Calendar connected",
-          description: "Your calendar has been connected successfully.",
-          variant: "success",
-        });
         setConnectingProvider(null);
         // Refetch calendars to update the UI immediately
         await refetchCalendars();
       },
       onError: (error) => {
-        toast({
-          title: "Connection failed",
-          description: error.message || "Failed to connect calendar. Please try again.",
-          variant: "destructive",
-          duration: 3500,
-        });
+        console.error("Connection failed:", error);
         setConnectingProvider(null);
       },
     })
@@ -91,12 +79,7 @@ function CalendarConnectionForm() {
     if (oauthErrorCookie) {
       try {
         const errorData = JSON.parse(oauthErrorCookie);
-        toast({
-          title: "Authorization failed",
-          description: errorData.error_description || errorData.error || "Failed to authorize calendar",
-          variant: "destructive",
-          duration: 5000,
-        });
+        console.error("Authorization failed:", errorData);
         deleteCookie('oauth_error');
         setConnectingProvider(null);
       } catch (e) {
@@ -134,19 +117,11 @@ function CalendarConnectionForm() {
   const updateUserMutation = useMutation(
     trpc.user.update.mutationOptions({
       onSuccess: () => {
-        toast({
-          title: "Calendar setup complete!",
-          description: "Moving to billing setup...",
-        });
         router.push("/onboarding/billing");
         router.refresh();
       },
       onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update setup step",
-          variant: "destructive",
-        });
+        console.error("Failed to update setup step:", error);
       },
     })
   );
@@ -191,11 +166,6 @@ function CalendarConnectionForm() {
 
   const handleConnectCalendar = async (provider: "google" | "microsoft") => {
     if (!user) {
-      toast({
-        title: "Not authenticated",
-        description: "Please sign in to connect your calendar",
-        variant: "destructive",
-      });
       return;
     }
 
@@ -213,11 +183,7 @@ function CalendarConnectionForm() {
       const { authUrl } = await response.json();
       window.location.href = authUrl;
     } catch (error: any) {
-      toast({
-        title: "Connection failed",
-        description: error.message || "Failed to start calendar connection",
-        variant: "destructive",
-      });
+      console.error("Connection failed:", error);
       setConnectingProvider(null);
     }
   };

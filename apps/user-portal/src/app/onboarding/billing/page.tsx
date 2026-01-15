@@ -15,7 +15,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
-import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Check, Crown, Sparkles, Zap } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
@@ -111,7 +110,6 @@ function formatCurrency(cents: number, currency: Currency, exchangeRates: Record
 
 function BillingOnboardingContent() {
   const router = useRouter();
-  const { toast } = useToast();
   const { user, isLoaded } = useAuth();
   const trpc = useTRPC();
 
@@ -132,11 +130,6 @@ function BillingOnboardingContent() {
   const handleSelectPlan = (planId: string) => {
     // Gold plan is not yet available in onboarding
     if (planId.startsWith("gold")) {
-      toast({
-        title: "Gold plan coming soon",
-        description:
-          "The Gold package will be available soon. Please select the Free or Silver plan for now.",
-      });
       return;
     }
 
@@ -250,11 +243,6 @@ function BillingOnboardingContent() {
       onSuccess: async (result) => {
         // Handle payment redirect for paid plans
         if (result.type === "requiresPayment") {
-          toast({
-            title: "Redirecting to Payment",
-            description: result.message,
-          });
-
           // Create form and submit to payment redirect endpoint
           const form = document.createElement('form');
           form.method = 'POST';
@@ -290,18 +278,10 @@ function BillingOnboardingContent() {
             if (!res.ok) {
               throw new Error(data?.error || "Failed to complete setup");
             }
-            toast({
-              title: "Setup complete!",
-              description: "Your subscription has been created and setup is finished.",
-            });
             // After subscription + onboarding complete, show success screen
             router.push("/onboarding/success");
           } catch (error: any) {
-            toast({
-              title: "Error",
-              description: error.message || "Failed to complete setup",
-              variant: "destructive",
-            });
+            console.error("Failed to complete setup:", error);
           } finally {
             setIsSubscribing(false);
           }
@@ -309,11 +289,7 @@ function BillingOnboardingContent() {
       },
       onError: (error) => {
         setIsSubscribing(false);
-        toast({
-          title: "Subscription error",
-          description: error.message || "Failed to create subscription",
-          variant: "destructive",
-        });
+        console.error("Subscription error:", error);
       },
     })
   );
@@ -328,18 +304,10 @@ function BillingOnboardingContent() {
       if (!res.ok) {
         throw new Error(data?.error || "Failed to complete setup");
       }
-      toast({
-        title: "Setup complete!",
-        description: "You can manage your billing at any time from the dashboard.",
-      });
       // After completing onboarding without changing plan, show success screen
       router.push("/onboarding/success");
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to complete setup",
-        variant: "destructive",
-      });
+      console.error("Failed to complete setup:", error);
     } finally {
       setIsCompleting(false);
     }
@@ -354,11 +322,6 @@ function BillingOnboardingContent() {
     
     const plan = plans.find((p) => p.id === planId);
     if (!plan) {
-      toast({
-        title: "Plan not available",
-        description: "Selected plan is not available. Please try another plan.",
-        variant: "destructive",
-      });
       return;
     }
     
