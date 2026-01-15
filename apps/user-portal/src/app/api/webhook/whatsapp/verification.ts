@@ -75,19 +75,40 @@ export async function handleVerificationMessage(
         ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
         : contactName || 'there';
 
-      // Send welcome message with CTA button
+      // Check if this is a phone number update (user already has completed setup) or new verification (onboarding)
+      const isPhoneNumberUpdate = user?.setupStep === 4; // User has completed onboarding
+      
+      // Check if user has other verified WhatsApp numbers (indicating this is an update)
+      const { getUserWhatsAppNumbers } = await import('@imaginecalendar/database/queries');
+      const existingNumbers = await getUserWhatsAppNumbers(db, verificationResult.userId);
+      const hasOtherVerifiedNumbers = existingNumbers?.some(
+        (num: any) => num.isVerified && num.phoneNumber !== verificationResult.phoneNumber
+      ) || false;
+
+      const isUpdate = isPhoneNumberUpdate || hasOtherVerifiedNumbers;
+
+      // Send appropriate message based on context
       try {
-        // Get the base URL for the redirect button
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://crackon.ai';
-        const finishSetupUrl = `${baseUrl}/onboarding/whatsapp`;
+        let welcomeResponse;
         
-        const welcomeMessage: CTAButtonMessage = {
-          bodyText: `*👋Welcome to CrackOn ${userName}*\n\nYour number is verified and you are one step closer to being more efficient, effective and organised. Tap the button below to complete your setup.`,
-          buttonText: 'Finish setup',
-          buttonUrl: finishSetupUrl,
-        };
-        
-        const welcomeResponse = await whatsappService.sendCTAButtonMessage(phoneNumber, welcomeMessage);
+        if (isUpdate) {
+          // Phone number update - send simple text message without button
+          const updateMessage = `*✅ Phone Number Updated*\n\nHi ${userName}, your new WhatsApp number has been successfully verified and updated. You can now continue using CrackOn with your new number.`;
+          
+          welcomeResponse = await whatsappService.sendTextMessage(phoneNumber, updateMessage);
+        } else {
+          // New verification during onboarding - send welcome message with CTA button
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://crackon.ai';
+          const finishSetupUrl = `${baseUrl}/onboarding/whatsapp`;
+          
+          const welcomeMessage: CTAButtonMessage = {
+            bodyText: `*👋Welcome to CrackOn ${userName}*\n\nYour number is verified and you are one step closer to being more efficient, effective and organised. Tap the button below to complete your setup.`,
+            buttonText: 'Finish setup',
+            buttonUrl: finishSetupUrl,
+          };
+          
+          welcomeResponse = await whatsappService.sendCTAButtonMessage(phoneNumber, welcomeMessage);
+        }
         
         // Log the outgoing message
         try {
@@ -98,7 +119,7 @@ export async function handleVerificationMessage(
             whatsappNumberId: verificationResult.whatsappNumberId,
             userId: verificationResult.userId,
             messageId: welcomeResponse.messages?.[0]?.id,
-            messageType: 'interactive',
+            messageType: isUpdate ? 'text' : 'interactive',
             isFreeMessage,
           });
         } catch (logError) {
@@ -117,8 +138,11 @@ export async function handleVerificationMessage(
             phoneNumber,
             userId: verificationResult.userId,
             messageId: welcomeResponse.messages?.[0]?.id,
+            isUpdate,
           },
-          'Welcome message sent successfully after verification'
+          isUpdate 
+            ? 'Phone number update confirmation message sent successfully'
+            : 'Welcome message sent successfully after verification'
         );
       } catch (welcomeMsgError) {
         const errorDetails = welcomeMsgError instanceof Error 
