@@ -15,9 +15,8 @@ import {
 } from "@imaginecalendar/ui/table";
 import { Badge } from "@imaginecalendar/ui/badge";
 import { useToast } from "@imaginecalendar/ui/use-toast";
-import { Download, FileText, Loader2, Receipt, Home, ChevronLeft, CheckCircle2, Clock, DollarSign } from "lucide-react";
+import { Download, FileText, Loader2, Receipt, CheckCircle2, Clock, DollarSign } from "lucide-react";
 import { format } from "date-fns";
-import Link from "next/link";
 
 export default function InvoicesPage() {
   const trpc = useTRPC();
@@ -106,37 +105,18 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Home className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <Link
-          href="/billing"
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Billing
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <span className="font-medium">Invoices</span>
+      {/* Header - Centered */}
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-black">Invoices & Payments</h1>
       </div>
 
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Payment Invoices</h1>
-        <p className="text-muted-foreground mt-2">
-          View and download your billing invoices and receipts
-        </p>
-      </div>
-
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Invoices Section */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-black mb-4">Invoices</h2>
+        
+        {/* Stats Cards - 2x2 Grid */}
+        {stats && (
+          <div className="grid grid-cols-2 gap-4">
           <StatCard
             number={stats.counts.total.toString()}
             label="Total Invoices"
@@ -172,8 +152,9 @@ export default function InvoicesPage() {
             blurColor="#FFDEC5"
             icon={<DollarIcon />}
           />
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       {/* Invoices Table */}
       <Card>
