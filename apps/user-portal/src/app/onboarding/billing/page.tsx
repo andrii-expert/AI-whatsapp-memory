@@ -342,10 +342,10 @@ function BillingOnboardingContent() {
       <div className="w-full lg:w-1/2 flex items-center justify-center px-4 sm:px-8 py-10">
         <div className="w-full max-w-md space-y-8">
           {/* Title */}
-          <div className="flex flex-col items-center justify-center">
-            <div className="flex flex-col items-start sm:items-start justify-between gap-4 mb-4">
+          <div>
+            <div className="flex flex-col items-center justify-between gap-4 mb-4">
               <div className="flex-1 w-full sm:w-auto">
-                <p className="text-md font-medium tracking-wide text-gray-400 mb-1 text-center sm:text-left">
+                <p className="text-md font-medium tracking-wide text-gray-400 mb-1 text-center">
                   Step 4 of 4
                 </p>
                 <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center sm:text-left">Billing and Subscription</h1>
@@ -357,7 +357,7 @@ function BillingOnboardingContent() {
           </div>
 
           {/* Billing cycle toggle */}
-          <div className="flex items-center justify-between bg-gray-100 rounded-full p-1 w-full max-w-xs">
+          <div className="w-full flex items-center justify-between bg-gray-100 rounded-full p-1 w-full">
             <button
               type="button"
               onClick={() => setIsAnnual(false)}
@@ -386,17 +386,7 @@ function BillingOnboardingContent() {
           </div>
 
                         {/* Currency Selector */}
-                        <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-center sm:items-end">
-                <div className="flex items-center justify-center sm:justify-end gap-2 mb-2">
-                  {isLoadingRates && (
-                    <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
-                  )}
-                  {ratesLastUpdated && !isLoadingRates && exchangeRates && (
-                    <p className="text-xs text-gray-400">
-                      Updated {format(ratesLastUpdated, 'HH:mm')}
-                    </p>
-                  )}
-                </div>
+              <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-center sm:items-end">
                 <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue />
