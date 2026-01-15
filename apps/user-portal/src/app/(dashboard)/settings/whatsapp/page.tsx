@@ -281,9 +281,9 @@ function WhatsAppVerificationPageContent() {
 
   return (
     <div className="bg-white">
-      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+      <div className="max-w-2xl mx-auto">
         {/* Header with Back Button */}
-        <div className="flex items-center gap-3 mb-6 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] rounded-xl">
+        <div className="flex items-center gap-3 mb-6 p-4 sm:p-6 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] rounded-xl">
           {/* <Button
             variant="ghost"
             size="icon"
@@ -296,12 +296,12 @@ function WhatsAppVerificationPageContent() {
         </div>
 
         {/* Description */}
-        <p className="text-sm text-gray-600 mb-8">
+        <p className="text-sm text-gray-600 mb-8 p-4 sm:p-6">
           Manage your WhatsApp connection and verify your phone number
         </p>
 
         {/* WhatsApp Number Section */}
-        <div className="mb-8">
+        <div className="mb-8 p-4 sm:p-6">
           <h2 className="text-base font-semibold text-gray-900 mb-3">WhatsApp Number</h2>
           {displayPhone ? (
             <div className="relative">
@@ -324,7 +324,7 @@ function WhatsAppVerificationPageContent() {
 
         {/* Change Number Form - Show when clicking Change number button */}
         {showChangeNumberForm && !showVerification && (
-          <div className="mb-8">
+          <div className="mb-8 p-4 sm:p-6">
             <Label htmlFor="new-phone" className="text-sm font-medium text-gray-700 mb-2 block">
               WhatsApp Number
             </Label>
@@ -428,7 +428,7 @@ function WhatsAppVerificationPageContent() {
 
         {/* WhatsApp Verification Success Message - Show only when verified */}
         {isVerified && displayPhone && (
-          <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded-md">
+          <div className="mb-8 p-4 sm:p-6 bg-green-50 border border-green-200 rounded-md">
             <div className="flex items-start gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
