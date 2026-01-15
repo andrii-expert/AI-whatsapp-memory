@@ -1,23 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import Image from "next/image";
-import { Home, ChevronLeft, CheckCircle2, Edit2, X, Check, Calendar } from "lucide-react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { WhatsAppVerificationSection } from "@/components/whatsapp-verification-section";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTRPC } from "@/trpc/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
 import { Button } from "@imaginecalendar/ui/button";
-import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
 import { Badge } from "@imaginecalendar/ui/badge";
 import { PhoneInput } from "@imaginecalendar/ui/phone-input";
-import { Checkbox } from "@imaginecalendar/ui/checkbox";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
-import { cn } from "@imaginecalendar/ui/cn";
 
 // Component to handle phone saving and verification flow
 function PhoneVerificationFlow({
@@ -118,6 +112,8 @@ function WhatsAppVerificationPageContent() {
   const [isVerified, setIsVerified] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
+  const [isChangingNumber, setIsChangingNumber] = useState(false);
+  const [showChangeNumberForm, setShowChangeNumberForm] = useState(false);
 
   // Fetch current user data to get phone number
   const { data: user, isLoading: userLoading, error: userError } = useQuery(
@@ -185,74 +181,6 @@ function WhatsAppVerificationPageContent() {
     }
   }, [whatsappNumbers]);
 
-  // Fetch connected calendars
-  const { data: calendars = [], isLoading: calendarsLoading } = useQuery(
-    trpc.calendar.list.queryOptions()
-  );
-
-  // Fetch user preferences for WhatsApp calendar selection
-  const { data: preferences, isLoading: preferencesLoading } = useQuery(
-    trpc.preferences.get.queryOptions()
-  );
-
-  // WhatsApp calendar selection state
-  const [selectedWhatsAppCalendars, setSelectedWhatsAppCalendars] = useState<string[]>([]);
-  const [isUpdatingCalendars, setIsUpdatingCalendars] = useState(false);
-
-  // Update selected calendars when preferences load
-  React.useEffect(() => {
-    if (preferences && preferences.whatsappCalendarIds && Array.isArray(preferences.whatsappCalendarIds) && preferences.whatsappCalendarIds.length > 0) {
-      setSelectedWhatsAppCalendars(preferences.whatsappCalendarIds as string[]);
-    } else {
-      // Default to all active calendars if none selected
-      const activeCalendars = calendars.filter((cal: any) => cal.isActive);
-      setSelectedWhatsAppCalendars(activeCalendars.map(cal => cal.id));
-    }
-  }, [preferences, calendars]);
-
-  // Update WhatsApp calendar selection
-  const updateWhatsAppCalendarsMutation = useMutation(
-    trpc.preferences.update.mutationOptions({
-      onSuccess: () => {
-        toast({
-          title: "Calendars updated",
-          description: `Selected ${selectedWhatsAppCalendars.length} calendar${selectedWhatsAppCalendars.length === 1 ? '' : 's'} for WhatsApp events.`,
-          variant: "success",
-        });
-        setIsUpdatingCalendars(false);
-        queryClient.invalidateQueries({ queryKey: trpc.preferences.get.queryKey() });
-      },
-      onError: (error) => {
-        toast({
-          title: "Update failed",
-          description: error.message || "Failed to update calendar selection.",
-          variant: "error",
-          duration: 3500,
-        });
-        setIsUpdatingCalendars(false);
-      },
-    })
-  );
-
-  const handleUpdateWhatsAppCalendars = () => {
-    if (selectedWhatsAppCalendars.length === 0) {
-      toast({
-        title: "No calendars selected",
-        description: "Please select at least one calendar for WhatsApp events.",
-        variant: "error",
-        duration: 3500,
-      });
-      return;
-    }
-
-    setIsUpdatingCalendars(true);
-    updateWhatsAppCalendarsMutation.mutate({
-      reminders: {
-        whatsappCalendarIds: selectedWhatsAppCalendars,
-      },
-    });
-  };
-
   // Save phone number mutation
   const savePhoneMutation = useMutation(
     trpc.user.update.mutationOptions({
@@ -266,6 +194,26 @@ function WhatsAppVerificationPageContent() {
     })
   );
 
+  // Format phone number for display (e.g., +27-825648508)
+  const formatPhoneForDisplay = (phone: string) => {
+    if (!phone) return "";
+    // Remove all non-digit characters except +
+    const cleaned = phone.replace(/[^\d+]/g, "");
+    // Format as +XX-XXXXXXXXX (country code + rest)
+    if (cleaned.startsWith("+")) {
+      const countryCode = cleaned.match(/^\+\d{1,3}/)?.[0] || "";
+      const rest = cleaned.slice(countryCode.length);
+      if (rest.length > 0) {
+        return `${countryCode}-${rest}`;
+      }
+      return countryCode;
+    }
+    return cleaned;
+  };
+
+  const displayPhone = verifiedNumber?.phoneNumber || user?.phone || "";
+  const formattedPhone = formatPhoneForDisplay(displayPhone);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -276,298 +224,200 @@ function WhatsAppVerificationPageContent() {
 
   if (hasError) {
     return (
-      <div className="flex min-h-screen flex-col lg:flex-row">
-        <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
-          <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
-            <div className="text-center">
-              <p className="text-destructive mb-4">
-                {userError ? "Failed to load user data." : "Failed to load WhatsApp numbers."}
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (userError) {
-                    queryClient.invalidateQueries({ queryKey: trpc.user.me.queryKey() });
-                  }
-                  if (numbersError) {
-                    refetchNumbers();
-                  }
-                }}
-              >
-                Try Again
-              </Button>
-            </div>
-          </div>
-        </div>
-        <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-8 xl:p-12 relative overflow-hidden">
-          <div className="text-center mb-6 xl:mb-8">
-            <h2 className="text-3xl xl:text-4xl font-bold text-white tracking-wide mb-4">
-              REMIND. ORGANISE. CRACKON.
-            </h2>
-          </div>
-          <div className="relative mb-6 xl:mb-8 flex justify-center">
-            <Image
-              src="/phone.png"
-              alt="WhatsApp Phone Mockup"
-              width={300}
-              height={600}
-              className="w-auto h-auto max-w-[250px] xl:max-w-[300px] object-contain"
-              priority
-            />
-          </div>
-          <div className="text-center max-w-md px-4">
-            <p className="text-white text-base xl:text-lg leading-relaxed">
-              CrackOn is your smart WhatsApp friend that helps you stay organised without leaving your favourite chat app.
-            </p>
-          </div>
+      <div className="min-h-screen bg-white p-4 sm:p-6">
+        <div className="max-w-2xl mx-auto">
+          <p className="text-destructive mb-4">
+            {userError ? "Failed to load user data." : "Failed to load WhatsApp numbers."}
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (userError) {
+                queryClient.invalidateQueries({ queryKey: trpc.user.me.queryKey() });
+              }
+              if (numbersError) {
+                refetchNumbers();
+              }
+            }}
+          >
+            Try Again
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
-      {/* Left Side - Form */}
-      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
-        <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
-          {/* Title */}
-          <div className="text-center">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 sm:mb-3">Link WhatsApp</h1>
-            <p className="text-gray-600 text-md leading-relaxed mb-3">
-              Maximise CrackOn and all its features, link and verify your WhatsApp number below
-            </p>
-          </div>
+    <div className="min-h-screen bg-white">
+      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+        {/* Header with Back Button */}
+        <div className="flex items-center gap-3 mb-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.back()}
+            className="h-10 w-10 rounded-lg bg-gray-100 hover:bg-gray-200"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-xl font-bold text-gray-900">WhatsApp settings</h1>
+        </div>
 
-          {/* Form */}
-          <div className="space-y-4 sm:space-y-6">
-            {/* Phone Number Input - Hide when verified */}
-            {!isVerified && (
-              <div>
-                <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
-                  WhatsApp Number
-                </Label>
-                <div className="flex gap-2 relative">
-                  <div className="flex-1">
-                    <PhoneInput
-                      id="phone"
-                      value={phoneNumber}
-                      onChange={(value) => {
-                        setPhoneNumber(value);
-                        setShowVerification(false);
-                      }}
-                      className="w-full"
-                      disabled={isVerified}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={async () => {
-                      if (!phoneNumber || !phoneNumber.trim()) {
-                        return;
-                      }
+        {/* Description */}
+        <p className="text-sm text-gray-600 mb-8">
+          Manage your WhatsApp connection and verify your phone number
+        </p>
 
-                      // Validate phone number has at least some digits
-                      const digitsOnly = phoneNumber.replace(/\D/g, '');
-                      if (digitsOnly.length < 7) {
-                        return;
-                      }
-
-                      setIsSavingPhone(true);
-                      const normalizedPhone = normalizePhoneNumber(phoneNumber);
-                      
-                      // Double-check normalized phone is valid
-                      if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
-                        setIsSavingPhone(false);
-                        return;
-                      }
-                      
-                      try {
-                        await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
-                        setShowVerification(true);
-                      } catch (error: any) {
-                        console.error("Error saving phone number:", error);
-                      } finally {
-                        setIsSavingPhone(false);
-                      }
-                    }}
-                    disabled={!phoneNumber || isSavingPhone || isVerified}
-                    className={cn(
-                      "whitespace-nowrap h-8 px-4 sm:px-8 absolute right-[2px] top-[7px]",
-                      isVerified 
-                        ? "bg-green-600 hover:bg-green-700 text-white cursor-default" 
-                        : "bg-blue-600 hover:bg-blue-700 text-white"
-                    )}
-                  >
-                    {isSavingPhone ? "Saving..." : isVerified ? "Verified" : "Get code"}
-                  </Button>
-                </div>
+        {/* WhatsApp Number Section */}
+        <div className="mb-8">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">WhatsApp Number</h2>
+          {displayPhone ? (
+            <div className="relative">
+              <div className="flex items-center justify-between px-4 py-3 border border-gray-200 rounded-lg bg-white">
+                <span className="text-base text-gray-900">{formattedPhone}</span>
+                {isVerified && (
+                  <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1.5 px-2.5 py-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">Verified</span>
+                  </Badge>
+                )}
               </div>
-            )}
+            </div>
+          ) : (
+            <div className="px-4 py-3 border border-gray-200 rounded-lg bg-gray-50">
+              <span className="text-base text-gray-400">No phone number added</span>
+            </div>
+          )}
+        </div>
 
-            {/* WhatsApp Verification - Show after clicking Get code button, but hide when verified */}
-            {showVerification && phoneNumber && !isVerified && (
-              <PhoneVerificationFlow
-                phoneNumber={phoneNumber}
-                userPhone={user?.phone}
-                onVerified={() => {
-                  setIsVerified(true);
-                  setShowVerification(false); // Hide verification section when verified
-                  refetchNumbers();
+        {/* Change Number Form - Show when clicking Change number button */}
+        {showChangeNumberForm && (
+          <div className="mb-8 p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <Label htmlFor="new-phone" className="text-sm font-medium text-gray-700 mb-2 block">
+              New WhatsApp Number
+            </Label>
+            <div className="flex gap-2 mb-3">
+              <PhoneInput
+                id="new-phone"
+                value={phoneNumber}
+                onChange={(value) => {
+                  setPhoneNumber(value);
+                  setShowVerification(false);
                 }}
-                savePhoneMutation={savePhoneMutation}
+                className="flex-1"
               />
-            )}
+              <Button
+                type="button"
+                onClick={async () => {
+                  if (!phoneNumber || !phoneNumber.trim()) {
+                    toast({
+                      title: "Phone number required",
+                      description: "Please enter your phone number first.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
 
-            {/* WhatsApp Verification Success Message - Show only when verified */}
-            {isVerified && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm text-green-800 leading-relaxed">
-                      Congratulations, WhatsApp is now connected.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+                  const digitsOnly = phoneNumber.replace(/\D/g, '');
+                  if (digitsOnly.length < 7) {
+                    toast({
+                      title: "Invalid phone number",
+                      description: "Please enter a valid phone number.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
 
-            {/* WhatsApp Calendar Selection - Only show when verified */}
-            {isVerified && (
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                    WhatsApp Calendar Selection
-                  </Label>
-                  <p className="text-xs text-gray-600 mb-3">
-                    Choose which calendars you want to use for creating events via WhatsApp.
-                  </p>
-                  {calendarsLoading || preferencesLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="animate-pulse text-sm text-gray-500">Loading calendars...</div>
-                    </div>
-                  ) : calendars.filter((cal: any) => cal.isActive).length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground border border-gray-200 rounded-lg">
-                      <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No active calendars found.</p>
-                      <p className="text-xs mt-1">Please connect a calendar first.</p>
-                      <Link
-                        href="/calendars"
-                        className="text-blue-600 hover:text-blue-700 font-medium mt-2 inline-block text-sm"
-                      >
-                        Go to Calendar Settings
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {calendars
-                        .filter((cal: any) => cal.isActive)
-                        .map((calendar: any) => (
-                          <div
-                            key={calendar.id}
-                            className={`flex items-start space-x-3 p-3 rounded-lg border-2 transition-colors cursor-pointer ${
-                              selectedWhatsAppCalendars.includes(calendar.id)
-                                ? "border-blue-500 bg-blue-50"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                            onClick={() => {
-                              if (selectedWhatsAppCalendars.includes(calendar.id)) {
-                                setSelectedWhatsAppCalendars(prev => prev.filter(id => id !== calendar.id));
-                              } else {
-                                setSelectedWhatsAppCalendars(prev => [...prev, calendar.id]);
-                              }
-                            }}
-                          >
-                            <Checkbox
-                              id={`whatsapp-calendar-${calendar.id}`}
-                              checked={selectedWhatsAppCalendars.includes(calendar.id)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedWhatsAppCalendars(prev => [...prev, calendar.id]);
-                                } else {
-                                  setSelectedWhatsAppCalendars(prev => prev.filter(id => id !== calendar.id));
-                                }
-                              }}
-                              className="mt-1"
-                            />
-                            <div className="flex-1">
-                              <Label
-                                htmlFor={`whatsapp-calendar-${calendar.id}`}
-                                className="flex items-center gap-2 font-medium cursor-pointer text-sm"
-                              >
-                                {calendar.calendarName || calendar.email}
-                                {selectedWhatsAppCalendars.includes(calendar.id) && (
-                                  <Check className="h-4 w-4 text-blue-600" />
-                                )}
-                              </Label>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {calendar.email}
-                              </p>
-                              <div className="flex items-center gap-2 mt-2">
-                                <Badge variant="secondary" className="text-xs">
-                                  {calendar.provider === "google" ? "Google" : "Microsoft"}
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                  {calendars.filter((cal: any) => cal.isActive).length > 0 && (
-                    <div className="flex justify-end pt-4 border-t">
-                      <Button
-                        onClick={handleUpdateWhatsAppCalendars}
-                        disabled={
-                          selectedWhatsAppCalendars.length === 0 ||
-                          isUpdatingCalendars ||
-                          updateWhatsAppCalendarsMutation.isPending
-                        }
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                      >
-                        {isUpdatingCalendars || updateWhatsAppCalendarsMutation.isPending ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Saving...
-                          </>
-                        ) : (
-                          "Save Calendar Selection"
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+                  setIsSavingPhone(true);
+                  const normalizedPhone = normalizePhoneNumber(phoneNumber);
+                  
+                  if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
+                    setIsSavingPhone(false);
+                    toast({
+                      title: "Invalid phone number",
+                      description: "Please enter a valid phone number.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  
+                  try {
+                    await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
+                    setShowVerification(true);
+                    setShowChangeNumberForm(false);
+                    toast({
+                      title: "Phone number updated",
+                      description: "Please verify your new number.",
+                      variant: "success",
+                    });
+                  } catch (error: any) {
+                    toast({
+                      title: "Error",
+                      description: error?.message || "Failed to update phone number",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setIsSavingPhone(false);
+                  }
+                }}
+                disabled={!phoneNumber || isSavingPhone}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isSavingPhone ? "Saving..." : "Save"}
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowChangeNumberForm(false);
+                setPhoneNumber("");
+              }}
+              className="text-sm text-gray-600"
+            >
+              Cancel
+            </Button>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Right Side - Promotional Content */}
-      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 flex-col items-center justify-center p-8 xl:p-12 relative overflow-hidden">
-        {/* Slogan */}
-        <div className="text-center mb-6 xl:mb-8">
-          <h2 className="text-3xl xl:text-4xl font-bold text-white tracking-wide mb-4">
-            REMIND. ORGANISE. CRACKON.
-          </h2>
-        </div>
+        {/* WhatsApp Verification - Show after changing number */}
+        {showVerification && phoneNumber && !isVerified && (
+          <div className="mb-8">
+            <PhoneVerificationFlow
+              phoneNumber={phoneNumber}
+              userPhone={user?.phone}
+              onVerified={() => {
+                setIsVerified(true);
+                setShowVerification(false);
+                refetchNumbers();
+                toast({
+                  title: "WhatsApp verified!",
+                  description: "Your WhatsApp number has been successfully verified.",
+                  variant: "success",
+                });
+              }}
+              savePhoneMutation={savePhoneMutation}
+            />
+          </div>
+        )}
 
-        {/* WhatsApp Phone Image */}
-        <div className="relative mb-6 xl:mb-8 flex justify-center">
-          <Image
-            src="/phone.png"
-            alt="WhatsApp Phone Mockup"
-            width={300}
-            height={600}
-            className="w-auto h-auto max-w-[250px] xl:max-w-[300px] object-contain"
-            priority
-          />
-        </div>
-
-        {/* Description Text */}
-        <div className="text-center max-w-md px-4">
-          <p className="text-white text-base xl:text-lg leading-relaxed">
-            CrackOn is your smart WhatsApp friend that helps you stay organised without leaving your favourite chat app.
-          </p>
+        {/* Change/Add Number Button */}
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (showChangeNumberForm) {
+                setShowChangeNumberForm(false);
+                setPhoneNumber("");
+              } else {
+                setShowChangeNumberForm(true);
+                setPhoneNumber(displayPhone);
+              }
+            }}
+            className="w-full sm:w-auto min-w-[200px] border-gray-300 text-gray-900 hover:bg-gray-50"
+          >
+            {showChangeNumberForm ? "Cancel" : displayPhone ? "Change number" : "Add number"}
+          </Button>
         </div>
       </div>
     </div>
