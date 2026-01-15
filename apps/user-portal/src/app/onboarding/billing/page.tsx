@@ -342,7 +342,7 @@ function BillingOnboardingContent() {
       <div className="w-full lg:w-1/2 flex items-center justify-center px-4 sm:px-8 py-10">
         <div className="w-full max-w-md space-y-8">
           {/* Title */}
-          <div>
+          <div className="flex flex-col items-center justify-center">
             <div className="flex flex-col items-start sm:items-start justify-between gap-4 mb-4">
               <div className="flex-1 w-full sm:w-auto">
                 <p className="text-md font-medium tracking-wide text-gray-400 mb-1 text-center sm:text-left">
