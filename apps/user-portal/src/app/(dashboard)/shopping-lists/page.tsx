@@ -348,14 +348,22 @@ export default function ShoppingListPage() {
         if (adContainerRef.current) {
           const adElement = adContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
           if (adElement && !adElement.dataset.adsbygoogleStatus) {
-            ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+            try {
+              ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+            } catch (e) {
+              console.error("Error initializing desktop ad:", e);
+            }
           }
         }
         // Initialize mobile ad
         if (mobileAdContainerRef.current) {
           const mobileAdElement = mobileAdContainerRef.current.querySelector('.adsbygoogle') as HTMLElement;
           if (mobileAdElement && !mobileAdElement.dataset.adsbygoogleStatus) {
-            ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+            try {
+              ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+            } catch (e) {
+              console.error("Error initializing mobile ad:", e);
+            }
           }
         }
       } catch (e) {
@@ -366,15 +374,27 @@ export default function ShoppingListPage() {
 
   // Fallback: Try to initialize ads if script already loaded
   useEffect(() => {
-    // Small delay to ensure DOM is ready
-    const timer = setTimeout(() => {
-      if (typeof window !== "undefined" && (window as any).adsbygoogle) {
+    // Check if script is already loaded
+    if (typeof window !== "undefined" && (window as any).adsbygoogle) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
         initializeGoogleAds();
-      }
-    }, 100);
-
-    return () => clearTimeout(timer);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
   }, []);
+
+  // Initialize ads when containers are rendered
+  useEffect(() => {
+    if (adContainerRef.current || mobileAdContainerRef.current) {
+      const timer = setTimeout(() => {
+        if (typeof window !== "undefined" && (window as any).adsbygoogle) {
+          initializeGoogleAds();
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedFolderId, viewAllItems]);
 
   // Get selected folder
   const selectedFolder = useMemo(() => {
@@ -1744,7 +1764,7 @@ export default function ShoppingListPage() {
                           height: '250px'
                         }}
                         data-ad-client="ca-pub-7722576468912568"
-                        data-ad-slot="XXXXXXXXXX"
+                        data-ad-slot="9168461239"
                         data-ad-format="auto"
                         data-full-width-responsive="true"
                       />
@@ -2525,8 +2545,9 @@ export default function ShoppingListPage() {
                     height: '600px'
                   }}
                   data-ad-client="ca-pub-7722576468912568"
-                  data-ad-slot="XXXXXXXXXX"
-                  data-ad-format="rectangle"
+                  data-ad-slot="9168461239"
+                  data-ad-format="auto"
+                  data-full-width-responsive="true"
                 />
               </div>
             </div>
