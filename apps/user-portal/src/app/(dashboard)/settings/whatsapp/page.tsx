@@ -444,6 +444,7 @@ function WhatsAppVerificationPageContent() {
 
         {/* Change/Add Number Button */}
         {!showVerification && (
+          <div className="px-4 sm:px-6">
           <div className="flex justify-center">
             <Button
               variant="outline"
@@ -460,7 +461,8 @@ function WhatsAppVerificationPageContent() {
               className="w-full sm:w-auto min-w-[200px] border-gray-300 text-gray-900 hover:bg-gray-50 hover:text-gray-900 font-normal hover:font-semibold transition-all"
             >
               {showChangeNumberForm ? "Cancel" : displayPhone ? "Change number" : "Add number"}
-            </Button>
+              </Button>
+            </div>
           </div>
         )}
       </div>
