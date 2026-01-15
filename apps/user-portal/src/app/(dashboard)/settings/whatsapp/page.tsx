@@ -455,7 +455,7 @@ function WhatsAppVerificationPageContent() {
                   setPhoneNumber(displayPhone);
                 }
               }}
-              className="w-full sm:w-auto min-w-[200px] border-gray-300 text-gray-900 hover:bg-gray-50"
+              className="w-full sm:w-auto min-w-[200px] border-gray-300 text-gray-900 hover:bg-gray-50 hover:text-gray-900 font-normal hover:font-semibold transition-all"
             >
               {showChangeNumberForm ? "Cancel" : displayPhone ? "Change number" : "Add number"}
             </Button>
