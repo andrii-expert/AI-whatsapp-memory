@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
 import { verifyToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
-import { getVerifiedWhatsappNumberByPhone, getUserWhatsAppNumbers, logOutgoingWhatsAppMessage, updateUser } from "@imaginecalendar/database/queries";
-import { WhatsAppService } from "@imaginecalendar/whatsapp";
+import { getVerifiedWhatsappNumberByPhone, getUserById, getUserWhatsAppNumbers, logOutgoingWhatsAppMessage, updateUser } from "@imaginecalendar/database/queries";
+import { WhatsAppService, type CTAButtonMessage } from "@imaginecalendar/whatsapp";
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,16 +38,32 @@ export async function POST(req: NextRequest) {
     if (verifiedNumber) {
       try {
         const whatsappService = new WhatsAppService();
-        const message = `🎉 *Setup Complete!*\n\nWelcome to CrackOn! Your account has been successfully set up.\n\nYou can now:\n• Manage your calendar events\n• Set reminders\n• Create tasks and notes\n• And much more!\n\nWe're excited to have you on board. If you need any help, just send us a message!`;
+        
+        // Get user details for personalization
+        const user = await getUserById(db, decoded.userId);
+        const userName = user?.firstName 
+          ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
+          : 'there';
+        
+        // Get the base URL for the dashboard button
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://crackon.ai';
+        const dashboardUrl = `${baseUrl}/dashboard`;
+        
+        // Create completion message with CTA button
+        const completionMessage: CTAButtonMessage = {
+          bodyText: `Boom 💥 You are all setup, ${userName}\n\nThis chat is now your command center. Voice note or type here to create meetings, reminders (once-off or recurring), shopping lists, and more. No forms. No buttons. Just talk:\n\nTry this now in the chat:\n"Add milk to my list"\n"Show my shopping list"\n"Remind me in 5 minutes to go shopping"\n\nEasy, right? Now CrackOn 🚀`,
+          buttonText: 'Dashboard',
+          buttonUrl: dashboardUrl,
+        };
 
-        await whatsappService.sendTextMessage(verifiedNumber.phoneNumber, message);
+        await whatsappService.sendCTAButtonMessage(verifiedNumber.phoneNumber, completionMessage);
 
         // Log the message
         await logOutgoingWhatsAppMessage(db, {
           whatsappNumberId: verifiedNumber.id,
           userId: decoded.userId,
-          messageType: 'text',
-          messageContent: message,
+          messageType: 'interactive',
+          messageContent: completionMessage.bodyText,
           isFreeMessage: true,
         });
 
