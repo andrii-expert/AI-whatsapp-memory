@@ -13,28 +13,8 @@ const navigationItems = [
   { name: "Friends", href: "/friends", icon: Users },
 ];
 
-// Pages where the bottom nav should be shown
-const pagesWithBottomNav = [
-  "/dashboard",
-  "/calendars",
-  "/notes",
-  "/reminders",
-  "/shopping-lists",
-  "/tasks",
-  "/friends",
-];
-
 export function MobileBottomNav() {
   const pathname = usePathname();
-
-  // Check if current page should show bottom nav
-  const shouldShow = pagesWithBottomNav.some(
-    (page) => pathname === page || pathname.startsWith(page + "/")
-  );
-
-  if (!shouldShow) {
-    return null;
-  }
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white md:hidden shadow-lg border-t border-gray-200">
