@@ -42,7 +42,7 @@ import {
   CommandItem,
   CommandList,
 } from "@imaginecalendar/ui/command";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, CheckCircle2 } from "lucide-react";
 
 // Component to handle phone saving and verification flow
 function PhoneVerificationFlow({
@@ -467,11 +467,29 @@ function WhatsAppLinkingForm() {
               />
             )}
 
-            {/* Timezone Selection */}
-            <div>
-              <Label htmlFor="timezone" className="text-sm font-medium text-gray-700 mb-2 block">
-                Timezone
-              </Label>
+            {/* WhatsApp Verification Success Message - Show only when verified */}
+            {isVerified && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-green-900 mb-1">
+                      WhatsApp Successfully Connected
+                    </h3>
+                    <p className="text-sm text-green-800 leading-relaxed">
+                      Your WhatsApp number has been successfully connected with CrackOn. To ensure accurate scheduling and reminders, please set your timezone below.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Timezone Selection - Only show when WhatsApp is verified */}
+            {isVerified && (
+              <div>
+                <Label htmlFor="timezone" className="text-sm font-medium text-gray-700 mb-2 block">
+                  Timezone
+                </Label>
               <div className="flex gap-0 border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
                 {/* Country Selector */}
                 <Popover open={countrySelectorOpen} onOpenChange={setCountrySelectorOpen}>
@@ -582,7 +600,8 @@ function WhatsAppLinkingForm() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+              </div>
+            )}
 
             {/* Next Step Button */}
             <div className="pt-2">
