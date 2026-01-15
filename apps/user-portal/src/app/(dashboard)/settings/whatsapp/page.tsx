@@ -87,10 +87,12 @@ function PhoneVerificationFlow({
 
   if (!phoneSaved || isSaving) {
     return (
-      <div className="mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-xs sm:text-sm text-blue-800">
-          {isSaving ? "Saving phone number..." : "Preparing verification..."}
-        </p>
+      <div className="px-4 sm:px-6">
+        <div className="mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-xs sm:text-sm text-blue-800">
+            {isSaving ? "Saving phone number..." : "Preparing verification..."}
+          </p>
+        </div>
       </div>
     );
   }
