@@ -343,7 +343,7 @@ function BillingOnboardingContent() {
         <div className="w-full max-w-md space-y-8">
           {/* Title */}
           <div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4 mb-4">
+            <div className="flex flex-col items-start sm:items-start justify-between gap-4 mb-4">
               <div className="flex-1 w-full sm:w-auto">
                 <p className="text-md font-medium tracking-wide text-gray-400 mb-1 text-center sm:text-left">
                   Step 4 of 4
@@ -352,35 +352,6 @@ function BillingOnboardingContent() {
                 <p className="text-gray-600 text-md leading-relaxed mb-3 text-center sm:text-left">
                   Manage your subscription and payment details
                 </p>
-              </div>
-              {/* Currency Selector */}
-              <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-center sm:items-end">
-                <div className="flex items-center justify-center sm:justify-end gap-2 mb-2">
-                  {isLoadingRates && (
-                    <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
-                  )}
-                  {ratesLastUpdated && !isLoadingRates && exchangeRates && (
-                    <p className="text-xs text-gray-400">
-                      Updated {format(ratesLastUpdated, 'HH:mm')}
-                    </p>
-                  )}
-                </div>
-                <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ZAR">ZAR (R) - South African Rand</SelectItem>
-                    <SelectItem value="USD">USD ($) - US Dollar</SelectItem>
-                    <SelectItem value="EUR">EUR (€) - Euro</SelectItem>
-                    <SelectItem value="GBP">GBP (£) - British Pound</SelectItem>
-                    <SelectItem value="CAD">CAD (CA$) - Canadian Dollar</SelectItem>
-                    <SelectItem value="AUD">AUD (AU$) - Australian Dollar</SelectItem>
-                  </SelectContent>
-                </Select>
-                {ratesError && (
-                  <p className="text-xs text-red-600 mt-1 text-center sm:text-right">{ratesError}</p>
-                )}
               </div>
             </div>
           </div>
@@ -413,6 +384,36 @@ function BillingOnboardingContent() {
               )}
             </button>
           </div>
+
+                        {/* Currency Selector */}
+                        <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-center sm:items-end">
+                <div className="flex items-center justify-center sm:justify-end gap-2 mb-2">
+                  {isLoadingRates && (
+                    <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+                  )}
+                  {ratesLastUpdated && !isLoadingRates && exchangeRates && (
+                    <p className="text-xs text-gray-400">
+                      Updated {format(ratesLastUpdated, 'HH:mm')}
+                    </p>
+                  )}
+                </div>
+                <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ZAR">ZAR (R) - South African Rand</SelectItem>
+                    <SelectItem value="USD">USD ($) - US Dollar</SelectItem>
+                    <SelectItem value="EUR">EUR (€) - Euro</SelectItem>
+                    <SelectItem value="GBP">GBP (£) - British Pound</SelectItem>
+                    <SelectItem value="CAD">CAD (CA$) - Canadian Dollar</SelectItem>
+                    <SelectItem value="AUD">AUD (AU$) - Australian Dollar</SelectItem>
+                  </SelectContent>
+                </Select>
+                {ratesError && (
+                  <p className="text-xs text-red-600 mt-1 text-center sm:text-right">{ratesError}</p>
+                )}
+              </div>
 
           {/* Plan cards */}
           <div className="space-y-4">
