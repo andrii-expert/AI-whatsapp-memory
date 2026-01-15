@@ -82,7 +82,7 @@ export async function handleVerificationMessage(
         const finishSetupUrl = `${baseUrl}/onboarding/whatsapp`;
         
         const welcomeMessage: CTAButtonMessage = {
-          bodyText: `👋Welcome to CrackOn ${userName}\n\nYour number is verified and you are one step closer to being more efficient, effective and organised. Tap the button below to complete your setup.`,
+          bodyText: `*👋Welcome to CrackOn ${userName}*\n\nYour number is verified and you are one step closer to being more efficient, effective and organised. Tap the button below to complete your setup.`,
           buttonText: 'Finish setup',
           buttonUrl: finishSetupUrl,
         };

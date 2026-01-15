@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         
         // Create completion message with CTA button
         const completionMessage: CTAButtonMessage = {
-          bodyText: `Boom 💥 You are all setup, ${userName}\n\nThis chat is now your command center. Voice note or type here to create meetings, reminders (once-off or recurring), shopping lists, and more. No forms. No buttons. Just talk:\n\nTry this now in the chat:\n"Add milk to my list"\n"Show my shopping list"\n"Remind me in 5 minutes to go shopping"\n\nEasy, right? Now CrackOn 🚀`,
+          bodyText: `*Boom 💥 You are all setup, ${userName}*\n\nThis chat is now your command center. Voice note or type here to create meetings, reminders (once-off or recurring), shopping lists, and more. No forms. No buttons. Just talk:\n\nTry this now in the chat:\n"Add milk to my list"\n"Show my shopping list"\n"Remind me in 5 minutes to go shopping"\n\nEasy, right? Now CrackOn 🚀`,
           buttonText: 'Dashboard',
           buttonUrl: dashboardUrl,
         };
