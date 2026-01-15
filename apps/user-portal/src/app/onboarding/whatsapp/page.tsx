@@ -360,93 +360,95 @@ function WhatsAppLinkingForm() {
 
           {/* Form */}
           <div className="space-y-4 sm:space-y-6">
-            {/* Phone Number Input */}
-            <div>
-              <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
-                WhatsApp Number
-              </Label>
-              <div className="flex gap-2 relative">
-                <div className="flex-1">
-                  <PhoneInput
-                    id="phone"
-                    value={phoneNumber}
-                    onChange={(value) => {
-                      setPhoneNumber(value);
-                      setShowVerification(false);
+            {/* Phone Number Input - Hide when verified */}
+            {!isVerified && (
+              <div>
+                <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
+                  WhatsApp Number
+                </Label>
+                <div className="flex gap-2 relative">
+                  <div className="flex-1">
+                    <PhoneInput
+                      id="phone"
+                      value={phoneNumber}
+                      onChange={(value) => {
+                        setPhoneNumber(value);
+                        setShowVerification(false);
+                      }}
+                      className="w-full"
+                      disabled={isVerified}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      if (!phoneNumber || !phoneNumber.trim()) {
+                        toast({
+                          title: "Phone number required",
+                          description: "Please enter your phone number first.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      // Validate phone number has at least some digits
+                      const digitsOnly = phoneNumber.replace(/\D/g, '');
+                      if (digitsOnly.length < 7) {
+                        toast({
+                          title: "Invalid phone number",
+                          description: "Please enter a valid phone number with at least 7 digits.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      setIsSavingPhone(true);
+                      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+                      
+                      // Double-check normalized phone is valid
+                      if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
+                        setIsSavingPhone(false);
+                        toast({
+                          title: "Invalid phone number",
+                          description: "Please enter a valid phone number.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      
+                      try {
+                        await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
+                        setShowVerification(true);
+                        toast({
+                          title: "Phone number saved",
+                          description: "Now verify your number to continue.",
+                          variant: "success",
+                        });
+                      } catch (error: any) {
+                        console.error("Error saving phone number:", error);
+                        const errorMessage = error?.message || error?.data?.message || "Failed to save phone number. Please try again.";
+                        toast({
+                          title: "Error",
+                          description: errorMessage,
+                          variant: "destructive",
+                        });
+                      } finally {
+                        setIsSavingPhone(false);
+                      }
                     }}
-                    className="w-full"
-                    disabled={isVerified}
-                  />
+                    disabled={!phoneNumber || isSavingPhone || isVerified}
+                    className={cn(
+                      "whitespace-nowrap h-8 px-4 sm:px-8 absolute right-[2px] top-[7px]",
+                      isVerified 
+                        ? "bg-green-600 hover:bg-green-700 text-white cursor-default" 
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                    )}
+                  >
+                    {isSavingPhone ? "Saving..." : isVerified ? "Verified" : "Get code"}
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  onClick={async () => {
-                    if (!phoneNumber || !phoneNumber.trim()) {
-                      toast({
-                        title: "Phone number required",
-                        description: "Please enter your phone number first.",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-
-                    // Validate phone number has at least some digits
-                    const digitsOnly = phoneNumber.replace(/\D/g, '');
-                    if (digitsOnly.length < 7) {
-                      toast({
-                        title: "Invalid phone number",
-                        description: "Please enter a valid phone number with at least 7 digits.",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-
-                    setIsSavingPhone(true);
-                    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-                    
-                    // Double-check normalized phone is valid
-                    if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
-                      setIsSavingPhone(false);
-                      toast({
-                        title: "Invalid phone number",
-                        description: "Please enter a valid phone number.",
-                        variant: "destructive",
-                      });
-                      return;
-                    }
-                    
-                    try {
-                      await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
-                      setShowVerification(true);
-                      toast({
-                        title: "Phone number saved",
-                        description: "Now verify your number to continue.",
-                        variant: "success",
-                      });
-                    } catch (error: any) {
-                      console.error("Error saving phone number:", error);
-                      const errorMessage = error?.message || error?.data?.message || "Failed to save phone number. Please try again.";
-                      toast({
-                        title: "Error",
-                        description: errorMessage,
-                        variant: "destructive",
-                      });
-                    } finally {
-                      setIsSavingPhone(false);
-                    }
-                  }}
-                  disabled={!phoneNumber || isSavingPhone || isVerified}
-                  className={cn(
-                    "whitespace-nowrap h-8 px-4 sm:px-8 absolute right-[2px] top-[7px]",
-                    isVerified 
-                      ? "bg-green-600 hover:bg-green-700 text-white cursor-default" 
-                      : "bg-blue-600 hover:bg-blue-700 text-white"
-                  )}
-                >
-                  {isSavingPhone ? "Saving..." : isVerified ? "Verified" : "Get code"}
-                </Button>
               </div>
-            </div>
+            )}
 
             {/* WhatsApp Verification - Show after clicking Get code button, but hide when verified */}
             {showVerification && phoneNumber && !isVerified && (
@@ -473,11 +475,8 @@ function WhatsAppLinkingForm() {
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <h3 className="text-sm font-semibold text-green-900 mb-1">
-                      WhatsApp Successfully Connected
-                    </h3>
                     <p className="text-sm text-green-800 leading-relaxed">
-                      Your WhatsApp number has been successfully connected with CrackOn. To ensure accurate scheduling and reminders, please set your timezone below.
+                      Congratulations, WhatsApp is now connected. Please select your time zone to proceed to the next step.
                     </p>
                   </div>
                 </div>

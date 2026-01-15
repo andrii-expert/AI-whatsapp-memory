@@ -4,7 +4,7 @@ import {
   logIncomingWhatsAppMessage,
   getUserById,
 } from '@imaginecalendar/database/queries';
-import type { WhatsAppParsedMessage } from '@imaginecalendar/whatsapp';
+import type { WhatsAppParsedMessage, CTAButtonMessage } from '@imaginecalendar/whatsapp';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { extractVerificationCode } from '@imaginecalendar/whatsapp';
 import { metrics } from '@/lib/metrics';
@@ -75,11 +75,19 @@ export async function handleVerificationMessage(
         ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
         : contactName || 'there';
 
-      // Send welcome message as plain text
+      // Send welcome message with CTA button
       try {
-        const welcomeMessage = `Hey ${userName} 👋 Welcome to CrackOn!\n\nYou have been successfully verified\n\nNow, just tell me what you need and I'll sort it out. Simply use voice notes or type text commands in this chat\n\n• Meetings ("Meet John at 2pm")\n• Tasks ("Buy Milk")\n• Reminders ("Pick up kids at 5pm")\n• Notes ("John said that...")`;
+        // Get the base URL for the redirect button
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://crackon.ai';
+        const finishSetupUrl = `${baseUrl}/onboarding/whatsapp`;
         
-        const welcomeResponse = await whatsappService.sendTextMessage(phoneNumber, welcomeMessage);
+        const welcomeMessage: CTAButtonMessage = {
+          bodyText: `👋Welcome to CrackOn ${userName}\n\nYour number is verified and you are one step closer to being more efficient, effective and organised. Tap the button below to complete your setup.`,
+          buttonText: 'Finish setup',
+          buttonUrl: finishSetupUrl,
+        };
+        
+        const welcomeResponse = await whatsappService.sendCTAButtonMessage(phoneNumber, welcomeMessage);
         
         // Log the outgoing message
         try {
@@ -90,7 +98,7 @@ export async function handleVerificationMessage(
             whatsappNumberId: verificationResult.whatsappNumberId,
             userId: verificationResult.userId,
             messageId: welcomeResponse.messages?.[0]?.id,
-            messageType: 'text',
+            messageType: 'interactive',
             isFreeMessage,
           });
         } catch (logError) {
