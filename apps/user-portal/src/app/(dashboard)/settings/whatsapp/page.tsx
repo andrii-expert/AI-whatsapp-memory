@@ -176,15 +176,40 @@ function WhatsAppVerificationPageContent() {
     }
   }, [user?.phone, whatsappNumbers, phoneNumber]);
 
-  // Check if user has verified WhatsApp
+  // Check if user has verified WhatsApp - check for the current or new phone number
   useEffect(() => {
-    const verified = whatsappNumbers.some((num: any) => num.isVerified);
+    // If we have a new phone number being verified, check verification for that number
+    if (newPhoneNumber) {
+      const newPhoneNormalized = normalizePhoneNumber(newPhoneNumber);
+      const verified = whatsappNumbers.some((num: any) => 
+        num.isVerified && normalizePhoneNumber(num.phoneNumber) === newPhoneNormalized
+      );
+      setIsVerified(verified);
+      // If new number is verified, hide verification section
+      if (verified) {
+        setShowVerification(false);
+      }
+      return;
+    }
+
+    // Otherwise, check verification for the current display phone number
+    if (!displayPhone) {
+      setIsVerified(false);
+      return;
+    }
+
+    const currentPhoneNormalized = normalizePhoneNumber(displayPhone);
+    const verified = whatsappNumbers.some((num: any) => 
+      num.isVerified && normalizePhoneNumber(num.phoneNumber) === currentPhoneNormalized
+    );
+    
     setIsVerified(verified);
-    // If already verified, hide verification section
+    
+    // If already verified for current number, hide verification section
     if (verified) {
       setShowVerification(false);
     }
-  }, [whatsappNumbers]);
+  }, [whatsappNumbers, displayPhone, newPhoneNumber]);
 
   // Save phone number mutation
   const savePhoneMutation = useMutation(
@@ -311,7 +336,6 @@ function WhatsAppVerificationPageContent() {
                     setShowVerification(false);
                   }}
                   className="w-full"
-                  disabled={isVerified}
                 />
               </div>
               <Button
@@ -360,22 +384,26 @@ function WhatsAppVerificationPageContent() {
                     await queryClient.invalidateQueries({ queryKey: trpc.user.me.queryKey() });
                     await refetchNumbers();
                   } catch (error: any) {
-                    console.error("Error saving phone number:", error);
+                    toast({
+                      title: "Error",
+                      description: error?.message || "Failed to update phone number",
+                      variant: "destructive",
+                    });
                   } finally {
                     setIsSavingPhone(false);
                   }
                 }}
-                disabled={!phoneNumber || isSavingPhone || isVerified}
+                disabled={!phoneNumber || isSavingPhone}
                 className="whitespace-nowrap h-8 px-4 sm:px-8 absolute right-[2px] top-[7px] bg-blue-600 hover:bg-blue-700 text-white"
               >
-                {isSavingPhone ? "Saving..." : isVerified ? "Verified" : "Get code"}
+                {isSavingPhone ? "Saving..." : "Get code"}
               </Button>
             </div>
           </div>
         )}
 
         {/* WhatsApp Verification - Show after clicking Get code button, but hide when verified */}
-        {showVerification && (newPhoneNumber || phoneNumber) && !isVerified && (
+        {showVerification && (newPhoneNumber || phoneNumber) && (
           <PhoneVerificationFlow
             phoneNumber={newPhoneNumber || phoneNumber}
             userPhone={user?.phone}
@@ -383,7 +411,14 @@ function WhatsAppVerificationPageContent() {
               setIsVerified(true);
               setShowVerification(false); // Hide verification section when verified
               setNewPhoneNumber(null);
+              // Invalidate queries to get fresh data
+              queryClient.invalidateQueries({ queryKey: trpc.user.me.queryKey() });
               refetchNumbers();
+              toast({
+                title: "WhatsApp verified!",
+                description: "Your WhatsApp number has been successfully verified.",
+                variant: "success",
+              });
             }}
             savePhoneMutation={savePhoneMutation}
           />
