@@ -24,6 +24,90 @@ import { FALLBACK_PLANS, toDisplayPlan } from "@/utils/plans";
 import type { DisplayPlan, PlanRecordLike } from "@/utils/plans";
 import { cn } from "@imaginecalendar/ui/cn";
 import { OnboardingLoading } from "@/components/onboarding-loading";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@imaginecalendar/ui/select";
+import { format } from "date-fns";
+
+type Currency = "ZAR" | "USD" | "EUR" | "GBP" | "CAD" | "AUD";
+
+const CURRENCY_SYMBOLS: Record<Currency, string> = {
+  ZAR: "R",
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  CAD: "CA$",
+  AUD: "AU$",
+};
+
+// Default exchange rates (fallback if API fails) - these are approximate and should not be used
+const DEFAULT_EXCHANGE_RATES: Record<Currency, number> = {
+  ZAR: 1,
+  USD: 0.0584, // 1 ZAR = 0.0584 USD (approximately 1 USD = 17.1 ZAR)
+  EUR: 0.0503,  // 1 ZAR = 0.0503 EUR (approximately 1 EUR = 19.9 ZAR)
+  GBP: 0.0443, // 1 ZAR = 0.0443 GBP (approximately 1 GBP = 22.6 ZAR)
+  CAD: 0.0819, // 1 ZAR = 0.0819 CAD (approximately 1 CAD = 12.2 ZAR)
+  AUD: 0.0897, // 1 ZAR = 0.0897 AUD (approximately 1 AUD = 11.1 ZAR)
+};
+
+// Fetch real-time exchange rates from exchangerate-api.io (free, no API key required)
+async function fetchExchangeRates(): Promise<Record<Currency, number> | null> {
+  try {
+    // Using exchangerate-api.io free endpoint (no API key required)
+    // This fetches rates with USD as base, so we'll convert to ZAR base
+    const response = await fetch('https://api.exchangerate-api.com/v4/latest/ZAR');
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch exchange rates');
+    }
+    
+    const data = await response.json();
+    
+    // Verify we have the rates object
+    if (!data.rates) {
+      throw new Error('Invalid API response: missing rates');
+    }
+    
+    // Convert to our Currency type format (ZAR as base = 1)
+    const rates: Record<Currency, number> = {
+      ZAR: 1,
+      USD: data.rates.USD ?? DEFAULT_EXCHANGE_RATES.USD,
+      EUR: data.rates.EUR ?? DEFAULT_EXCHANGE_RATES.EUR,
+      GBP: data.rates.GBP ?? DEFAULT_EXCHANGE_RATES.GBP,
+      CAD: data.rates.CAD ?? DEFAULT_EXCHANGE_RATES.CAD,
+      AUD: data.rates.AUD ?? DEFAULT_EXCHANGE_RATES.AUD,
+    };
+    
+    // Log for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Exchange rates fetched:', {
+        USD: rates.USD,
+        EUR: rates.EUR,
+        GBP: rates.GBP,
+        CAD: rates.CAD,
+        AUD: rates.AUD,
+      });
+    }
+    
+    return rates;
+  } catch (error) {
+    console.error('Error fetching exchange rates:', error);
+    return null;
+  }
+}
+
+function formatCurrency(cents: number, currency: Currency, exchangeRates: Record<Currency, number> | null): string {
+  if (!exchangeRates) {
+    return '...';
+  }
+  const amount = (cents / 100) * exchangeRates[currency];
+  const symbol = CURRENCY_SYMBOLS[currency];
+  return `${symbol}${amount.toFixed(2)}`;
+}
 
 function BillingOnboardingContent() {
   const router = useRouter();
@@ -35,6 +119,15 @@ function BillingOnboardingContent() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  
+  // Currency state - default to ZAR for all users
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>("ZAR");
+
+  // Exchange rates state - only use real-time rates, no defaults
+  const [exchangeRates, setExchangeRates] = useState<Record<Currency, number> | null>(null);
+  const [isLoadingRates, setIsLoadingRates] = useState(true);
+  const [ratesLastUpdated, setRatesLastUpdated] = useState<Date | null>(null);
+  const [ratesError, setRatesError] = useState<string | null>(null);
 
   const handleSelectPlan = (planId: string) => {
     // Gold plan is not yet available in onboarding
@@ -104,6 +197,53 @@ function BillingOnboardingContent() {
       setSelectedPlanId(currentPlanId);
     }
   }, [currentPlanId, selectedPlanId]);
+
+  // Load saved currency preference on mount, otherwise use ZAR as default
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Check if user has a saved currency preference
+    const saved = localStorage.getItem("billing-currency");
+    if (saved && ["ZAR", "USD", "EUR", "GBP", "CAD", "AUD"].includes(saved)) {
+      // User has a saved preference, use it
+      setSelectedCurrency(saved as Currency);
+    } else {
+      // No saved preference - use ZAR as default
+      setSelectedCurrency("ZAR");
+      localStorage.setItem("billing-currency", "ZAR");
+    }
+  }, []);
+
+  // Fetch exchange rates on mount and periodically
+  useEffect(() => {
+    const loadExchangeRates = async () => {
+      setIsLoadingRates(true);
+      setRatesError(null);
+      const rates = await fetchExchangeRates();
+      if (rates) {
+        setExchangeRates(rates);
+        setRatesLastUpdated(new Date());
+        setRatesError(null);
+      } else {
+        setRatesError('Failed to fetch exchange rates. Please refresh the page.');
+      }
+      setIsLoadingRates(false);
+    };
+
+    // Load immediately
+    loadExchangeRates();
+
+    // Refresh rates every 1 hour (3600000 ms)
+    const interval = setInterval(loadExchangeRates, 3600000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("billing-currency", selectedCurrency);
+    }
+  }, [selectedCurrency]);
 
   const createSubscriptionMutation = useMutation(
     trpc.billing.createSubscription.mutationOptions({
@@ -240,13 +380,46 @@ function BillingOnboardingContent() {
         <div className="w-full max-w-md space-y-8">
           {/* Title */}
           <div>
-            <p className="text-md font-medium tracking-wide text-gray-400 mb-1 text-center sm:text-left">
-              Step 4 of 4
-            </p>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Billing and Subscription</h1>
-            <p className="text-gray-600 text-md leading-relaxed mb-3">
-              Manage your subscription and payment details
-            </p>
+            <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-4 mb-4">
+              <div className="flex-1 w-full sm:w-auto">
+                <p className="text-md font-medium tracking-wide text-gray-400 mb-1 text-center sm:text-left">
+                  Step 4 of 4
+                </p>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center sm:text-left">Billing and Subscription</h1>
+                <p className="text-gray-600 text-md leading-relaxed mb-3 text-center sm:text-left">
+                  Manage your subscription and payment details
+                </p>
+              </div>
+              {/* Currency Selector */}
+              <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-center sm:items-end">
+                <div className="flex items-center justify-center sm:justify-end gap-2 mb-2">
+                  {isLoadingRates && (
+                    <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+                  )}
+                  {ratesLastUpdated && !isLoadingRates && exchangeRates && (
+                    <p className="text-xs text-gray-400">
+                      Updated {format(ratesLastUpdated, 'HH:mm')}
+                    </p>
+                  )}
+                </div>
+                <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ZAR">ZAR (R) - South African Rand</SelectItem>
+                    <SelectItem value="USD">USD ($) - US Dollar</SelectItem>
+                    <SelectItem value="EUR">EUR (€) - Euro</SelectItem>
+                    <SelectItem value="GBP">GBP (£) - British Pound</SelectItem>
+                    <SelectItem value="CAD">CAD (CA$) - Canadian Dollar</SelectItem>
+                    <SelectItem value="AUD">AUD (AU$) - Australian Dollar</SelectItem>
+                  </SelectContent>
+                </Select>
+                {ratesError && (
+                  <p className="text-xs text-red-600 mt-1 text-center sm:text-right">{ratesError}</p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Billing cycle toggle */}
@@ -303,8 +476,17 @@ function BillingOnboardingContent() {
                   )}
                 </div>
                 <div className={cn("text-3xl font-bold", selectedPlanId === "free" ? "text-white" : "text-gray-900")}>
-                  {freePlan.displayPrice}
-                  <span className="text-sm text-gray-600 ml-1"> / {freePlan.billingPeriod}</span>
+                  {isLoadingRates || !exchangeRates ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === "free" ? "text-white" : "text-gray-600")} />
+                      <span className={cn("text-sm", selectedPlanId === "free" ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {formatCurrency(freePlan.amountCents, selectedCurrency, exchangeRates)}
+                      <span className="text-sm text-gray-600 ml-1"> / {freePlan.billingPeriod}</span>
+                    </>
+                  )}
                 </div>
                 <p className={cn("mt-1 text-xs", selectedPlanId === "free" ? "text-white/80" : "text-gray-500")}>
                   {freePlan.description}
@@ -348,12 +530,21 @@ function BillingOnboardingContent() {
                   )}
                 </div>
                 <div className={cn("text-3xl font-bold", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-900")}>
-                  {silverPlan.displayPrice}
-                  <span className="text-sm text-gray-600 ml-1"> / {silverPlan.billingPeriod}</span>
+                  {isLoadingRates || !exchangeRates ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-600")} />
+                      <span className={cn("text-sm", selectedPlanId === silverPlan.id ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {formatCurrency(silverPlan.amountCents, selectedCurrency, exchangeRates)}
+                      <span className="text-sm text-gray-600 ml-1"> / {silverPlan.billingPeriod}</span>
+                    </>
+                  )}
                 </div>
-                {isAnnual && silverPlan.monthlyPriceCents > 0 && (
+                {!isLoadingRates && exchangeRates && isAnnual && silverPlan.monthlyPriceCents > 0 && (
                   <p className={cn("text-xs mt-1", selectedPlanId === silverPlan.id ? "text-white/80" : "text-purple-700")}>
-                    {silverPlan.monthlyPriceCents / 100}/month when paid annually
+                    {formatCurrency(silverPlan.monthlyPriceCents, selectedCurrency, exchangeRates)}/month when paid annually
                   </p>
                 )}
                 <p className={cn("mt-1 text-xs", selectedPlanId === silverPlan.id ? "text-white/80" : "text-gray-500")}>
@@ -393,12 +584,21 @@ function BillingOnboardingContent() {
                   )}
                 </div>
                 <div className={cn("text-3xl font-bold", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-900")}>
-                  {goldPlan.displayPrice}
-                  <span className="text-sm text-gray-600 ml-1"> / {goldPlan.billingPeriod}</span>
+                  {isLoadingRates || !exchangeRates ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-600")} />
+                      <span className={cn("text-sm", selectedPlanId === goldPlan.id ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {formatCurrency(goldPlan.amountCents, selectedCurrency, exchangeRates)}
+                      <span className="text-sm text-gray-600 ml-1"> / {goldPlan.billingPeriod}</span>
+                    </>
+                  )}
                 </div>
-                {isAnnual && goldPlan.monthlyPriceCents > 0 && (
+                {!isLoadingRates && exchangeRates && isAnnual && goldPlan.monthlyPriceCents > 0 && (
                   <p className={cn("text-xs mt-1", selectedPlanId === goldPlan.id ? "text-white/80" : "text-blue-700")}>
-                    {goldPlan.monthlyPriceCents / 100}/month when paid annually
+                    {formatCurrency(goldPlan.monthlyPriceCents, selectedCurrency, exchangeRates)}/month when paid annually
                   </p>
                 )}
                 <p className={cn("mt-1 text-xs", selectedPlanId === goldPlan.id ? "text-white/80" : "text-gray-500")}>
