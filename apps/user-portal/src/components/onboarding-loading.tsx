@@ -9,7 +9,7 @@ export function OnboardingLoading() {
         {/* Logo with subtle animation */}
         <div className="relative">
           <Image
-            src="/crackon_logo_pngs-16.png"
+            src="/crack-on-logo-icon.png"
             alt="CrackOn"
             width={240}
             height={96}
