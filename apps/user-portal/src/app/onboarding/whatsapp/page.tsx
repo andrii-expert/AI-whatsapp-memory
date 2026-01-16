@@ -477,11 +477,11 @@ function WhatsAppLinkingForm() {
                 <Label className="text-sm font-medium text-gray-700 mb-2 block">
                   Verification Step
                 </Label>
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p>Tap the button below to open up WhatsApp</p>
-                  <p>Simply send the pre-filled message with your verification code.</p>
-                  <p>If successful, you will receive a confirmation message.</p>
-                </div>
+                <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                  <li>Tap the button below to open up WhatsApp</li>
+                  <li>Simply send the pre-filled message with your verification code.</li>
+                  <li>If successful, you will receive a confirmation message.</li>
+                </ul>
               </div>
             )}
 
@@ -679,10 +679,10 @@ function WhatsAppLinkingForm() {
                   type="button"
                   className="w-full text-white py-4 sm:py-6 text-sm sm:text-base font-medium"
                   style={{ backgroundColor: '#06DB6D' }}
-                  onMouseEnter={(e) => {
+                  onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.backgroundColor = '#05C85A';
                   }}
-                  onMouseLeave={(e) => {
+                  onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.backgroundColor = '#06DB6D';
                   }}
                   onClick={handleNext}
