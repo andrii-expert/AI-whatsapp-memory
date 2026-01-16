@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
@@ -145,8 +145,8 @@ function WhatsAppLinkingForm() {
   // Fetch user data using useAuth
   const { user, isLoaded } = useAuth();
 
-  // Fetch WhatsApp numbers
-  const { data: whatsappNumbers = [], refetch: refetchNumbers } = useQuery(
+  // Fetch WhatsApp numbers - will be refetched when user becomes available after auto-login
+  const { data: whatsappNumbers = [], refetch: refetchNumbers, isLoading: isLoadingNumbers } = useQuery(
     trpc.whatsapp.getMyNumbers.queryOptions()
   );
 
@@ -189,8 +189,32 @@ function WhatsAppLinkingForm() {
     }
   }, [user, isLoaded, router]);
 
+  // Refetch WhatsApp numbers when user becomes available (e.g., after auto-login)
+  // This ensures WhatsApp data is loaded correctly after session restoration
+  const hasRefetchedRef = useRef(false);
+  useEffect(() => {
+    if (isLoaded && user && !hasRefetchedRef.current) {
+      // Refetch WhatsApp numbers to ensure we have the latest data
+      // This is critical after auto-login when data might not be loaded yet
+      const timeoutId = setTimeout(() => {
+        refetchNumbers()
+          .then(() => {
+            hasRefetchedRef.current = true;
+          })
+          .catch((err) => {
+            console.error("Failed to refetch WhatsApp numbers:", err);
+          });
+      }, 200); // Small delay to ensure auth token is set in cookies
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isLoaded, user, refetchNumbers]);
+
   // Check if user has verified WhatsApp and initialize phone number
   useEffect(() => {
+    // Wait for WhatsApp numbers to finish loading
+    if (isLoadingNumbers) return;
+    
     // First check for verified WhatsApp numbers (highest priority)
     if (whatsappNumbers && whatsappNumbers.length > 0) {
       const verifiedNumber = whatsappNumbers.find((num: any) => num.isVerified);
@@ -222,7 +246,7 @@ function WhatsAppLinkingForm() {
     if (user?.phone && !phoneNumber) {
       setPhoneNumber(user.phone);
     }
-  }, [whatsappNumbers, user?.phone]);
+  }, [whatsappNumbers, user?.phone, isLoadingNumbers, phoneNumber]);
 
   // Initialize country from existing timezone or default to South Africa
   useEffect(() => {
@@ -347,7 +371,7 @@ function WhatsAppLinkingForm() {
   const openWhatsAppWithCode = (code: string) => {
     const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
     const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
-    const whatsappUrl = `https://web.whatsapp.com/send?phone=${businessWhatsappNumber}&text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
