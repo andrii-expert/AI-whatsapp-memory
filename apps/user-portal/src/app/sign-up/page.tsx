@@ -81,7 +81,7 @@ function SignUpForm() {
   return (
     <div className="flex min-h-screen">
       {/* Left Side - Sign Up Form */}
-      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-8 lg:p-12">
+      <div className="w-full lg:w-1/2 bg-white flex sm:items-center justify-center p-8 lg:p-12">
         <div className="w-full max-w-md space-y-8">
           {/* Title and Subtitle */}
           <div className="space-y-2 flex flex-col items-center justify-center">
