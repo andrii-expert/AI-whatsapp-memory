@@ -212,7 +212,7 @@ function CalendarConnectionForm() {
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Left Side - Form */}
-      <div className="w-full lg:w-1/2 bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
+      <div className="w-full lg:w-1/2 bg-white flex sm:items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 min-h-screen lg:min-h-0">
         <div className="w-full max-w-md space-y-6 sm:space-y-8 py-4 sm:py-8">
           {/* Title */}
           <div>
