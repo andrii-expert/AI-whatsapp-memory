@@ -145,12 +145,20 @@ function WhatsAppLinkingForm() {
   // Fetch user data using useAuth
   const { user, isLoaded } = useAuth();
 
+  // Poll user setupStep every 1 second to detect when user advances to next step
+  const { data: polledUser } = useQuery({
+    ...trpc.user.me.queryOptions(),
+    refetchInterval: 1000, // Check every 1 second
+    enabled: isLoaded && !!user && (user.setupStep ?? 1) === 1, // Only poll while on step 1
+  });
+
   // Fetch WhatsApp numbers - will be refetched when user becomes available after auto-login
   const { data: whatsappNumbers = [], refetch: refetchNumbers, isLoading: isLoadingNumbers } = useQuery(
     trpc.whatsapp.getMyNumbers.queryOptions()
   );
 
   // Redirect if user has already completed this step or is on wrong step
+  // Also check polled user data for setupStep changes
   useEffect(() => {
     if (!isLoaded) return;
     
@@ -159,8 +167,9 @@ function WhatsAppLinkingForm() {
       return;
     }
 
-    // Default to 1 if setupStep is null/undefined
-    const setupStep = user.setupStep ?? 1;
+    // Use polled user data if available (for real-time updates), otherwise use user from useAuth
+    const currentUser = polledUser || user;
+    const setupStep = currentUser.setupStep ?? 1;
 
     // If setupStep is 2, 3, or 4, redirect to appropriate page
     if (setupStep === 2) {
@@ -187,7 +196,7 @@ function WhatsAppLinkingForm() {
         console.error("Failed to update signup step:", err);
       });
     }
-  }, [user, isLoaded, router]);
+  }, [user, polledUser, isLoaded, router]);
 
   // Refetch WhatsApp numbers when user becomes available (e.g., after auto-login)
   // This ensures WhatsApp data is loaded correctly after session restoration
