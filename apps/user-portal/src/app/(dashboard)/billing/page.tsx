@@ -716,84 +716,71 @@ export default function BillingPage() {
         <div className="mb-8 px-4 sm:px-6">
           <h2 className="text-base font-semibold text-gray-900 mb-3">Change Plan</h2>
           
-          <Card className="rounded-2xl border-2 border-gray-200">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-              <CardDescription className="text-sm text-gray-600">
-                {currentPlanId === 'free' 
-                  ? 'Upgrade to unlock premium features' 
-                  : 'Switch to a different subscription plan'}
-              </CardDescription>
-            </div>
-            {/* Currency Selector */}
-            <div className="flex-shrink-0">
-              <div className="flex items-center justify-end gap-2 mb-2">
-                {isLoadingRates && (
-                  <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
-                )}
-                {ratesLastUpdated && !isLoadingRates && exchangeRates && (
-                  <p className="text-xs text-gray-400">
-                    Updated {format(ratesLastUpdated, 'HH:mm')}
-                  </p>
+          <div className="space-y-8">
+            {/* Currency Selector and Billing Cycle Toggle */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              {/* Billing cycle toggle */}
+              <div className="w-full sm:w-auto flex-shrink-0">
+                <div className="flex items-center justify-between bg-gray-100 rounded-full p-1 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsAnnual(false)}
+                    className={cn(
+                      "flex-1 py-2 text-sm rounded-full transition",
+                      !isAnnual ? "bg-white shadow text-gray-900" : "text-gray-600"
+                    )}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAnnual(true)}
+                    className={cn(
+                      "flex-1 py-2 text-sm rounded-full transition relative",
+                      isAnnual ? "bg-white shadow text-gray-900" : "text-gray-600"
+                    )}
+                  >
+                    Yearly
+                    {!isAnnual && (
+                      <span className="absolute -top-5 inset-x-0 mx-auto text-[10px] text-blue-600 font-semibold">
+                        Save 20%
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Currency Selector */}
+              <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-start sm:items-end">
+                <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ZAR">ZAR (R) - South African Rand</SelectItem>
+                    <SelectItem value="USD">USD ($) - US Dollar</SelectItem>
+                    <SelectItem value="EUR">EUR (€) - Euro</SelectItem>
+                    <SelectItem value="GBP">GBP (£) - British Pound</SelectItem>
+                    <SelectItem value="CAD">CAD (CA$) - Canadian Dollar</SelectItem>
+                    <SelectItem value="AUD">AUD (AU$) - Australian Dollar</SelectItem>
+                  </SelectContent>
+                </Select>
+                {ratesError && (
+                  <p className="text-xs text-red-600 mt-1 text-center sm:text-right">{ratesError}</p>
                 )}
               </div>
-              <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ZAR">ZAR (R) - South African Rand</SelectItem>
-                  <SelectItem value="USD">USD ($) - US Dollar</SelectItem>
-                  <SelectItem value="EUR">EUR (€) - Euro</SelectItem>
-                  <SelectItem value="GBP">GBP (£) - British Pound</SelectItem>
-                  <SelectItem value="CAD">CAD (CA$) - Canadian Dollar</SelectItem>
-                  <SelectItem value="AUD">AUD (AU$) - Australian Dollar</SelectItem>
-                </SelectContent>
-              </Select>
-              {ratesError && (
-                <p className="text-xs text-red-600 mt-1 text-right">{ratesError}</p>
-              )}
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Monthly/Annual Toggle */}
-          <div className="flex items-center justify-between space-x-2">
-            <div className="space-y-0.5">
-              <p className="text-base font-medium">
-                Billing Cycle
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {isAnnual 
-                  ? "Annual billing (Save 20%)" 
-                  : "Monthly billing"}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className={cn("text-sm", !isAnnual && "font-semibold")}>
-                Monthly
-              </span>
-              <Switch
-                checked={isAnnual}
-                onCheckedChange={setIsAnnual}
-              />
-              <span className={cn("text-sm", isAnnual && "font-semibold")}>
-                Annual
-              </span>
-            </div>
-          </div>
 
-          {planLoadError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
-              We couldn't load the latest plans. Showing default options instead.
-            </div>
-          )}
+            {planLoadError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                We couldn't load the latest plans. Showing default options instead.
+              </div>
+            )}
 
-          {isLoadingPlans ? (
-            <div className="text-center text-muted-foreground py-8">Loading available plans...</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+            {isLoadingPlans ? (
+              <div className="text-center text-muted-foreground py-8">Loading available plans...</div>
+            ) : (
+              <>
               <RadioGroup
                 value={selectedPlanForChange && !selectedPlanForChange.startsWith("gold") ? selectedPlanForChange : (currentPlanId && !currentPlanId.startsWith("gold") ? currentPlanId : undefined)}
                 onValueChange={handlePlanSelect}
@@ -1009,8 +996,9 @@ export default function BillingPage() {
                   </div>
                 );
               })()}
-            </div>
-          )}
+              </RadioGroup>
+            </>
+            )}
 
           {/* Confirm Plan Change Button */}
           {selectedPlanForChange && selectedPlanForChange !== currentPlanId && !isLoadingPlans && (
@@ -1040,103 +1028,6 @@ export default function BillingPage() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Subscription Management */}
-      <Card className="rounded-md">
-        <CardHeader>
-          <CardTitle>Subscription Actions</CardTitle>
-          <CardDescription>
-            Manage your subscription
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isCancelled ? (
-            <>
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-                Your subscription is scheduled to cancel. You can reactivate it anytime before the end date.
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleReactivateSubscription}
-                  disabled={reactivateSubscriptionMutation.isPending}
-                  variant="blue-primary"
-                >
-                  {reactivateSubscriptionMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Reactivating...
-                    </>
-                  ) : (
-                    'Reactivate Subscription'
-                  )}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              {currentPlanId !== 'free' ? (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    Your subscription is active and will auto-renew. You can cancel anytime.
-                  </p>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="outline"
-                      disabled={cancelSubscriptionMutation.isPending}
-                      className="border-red-500 text-red-600 hover:bg-red-50"
-                      onClick={() => setShowCancelDialog(true)}
-                    >
-                      Cancel Subscription
-                    </Button>
-                    <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to cancel your subscription? Your subscription will remain active until the end of your current billing period ({subscription?.currentPeriodEnd 
-                              ? format(new Date(subscription.currentPeriodEnd), 'MMM d, yyyy')
-                              : 'N/A'}). You can reactivate it anytime before then.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel 
-                            disabled={cancelSubscriptionMutation.isPending}
-                          >
-                            Keep Subscription
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                              e.preventDefault();
-                              handleCancelSubscription();
-                            }}
-                            disabled={cancelSubscriptionMutation.isPending}
-                            className="bg-red-600 hover:bg-red-700 text-white"
-                          >
-                            {cancelSubscriptionMutation.isPending ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Cancelling...
-                              </>
-                            ) : (
-                              'Yes, Cancel Subscription'
-                            )}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  You're on the free plan. No subscription to manage.
-                </p>
-              )}
-            </>
-          )}
-        </CardContent>
-        </Card>
         </div>
       </div>
     </div>
