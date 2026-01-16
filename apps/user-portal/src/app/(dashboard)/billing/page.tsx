@@ -718,9 +718,9 @@ export default function BillingPage() {
           
           <div className="space-y-8">
             {/* Currency Selector and Billing Cycle Toggle */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex flex-col items-start sm:items-center justify-between gap-4">
               {/* Billing cycle toggle */}
-              <div className="w-full sm:w-auto flex-shrink-0">
+              <div className="w-full flex-shrink-0">
                 <div className="flex items-center justify-between bg-gray-100 rounded-full p-1 w-full sm:w-auto">
                   <button
                     type="button"
@@ -751,7 +751,7 @@ export default function BillingPage() {
               </div>
 
               {/* Currency Selector */}
-              <div className="flex-shrink-0 w-full sm:w-auto flex flex-col items-start sm:items-end">
+              <div className="flex w-full flex justify-center items-start">
                 <Select value={selectedCurrency} onValueChange={(value) => setSelectedCurrency(value as Currency)} disabled={isLoadingRates || !exchangeRates}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue />
@@ -938,8 +938,6 @@ export default function BillingPage() {
                 );
               })()}
 
-              </RadioGroup>
-              
               {/* Gold Plan (disabled / coming soon) - Outside RadioGroup */}
               {(() => {
                 const planId = isAnnual ? 'gold-annual' : 'gold-monthly';
@@ -1002,6 +1000,8 @@ export default function BillingPage() {
                   </div>
                 );
               })()}
+
+              </RadioGroup>
               </>
             )}
 
