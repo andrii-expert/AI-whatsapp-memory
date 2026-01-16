@@ -286,6 +286,45 @@ export const userPreferencesRelations = relations(userPreferences, ({ one }) => 
 }));
 
 // ============================================
+// Temporary Signup Credentials
+// ============================================
+
+export const temporarySignupCredentials = pgTable("temporary_signup_credentials", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  
+  // Encrypted credentials (stored temporarily during signup)
+  email: text("email").notNull(),
+  passwordHash: text("password_hash").notNull(), // Hashed password
+  
+  // Device information for auto-login
+  deviceFingerprint: text("device_fingerprint").notNull(), // Unique device identifier
+  userAgent: text("user_agent"),
+  ipAddress: text("ip_address"),
+  
+  // Current signup step
+  currentStep: text("current_step").notNull(), // e.g., "signup", "verify-email", "whatsapp", "calendar", "billing"
+  stepData: jsonb("step_data"), // Store any step-specific data
+  
+  // Expiration (clean up after 7 days or when signup is complete)
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("temporary_signup_credentials_user_id_idx").on(table.userId),
+  deviceFingerprintIdx: index("temporary_signup_credentials_device_fingerprint_idx").on(table.deviceFingerprint),
+  expiresAtIdx: index("temporary_signup_credentials_expires_at_idx").on(table.expiresAt),
+}));
+
+export const temporarySignupCredentialsRelations = relations(temporarySignupCredentials, ({ one }) => ({
+  user: one(users, {
+    fields: [temporarySignupCredentials.userId],
+    references: [users.id],
+  }),
+}));
+
+// ============================================
 // Subscriptions
 // ============================================
 

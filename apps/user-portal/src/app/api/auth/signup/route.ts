@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { getUserByEmail, createUser, generateEmailVerificationCode } from "@imaginecalendar/database/queries";
+import { getUserByEmail, createUser, generateEmailVerificationCode, createTemporarySignupCredentials } from "@imaginecalendar/database/queries";
 import { sendEmailVerificationCode } from "@api/utils/email";
 import { hashPassword, generateToken } from "@api/utils/auth-helpers";
+import { getDeviceFingerprintFromRequest, getIpAddressFromRequest } from "@api/utils/device-fingerprint";
 import { z } from "zod";
 import { logger } from "@imaginecalendar/logger";
 import { randomUUID } from "crypto";
@@ -12,6 +13,7 @@ const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
+  deviceFingerprint: z.string().optional(), // Optional device fingerprint from client
 });
 
 export async function POST(req: NextRequest) {
@@ -68,6 +70,42 @@ export async function POST(req: NextRequest) {
       userId,
       email: validated.email,
     });
+
+    // Save temporary credentials with device info for auto-login
+    try {
+      // Use client-provided fingerprint if available, otherwise generate from request
+      let deviceFingerprint = validated.deviceFingerprint;
+      if (!deviceFingerprint) {
+        deviceFingerprint = getDeviceFingerprintFromRequest(req);
+      }
+      const userAgent = req.headers.get("user-agent") || undefined;
+      const ipAddress = getIpAddressFromRequest(req);
+
+      await createTemporarySignupCredentials(db, {
+        userId,
+        email: validated.email,
+        passwordHash: passwordHash,
+        deviceFingerprint,
+        userAgent,
+        ipAddress,
+        currentStep: "verify-email",
+        stepData: {
+          firstName: validated.firstName,
+          lastName: validated.lastName,
+        },
+      });
+
+      logger.info(
+        { userId, email: validated.email, deviceFingerprint },
+        "Temporary signup credentials saved with device info"
+      );
+    } catch (credentialError) {
+      // Log but don't fail signup if saving temporary credentials fails
+      logger.error(
+        { error: credentialError, userId, email: validated.email },
+        "Failed to save temporary signup credentials"
+      );
+    }
 
     // Set cookie
     const response = NextResponse.json(

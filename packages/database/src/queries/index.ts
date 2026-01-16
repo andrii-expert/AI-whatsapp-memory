@@ -27,6 +27,7 @@ export * from "./addresses";
 export * from "./address-sharing";
 export * from "./friends";
 export * from "./email-verification";
+export * from "./temporary-signup-credentials";
 
 // Re-export utility functions
 export * from "../utils/plan-limits";
