@@ -17,7 +17,8 @@ import { z } from "zod";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@imaginecalendar/ui/select";
 import { Calendar } from "@imaginecalendar/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@imaginecalendar/ui/popover";
-import { CalendarIcon } from "lucide-react";
+import Link from "next/link";
+import { Home, ChevronLeft, CalendarIcon } from "lucide-react";
 import {
   AGE_GROUP_OPTIONS,
   GENDER_OPTIONS,
@@ -279,24 +280,36 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="bg-white">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6 p-4 sm:p-6 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] rounded-xl">
-          <h1 className="text-xl font-bold text-gray-900">Profile Settings</h1>
-        </div>
+    <div className="space-y-6">
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center gap-2 text-sm">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Home className="h-4 w-4" />
+          Dashboard
+        </Link>
+        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+        <span className="font-medium">Profile Settings</span>
+      </div>
 
-        {/* Profile Section */}
-        <div className="px-4 sm:px-6">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Personal Information</CardTitle>
-                <CardDescription>
-                  Update your profile details
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight text-primary">Profile Settings</h1>
+        <p className="text-muted-foreground mt-2">
+          Manage your personal information
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Personal Information</CardTitle>
+            <CardDescription>
+              Update your profile details
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             {/* Email (read-only from Clerk) */}
             <div>
               <Label htmlFor="email">Email</Label>
@@ -568,20 +581,18 @@ export default function ProfilePage() {
         </Card>
         */}
 
-            {/* Save Button */}
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                variant="blue-primary"
-                disabled={isSubmitting}
-                size="lg"
-              >
-                {isSubmitting ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </form>
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button
+            type="submit"
+            variant="blue-primary"
+            disabled={isSubmitting}
+            size="lg"
+          >
+            {isSubmitting ? "Saving..." : "Save Changes"}
+          </Button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }
