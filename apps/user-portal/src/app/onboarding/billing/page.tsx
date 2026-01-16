@@ -476,7 +476,7 @@ function BillingOnboardingContent() {
                   onClick={() => handleSelectPlan("free")}
                 >
                   <AccordionTrigger className="hover:no-underline py-0">
-                    <div className="flex items-center justify-between w-full mr-2">
+                    <div className="flex items-center justify-between w-full mr-2 gap-2">
                       <div className="flex items-center gap-2">
                         <Sparkles className={cn("h-5 w-5", selectedPlanId === "free" ? "text-white" : "text-gray-600")} />
                         <span className="font-semibold text-lg">{freePlan.name}</span>
@@ -487,7 +487,7 @@ function BillingOnboardingContent() {
                             Current Plan
                           </span>
                         )}
-                        <div className={cn("text-3xl font-bold", selectedPlanId === "free" ? "text-white" : "text-gray-900")}>
+                        <div className={cn("text-md font-bold", selectedPlanId === "free" ? "text-white" : "text-gray-900")}>
                           {isLoadingRates || !exchangeRates ? (
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === "free" ? "text-white" : "text-gray-600")} />
