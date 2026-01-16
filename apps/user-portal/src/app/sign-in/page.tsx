@@ -215,7 +215,7 @@ function SignInForm() {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 disabled={loading}
-                className="h-11"
+                className="h-11 text-base"
               />
             </div>
 
@@ -235,7 +235,7 @@ function SignInForm() {
                     setFormData({ ...formData, password: e.target.value })
                   }
                   disabled={loading}
-                  className="h-11 pr-10"
+                  className="h-11 pr-10 text-base"
                 />
                 <button
                   type="button"

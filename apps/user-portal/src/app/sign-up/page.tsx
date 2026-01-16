@@ -240,11 +240,11 @@ function SignUpForm() {
                   required
                   placeholder="Enter your first name"
                   value={formData.firstName}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setFormData({ ...formData, firstName: e.target.value })
                   }
                   disabled={loading}
-                  className="h-11"
+                  className="h-11 text-base"
                 />
               </div>
               <div className="space-y-2">
@@ -257,11 +257,11 @@ function SignUpForm() {
                   required
                   placeholder="Enter your last name"
                   value={formData.lastName}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setFormData({ ...formData, lastName: e.target.value })
                   }
                   disabled={loading}
-                  className="h-11"
+                  className="h-11 text-base"
                 />
               </div>
             </div>
@@ -277,11 +277,11 @@ function SignUpForm() {
                 required
                 placeholder="Enter your email address"
                 value={formData.email}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
                 disabled={loading}
-                className="h-11"
+                className="h-11 text-base"
               />
             </div>
 
@@ -298,11 +298,11 @@ function SignUpForm() {
                   minLength={8}
                   placeholder="Create a secure password (min. 8 characters)"
                   value={formData.password}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
                   disabled={loading}
-                  className="h-11 pr-10"
+                  className="h-11 pr-10 text-base"
                 />
                 <button
                   type="button"

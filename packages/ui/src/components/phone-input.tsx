@@ -165,7 +165,7 @@ export function PhoneInput({
         value={phoneNumber}
         onChange={handlePhoneNumberChange}
         className={cn(
-          "flex-1 border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0",
+          "flex-1 border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 text-base",
           error && "border-red-500"
         )}
         disabled={disabled}
