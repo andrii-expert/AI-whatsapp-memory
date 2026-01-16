@@ -549,7 +549,7 @@ function BillingOnboardingContent() {
                             Current Plan
                           </span>
                         )}
-                        <div className={cn("text-3xl font-bold", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-900")}>
+                        <div className={cn("text-md font-bold", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-900")}>
                           {isLoadingRates || !exchangeRates ? (
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-600")} />
@@ -611,7 +611,7 @@ function BillingOnboardingContent() {
                             Current Plan
                           </span>
                         )}
-                        <div className={cn("text-3xl font-bold", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-900")}>
+                        <div className={cn("text-md font-bold", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-900")}>
                           {isLoadingRates || !exchangeRates ? (
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-600")} />
