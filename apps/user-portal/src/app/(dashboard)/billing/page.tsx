@@ -1027,6 +1027,7 @@ export default function BillingPage() {
               </Button>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
