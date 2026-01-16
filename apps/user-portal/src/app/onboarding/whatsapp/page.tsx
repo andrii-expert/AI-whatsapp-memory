@@ -463,7 +463,7 @@ function WhatsAppLinkingForm() {
               <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
                 WhatsApp Number
               </Label>
-              <div className="flex gap-2 items-start">
+              <div className="flex gap-2 items-center">
                 <div className="flex-1">
                   <PhoneInput
                     id="phone"
