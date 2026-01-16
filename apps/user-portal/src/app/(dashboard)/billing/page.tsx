@@ -996,7 +996,6 @@ export default function BillingPage() {
                   </div>
                 );
               })()}
-              </RadioGroup>
             </>
             )}
 
