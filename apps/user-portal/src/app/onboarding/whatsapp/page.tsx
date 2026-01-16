@@ -430,53 +430,28 @@ function WhatsAppLinkingForm() {
 
           {/* Form */}
           <div className="space-y-4 sm:space-y-6">
-            {/* Phone Number Input - Hide when verified */}
-            {!isVerified && (
-              <div>
-                <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
-                  WhatsApp Number
-                </Label>
-                <div className="flex gap-2 relative">
-                  <div className="flex-1">
-                    <PhoneInput
-                      id="phone"
-                      value={phoneNumber}
-                      onChange={(value) => {
-                        setPhoneNumber(value);
-                        setShowVerification(false);
-                        setShowQRCode(false);
-                        setVerificationCode("");
-                        setQrCodeUrl("");
-                      }}
-                      className="w-full"
-                      disabled={isVerified}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={handleVerifyClick}
-                    disabled={!phoneNumber || isSavingPhone || isGeneratingCode || isVerified}
-                    className={cn(
-                      "whitespace-nowrap h-8 px-4 sm:px-8 absolute right-[2px] top-[7px]",
-                      isVerified 
-                        ? "bg-green-600 hover:bg-green-700 text-white cursor-default" 
-                        : "bg-blue-600 hover:bg-blue-700 text-white"
-                    )}
-                  >
-                    {isSavingPhone || isGeneratingCode 
-                      ? "Processing..." 
-                      : isVerified 
-                        ? "Verified" 
-                        : isMobile 
-                          ? "Open WhatsApp" 
-                          : "Verify WhatsApp"}
-                  </Button>
-                </div>
-              </div>
-            )}
+            {/* Phone Number Input */}
+            <div>
+              <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
+                WhatsApp Number
+              </Label>
+              <PhoneInput
+                id="phone"
+                value={phoneNumber}
+                onChange={(value) => {
+                  setPhoneNumber(value);
+                  setShowVerification(false);
+                  setShowQRCode(false);
+                  setVerificationCode("");
+                  setQrCodeUrl("");
+                }}
+                className="w-full"
+                disabled={isVerified}
+              />
+            </div>
 
-            {/* Verification Step Instructions - Show when phone is entered but not verified */}
-            {!isVerified && phoneNumber && !showQRCode && (
+            {/* Verification Step Instructions - Always show when not verified */}
+            {!isVerified && (
               <div>
                 <Label className="text-sm font-medium text-gray-700 mb-2 block">
                   Verification Step
@@ -492,9 +467,6 @@ function WhatsAppLinkingForm() {
             {/* QR Code - Desktop only, shown when Verify WhatsApp is clicked */}
             {!isVerified && showQRCode && qrCodeUrl && !isMobile && (
               <div className="space-y-3">
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Scan QR Code
-                </Label>
                 <div className="flex justify-center">
                   <div className="p-4 bg-white border border-gray-200 rounded-lg">
                     <img
@@ -507,6 +479,27 @@ function WhatsAppLinkingForm() {
                 <p className="text-xs text-gray-500 text-center">
                   Please scan this to verify your WhatsApp
                 </p>
+              </div>
+            )}
+
+            {/* Open WhatsApp / Verify WhatsApp Button */}
+            {!isVerified && (
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Buttons
+                </Label>
+                <Button
+                  type="button"
+                  onClick={handleVerifyClick}
+                  disabled={!phoneNumber || isSavingPhone || isGeneratingCode}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-6 text-sm sm:text-base font-medium"
+                >
+                  {isSavingPhone || isGeneratingCode 
+                    ? "Processing..." 
+                    : isMobile 
+                      ? "Open WhatsApp" 
+                      : "Verify WhatsApp"}
+                </Button>
               </div>
             )}
 
@@ -660,17 +653,19 @@ function WhatsAppLinkingForm() {
               </div>
             )}
 
-            {/* Next Step Button */}
-            <div className="pt-2">
-              <Button
-                type="button"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-6 text-sm sm:text-base font-medium"
-                onClick={handleNext}
-                disabled={!isVerified || !timezone || isSubmitting}
-              >
-                {isSubmitting ? "Saving..." : "Next Step"}
-              </Button>
-            </div>
+            {/* Next Step Button - Only show when verified */}
+            {isVerified && (
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-6 text-sm sm:text-base font-medium"
+                  onClick={handleNext}
+                  disabled={!timezone || isSubmitting}
+                >
+                  {isSubmitting ? "Saving..." : "Next Step"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
