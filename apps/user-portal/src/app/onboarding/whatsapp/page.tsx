@@ -140,6 +140,7 @@ function WhatsAppLinkingForm() {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [hasInitiatedVerification, setHasInitiatedVerification] = useState(false);
 
   // Fetch user data using useAuth
   const { user, isLoaded } = useAuth();
@@ -354,6 +355,7 @@ function WhatsAppLinkingForm() {
 
     // Generate verification code
     setIsGeneratingCode(true);
+    setHasInitiatedVerification(true);
     generateCodeMutation.mutate({ phoneNumber: normalizedPhone });
   };
 
@@ -435,19 +437,38 @@ function WhatsAppLinkingForm() {
               <Label htmlFor="phone" className="text-sm font-medium text-gray-700 mb-2 block">
                 WhatsApp Number
               </Label>
-              <PhoneInput
-                id="phone"
-                value={phoneNumber}
-                onChange={(value) => {
-                  setPhoneNumber(value);
-                  setShowVerification(false);
-                  setShowQRCode(false);
-                  setVerificationCode("");
-                  setQrCodeUrl("");
-                }}
-                className="w-full"
-                disabled={isVerified}
-              />
+              <div className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <PhoneInput
+                    id="phone"
+                    value={phoneNumber}
+                    onChange={(value) => {
+                      setPhoneNumber(value);
+                      setShowVerification(false);
+                      setShowQRCode(false);
+                      setVerificationCode("");
+                      setQrCodeUrl("");
+                      setHasInitiatedVerification(false);
+                    }}
+                    className="w-full"
+                    disabled={isVerified}
+                  />
+                  {hasInitiatedVerification && !isVerified && (
+                    <p className="text-sm text-red-600 mt-2">
+                      Please double check your WhatsApp number and try again
+                    </p>
+                  )}
+                </div>
+                {hasInitiatedVerification && !isVerified && (
+                  <Button
+                    type="button"
+                    disabled
+                    className="bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-md cursor-default whitespace-nowrap flex-shrink-0"
+                  >
+                    Not Verified
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Verification Step Instructions - Always show when not verified */}
@@ -477,7 +498,7 @@ function WhatsAppLinkingForm() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 text-center">
-                  Please scan this to verify your WhatsApp
+                  Please scan this open your WhatsApp
                 </p>
               </div>
             )}
@@ -485,9 +506,6 @@ function WhatsAppLinkingForm() {
             {/* Open WhatsApp / Verify WhatsApp Button */}
             {!isVerified && (
               <div>
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Buttons
-                </Label>
                 <Button
                   type="button"
                   onClick={handleVerifyClick}
@@ -514,6 +532,7 @@ function WhatsAppLinkingForm() {
                   setShowQRCode(false);
                   setVerificationCode("");
                   setQrCodeUrl("");
+                  setHasInitiatedVerification(false);
                   refetchNumbers();
                 }}
                 savePhoneMutation={savePhoneMutation}
