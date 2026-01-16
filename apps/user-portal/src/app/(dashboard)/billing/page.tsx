@@ -780,6 +780,7 @@ export default function BillingPage() {
             {isLoadingPlans ? (
               <div className="text-center text-muted-foreground py-8">Loading available plans...</div>
             ) : (
+              <>
               <RadioGroup
                 value={selectedPlanForChange && !selectedPlanForChange.startsWith("gold") ? selectedPlanForChange : (currentPlanId && !currentPlanId.startsWith("gold") ? currentPlanId : undefined)}
                 onValueChange={handlePlanSelect}
@@ -1001,6 +1002,7 @@ export default function BillingPage() {
                   </div>
                 );
               })()}
+              </>
             )}
 
           {/* Confirm Plan Change Button */}
