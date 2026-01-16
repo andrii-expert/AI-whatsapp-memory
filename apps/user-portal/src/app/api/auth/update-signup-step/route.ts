@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { updateTemporaryCredentials, getTemporaryCredentialsByUserId } from "@imaginecalendar/database/queries";
+import { updateTemporaryCredentials, getTemporaryCredentialsByUserId, createTemporarySignupCredentials, getUserById } from "@imaginecalendar/database/queries";
 import { verifyToken } from "@api/utils/auth-helpers";
+import { getDeviceFingerprintFromRequest, getIpAddressFromRequest } from "@api/utils/device-fingerprint";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";
 
@@ -37,17 +38,56 @@ export async function POST(req: NextRequest) {
     const db = await connectDb();
 
     // Check if temporary credentials exist for this user
-    const existing = await getTemporaryCredentialsByUserId(db, decoded.userId);
+    let existing = await getTemporaryCredentialsByUserId(db, decoded.userId);
+    
+    // If no temporary credentials exist, create them (user might be in onboarding)
     if (!existing) {
-      // No temporary credentials, that's okay (maybe user already completed signup)
-      return NextResponse.json({ success: true });
+      // Get user to check if they're still in onboarding
+      const user = await getUserById(db, decoded.userId);
+      if (!user || user.setupStep >= 4) {
+        // User completed onboarding, no need for temporary credentials
+        return NextResponse.json({ success: true });
+      }
+
+      // Create temporary credentials for users still in onboarding
+      const deviceFingerprint = getDeviceFingerprintFromRequest(req);
+      const userAgent = req.headers.get("user-agent") || undefined;
+      const ipAddress = getIpAddressFromRequest(req);
+
+      try {
+        await createTemporarySignupCredentials(db, {
+          userId: decoded.userId,
+          email: user.email,
+          // No passwordHash for OAuth users or if not available
+          deviceFingerprint,
+          userAgent,
+          ipAddress,
+          currentStep: validated.currentStep,
+          stepData: validated.stepData,
+        });
+
+        logger.info(
+          { userId: decoded.userId, currentStep: validated.currentStep },
+          "Temporary signup credentials created during step update"
+        );
+
+        return NextResponse.json({ success: true });
+      } catch (createError) {
+        logger.error(
+          { error: createError, userId: decoded.userId },
+          "Failed to create temporary credentials during step update"
+        );
+        // Continue to try updating if creation fails
+      }
     }
 
-    // Update the step
-    await updateTemporaryCredentials(db, decoded.userId, {
-      currentStep: validated.currentStep,
-      stepData: validated.stepData,
-    });
+    // Update the step if credentials exist
+    if (existing) {
+      await updateTemporaryCredentials(db, decoded.userId, {
+        currentStep: validated.currentStep,
+        stepData: validated.stepData,
+      });
+    }
 
     logger.info(
       { userId: decoded.userId, currentStep: validated.currentStep },

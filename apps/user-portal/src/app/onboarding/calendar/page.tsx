@@ -150,6 +150,19 @@ function CalendarConnectionForm() {
       return;
     }
     // If setupStep is 2, stay on this page (correct step)
+    
+    // Update temporary credentials step when landing on this page
+    if (setupStep === 2) {
+      fetch("/api/auth/update-signup-step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ currentStep: "calendar" }),
+      }).catch((err) => {
+        // Silently fail - step update is not critical
+        console.error("Failed to update signup step:", err);
+      });
+    }
   }, [user, isLoaded, router]);
 
   if (!isLoaded || !user) {
@@ -190,18 +203,50 @@ function CalendarConnectionForm() {
 
   const handleNextStep = async () => {
     setIsCompleting(true);
-    updateUserMutation.mutate({
-      setupStep: 3, // Move to next step: Billing setup
-    });
-    setIsCompleting(false);
+    try {
+      await updateUserMutation.mutateAsync({
+        setupStep: 3, // Move to next step: Billing setup
+      });
+
+      // Update temporary credentials step
+      try {
+        await fetch("/api/auth/update-signup-step", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ currentStep: "billing" }),
+        });
+      } catch (err) {
+        // Silently fail - step update is not critical
+        console.error("Failed to update signup step:", err);
+      }
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   const handleSkip = async () => {
     setIsCompleting(true);
-    updateUserMutation.mutate({
-      setupStep: 3, // Move to next step: Billing setup
-    });
-    setIsCompleting(false);
+    try {
+      await updateUserMutation.mutateAsync({
+        setupStep: 3, // Move to next step: Billing setup
+      });
+
+      // Update temporary credentials step
+      try {
+        await fetch("/api/auth/update-signup-step", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ currentStep: "billing" }),
+        });
+      } catch (err) {
+        // Silently fail - step update is not critical
+        console.error("Failed to update signup step:", err);
+      }
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   // Check if any calendar is connected
