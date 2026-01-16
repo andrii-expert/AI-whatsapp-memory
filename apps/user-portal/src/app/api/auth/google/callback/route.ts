@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { getUserByEmail, createUser } from "@imaginecalendar/database/queries";
+import { getUserByEmail, createUser, createTemporarySignupCredentials } from "@imaginecalendar/database/queries";
 import { generateToken } from "@api/utils/auth-helpers";
+import { getDeviceFingerprintFromRequest, getIpAddressFromRequest } from "@api/utils/device-fingerprint";
 import { logger } from "@imaginecalendar/logger";
 import { randomUUID } from "crypto";
 
@@ -108,6 +109,53 @@ export async function GET(request: NextRequest) {
       userId,
       email,
     });
+
+    // Save temporary credentials with device info for auto-login
+    // For new users OR existing users still in onboarding (setupStep < 4)
+    if (isNewUser || (user && user.setupStep < 4)) {
+      try {
+        const deviceFingerprint = getDeviceFingerprintFromRequest(request);
+        const userAgent = request.headers.get("user-agent") || undefined;
+        const ipAddress = getIpAddressFromRequest(request);
+
+        // Determine current step based on setupStep
+        let currentStep = "whatsapp"; // Google users skip email verification
+        if (user?.setupStep === 2) {
+          currentStep = "calendar";
+        } else if (user?.setupStep === 3) {
+          currentStep = "billing";
+        } else if (user?.setupStep === 4) {
+          currentStep = "complete";
+        }
+
+        await createTemporarySignupCredentials(db, {
+          userId,
+          email,
+          // No passwordHash for OAuth users
+          deviceFingerprint,
+          userAgent,
+          ipAddress,
+          currentStep,
+          stepData: {
+            firstName: user?.firstName || firstName || undefined,
+            lastName: user?.lastName || lastName || undefined,
+            isOAuth: true,
+            oAuthProvider: "google",
+          },
+        });
+
+        logger.info(
+          { userId, email, deviceFingerprint, currentStep, isNewUser },
+          "Temporary signup credentials saved for Google OAuth user"
+        );
+      } catch (credentialError) {
+        // Log but don't fail OAuth if saving temporary credentials fails
+        logger.error(
+          { error: credentialError, userId, email },
+          "Failed to save temporary signup credentials for Google OAuth user"
+        );
+      }
+    }
 
     // Redirect based on setup step
     // setupStep 1 = WhatsApp setup, 2 = Calendar setup, 3 = Billing setup, 4 = Complete

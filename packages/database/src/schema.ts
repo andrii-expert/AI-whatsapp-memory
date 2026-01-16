@@ -295,7 +295,7 @@ export const temporarySignupCredentials = pgTable("temporary_signup_credentials"
   
   // Encrypted credentials (stored temporarily during signup)
   email: text("email").notNull(),
-  passwordHash: text("password_hash").notNull(), // Hashed password
+  passwordHash: text("password_hash"), // Hashed password (nullable for OAuth users)
   
   // Device information for auto-login
   deviceFingerprint: text("device_fingerprint").notNull(), // Unique device identifier

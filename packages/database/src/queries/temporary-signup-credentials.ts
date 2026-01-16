@@ -7,7 +7,7 @@ import { logger } from "@imaginecalendar/logger";
 export interface CreateTemporaryCredentialsData {
   userId: string;
   email: string;
-  passwordHash: string;
+  passwordHash?: string; // Optional for OAuth users (Google, etc.)
   deviceFingerprint: string;
   userAgent?: string;
   ipAddress?: string;
@@ -40,7 +40,7 @@ export async function createTemporarySignupCredentials(
         .values({
           userId: data.userId,
           email: data.email,
-          passwordHash: data.passwordHash,
+          passwordHash: data.passwordHash || null, // Optional for OAuth users
           deviceFingerprint: data.deviceFingerprint,
           userAgent: data.userAgent,
           ipAddress: data.ipAddress,
