@@ -189,26 +189,40 @@ function WhatsAppLinkingForm() {
     }
   }, [user, isLoaded, router]);
 
-  // Initialize phone number from user data or verified WhatsApp number
+  // Check if user has verified WhatsApp and initialize phone number
   useEffect(() => {
+    // First check for verified WhatsApp numbers (highest priority)
+    if (whatsappNumbers && whatsappNumbers.length > 0) {
+      const verifiedNumber = whatsappNumbers.find((num: any) => num.isVerified);
+      
+      if (verifiedNumber?.phoneNumber) {
+        // User has a verified WhatsApp number
+        const verifiedPhone = verifiedNumber.phoneNumber;
+        
+        // Always use the verified WhatsApp number
+        setPhoneNumber(verifiedPhone);
+        
+        // Mark as verified
+        setIsVerified(true);
+        setShowVerification(false);
+        setHasInitiatedVerification(false);
+        setShowQRCode(false);
+        setVerificationCode("");
+        
+        // Ensure user's profile phone matches the verified number
+        // This will be handled when they proceed to next step
+        return;
+      }
+    }
+    
+    // No verified WhatsApp number found
+    setIsVerified(false);
+    
+    // Fallback to user's profile phone if no phone number is set yet
     if (user?.phone && !phoneNumber) {
       setPhoneNumber(user.phone);
     }
-    const verifiedNumber = whatsappNumbers.find((num: any) => num.isVerified);
-    if (verifiedNumber?.phoneNumber && !phoneNumber) {
-      setPhoneNumber(verifiedNumber.phoneNumber);
-    }
-  }, [user?.phone, whatsappNumbers, phoneNumber]);
-
-  // Check if user has verified WhatsApp
-  useEffect(() => {
-    const verified = whatsappNumbers.some((num: any) => num.isVerified);
-    setIsVerified(verified);
-    // If already verified, hide verification section
-    if (verified) {
-      setShowVerification(false);
-    }
-  }, [whatsappNumbers]);
+  }, [whatsappNumbers, user?.phone]);
 
   // Initialize country from existing timezone or default to South Africa
   useEffect(() => {
