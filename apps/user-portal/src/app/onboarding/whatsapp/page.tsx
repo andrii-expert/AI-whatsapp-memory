@@ -489,9 +489,9 @@ function WhatsAppLinkingForm() {
                   <Button
                     type="button"
                     disabled
-                    className="bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-md cursor-default whitespace-nowrap flex-shrink-0"
+                    className="bg-blue-600 text-white px-4 py-2 text-sm font-medium rounded-md cursor-default whitespace-nowrap flex-shrink-0"
                   >
-                    Not Verified
+                    Pending
                   </Button>
                 )}
               </div>
