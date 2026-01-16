@@ -658,7 +658,14 @@ function WhatsAppLinkingForm() {
               <div className="pt-2">
                 <Button
                   type="button"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-6 text-sm sm:text-base font-medium"
+                  className="w-full text-white py-4 sm:py-6 text-sm sm:text-base font-medium"
+                  style={{ backgroundColor: '#06DB6D' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#05C85A';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#06DB6D';
+                  }}
                   onClick={handleNext}
                   disabled={!timezone || isSubmitting}
                 >
