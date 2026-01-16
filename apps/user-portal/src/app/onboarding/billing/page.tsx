@@ -214,7 +214,7 @@ function BillingOnboardingContent() {
 
   // Fetch current subscription data (used to detect existing plan, but never blocks UI)
   // Use the single-argument tRPC helper form to avoid server-side defaultQueryOptions issues.
-  const { data: subscription } = useQuery(
+  const { data: subscription, isSuccess: subscriptionLoaded } = useQuery(
     trpc.billing.getSubscription.queryOptions()
   );
 
@@ -240,12 +240,19 @@ function BillingOnboardingContent() {
 
   const currentPlanId = subscription?.plan ?? freePlan?.id ?? "free";
   
-  // Initialize selected plan to current plan or free
+  // Initialize selected plan to current plan when subscription data is available
   useEffect(() => {
-    if (!selectedPlanId && currentPlanId) {
-      setSelectedPlanId(currentPlanId);
+    // Wait for subscription query to complete before setting selected plan
+    if (subscriptionLoaded && !selectedPlanId) {
+      // If user has a subscription, select their current plan
+      if (subscription?.plan) {
+        setSelectedPlanId(subscription.plan);
+      } else {
+        // No subscription, default to free plan
+        setSelectedPlanId(freePlan?.id ?? "free");
+      }
     }
-  }, [currentPlanId, selectedPlanId]);
+  }, [subscriptionLoaded, subscription?.plan, selectedPlanId, freePlan?.id]);
 
   // Load saved currency preference on mount, otherwise use ZAR as default
   useEffect(() => {
