@@ -37,6 +37,13 @@ function CalendarConnectionForm() {
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
 
+  // Poll user setupStep every 1 second to detect when user advances to next step
+  const { data: polledUser } = useQuery({
+    ...trpc.user.me.queryOptions(),
+    refetchInterval: 1000, // Check every 1 second
+    enabled: isLoaded && !!user && (user.setupStep ?? 1) === 2, // Only poll while on step 2
+  });
+
   // Fetch user's calendar connections to check sync status
   const { data: calendars = [], refetch: refetchCalendars } = useQuery(
     trpc.calendar.list.queryOptions()
@@ -127,6 +134,7 @@ function CalendarConnectionForm() {
   );
 
   // Redirect if user has already completed this step or is on wrong step
+  // Also check polled user data for setupStep changes
   useEffect(() => {
     if (!isLoaded) return;
     
@@ -135,8 +143,10 @@ function CalendarConnectionForm() {
       return;
     }
 
+    // Use polled user data if available (for real-time updates), otherwise use user from useAuth
+    const currentUser = polledUser || user;
     // Default to 1 if setupStep is null/undefined
-    const setupStep = user.setupStep ?? 1;
+    const setupStep = currentUser.setupStep ?? 1;
 
     // If setupStep is 1, redirect to WhatsApp setup
     if (setupStep === 1) {
@@ -163,7 +173,7 @@ function CalendarConnectionForm() {
         console.error("Failed to update signup step:", err);
       });
     }
-  }, [user, isLoaded, router]);
+  }, [user, polledUser, isLoaded, router]);
 
   if (!isLoaded || !user) {
     return <OnboardingLoading />;

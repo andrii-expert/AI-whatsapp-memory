@@ -120,6 +120,13 @@ function BillingOnboardingContent() {
   const trpc = useTRPC();
   const { toast } = useToast();
 
+  // Poll user setupStep every 1 second to detect when user advances to next step
+  const { data: polledUser } = useQuery({
+    ...trpc.user.me.queryOptions(),
+    refetchInterval: 1000, // Check every 1 second
+    enabled: isLoaded && !!user && (user.setupStep ?? 1) === 3, // Only poll while on step 3
+  });
+
   const [isAnnual, setIsAnnual] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
@@ -182,13 +189,18 @@ function BillingOnboardingContent() {
   }, [isLoaded, user, router]);
 
   // Ensure user is on the correct onboarding step
+  // Also check polled user data for setupStep changes
   useEffect(() => {
     if (!isLoaded) return;
     if (!user) {
       router.push("/sign-in");
       return;
     }
-    const setupStep = user.setupStep ?? 1;
+    
+    // Use polled user data if available (for real-time updates), otherwise use user from useAuth
+    const currentUser = polledUser || user;
+    const setupStep = currentUser.setupStep ?? 1;
+    
     if (setupStep < 3) {
       // Should have completed WhatsApp and Calendar first
       if (setupStep === 1) {
@@ -197,6 +209,9 @@ function BillingOnboardingContent() {
         router.push("/onboarding/calendar");
       }
     } else if (setupStep > 4) {
+      router.push("/dashboard");
+    } else if (setupStep === 4) {
+      // User completed onboarding, redirect to dashboard
       router.push("/dashboard");
     } else if (setupStep === 3) {
       // Update temporary credentials step when landing on this page
@@ -210,7 +225,7 @@ function BillingOnboardingContent() {
         console.error("Failed to update signup step:", err);
       });
     }
-  }, [isLoaded, user, router]);
+  }, [isLoaded, user, polledUser, router]);
 
   // Fetch current subscription data (used to detect existing plan, but never blocks UI)
   // Use the single-argument tRPC helper form to avoid server-side defaultQueryOptions issues.
