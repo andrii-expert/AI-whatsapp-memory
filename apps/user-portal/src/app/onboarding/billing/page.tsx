@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@imaginecalendar/ui/button";
+import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Check, Crown, Sparkles, Zap } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
@@ -117,6 +118,7 @@ function BillingOnboardingContent() {
   const router = useRouter();
   const { user, isLoaded } = useAuth();
   const trpc = useTRPC();
+  const { toast } = useToast();
 
   const [isAnnual, setIsAnnual] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -136,6 +138,10 @@ function BillingOnboardingContent() {
   const handleSelectPlan = (planId: string) => {
     // Gold plan is not yet available in onboarding
     if (planId.startsWith("gold")) {
+      toast({
+        title: "Coming Soon",
+        description: "The Gold package will be available soon!",
+      });
       return;
     }
 
@@ -390,7 +396,7 @@ function BillingOnboardingContent() {
     <div className="flex min-h-screen flex-col bg-white">
       {/* Billing cards - Full width */}
       <div className="w-full flex items-center justify-center px-4 sm:px-8 py-10">
-        <div className="w-full max-w-md space-y-8">
+        <div className="w-full max-w-md space-y-4">
           {/* Title */}
           <div>
             <div className="flex flex-col items-center justify-between gap-4 mb-4">
@@ -645,7 +651,7 @@ function BillingOnboardingContent() {
           </Accordion>
           
           {/* Action buttons */}
-          <div className="pt-4 space-y-3">
+          <div className="space-y-3">
             {/* Subscribe button for selected plan (if different from current) */}
             {selectedPlanId && selectedPlanId !== currentPlanId ? (
               <Button
