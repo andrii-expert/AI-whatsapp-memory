@@ -17,6 +17,7 @@ export interface CreateTemporaryCredentialsData {
 
 /**
  * Create temporary signup credentials with device info
+ * Allows multiple device fingerprints per user (for different browsers/devices)
  */
 export async function createTemporarySignupCredentials(
   db: Database,
@@ -26,10 +27,37 @@ export async function createTemporarySignupCredentials(
     'createTemporarySignupCredentials',
     { userId: data.userId, email: data.email },
     async () => {
-      // Delete any existing credentials for this user
-      await db
-        .delete(temporarySignupCredentials)
-        .where(eq(temporarySignupCredentials.userId, data.userId));
+      // Check if credentials already exist for this device fingerprint
+      const existing = await db.query.temporarySignupCredentials.findFirst({
+        where: and(
+          eq(temporarySignupCredentials.userId, data.userId),
+          eq(temporarySignupCredentials.deviceFingerprint, data.deviceFingerprint)
+        ),
+      });
+
+      // If exists and not expired, update it; otherwise create new
+      if (existing && existing.expiresAt && existing.expiresAt > new Date()) {
+        const [updated] = await db
+          .update(temporarySignupCredentials)
+          .set({
+            email: data.email,
+            passwordHash: data.passwordHash || null,
+            userAgent: data.userAgent,
+            ipAddress: data.ipAddress,
+            currentStep: data.currentStep,
+            stepData: data.stepData || null,
+            updatedAt: new Date(),
+          })
+          .where(eq(temporarySignupCredentials.id, existing.id))
+          .returning();
+
+        logger.info(
+          { userId: data.userId, deviceFingerprint: data.deviceFingerprint, currentStep: data.currentStep },
+          "Temporary signup credentials updated"
+        );
+
+        return updated;
+      }
 
       // Create expiration date (7 days from now)
       const expiresAt = new Date();
@@ -126,6 +154,7 @@ export async function getTemporaryCredentialsByUserId(
 
 /**
  * Update temporary credentials (e.g., update current step)
+ * Updates ALL credentials for a user (all device fingerprints)
  */
 export async function updateTemporaryCredentials(
   db: Database,
@@ -139,7 +168,8 @@ export async function updateTemporaryCredentials(
     'updateTemporaryCredentials',
     { userId },
     async () => {
-      const [updated] = await db
+      // Update all credentials for this user (all device fingerprints)
+      const updated = await db
         .update(temporarySignupCredentials)
         .set({
           ...updates,
@@ -149,7 +179,12 @@ export async function updateTemporaryCredentials(
         .where(eq(temporarySignupCredentials.userId, userId))
         .returning();
 
-      return updated;
+      logger.info(
+        { userId, updatedCount: updated.length, currentStep: updates.currentStep },
+        "Updated temporary credentials for all device fingerprints"
+      );
+
+      return updated[0] || null; // Return first updated record for backward compatibility
     }
   );
 }

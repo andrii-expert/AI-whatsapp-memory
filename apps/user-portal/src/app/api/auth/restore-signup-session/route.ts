@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { getTemporaryCredentialsByDevice, getUserById } from "@imaginecalendar/database/queries";
+import { getTemporaryCredentialsByDevice, getTemporaryCredentialsByUserId, getUserById } from "@imaginecalendar/database/queries";
 import { generateToken } from "@api/utils/auth-helpers";
-import { getDeviceFingerprintFromRequest } from "@api/utils/device-fingerprint";
+import { getDeviceFingerprintFromRequest, getIpAddressFromRequest } from "@api/utils/device-fingerprint";
 import { logger } from "@imaginecalendar/logger";
 import { z } from "zod";
 
@@ -22,9 +22,71 @@ export async function POST(req: NextRequest) {
     // Use client-provided fingerprint or generate from request
     const deviceFingerprint = validated.deviceFingerprint || getDeviceFingerprintFromRequest(req);
     const db = await connectDb();
+    const currentIpAddress = getIpAddressFromRequest(req);
 
-    // Get temporary credentials by device fingerprint
-    const credentials = await getTemporaryCredentialsByDevice(db, deviceFingerprint);
+    // First, try to get credentials by device fingerprint (exact match)
+    let credentials = await getTemporaryCredentialsByDevice(db, deviceFingerprint);
+
+    // If no exact match and we have an IP address, try to find credentials by IP
+    // This allows auto-login from different browsers on the same network/device
+    if (!credentials && currentIpAddress) {
+      // Query all credentials and filter by IP address and expiration
+      const allCredentials = await db.query.temporarySignupCredentials.findMany({
+        orderBy: (credentials, { desc }) => [desc(credentials.createdAt)],
+        limit: 50, // Limit to recent credentials
+      });
+
+      // Filter for matching IP, non-expired, and user still in onboarding
+      for (const cred of allCredentials) {
+        // Skip if expired
+        if (cred.expiresAt && cred.expiresAt <= new Date()) {
+          continue;
+        }
+
+        // Check if IP matches (exact match)
+        if (cred.ipAddress && cred.ipAddress === currentIpAddress) {
+          const user = await getUserById(db, cred.userId);
+          if (user && user.setupStep < 4) {
+            // User is still in onboarding, allow auto-login from same IP
+            credentials = cred;
+            
+            // Create/update credentials for this new device fingerprint for faster future lookups
+            try {
+              const { createTemporarySignupCredentials } = await import("@imaginecalendar/database/queries");
+              const userAgent = req.headers.get("user-agent") || undefined;
+              
+              await createTemporarySignupCredentials(db, {
+                userId: cred.userId,
+                email: cred.email,
+                passwordHash: cred.passwordHash || undefined,
+                deviceFingerprint,
+                userAgent,
+                ipAddress: currentIpAddress,
+                currentStep: cred.currentStep,
+                stepData: cred.stepData as Record<string, any> | undefined,
+              });
+              
+              logger.info(
+                { userId: cred.userId, deviceFingerprint, reason: "Created credentials for new browser" },
+                "Temporary credentials created for new browser/device"
+              );
+            } catch (createError) {
+              // Log but don't fail - we already have credentials to use
+              logger.error(
+                { error: createError, userId: cred.userId },
+                "Failed to create credentials for new browser"
+              );
+            }
+            
+            logger.info(
+              { userId: cred.userId, ipAddress: currentIpAddress, reason: "IP match for user in onboarding" },
+              "Signup session found by IP address for user in onboarding"
+            );
+            break;
+          }
+        }
+      }
+    }
 
     if (!credentials) {
       return NextResponse.json(
