@@ -479,21 +479,18 @@ function WhatsAppLinkingForm() {
                     className="w-full"
                     disabled={isVerified}
                   />
+                </div>
+                <div className="h-full flex items-center justify-center">
                   {hasInitiatedVerification && !isVerified && (
-                    <p className="text-sm text-red-600 mt-2">
-                      Please double check your WhatsApp number and try again
-                    </p>
+                    <Button
+                      type="button"
+                      disabled
+                      className="bg-blue-600 text-white px-4 py-2 text-sm font-medium rounded-md cursor-default whitespace-nowrap flex-shrink-0"
+                    >
+                      Pending
+                    </Button>
                   )}
                 </div>
-                {hasInitiatedVerification && !isVerified && (
-                  <Button
-                    type="button"
-                    disabled
-                    className="bg-blue-600 text-white px-4 py-2 text-sm font-medium rounded-md cursor-default whitespace-nowrap flex-shrink-0"
-                  >
-                    Pending
-                  </Button>
-                )}
               </div>
             </div>
 
