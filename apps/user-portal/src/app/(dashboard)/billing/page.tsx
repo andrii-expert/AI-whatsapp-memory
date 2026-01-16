@@ -601,31 +601,21 @@ export default function BillingPage() {
   const planLoadError = USE_DB_PLANS && plansQuery.isError;
 
   return (
-    <div className="space-y-6">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Home className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <span className="font-medium">Billing & Subscription</span>
-      </div>
+    <div className="bg-white">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6 p-4 sm:p-6 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] rounded-xl">
+          <h1 className="text-xl font-bold text-gray-900">Billing & Subscription</h1>
+        </div>
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Billing & Subscription</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage your subscription and payment details
-        </p>
-      </div>
-
-      {/* Current Subscription and Plan Features - Side by Side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Current Subscription */}
-        <Card className="rounded-md border border-gray-200">
+        {/* Current Subscription Section */}
+        <div className="mb-8 px-4 sm:px-6">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Current Subscription</h2>
+          
+          {/* Current Subscription and Plan Features - Side by Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Current Subscription */}
+            <Card className="rounded-2xl border-2 border-gray-200">
           <CardHeader>
             <CardTitle className="font-bold">Current Subscription</CardTitle>
             <CardDescription className="text-sm text-gray-600">
@@ -700,8 +690,8 @@ export default function BillingPage() {
           </CardContent>
         </Card>
 
-        {/* Plan Features */}
-        <Card className="rounded-md border border-gray-200">
+            {/* Plan Features */}
+            <Card className="rounded-2xl border-2 border-gray-200">
           <CardHeader>
             <CardTitle className="font-bold">Plan Features</CardTitle>
             <CardDescription className="text-sm text-gray-600">
@@ -718,16 +708,19 @@ export default function BillingPage() {
               ))}
             </ul>
           </CardContent>
-        </Card>
-      </div>
+            </Card>
+          </div>
+        </div>
 
-      {/* Available Plans */}
-      <Card className="rounded-md">
+        {/* Available Plans */}
+        <div className="mb-8 px-4 sm:px-6">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Change Plan</h2>
+          
+          <Card className="rounded-2xl border-2 border-gray-200">
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <CardTitle>Change Plan</CardTitle>
-              <CardDescription>
+              <div className="flex-1">
+              <CardDescription className="text-sm text-gray-600">
                 {currentPlanId === 'free' 
                   ? 'Upgrade to unlock premium features' 
                   : 'Switch to a different subscription plan'}
@@ -911,38 +904,38 @@ export default function BillingPage() {
                       )}
                     />
 
-                    <div className={cn("text-center mb-6", isCurrentPlan && !isSelected && "mt-6")}>
-                      <div className={cn(
-                        "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
-                        isSelected ? "bg-white/20" : "bg-purple-100"
-                      )}>
-                        <Zap className={cn("h-6 w-6", isSelected ? "text-white" : "text-purple-600")} />
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className={cn("h-5 w-5", isSelected ? "text-white" : "text-purple-600")} />
+                        <span className="font-semibold text-lg">{silverPlan.name.replace(' Annual', '')}</span>
                       </div>
-                      <h4 className={cn("text-xl font-bold mb-3", isSelected ? "text-white" : "text-primary")}>
-                        {silverPlan.name.replace(' Annual', '')}
-                      </h4>
-                      <div className={cn("text-3xl font-bold", isSelected ? "text-white" : "text-gray-900")}>
-                        {isLoadingRates || !exchangeRates ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-gray-600")} />
-                            <span className={cn("text-sm", isSelected ? "text-white/90" : "text-gray-500")}>Loading...</span>
-                          </div>
-                        ) : (
-                          <>
-                            {formatCurrency(silverPlan.amountCents, selectedCurrency, exchangeRates)}
-                            <span className="text-sm text-gray-600 ml-1"> / {silverPlan.billingPeriod}</span>
-                          </>
-                        )}
-                      </div>
-                      {!isLoadingRates && exchangeRates && isAnnual && silverPlan.monthlyPriceCents > 0 && (
-                        <p className={cn("text-xs mt-1", isSelected ? "text-white/80" : "text-purple-700")}>
-                          {silverPlan.monthlyPriceCents / 100}/month when paid annually
-                        </p>
+                      {isCurrentPlan && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                          Current Plan
+                        </span>
                       )}
-                      <p className={cn("mt-1 text-xs", isSelected ? "text-white/80" : "text-gray-500")}>
-                        {silverPlan.description}
-                      </p>
                     </div>
+                    <div className={cn("text-3xl font-bold", isSelected ? "text-white" : "text-gray-900")}>
+                      {isLoadingRates || !exchangeRates ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-gray-600")} />
+                          <span className={cn("text-sm", isSelected ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                        </div>
+                      ) : (
+                        <>
+                          {formatCurrency(silverPlan.amountCents, selectedCurrency, exchangeRates)}
+                          <span className="text-sm text-gray-600 ml-1"> / {silverPlan.billingPeriod}</span>
+                        </>
+                      )}
+                    </div>
+                    {!isLoadingRates && exchangeRates && isAnnual && silverPlan.monthlyPriceCents > 0 && (
+                      <p className={cn("text-xs mt-1", isSelected ? "text-white/80" : "text-purple-700")}>
+                        {formatCurrency(silverPlan.monthlyPriceCents, selectedCurrency, exchangeRates)}/month when paid annually
+                      </p>
+                    )}
+                    <p className={cn("mt-1 text-xs", isSelected ? "text-white/80" : "text-gray-500")}>
+                      {silverPlan.description}
+                    </p>
 
                     <ul className="mt-4 space-y-2 text-sm">
                       {silverPlan.features.map((feature, i) => (
@@ -1143,8 +1136,9 @@ export default function BillingPage() {
             </>
           )}
         </CardContent>
-      </Card>
-
+        </Card>
+        </div>
+      </div>
     </div>
   );
 }
