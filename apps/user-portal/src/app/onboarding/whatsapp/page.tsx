@@ -42,8 +42,9 @@ import {
   CommandList,
 } from "@imaginecalendar/ui/command";
 import { CheckIcon, ChevronDownIcon, CheckCircle2 } from "lucide-react";
+import QRCode from "qrcode";
 
-// Component to handle phone saving and verification flow
+// Component to handle phone saving and verification polling (background only, no UI)
 function PhoneVerificationFlow({
   phoneNumber,
   userPhone,
@@ -88,47 +89,35 @@ function PhoneVerificationFlow({
   }, [normalizedPhone, userPhone, phoneSaved, isSaving, savePhoneMutation]);
 
   useEffect(() => {
-    const verified = whatsappNumbers.some((num: any) => num.isVerified);
-    // Call onVerified only once, when we first detect verification
-    if (verified && !hasNotifiedVerified) {
+    const verifiedNumber = whatsappNumbers.find((num: any) => 
+      num.phoneNumber === normalizedPhone && num.isVerified
+    );
+    // Call onVerified only once, when we first detect verification for this specific number
+    if (verifiedNumber && !hasNotifiedVerified) {
       setHasNotifiedVerified(true);
       onVerified();
     }
-  }, [whatsappNumbers, onVerified, hasNotifiedVerified]);
+  }, [whatsappNumbers, normalizedPhone, onVerified, hasNotifiedVerified]);
 
   // Poll every 3 seconds if not verified
   useEffect(() => {
     if (!phoneSaved) return;
     
+    const verifiedNumber = whatsappNumbers.find((num: any) => 
+      num.phoneNumber === normalizedPhone && num.isVerified
+    );
+    
     const interval = setInterval(() => {
-      const verified = whatsappNumbers.some((num: any) => num.isVerified);
-      if (!verified) {
+      if (!verifiedNumber) {
         refetch();
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [phoneSaved, whatsappNumbers, refetch]);
+  }, [phoneSaved, whatsappNumbers, normalizedPhone, refetch]);
 
-  if (!phoneSaved || isSaving) {
-    return (
-      <div className="mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-xs sm:text-sm text-blue-800">
-          {isSaving ? "Saving phone number..." : "Preparing verification..."}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-4">
-      <WhatsAppVerificationSection
-        phoneNumber={normalizedPhone}
-        alwaysGenerateNewCode={true}
-        redirectFrom="onboarding"
-      />
-    </div>
-  );
+  // Return null - this component only handles background polling
+  return null;
 }
 
 function WhatsAppLinkingForm() {
@@ -146,6 +135,11 @@ function WhatsAppLinkingForm() {
   const [showVerification, setShowVerification] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [countrySelectorOpen, setCountrySelectorOpen] = useState(false);
+  const [verificationCode, setVerificationCode] = useState<string>("");
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [showQRCode, setShowQRCode] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Fetch user data using useAuth
   const { user, isLoaded } = useAuth();
@@ -266,6 +260,103 @@ function WhatsAppLinkingForm() {
     })
   );
 
+  // Generate verification code mutation
+  const generateCodeMutation = useMutation(
+    trpc.whatsapp.generateVerificationCode.mutationOptions({
+      onSuccess: async (data) => {
+        setVerificationCode(data.code);
+        await generateQRCode(data.code);
+        setIsGeneratingCode(false);
+        
+        // On mobile, open WhatsApp immediately
+        if (isMobile) {
+          openWhatsAppWithCode(data.code);
+        } else {
+          // On desktop, show QR code
+          setShowQRCode(true);
+        }
+      },
+      onError: (error) => {
+        console.error("Failed to generate verification code:", error);
+        setIsGeneratingCode(false);
+      },
+    })
+  );
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Generate QR code
+  const generateQRCode = async (code: string) => {
+    try {
+      const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
+      const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
+      const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
+
+      const qrDataUrl = await QRCode.toDataURL(whatsappUrl, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
+
+      setQrCodeUrl(qrDataUrl);
+    } catch (error) {
+      console.error("Failed to generate QR code:", error);
+    }
+  };
+
+  // Open WhatsApp with verification code
+  const openWhatsAppWithCode = (code: string) => {
+    const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
+    const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
+    const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Handle Open WhatsApp / Verify WhatsApp button click
+  const handleVerifyClick = async () => {
+    if (!phoneNumber || !phoneNumber.trim()) {
+      return;
+    }
+
+    const digitsOnly = phoneNumber.replace(/\D/g, '');
+    if (digitsOnly.length < 7) {
+      return;
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
+      return;
+    }
+
+    // Save phone number first if not already saved
+    if (normalizedPhone !== user?.phone) {
+      setIsSavingPhone(true);
+      try {
+        await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
+      } catch (error: any) {
+        console.error("Error saving phone number:", error);
+        setIsSavingPhone(false);
+        return;
+      }
+      setIsSavingPhone(false);
+    }
+
+    // Generate verification code
+    setIsGeneratingCode(true);
+    generateCodeMutation.mutate({ phoneNumber: normalizedPhone });
+  };
+
   // Update user mutation for timezone
   const updateUserMutation = useMutation(
     trpc.user.update.mutationOptions({
@@ -353,6 +444,9 @@ function WhatsAppLinkingForm() {
                       onChange={(value) => {
                         setPhoneNumber(value);
                         setShowVerification(false);
+                        setShowQRCode(false);
+                        setVerificationCode("");
+                        setQrCodeUrl("");
                       }}
                       className="w-full"
                       disabled={isVerified}
@@ -360,36 +454,8 @@ function WhatsAppLinkingForm() {
                   </div>
                   <Button
                     type="button"
-                    onClick={async () => {
-                      if (!phoneNumber || !phoneNumber.trim()) {
-                        return;
-                      }
-
-                      // Validate phone number has at least some digits
-                      const digitsOnly = phoneNumber.replace(/\D/g, '');
-                      if (digitsOnly.length < 7) {
-                        return;
-                      }
-
-                      setIsSavingPhone(true);
-                      const normalizedPhone = normalizePhoneNumber(phoneNumber);
-                      
-                      // Double-check normalized phone is valid
-                      if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
-                        setIsSavingPhone(false);
-                        return;
-                      }
-                      
-                      try {
-                        await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
-                        setShowVerification(true);
-                      } catch (error: any) {
-                        console.error("Error saving phone number:", error);
-                      } finally {
-                        setIsSavingPhone(false);
-                      }
-                    }}
-                    disabled={!phoneNumber || isSavingPhone || isVerified}
+                    onClick={handleVerifyClick}
+                    disabled={!phoneNumber || isSavingPhone || isGeneratingCode || isVerified}
                     className={cn(
                       "whitespace-nowrap h-8 px-4 sm:px-8 absolute right-[2px] top-[7px]",
                       isVerified 
@@ -397,20 +463,64 @@ function WhatsAppLinkingForm() {
                         : "bg-blue-600 hover:bg-blue-700 text-white"
                     )}
                   >
-                    {isSavingPhone ? "Saving..." : isVerified ? "Verified" : "Get code"}
+                    {isSavingPhone || isGeneratingCode 
+                      ? "Processing..." 
+                      : isVerified 
+                        ? "Verified" 
+                        : isMobile 
+                          ? "Open WhatsApp" 
+                          : "Verify WhatsApp"}
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* WhatsApp Verification - Show after clicking Get code button, but hide when verified */}
-            {showVerification && phoneNumber && !isVerified && (
+            {/* Verification Step Instructions - Show when phone is entered but not verified */}
+            {!isVerified && phoneNumber && !showQRCode && (
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Verification Step
+                </Label>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <p>Tap the button below to open up WhatsApp</p>
+                  <p>Simply send the pre-filled message with your verification code.</p>
+                  <p>If successful, you will receive a confirmation message.</p>
+                </div>
+              </div>
+            )}
+
+            {/* QR Code - Desktop only, shown when Verify WhatsApp is clicked */}
+            {!isVerified && showQRCode && qrCodeUrl && !isMobile && (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Scan QR Code
+                </Label>
+                <div className="flex justify-center">
+                  <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                    <img
+                      src={qrCodeUrl}
+                      alt="WhatsApp Verification QR Code"
+                      className="w-48 h-48"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 text-center">
+                  Please scan this to verify your WhatsApp
+                </p>
+              </div>
+            )}
+
+            {/* WhatsApp Verification - Poll for verification status in background */}
+            {phoneNumber && !isVerified && (
               <PhoneVerificationFlow
                 phoneNumber={phoneNumber}
                 userPhone={user?.phone}
                 onVerified={() => {
                   setIsVerified(true);
-                  setShowVerification(false); // Hide verification section when verified
+                  setShowVerification(false);
+                  setShowQRCode(false);
+                  setVerificationCode("");
+                  setQrCodeUrl("");
                   refetchNumbers();
                 }}
                 savePhoneMutation={savePhoneMutation}
