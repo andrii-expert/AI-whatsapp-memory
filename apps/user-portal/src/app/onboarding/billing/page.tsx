@@ -13,7 +13,6 @@ export const runtime = "nodejs";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Check, Crown, Sparkles, Zap } from "lucide-react";
@@ -30,6 +29,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@imaginecalendar/ui/select";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@imaginecalendar/ui/accordion";
 import { format } from "date-fns";
 
 type Currency = "ZAR" | "USD" | "EUR" | "GBP" | "CAD" | "AUD";
@@ -117,6 +122,7 @@ function BillingOnboardingContent() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [expandedPlans, setExpandedPlans] = useState<string[]>([]); // Track which plans are expanded
   
   // Currency state - default to ZAR for all users
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>("ZAR");
@@ -135,6 +141,39 @@ function BillingOnboardingContent() {
 
     setSelectedPlanId(planId);
   };
+
+  // Check for payment success and complete onboarding if needed
+  useEffect(() => {
+    if (!isLoaded || !user) return;
+    
+    const searchParams = new URLSearchParams(window.location.search);
+    const status = searchParams.get('status');
+    
+    if (status === 'success' && (user.setupStep ?? 1) < 4) {
+      // Payment was successful and user is still in onboarding
+      // Complete onboarding
+      fetch("/api/onboarding/complete", {
+        method: "POST",
+      })
+        .then((res) => {
+          if (res.ok) {
+            // Redirect to success page
+            router.push("/onboarding/success");
+          } else {
+            console.error("Failed to complete onboarding after payment");
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to complete onboarding after payment:", err);
+        });
+      
+      // Clean up URL
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('status');
+      newUrl.searchParams.delete('message');
+      router.replace(newUrl.pathname + newUrl.search);
+    }
+  }, [isLoaded, user, router]);
 
   // Ensure user is on the correct onboarding step
   useEffect(() => {
@@ -348,9 +387,9 @@ function BillingOnboardingContent() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row bg-white">
-      {/* Left column – billing cards */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 sm:px-8 py-10">
+    <div className="flex min-h-screen flex-col bg-white">
+      {/* Billing cards - Full width */}
+      <div className="w-full flex items-center justify-center px-4 sm:px-8 py-10">
         <div className="w-full max-w-md space-y-8">
           {/* Title */}
           <div>
@@ -416,170 +455,194 @@ function BillingOnboardingContent() {
                 )}
               </div>
 
-          {/* Plan cards */}
-          <div className="space-y-4">
+          {/* Plan cards - Collapsible */}
+          <Accordion type="multiple" value={expandedPlans} onValueChange={setExpandedPlans} className="space-y-4">
             {/* Free plan */}
             {freePlan && (
-              <div
-                className={cn(
-                  "rounded-2xl border-2 p-5 cursor-pointer transition-all",
-                  selectedPlanId === "free"
-                    ? "border-gray-500 bg-gray-500 text-white"
-                    : "border-gray-200 bg-gray-50 hover:border-gray-300"
-                )}
-                onClick={() => handleSelectPlan("free")}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className={cn("h-5 w-5", selectedPlanId === "free" ? "text-white" : "text-gray-600")} />
-                    <span className="font-semibold text-lg">{freePlan.name}</span>
-                  </div>
-                  {currentPlanId === "free" && (
-                    <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
-                      Current Plan
-                    </span>
+              <AccordionItem value="free" className="border-none">
+                <div
+                  className={cn(
+                    "rounded-2xl border-2 p-5 cursor-pointer transition-all",
+                    selectedPlanId === "free"
+                      ? "border-gray-500 bg-gray-500 text-white"
+                      : "border-gray-200 bg-gray-50 hover:border-gray-300"
                   )}
-                </div>
-                <div className={cn("text-3xl font-bold", selectedPlanId === "free" ? "text-white" : "text-gray-900")}>
-                  {isLoadingRates || !exchangeRates ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === "free" ? "text-white" : "text-gray-600")} />
-                      <span className={cn("text-sm", selectedPlanId === "free" ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                  onClick={() => handleSelectPlan("free")}
+                >
+                  <AccordionTrigger className="hover:no-underline py-0">
+                    <div className="flex items-center justify-between w-full mr-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className={cn("h-5 w-5", selectedPlanId === "free" ? "text-white" : "text-gray-600")} />
+                        <span className="font-semibold text-lg">{freePlan.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {currentPlanId === "free" && (
+                          <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                            Current Plan
+                          </span>
+                        )}
+                        <div className={cn("text-3xl font-bold", selectedPlanId === "free" ? "text-white" : "text-gray-900")}>
+                          {isLoadingRates || !exchangeRates ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === "free" ? "text-white" : "text-gray-600")} />
+                              <span className={cn("text-sm", selectedPlanId === "free" ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                            </div>
+                          ) : (
+                            <>
+                              {formatCurrency(freePlan.amountCents, selectedCurrency, exchangeRates)}
+                              <span className="text-sm text-gray-600 ml-1"> / {freePlan.billingPeriod}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <>
-                      {formatCurrency(freePlan.amountCents, selectedCurrency, exchangeRates)}
-                      <span className="text-sm text-gray-600 ml-1"> / {freePlan.billingPeriod}</span>
-                    </>
-                  )}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <p className={cn("mt-1 text-xs", selectedPlanId === "free" ? "text-white/80" : "text-gray-500")}>
+                      {freePlan.description}
+                    </p>
+                    <ul className="mt-4 space-y-2 text-sm">
+                      {freePlan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === "free" ? "text-white" : "text-green-600")} />
+                          <span className={selectedPlanId === "free" ? "text-white" : "text-gray-700"}>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </AccordionContent>
                 </div>
-                <p className={cn("mt-1 text-xs", selectedPlanId === "free" ? "text-white/80" : "text-gray-500")}>
-                  {freePlan.description}
-                </p>
-                <ul className="mt-4 space-y-2 text-sm">
-                  {freePlan.features.map((feature, i) => (
-                    <li key={i} className="flex items-center gap-2">
-                      <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === "free" ? "text-white" : "text-green-600")} />
-                      <span className={selectedPlanId === "free" ? "text-white" : "text-gray-700"}>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              </AccordionItem>
             )}
 
             {/* Silver plan */}
             {silverPlan && (
-              <div
-                className={cn(
-                  "rounded-2xl border-2 p-5 cursor-pointer transition-all relative",
-                  selectedPlanId === silverPlan.id
-                    ? "border-purple-500 bg-purple-500 text-white shadow-xl"
-                    : "border-gray-200 bg-white hover:border-purple-300"
-                )}
-                onClick={() => handleSelectPlan(silverPlan.id)}
-              >
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-accent text-white shadow-md">
-                    Most Popular
-                  </span>
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Zap className={cn("h-5 w-5", selectedPlanId === silverPlan.id ? "text-white" : "text-purple-600")} />
-                    <span className="font-semibold text-lg">{silverPlan.name.replace(" Annual", "")}</span>
-                  </div>
-                  {currentPlanId === silverPlan.id && (
-                    <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
-                      Current Plan
+              <AccordionItem value="silver" className="border-none">
+                <div
+                  className={cn(
+                    "rounded-2xl border-2 p-5 cursor-pointer transition-all relative",
+                    selectedPlanId === silverPlan.id
+                      ? "border-purple-500 bg-purple-500 text-white shadow-xl"
+                      : "border-gray-200 bg-white hover:border-purple-300"
+                  )}
+                  onClick={() => handleSelectPlan(silverPlan.id)}
+                >
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                    <span className="text-xs font-bold px-4 py-1.5 rounded-full bg-accent text-white shadow-md">
+                      Most Popular
                     </span>
-                  )}
-                </div>
-                <div className={cn("text-3xl font-bold", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-900")}>
-                  {isLoadingRates || !exchangeRates ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-600")} />
-                      <span className={cn("text-sm", selectedPlanId === silverPlan.id ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                  </div>
+                  <AccordionTrigger className="hover:no-underline py-0">
+                    <div className="flex items-center justify-between w-full mr-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className={cn("h-5 w-5", selectedPlanId === silverPlan.id ? "text-white" : "text-purple-600")} />
+                        <span className="font-semibold text-lg">{silverPlan.name.replace(" Annual", "")}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {currentPlanId === silverPlan.id && (
+                          <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                            Current Plan
+                          </span>
+                        )}
+                        <div className={cn("text-3xl font-bold", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-900")}>
+                          {isLoadingRates || !exchangeRates ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === silverPlan.id ? "text-white" : "text-gray-600")} />
+                              <span className={cn("text-sm", selectedPlanId === silverPlan.id ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                            </div>
+                          ) : (
+                            <>
+                              {formatCurrency(silverPlan.amountCents, selectedCurrency, exchangeRates)}
+                              <span className="text-sm text-gray-600 ml-1"> / {silverPlan.billingPeriod}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <>
-                      {formatCurrency(silverPlan.amountCents, selectedCurrency, exchangeRates)}
-                      <span className="text-sm text-gray-600 ml-1"> / {silverPlan.billingPeriod}</span>
-                    </>
-                  )}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {!isLoadingRates && exchangeRates && isAnnual && silverPlan.monthlyPriceCents > 0 && (
+                      <p className={cn("text-xs mt-1", selectedPlanId === silverPlan.id ? "text-white/80" : "text-purple-700")}>
+                        {formatCurrency(silverPlan.monthlyPriceCents, selectedCurrency, exchangeRates)}/month when paid annually
+                      </p>
+                    )}
+                    <p className={cn("mt-1 text-xs", selectedPlanId === silverPlan.id ? "text-white/80" : "text-gray-500")}>
+                      {silverPlan.description}
+                    </p>
+                    <ul className="mt-4 space-y-2 text-sm">
+                      {silverPlan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === silverPlan.id ? "text-white" : "text-green-600")} />
+                          <span className={selectedPlanId === silverPlan.id ? "text-white" : "text-gray-700"}>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </AccordionContent>
                 </div>
-                {!isLoadingRates && exchangeRates && isAnnual && silverPlan.monthlyPriceCents > 0 && (
-                  <p className={cn("text-xs mt-1", selectedPlanId === silverPlan.id ? "text-white/80" : "text-purple-700")}>
-                    {formatCurrency(silverPlan.monthlyPriceCents, selectedCurrency, exchangeRates)}/month when paid annually
-                  </p>
-                )}
-                <p className={cn("mt-1 text-xs", selectedPlanId === silverPlan.id ? "text-white/80" : "text-gray-500")}>
-                  {silverPlan.description}
-                </p>
-                <ul className="mt-4 space-y-2 text-sm">
-                  {silverPlan.features.map((feature, i) => (
-                    <li key={i} className="flex items-center gap-2">
-                      <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === silverPlan.id ? "text-white" : "text-green-600")} />
-                      <span className={selectedPlanId === silverPlan.id ? "text-white" : "text-gray-700"}>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              </AccordionItem>
             )}
 
             {/* Gold plan (disabled / coming soon) */}
             {goldPlan && (
-              <div
-                className={cn(
-                  "rounded-2xl border-2 p-5 cursor-not-allowed opacity-70 transition-all relative",
-                  selectedPlanId === goldPlan.id
-                    ? "border-blue-500 bg-blue-500 text-white shadow-xl"
-                    : "border-gray-200 bg-white hover:border-blue-300"
-                )}
-                onClick={() => handleSelectPlan(goldPlan.id)}
-              >
-                <div className="flex items-center justify-between mb-2 mt-2">
-                  <div className="flex items-center gap-2">
-                    <Crown className={cn("h-5 w-5", selectedPlanId === goldPlan.id ? "text-white" : "text-blue-600")} />
-                    <span className="font-semibold text-lg">{goldPlan.name.replace(" Annual", "")}</span>
-                  </div>
-                  {currentPlanId === goldPlan.id && (
-                    <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
-                      Current Plan
-                    </span>
+              <AccordionItem value="gold" className="border-none">
+                <div
+                  className={cn(
+                    "rounded-2xl border-2 p-5 cursor-not-allowed opacity-70 transition-all relative",
+                    selectedPlanId === goldPlan.id
+                      ? "border-blue-500 bg-blue-500 text-white shadow-xl"
+                      : "border-gray-200 bg-white hover:border-blue-300"
                   )}
-                </div>
-                <div className={cn("text-3xl font-bold", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-900")}>
-                  {isLoadingRates || !exchangeRates ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-600")} />
-                      <span className={cn("text-sm", selectedPlanId === goldPlan.id ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                  onClick={() => handleSelectPlan(goldPlan.id)}
+                >
+                  <AccordionTrigger className="hover:no-underline py-0">
+                    <div className="flex items-center justify-between w-full mr-2">
+                      <div className="flex items-center gap-2">
+                        <Crown className={cn("h-5 w-5", selectedPlanId === goldPlan.id ? "text-white" : "text-blue-600")} />
+                        <span className="font-semibold text-lg">{goldPlan.name.replace(" Annual", "")}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {currentPlanId === goldPlan.id && (
+                          <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                            Current Plan
+                          </span>
+                        )}
+                        <div className={cn("text-3xl font-bold", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-900")}>
+                          {isLoadingRates || !exchangeRates ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === goldPlan.id ? "text-white" : "text-gray-600")} />
+                              <span className={cn("text-sm", selectedPlanId === goldPlan.id ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                            </div>
+                          ) : (
+                            <>
+                              {formatCurrency(goldPlan.amountCents, selectedCurrency, exchangeRates)}
+                              <span className="text-sm text-gray-600 ml-1"> / {goldPlan.billingPeriod}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <>
-                      {formatCurrency(goldPlan.amountCents, selectedCurrency, exchangeRates)}
-                      <span className="text-sm text-gray-600 ml-1"> / {goldPlan.billingPeriod}</span>
-                    </>
-                  )}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {!isLoadingRates && exchangeRates && isAnnual && goldPlan.monthlyPriceCents > 0 && (
+                      <p className={cn("text-xs mt-1", selectedPlanId === goldPlan.id ? "text-white/80" : "text-blue-700")}>
+                        {formatCurrency(goldPlan.monthlyPriceCents, selectedCurrency, exchangeRates)}/month when paid annually
+                      </p>
+                    )}
+                    <p className={cn("mt-1 text-xs", selectedPlanId === goldPlan.id ? "text-white/80" : "text-gray-500")}>
+                      {goldPlan.description}
+                    </p>
+                    <ul className="mt-4 space-y-2 text-sm">
+                      {goldPlan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === goldPlan.id ? "text-white" : "text-green-600")} />
+                          <span className={selectedPlanId === goldPlan.id ? "text-white" : "text-gray-700"}>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </AccordionContent>
                 </div>
-                {!isLoadingRates && exchangeRates && isAnnual && goldPlan.monthlyPriceCents > 0 && (
-                  <p className={cn("text-xs mt-1", selectedPlanId === goldPlan.id ? "text-white/80" : "text-blue-700")}>
-                    {formatCurrency(goldPlan.monthlyPriceCents, selectedCurrency, exchangeRates)}/month when paid annually
-                  </p>
-                )}
-                <p className={cn("mt-1 text-xs", selectedPlanId === goldPlan.id ? "text-white/80" : "text-gray-500")}>
-                  {goldPlan.description}
-                </p>
-                <ul className="mt-4 space-y-2 text-sm">
-                  {goldPlan.features.map((feature, i) => (
-                    <li key={i} className="flex items-center gap-2">
-                      <Check className={cn("h-4 w-4 flex-shrink-0", selectedPlanId === goldPlan.id ? "text-white" : "text-green-600")} />
-                      <span className={selectedPlanId === goldPlan.id ? "text-white" : "text-gray-700"}>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              </AccordionItem>
             )}
-          </div>
+          </Accordion>
           
           {/* Action buttons */}
           <div className="pt-4 space-y-3">
@@ -630,29 +693,6 @@ function BillingOnboardingContent() {
         </div>
       </div>
 
-      {/* Right column – same as first and second steps */}
-      <div className="w-full lg:w-1/2 bg-blue-600 flex items-center justify-center p-10">
-        <div className="max-w-md text-center text-white space-y-8">
-          <h2 className="text-3xl font-bold tracking-wide">
-            REMIND. ORGANISE. CRACKON.
-          </h2>
-          <div className="flex justify-center">
-            <Image
-              src="/phone.png"
-              alt="CrackOn on mobile"
-              width={320}
-              height={640}
-              className="w-auto h-auto max-h-[420px] object-contain drop-shadow-2xl"
-              priority
-            />
-          </div>
-          <p className="text-sm sm:text-base leading-relaxed">
-            CrackOn is your smart WhatsApp friend that helps you stay organised
-            without leaving your favourite chat app. Upgrade your plan to
-            unlock unlimited calendars, reminders, and more.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
