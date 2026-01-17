@@ -2613,13 +2613,23 @@ export default function ShoppingListPage() {
             <div className="space-y-4 sm:space-y-6">
               <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="item-name" className="text-sm font-medium text-gray-900">Item Name</Label>
-                <ProductAutocomplete
-                  id="item-name"
-                  value={newItemName}
-                  onChange={setNewItemName}
-                  placeholder="Milk"
-                  className="bg-gray-50 h-10 sm:h-11 w-full"
-                />
+                <div className="bg-gray-50 rounded-md h-10 sm:h-11 flex items-center">
+                  <ProductAutocomplete
+                    id="item-name"
+                    value={newItemName}
+                    onChange={setNewItemName}
+                    onSelect={(value) => {
+                      setNewItemName(value);
+                      // Focus on description field after selection (optional)
+                      setTimeout(() => {
+                        const descInput = document.getElementById("item-description");
+                        if (descInput) descInput.focus();
+                      }, 100);
+                    }}
+                    placeholder="Milk"
+                    className="bg-transparent h-full w-full"
+                  />
+                </div>
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="item-description" className="text-sm font-medium text-gray-900">
@@ -2678,12 +2688,23 @@ export default function ShoppingListPage() {
             <div className="space-y-4 sm:space-y-6">
               <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="edit-item-name" className="text-sm font-medium text-gray-900">Item Name</Label>
-                <Input
-                  id="edit-item-name"
-                  value={editItemName}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditItemName(e.target.value)}
-                  className="bg-gray-50 h-10 sm:h-11 w-full"
-                />
+                <div className="bg-gray-50 rounded-md h-10 sm:h-11 flex items-center">
+                  <ProductAutocomplete
+                    id="edit-item-name"
+                    value={editItemName}
+                    onChange={setEditItemName}
+                    onSelect={(value) => {
+                      setEditItemName(value);
+                      // Focus on description field after selection (optional)
+                      setTimeout(() => {
+                        const descInput = document.getElementById("edit-item-description");
+                        if (descInput) descInput.focus();
+                      }, 100);
+                    }}
+                    placeholder="Milk"
+                    className="bg-transparent h-full w-full"
+                  />
+                </div>
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="edit-item-description" className="text-sm font-medium text-gray-900">
