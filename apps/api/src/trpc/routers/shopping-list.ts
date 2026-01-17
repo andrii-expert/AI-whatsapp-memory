@@ -11,6 +11,8 @@ import {
   createShoppingListFolder,
   updateShoppingListFolder,
   deleteShoppingListFolder,
+  setPrimaryShoppingListFolder,
+  getPrimaryShoppingListFolder,
 } from "@imaginecalendar/database/queries";
 import { getCategorySuggestion } from "@api/utils/shopping-list-categorization";
 import { logger } from "@imaginecalendar/logger";
@@ -31,6 +33,7 @@ const updateShoppingListFolderSchema = z.object({
   color: z.string().optional(),
   icon: z.string().optional(),
   sortOrder: z.number().optional(),
+  isPrimary: z.boolean().optional(),
 });
 
 // Shopping list item schemas
@@ -134,6 +137,22 @@ export const shoppingListRouter = createTRPCRouter({
         logger.info({ userId: session.user.id, folderId: input.id }, "Shopping list folder deleted");
         return { success: true };
       }),
+
+    setPrimary: protectedProcedure
+      .input(z.object({ id: z.string().uuid() }))
+      .mutation(async ({ ctx: { db, session }, input }) => {
+        logger.info({ userId: session.user.id, folderId: input.id }, "Setting shopping list folder as primary");
+        
+        const folder = await setPrimaryShoppingListFolder(db, input.id, session.user.id);
+        
+        logger.info({ userId: session.user.id, folderId: input.id }, "Shopping list folder set as primary");
+        return folder;
+      }),
+
+    getPrimary: protectedProcedure.query(async ({ ctx: { db, session } }) => {
+      const folder = await getPrimaryShoppingListFolder(db, session.user.id);
+      return folder;
+    }),
   }),
 
   // ============================================

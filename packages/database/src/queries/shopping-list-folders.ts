@@ -303,7 +303,27 @@ export async function createShoppingListFolder(
         }
       }
 
-      const [folder] = await db.insert(shoppingListFolders).values(data).returning();
+      // Check if this is the user's first root folder (no parentId)
+      // If so, and no primary folder exists, set this as primary
+      let isPrimary = false;
+      if (!data.parentId) {
+        const existingPrimary = await db.query.shoppingListFolders.findFirst({
+          where: and(
+            eq(shoppingListFolders.userId, data.userId),
+            eq(shoppingListFolders.isPrimary, true)
+          ),
+        });
+        
+        // If no primary folder exists, set this as primary
+        if (!existingPrimary) {
+          isPrimary = true;
+        }
+      }
+
+      const [folder] = await db.insert(shoppingListFolders).values({
+        ...data,
+        isPrimary,
+      }).returning();
       return folder;
     }
   );
@@ -318,6 +338,7 @@ export async function updateShoppingListFolder(
     color?: string;
     icon?: string;
     sortOrder?: number;
+    isPrimary?: boolean;
   }
 ) {
   return withMutationLogging(
@@ -366,6 +387,25 @@ export async function updateShoppingListFolder(
         }
       }
 
+      // Handle isPrimary: if setting to true, unset all other primary folders
+      if (data.isPrimary === true && isOwner) {
+        // Only root folders can be primary
+        if (folder.parentId) {
+          throw new Error("Only root folders can be set as primary");
+        }
+
+        // Unset all other primary folders for this user (excluding current folder)
+        await db
+          .update(shoppingListFolders)
+          .set({ isPrimary: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(shoppingListFolders.userId, userId),
+              eq(shoppingListFolders.isPrimary, true)
+            )
+          );
+      }
+
       const [updatedFolder] = await db
         .update(shoppingListFolders)
         .set({ ...data, updatedAt: new Date() })
@@ -398,6 +438,79 @@ export async function deleteShoppingListFolder(db: Database, folderId: string, u
       // Delete the folder (cascade will handle subfolders and items)
       await db.delete(shoppingListFolders).where(eq(shoppingListFolders.id, folderId));
       return { success: true };
+    }
+  );
+}
+
+/**
+ * Get the primary shopping list folder for a user
+ * Returns null if no primary folder is set
+ */
+export async function getPrimaryShoppingListFolder(db: Database, userId: string) {
+  return withQueryLogging(
+    'getPrimaryShoppingListFolder',
+    { userId },
+    async () => {
+      const folder = await db.query.shoppingListFolders.findFirst({
+        where: and(
+          eq(shoppingListFolders.userId, userId),
+          eq(shoppingListFolders.isPrimary, true),
+          isNull(shoppingListFolders.parentId) // Only root folders can be primary
+        ),
+      });
+
+      return folder || null;
+    }
+  );
+}
+
+/**
+ * Set a folder as primary and unset all other primary folders for the user
+ * Only the folder owner can set it as primary
+ */
+export async function setPrimaryShoppingListFolder(db: Database, folderId: string, userId: string) {
+  return withMutationLogging(
+    'setPrimaryShoppingListFolder',
+    { folderId, userId },
+    async () => {
+      // First check if user owns the folder
+      const folder = await db.query.shoppingListFolders.findFirst({
+        where: eq(shoppingListFolders.id, folderId),
+      });
+
+      if (!folder) {
+        throw new Error("Folder not found");
+      }
+
+      // Only owners can set folder as primary
+      if (folder.userId !== userId) {
+        throw new Error("No permission to set this folder as primary");
+      }
+
+      // Only root folders can be primary
+      if (folder.parentId) {
+        throw new Error("Only root folders can be set as primary");
+      }
+
+      // Unset all other primary folders for this user
+      await db
+        .update(shoppingListFolders)
+        .set({ isPrimary: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(shoppingListFolders.userId, userId),
+            eq(shoppingListFolders.isPrimary, true)
+          )
+        );
+
+      // Set this folder as primary
+      const [updatedFolder] = await db
+        .update(shoppingListFolders)
+        .set({ isPrimary: true, updatedAt: new Date() })
+        .where(eq(shoppingListFolders.id, folderId))
+        .returning();
+
+      return updatedFolder;
     }
   );
 }

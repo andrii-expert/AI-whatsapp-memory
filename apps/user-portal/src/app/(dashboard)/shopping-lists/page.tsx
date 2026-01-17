@@ -202,6 +202,9 @@ export default function ShoppingListPage() {
   const { data: allItems = [], isLoading: isLoadingItems } = useQuery(
     trpc.shoppingList.list.queryOptions({})
   );
+  const { data: primaryFolder } = useQuery(
+    trpc.shoppingList.folders.getPrimary.queryOptions()
+  );
   
   const { data: myShares = [], isLoading: isLoadingShares } = useQuery(
     trpc.taskSharing.getMyShares.queryOptions()
@@ -715,6 +718,25 @@ export default function ShoppingListPage() {
         toast({
           title: "Error",
           description: error.message || "Failed to delete folder",
+          variant: "error",
+        });
+      },
+    })
+  );
+
+  const setPrimaryFolderMutation = useMutation(
+    trpc.shoppingList.folders.setPrimary.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        toast({
+          title: "Success",
+          description: "Primary list updated successfully",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to set primary list",
           variant: "error",
         });
       },
@@ -1548,7 +1570,14 @@ export default function ShoppingListPage() {
                           <span className="text-2xl">{folder.icon || "🎂"}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                          <div className="font-bold text-gray-900 truncate flex items-center gap-2">
+                            {folder.name}
+                            {primaryFolder?.id === folder.id && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium" title="Primary list - items added via WhatsApp without a list name will go here">
+                                Primary
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-1">
                             {totalItems > 0 && (
                               <span className={cn(
@@ -1637,6 +1666,18 @@ export default function ShoppingListPage() {
                                 </DropdownMenuItem>
                               );
                             })()}
+                            {primaryFolder?.id !== folder.id && (
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  setPrimaryFolderMutation.mutate({ id: folder.id });
+                                }}
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                              >
+                                <Check className="h-4 w-4" />
+                                <span>Set as Primary</span>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                               onClick={(e: React.MouseEvent) => {
                                 e.stopPropagation();
@@ -1902,7 +1943,14 @@ export default function ShoppingListPage() {
                         <span className="text-2xl">{folder.icon || "🎂"}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-gray-900 truncate">{folder.name}</div>
+                        <div className="font-bold text-gray-900 truncate flex items-center gap-2">
+                          {folder.name}
+                          {primaryFolder?.id === folder.id && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium" title="Primary list - items added via WhatsApp without a list name will go here">
+                              Primary
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                           {totalItems > 0 && (
                             <span className={cn(
@@ -1991,6 +2039,18 @@ export default function ShoppingListPage() {
                               </DropdownMenuItem>
                             );
                           })()}
+                          {primaryFolder?.id !== folder.id && (
+                            <DropdownMenuItem
+                              onClick={(e: React.MouseEvent) => {
+                                e.stopPropagation();
+                                setPrimaryFolderMutation.mutate({ id: folder.id });
+                              }}
+                              className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                            >
+                              <Check className="h-4 w-4" />
+                              <span>Set as Primary</span>
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();

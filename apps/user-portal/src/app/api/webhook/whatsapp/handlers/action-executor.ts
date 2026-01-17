@@ -65,6 +65,7 @@ import {
   updateShoppingListFolder,
   deleteShoppingListFolder,
   getShoppingListFolderById,
+  getPrimaryShoppingListFolder,
   getUserFriends,
   getFriendById,
   createFriend,
@@ -1685,6 +1686,14 @@ export class ActionExecutor {
             message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
+      } else {
+        // If no folder specified, use the primary folder
+        const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
+        if (primaryFolder) {
+          folderId = primaryFolder.id;
+          logger.info({ userId: this.userId, folderId: primaryFolder.id, folderName: primaryFolder.name }, 'Using primary shopping list folder for WhatsApp item');
+        }
+        // If no primary folder is set, folderId remains undefined (item goes to "All Items")
       }
 
       // Determine category: use extracted category if provided, otherwise use AI suggestion

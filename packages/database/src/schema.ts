@@ -1088,6 +1088,7 @@ export const shoppingListFolders = pgTable("shopping_list_folders", {
   icon: text("icon"),
   sortOrder: integer("sort_order").default(0).notNull(),
   isExpanded: boolean("is_expanded").default(true).notNull(),
+  isPrimary: boolean("is_primary").default(false).notNull(),
   
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -1095,6 +1096,7 @@ export const shoppingListFolders = pgTable("shopping_list_folders", {
   userIdIdx: index("shopping_list_folders_user_id_idx").on(table.userId),
   parentIdIdx: index("shopping_list_folders_parent_id_idx").on(table.parentId),
   sortOrderIdx: index("shopping_list_folders_sort_order_idx").on(table.sortOrder),
+  isPrimaryIdx: index("shopping_list_folders_is_primary_idx").on(table.isPrimary),
 }));
 
 export const shoppingListItems = pgTable("shopping_list_items", {
