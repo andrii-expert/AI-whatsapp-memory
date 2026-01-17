@@ -11,9 +11,8 @@ import { Switch } from "@imaginecalendar/ui/switch";
 import { Input } from "@imaginecalendar/ui/input";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useZodForm } from "@/hooks/use-zod-form";
-import { Loader2, Home, ChevronLeft } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { z } from "zod";
-import Link from "next/link";
 
 // Define the form schema
 const preferencesSchema = z.object({
@@ -111,28 +110,16 @@ export default function PreferencesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Home className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-        <span className="font-medium">Preferences</span>
-      </div>
+    <div className="bg-white">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6 p-4 sm:p-6 shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)] rounded-xl">
+          <h1 className="text-xl font-bold text-gray-900">Preferences</h1>
+        </div>
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Preferences</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage your notification and reminder settings
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Form Content */}
+        <div className="px-4 sm:px-6">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Marketing Emails */}
         <Card>
           <CardHeader>
@@ -218,18 +205,20 @@ export default function PreferencesPage() {
           </CardContent>
         </Card>
 
-        {/* Save Button */}
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            variant="blue-primary"
-            disabled={isSubmitting}
-            size="lg"
-          >
-            {isSubmitting ? "Saving..." : "Save Preferences"}
-          </Button>
+            {/* Save Button */}
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                variant="blue-primary"
+                disabled={isSubmitting}
+                size="lg"
+              >
+                {isSubmitting ? "Saving..." : "Save Preferences"}
+              </Button>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
