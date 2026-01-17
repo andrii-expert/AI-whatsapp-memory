@@ -167,7 +167,7 @@ export function ProductAutocomplete({
       {showSuggestions && (suggestions.length > 0 || isLoading) && (
         <div
           ref={suggestionsRef}
-          className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+          className="absolute z-[9999] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-100 overflow-y-auto"
           style={{
             position: "absolute",
             top: "100%",
