@@ -4,13 +4,12 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Check } from "lucide-react";
-import { useEffect } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { OnboardingLoading } from "@/components/onboarding-loading";
@@ -36,6 +35,7 @@ function CalendarConnectionForm() {
   const trpc = useTRPC();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
+  const isRedirectingRef = useRef(false);
 
   // Poll user setupStep every 1 second to detect when user advances to next step
   const { data: polledUser } = useQuery({
@@ -123,12 +123,30 @@ function CalendarConnectionForm() {
 
   const updateUserMutation = useMutation(
     trpc.user.update.mutationOptions({
-      onSuccess: () => {
+      onSuccess: async () => {
+        if (isRedirectingRef.current) return;
+        isRedirectingRef.current = true;
+        
+        // Update temporary credentials step
+        try {
+          await fetch("/api/auth/update-signup-step", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ currentStep: "billing" }),
+          });
+        } catch (err) {
+          // Silently fail - step update is not critical
+          console.error("Failed to update signup step:", err);
+        }
+        // Redirect to billing page
         router.push("/onboarding/billing");
         router.refresh();
       },
       onError: (error) => {
         console.error("Failed to update setup step:", error);
+        setIsCompleting(false);
+        isRedirectingRef.current = false;
       },
     })
   );
@@ -137,6 +155,7 @@ function CalendarConnectionForm() {
   // Also check polled user data for setupStep changes
   useEffect(() => {
     if (!isLoaded) return;
+    if (isRedirectingRef.current) return;
     
     if (!user) {
       router.push("/sign-in");
@@ -150,12 +169,15 @@ function CalendarConnectionForm() {
 
     // If setupStep is 1, redirect to WhatsApp setup
     if (setupStep === 1) {
+      isRedirectingRef.current = true;
       router.push("/onboarding/whatsapp");
       return;
     } else if (setupStep === 3) {
+      isRedirectingRef.current = true;
       router.push("/onboarding/billing");
       return;
     } else if (setupStep === 4) {
+      isRedirectingRef.current = true;
       router.push("/dashboard");
       return;
     }
@@ -179,8 +201,10 @@ function CalendarConnectionForm() {
     return <OnboardingLoading />;
   }
 
+  // Use polled user data if available (for real-time updates), otherwise use user from useAuth
+  const currentUser = polledUser || user;
   // Default to 1 if setupStep is null/undefined
-  const setupStep = user.setupStep ?? 1;
+  const setupStep = currentUser.setupStep ?? 1;
   
   // If user is on wrong step, show loading (redirect will happen in useEffect)
   if (setupStep !== 2) {
@@ -217,20 +241,9 @@ function CalendarConnectionForm() {
       await updateUserMutation.mutateAsync({
         setupStep: 3, // Move to next step: Billing setup
       });
-
-      // Update temporary credentials step
-      try {
-        await fetch("/api/auth/update-signup-step", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ currentStep: "billing" }),
-        });
-      } catch (err) {
-        // Silently fail - step update is not critical
-        console.error("Failed to update signup step:", err);
-      }
-    } finally {
+      // Redirect is handled in mutation's onSuccess
+    } catch (error) {
+      console.error("Failed to update setup step:", error);
       setIsCompleting(false);
     }
   };
@@ -241,20 +254,9 @@ function CalendarConnectionForm() {
       await updateUserMutation.mutateAsync({
         setupStep: 3, // Move to next step: Billing setup
       });
-
-      // Update temporary credentials step
-      try {
-        await fetch("/api/auth/update-signup-step", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ currentStep: "billing" }),
-        });
-      } catch (err) {
-        // Silently fail - step update is not critical
-        console.error("Failed to update signup step:", err);
-      }
-    } finally {
+      // Redirect is handled in mutation's onSuccess
+    } catch (error) {
+      console.error("Failed to update setup step:", error);
       setIsCompleting(false);
     }
   };
