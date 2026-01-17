@@ -228,11 +228,7 @@ export default function ProfilePage() {
   );
 
   function onSubmit(values: z.infer<typeof profileSchema>) {
-    console.log("Submitting profile with values:", {
-      timezone: values.timezone,
-      utcOffset: values.utcOffset,
-      ...values,
-    });
+    console.log("Submitting profile with values:", values);
 
     // Ensure utcOffset is set if timezone is set
     if (values.timezone && !values.utcOffset) {
@@ -289,7 +285,7 @@ export default function ProfilePage() {
         {/* Profile Section */}
         <div className="px-4 sm:px-6">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <Card>
+            <Card className="rounded-xl">
               <CardHeader>
                 <CardTitle>Personal Information</CardTitle>
                 <CardDescription>

@@ -121,7 +121,7 @@ export default function PreferencesPage() {
         <div className="px-4 sm:px-6">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Marketing Emails */}
-        <Card>
+        <Card className="rounded-xl">
           <CardHeader>
             <CardTitle>Email Notifications</CardTitle>
             <CardDescription>
@@ -148,7 +148,7 @@ export default function PreferencesPage() {
         </Card>
 
         {/* WhatsApp Calendar Notifications */}
-        <Card>
+        <Card className="rounded-xl">
           <CardHeader>
             <CardTitle>WhatsApp Calendar Notifications</CardTitle>
             <CardDescription>

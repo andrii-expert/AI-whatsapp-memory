@@ -159,7 +159,7 @@ export default function InvoicesPage() {
 
         {/* Invoices Table */}
         <div className="px-4 sm:px-6">
-          <Card>
+          <Card className="rounded-xl">
         <CardHeader>
           <CardTitle>Invoice History</CardTitle>
           <CardDescription>
