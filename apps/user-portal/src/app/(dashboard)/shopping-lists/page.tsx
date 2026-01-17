@@ -33,6 +33,7 @@ import {
 import { Label } from "@imaginecalendar/ui/label";
 import { ShareButton } from "@/components/share-button";
 import { ShareDetailsModal } from "@/components/share-details-modal";
+import { ProductAutocomplete } from "@/components/product-autocomplete";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -2612,15 +2613,12 @@ export default function ShoppingListPage() {
             <div className="space-y-4 sm:space-y-6">
               <div className="space-y-1.5 sm:space-y-2">
                 <Label htmlFor="item-name" className="text-sm font-medium text-gray-900">Item Name</Label>
-                <Input
+                <ProductAutocomplete
                   id="item-name"
                   value={newItemName}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewItemName(e.target.value)}
+                  onChange={setNewItemName}
                   placeholder="Milk"
                   className="bg-gray-50 h-10 sm:h-11 w-full"
-                  style={{
-                    border: 0
-                  }}
                 />
               </div>
               <div className="space-y-1.5 sm:space-y-2">
