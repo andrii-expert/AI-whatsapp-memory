@@ -518,7 +518,7 @@ export default function ShoppingListPage() {
         setIsAddModalOpen(false);
         toast({
           title: "Item added",
-          description: "Item has been added to your shopping list",
+          description: "Item has been added to your list",
         });
       },
       onError: (error) => {
@@ -566,7 +566,7 @@ export default function ShoppingListPage() {
         setItemToDelete(null);
         toast({
           title: "Item deleted",
-          description: "Item has been removed from your shopping list",
+          description: "Item has been removed from your list",
         });
       },
       onError: (error) => {
@@ -1457,7 +1457,7 @@ export default function ShoppingListPage() {
                 <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
                   <div className="px-4 pt-6 pb-4">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Shopping Lists</h2>
+                      <h2 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Lists</h2>
                       <Button
                         onClick={handleOpenCreateListModal}
                         variant="outline"
@@ -1816,7 +1816,7 @@ export default function ShoppingListPage() {
           <div className="space-y-4">
             {/* Your Lists Header */}
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Your Shopping Lists</h2>
+              <h2 className="text-lg font-bold text-gray-900">Your Lists</h2>
               <Button
                 onClick={handleOpenCreateListModal}
                 variant="outline"
@@ -2995,7 +2995,7 @@ export default function ShoppingListPage() {
                 Edit List
               </AlertDialogTitle>
               <AlertDialogDescription className="text-sm text-gray-500">
-                Update your shopping list
+                Update your list
               </AlertDialogDescription>
             </div>
           </div>

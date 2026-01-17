@@ -2667,7 +2667,7 @@ export class ActionExecutor {
       return {
         success: true,
         message: newStatus === 'completed' 
-          ? `✅ *Item Completed:*\n${item.name}`
+          ? `✅ *Item Purchased:*\n${item.name}`
           : `📝 *Item Reopened:*\n${item.name}`,
       };
     } catch (error) {
