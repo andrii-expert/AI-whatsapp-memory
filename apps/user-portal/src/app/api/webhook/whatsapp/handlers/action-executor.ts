@@ -6541,10 +6541,10 @@ export class ActionExecutor {
 
   private findSubfolderByName(folders: any[], folderName: string): any | null {
     for (const folder of folders) {
-      // Check categories at this level
+      // Check categories at this level (with fuzzy matching)
       if (folder.subfolders && folder.subfolders.length > 0) {
         const found = folder.subfolders.find(
-          (sf: any) => sf.name.toLowerCase() === folderName
+          (sf: any) => this.folderNamesMatch(sf.name, folderName)
         );
         if (found) {
           return found;
@@ -6563,8 +6563,108 @@ export class ActionExecutor {
   }
 
   /**
+   * Check if two folder names match, handling singular/plural variations
+   */
+  private folderNamesMatch(name1: string, name2: string): boolean {
+    const n1 = name1.toLowerCase().trim();
+    const n2 = name2.toLowerCase().trim();
+    
+    // Exact match
+    if (n1 === n2) return true;
+    
+    // Helper function to get plural form
+    const getPlural = (word: string): string => {
+      // Words ending in 'y' preceded by a consonant -> 'ies'
+      if (/[^aeiou]y$/i.test(word)) {
+        return word.slice(0, -1) + 'ies';
+      }
+      // Words ending in 's', 'x', 'z', 'ch', 'sh' -> 'es'
+      if (/[sxz]|[cs]h$/i.test(word)) {
+        return word + 'es';
+      }
+      // Words ending in 'f' or 'fe' -> 'ves' (common cases)
+      if (/f$/i.test(word)) {
+        return word.slice(0, -1) + 'ves';
+      }
+      if (/fe$/i.test(word)) {
+        return word.slice(0, -2) + 'ves';
+      }
+      // Default: add 's'
+      return word + 's';
+    };
+    
+    // Helper function to get singular form
+    const getSingular = (word: string): string => {
+      // Words ending in 'ies' -> 'y'
+      if (/ies$/i.test(word)) {
+        return word.slice(0, -3) + 'y';
+      }
+      // Words ending in 'ves' -> 'f' or 'fe'
+      if (/ves$/i.test(word)) {
+        const base = word.slice(0, -3);
+        // Try 'f' first
+        if (base.length > 0) {
+          return base + 'f';
+        }
+      }
+      // Words ending in 'es' (after s, x, z, ch, sh) -> remove 'es'
+      if (/[sxz]es$|[cs]hes$/i.test(word)) {
+        return word.slice(0, -2);
+      }
+      // Words ending in 's' -> remove 's'
+      if (/s$/i.test(word)) {
+        return word.slice(0, -1);
+      }
+      return word;
+    };
+    
+    // Check if name1 is singular of name2
+    const pluralOfN1 = getPlural(n1);
+    if (pluralOfN1 === n2) return true;
+    
+    // Check if name2 is singular of name1
+    const pluralOfN2 = getPlural(n2);
+    if (pluralOfN2 === n1) return true;
+    
+    // Check if name1 is plural of name2
+    const singularOfN1 = getSingular(n1);
+    if (singularOfN1 === n2 && n1 !== n2) return true;
+    
+    // Check if name2 is plural of name1
+    const singularOfN2 = getSingular(n2);
+    if (singularOfN2 === n1 && n1 !== n2) return true;
+    
+    // Check if one contains the other (for partial matches like "grocery" in "grocery list")
+    // Only allow if the shorter name is at least 4 characters to avoid false matches
+    if (n1.includes(n2) || n2.includes(n1)) {
+      const shorter = n1.length < n2.length ? n1 : n2;
+      if (shorter.length >= 4) return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Find folder by name with fuzzy matching (handles singular/plural)
+   */
+  private findFolderByName(folders: any[], folderName: string): any | null {
+    const folderNameLower = folderName.toLowerCase().trim();
+    
+    // First try exact match
+    let folder = folders.find(f => f.name.toLowerCase() === folderNameLower);
+    if (folder) return folder;
+    
+    // Try fuzzy matching (singular/plural variations)
+    folder = folders.find(f => this.folderNamesMatch(f.name, folderName));
+    if (folder) return folder;
+    
+    return null;
+  }
+
+  /**
    * Resolve shopping list folder route (e.g., "Groceries" or "Groceries/Fruits") to folder ID
    * Similar to resolveFolderRoute but for shopping list folders
+   * Handles singular/plural variations (e.g., "grocery" matches "Groceries")
    */
   private async resolveShoppingListFolderRoute(folderRoute: string): Promise<string | null> {
     const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
@@ -6572,10 +6672,10 @@ export class ActionExecutor {
     
     // If only one part is provided, search all categories recursively
     if (parts.length === 1) {
-      const folderName = parts[0].toLowerCase();
+      const folderName = parts[0];
       
-      // First check if it's a root folder
-      const rootFolder = folders.find(f => f.name.toLowerCase() === folderName);
+      // First check if it's a root folder (with fuzzy matching)
+      const rootFolder = this.findFolderByName(folders, folderName);
       if (rootFolder) {
         return rootFolder.id;
       }
@@ -6590,16 +6690,17 @@ export class ActionExecutor {
     }
     
     // Multiple parts: use the original path-based approach
-    // Find root folder
-    let currentFolder = folders.find(f => f.name.toLowerCase() === parts[0].toLowerCase());
+    // Find root folder (with fuzzy matching)
+    let currentFolder = this.findFolderByName(folders, parts[0]);
     if (!currentFolder) {
       return null;
     }
 
-    // Navigate through categories
+    // Navigate through categories (with fuzzy matching)
     for (let i = 1; i < parts.length; i++) {
+      const categoryName = parts[i];
       const category = currentFolder.subfolders?.find(
-        sf => sf.name.toLowerCase() === parts[i].toLowerCase()
+        sf => this.folderNamesMatch(sf.name, categoryName)
       );
       if (!category) {
         return null;
