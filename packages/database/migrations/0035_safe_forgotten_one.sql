@@ -1,0 +1,1 @@
+ALTER TABLE "temporary_signup_credentials" ALTER COLUMN "password_hash" DROP NOT NULL;
