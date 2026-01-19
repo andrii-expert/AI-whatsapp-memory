@@ -5689,6 +5689,30 @@ export class ActionExecutor {
         };
       }
 
+      // Handle "delete all" case
+      if (parsed.taskName.toLowerCase() === 'all') {
+        const allReminders = await getRemindersByUserId(this.db, this.userId);
+        
+        if (allReminders.length === 0) {
+          return {
+            success: false,
+            message: "You don't have any reminders to delete.",
+          };
+        }
+
+        // Delete all reminders
+        for (const reminder of allReminders) {
+          await deleteReminder(this.db, reminder.id, this.userId);
+        }
+
+        logger.info({ userId: this.userId, count: allReminders.length }, 'All reminders deleted');
+
+        return {
+          success: true,
+          message: `⛔ *All Reminders Deleted:*\nDeleted ${allReminders.length} reminder${allReminders.length === 1 ? '' : 's'}.`,
+        };
+      }
+
       // Find reminder by title
       const reminders = await getRemindersByUserId(this.db, this.userId);
       const reminder = reminders.find(r => 

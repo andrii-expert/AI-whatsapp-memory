@@ -45,6 +45,7 @@ function isValidTemplateResponse(text: string): boolean {
     /^Create a reminder:/i,
     /^Update a reminder:/i,
     /^Delete a reminder:/i,
+    /^Delete all reminders$/i,
     /^Create a friend:/i,
     /^Update a friend:/i,
     /^Delete a friend:/i,
@@ -2555,7 +2556,7 @@ async function processAIResponse(
       // Handle reminder operations
       const isCreate = /^Create a reminder:/i.test(actionTemplate);
       const isUpdate = /^Update a reminder:/i.test(actionTemplate);
-      const isDelete = /^Delete a reminder:/i.test(actionTemplate);
+      const isDelete = /^Delete a reminder:/i.test(actionTemplate) || /^Delete all reminders$/i.test(actionTemplate);
       const isPause = /^Pause a reminder:/i.test(actionTemplate);
       const isResume = /^Resume a reminder:/i.test(actionTemplate);
       const isList = /^List reminders:/i.test(actionTemplate);
@@ -5295,12 +5296,17 @@ function parseReminderTemplateToAction(
     }
   } else if (isDelete) {
     action = 'delete';
-    // Parse: "Delete a reminder: {title}"
-    const deleteMatch = template.match(/^Delete a reminder:\s*(.+?)$/i);
-    if (deleteMatch && deleteMatch[1]) {
-      reminderTitle = deleteMatch[1].trim();
+    // Check for "Delete all reminders" first
+    if (template.match(/^Delete all reminders$/i)) {
+      reminderTitle = 'all';
     } else {
-      missingFields.push('reminder title');
+      // Parse: "Delete a reminder: {title}"
+      const deleteMatch = template.match(/^Delete a reminder:\s*(.+?)$/i);
+      if (deleteMatch && deleteMatch[1]) {
+        reminderTitle = deleteMatch[1].trim();
+      } else {
+        missingFields.push('reminder title');
+      }
     }
   } else if (isPause) {
     action = 'pause';
