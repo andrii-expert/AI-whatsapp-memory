@@ -245,14 +245,17 @@ export class ActionExecutor {
       // Match: "List shopping items: {folder|all} - status: {open|completed|all}"
       const matchWithStatus = trimmed.match(/^List shopping items:\s*(.+?)\s*-\s*status:\s*(.+)$/i);
       if (matchWithStatus) {
-        folderRoute = matchWithStatus[1].trim().toLowerCase() === 'all' ? undefined : matchWithStatus[1].trim();
+        // Preserve the raw folder route (including "all") so downstream logic
+        // can distinguish between "all" vs no folder (Home list)
+        folderRoute = matchWithStatus[1].trim();
         status = matchWithStatus[2].trim();
       } else {
         // Match: "List shopping items: {folder|all}" (no status)
         const matchWithoutStatus = trimmed.match(/^List shopping items:\s*(.+)$/i);
         if (matchWithoutStatus) {
           const folderOrAll = matchWithoutStatus[1].trim();
-          folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
+          // Preserve "all" so downstream logic can handle it specially
+          folderRoute = folderOrAll;
           status = 'all'; // Default to all statuses
         } else {
           missingFields.push('folder or "all"');
