@@ -3604,6 +3604,7 @@ export class ActionExecutor {
       
       // Resolve folder if specified
       let folderId: string | undefined = undefined;
+      let folderName: string | undefined = undefined;
       if (parsed.folderRoute && parsed.folderRoute.toLowerCase() !== 'all') {
         const resolvedFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
         folderId = resolvedFolderId || undefined;
@@ -3613,6 +3614,9 @@ export class ActionExecutor {
             message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
+        // Get the actual folder name from the database
+        const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
+        folderName = folder?.name;
       }
 
       const items = await getUserShoppingListItems(this.db, this.userId, {
@@ -3622,14 +3626,14 @@ export class ActionExecutor {
 
       if (items.length === 0) {
         const statusText = statusFilter ? ` (${statusFilter})` : '';
-        const folderText = folderId ? ` in "${parsed.folderRoute}"` : '';
+        const folderText = folderName ? ` in "${folderName}"` : '';
         return {
           success: true,
           message: `🛒 *Your shopping list${folderText} is empty${statusText}*`,
         };
       }
       const statusText = statusFilter ? ` (${statusFilter})` : '';
-      const folderText = folderId ? ` - ${parsed.folderRoute}` : '';
+      const folderText = folderName ? ` - ${folderName}` : '';
       let message = `🛍️ *Shopping Lists${folderText}${statusText}:*\n`;
 
       const displayedItems = items.slice(0, 20);
