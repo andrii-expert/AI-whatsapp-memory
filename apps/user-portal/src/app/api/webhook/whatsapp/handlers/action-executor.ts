@@ -1678,6 +1678,9 @@ export class ActionExecutor {
     try {
       // Resolve folder if specified
       let folderId: string | undefined = undefined;
+      let primaryFolder: any = null;
+      let isPrimaryFolder = false;
+      
       if (parsed.folderRoute) {
         folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute) || undefined;
         if (parsed.folderRoute && !folderId) {
@@ -1686,11 +1689,17 @@ export class ActionExecutor {
             message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
+        // Check if the resolved folder is primary
+        if (folderId) {
+          primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
+          isPrimaryFolder = primaryFolder?.id === folderId;
+        }
       } else {
         // If no folder specified, use the primary folder
-        const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
+        primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
         if (primaryFolder) {
           folderId = primaryFolder.id;
+          isPrimaryFolder = true;
           logger.info({ userId: this.userId, folderId: primaryFolder.id, folderName: primaryFolder.name }, 'Using primary shopping list folder for WhatsApp item');
         }
         // If no primary folder is set, folderId remains undefined (item goes to "All Items")
@@ -1740,9 +1749,26 @@ export class ActionExecutor {
         status: 'open',
       });
 
+      // Determine the message format based on whether it's the primary folder
+      let message: string;
+      if (folderId) {
+        if (isPrimaryFolder) {
+          // Primary folder - don't mention folder name
+          message = `✅ *Added to Shopping List:*\nItem/s: ${parsed.taskName}`;
+        } else {
+          // Not primary folder - include folder name
+          const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
+          const folderName = folder?.name || parsed.folderRoute || 'Shopping List';
+          message = `✅ *Added to ${folderName} Shopping List:*\nItem/s: ${parsed.taskName}`;
+        }
+      } else {
+        // No folder (goes to "All Items") - use default message
+        message = `✅ *Added to Shopping List:*\nItem/s: ${parsed.taskName}`;
+      }
+
       return {
         success: true,
-        message: `✅ *Added to Shopping Lists:*\nItem/s: ${parsed.taskName}`,
+        message,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
