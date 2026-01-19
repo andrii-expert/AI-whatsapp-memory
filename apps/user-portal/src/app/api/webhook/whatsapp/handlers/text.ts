@@ -1335,7 +1335,6 @@ async function processAIResponse(
         // Group similar messages together
         const shoppingItems: string[] = [];
         let shoppingListLabel: string | null = null;
-        let shoppingListLabel: string | null = null;
         const tasks: string[] = [];
         const notes: string[] = [];
         const events: string[] = [];
@@ -1353,13 +1352,6 @@ async function processAIResponse(
             // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to Shopping List(s)'
             let itemName: string | null = null;
-            // Try to extract list label from header once
-            if (!shoppingListLabel) {
-              const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
-              if (headerMatch && headerMatch[1]) {
-                shoppingListLabel = headerMatch[1].trim();
-              }
-            }
             // Try to extract list label from header once
             if (!shoppingListLabel) {
               const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
@@ -1534,6 +1526,7 @@ async function processAIResponse(
       if (nonEmptyResults.length > 0) {
         // Group similar messages together
         const shoppingItems: string[] = [];
+        let shoppingListLabel: string | null = null;
         const tasks: string[] = [];
         const notes: string[] = [];
         const events: string[] = [];
@@ -1551,6 +1544,13 @@ async function processAIResponse(
             // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to Shopping List(s)'
             let itemName: string | null = null;
+            // Try to extract list label from header once
+            if (!shoppingListLabel) {
+              const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
+              if (headerMatch && headerMatch[1]) {
+                shoppingListLabel = headerMatch[1].trim();
+              }
+            }
             const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
             if (match1 && match1[1]) {
               itemName = match1[1].trim();
