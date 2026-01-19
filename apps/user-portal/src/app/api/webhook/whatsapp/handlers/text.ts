@@ -1334,6 +1334,8 @@ async function processAIResponse(
       if (nonEmptyResults.length > 0) {
         // Group similar messages together
         const shoppingItems: string[] = [];
+        const purchasedItems: string[] = [];
+        const reopenedItems: string[] = [];
         let shoppingListLabel: string | null = null;
         const tasks: string[] = [];
         const notes: string[] = [];
@@ -1370,6 +1372,24 @@ async function processAIResponse(
             }
             if (itemName) {
               shoppingItems.push(itemName);
+            } else {
+              otherMessages.push(result);
+            }
+          }
+          // Check for shopping item completion/reopen (purchased / reopened)
+          else if (result.includes('Item Purchased')) {
+            const lines = result.split('\n');
+            const nameLine = lines[1]?.trim();
+            if (nameLine) {
+              purchasedItems.push(nameLine);
+            } else {
+              otherMessages.push(result);
+            }
+          } else if (result.includes('Item Reopened')) {
+            const lines = result.split('\n');
+            const nameLine = lines[1]?.trim();
+            if (nameLine) {
+              reopenedItems.push(nameLine);
             } else {
               otherMessages.push(result);
             }
@@ -1418,7 +1438,7 @@ async function processAIResponse(
         let combinedMessage = '';
         const messageParts: string[] = [];
         
-        // Format shopping list items
+        // Format shopping list items (added)
         if (shoppingItems.length > 0) {
           const itemsText = shoppingItems.length === 1
             ? shoppingItems[0]
@@ -1427,6 +1447,26 @@ async function processAIResponse(
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
           const listLabel = shoppingListLabel || 'Home';
           messageParts.push(`✅ *Added to ${listLabel} List:*\nItem/s: ${itemsText}`);
+        }
+
+        // Format purchased items
+        if (purchasedItems.length > 0) {
+          const itemsText = purchasedItems.length === 1
+            ? purchasedItems[0]
+            : purchasedItems.length === 2
+            ? `${purchasedItems[0]} and ${purchasedItems[1]}`
+            : `${purchasedItems.slice(0, -1).join(', ')} and ${purchasedItems[purchasedItems.length - 1]}`;
+          messageParts.push(`✅ *Items Purchased:*\n${itemsText}`);
+        }
+
+        // Format reopened items
+        if (reopenedItems.length > 0) {
+          const itemsText = reopenedItems.length === 1
+            ? reopenedItems[0]
+            : reopenedItems.length === 2
+            ? `${reopenedItems[0]} and ${reopenedItems[1]}`
+            : `${reopenedItems.slice(0, -1).join(', ')} and ${reopenedItems[reopenedItems.length - 1]}`;
+          messageParts.push(`📝 *Items Reopened:*\n${itemsText}`);
         }
         
         // Format tasks
@@ -1526,6 +1566,8 @@ async function processAIResponse(
       if (nonEmptyResults.length > 0) {
         // Group similar messages together
         const shoppingItems: string[] = [];
+        const purchasedItems: string[] = [];
+        const reopenedItems: string[] = [];
         let shoppingListLabel: string | null = null;
         const tasks: string[] = [];
         const notes: string[] = [];
@@ -1562,6 +1604,24 @@ async function processAIResponse(
             }
             if (itemName) {
               shoppingItems.push(itemName);
+            } else {
+              otherMessages.push(result);
+            }
+          } 
+          // Check for shopping item completion / reopen
+          else if (result.includes('Item Purchased')) {
+            const lines = result.split('\n');
+            const nameLine = lines[1]?.trim();
+            if (nameLine) {
+              purchasedItems.push(nameLine);
+            } else {
+              otherMessages.push(result);
+            }
+          } else if (result.includes('Item Reopened')) {
+            const lines = result.split('\n');
+            const nameLine = lines[1]?.trim();
+            if (nameLine) {
+              reopenedItems.push(nameLine);
             } else {
               otherMessages.push(result);
             }
@@ -1619,6 +1679,25 @@ async function processAIResponse(
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
           const listLabel = shoppingListLabel || 'Home';
           messageParts.push(`✅ *Added to ${listLabel} List:*\nItem/s: ${itemsText}`);
+        }
+        // Format purchased items
+        if (purchasedItems.length > 0) {
+          const itemsText = purchasedItems.length === 1
+            ? purchasedItems[0]
+            : purchasedItems.length === 2
+            ? `${purchasedItems[0]} and ${purchasedItems[1]}`
+            : `${purchasedItems.slice(0, -1).join(', ')} and ${purchasedItems[purchasedItems.length - 1]}`;
+          messageParts.push(`✅ *Items Purchased:*\n${itemsText}`);
+        }
+
+        // Format reopened items
+        if (reopenedItems.length > 0) {
+          const itemsText = reopenedItems.length === 1
+            ? reopenedItems[0]
+            : reopenedItems.length === 2
+            ? `${reopenedItems[0]} and ${reopenedItems[1]}`
+            : `${reopenedItems.slice(0, -1).join(', ')} and ${reopenedItems[reopenedItems.length - 1]}`;
+          messageParts.push(`📝 *Items Reopened:*\n${itemsText}`);
         }
         
         // Format tasks

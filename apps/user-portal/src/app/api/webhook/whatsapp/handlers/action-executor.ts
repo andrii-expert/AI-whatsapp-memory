@@ -6732,19 +6732,35 @@ export class ActionExecutor {
   private async resolveShoppingListFolderRoute(folderRoute: string): Promise<string | null> {
     const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
     const folders = await getUserShoppingListFolders(this.db, this.userId);
-    
+    const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
+
     // If only one part is provided, search all categories recursively
     if (parts.length === 1) {
-      const folderName = parts[0];
+      const rawName = parts[0];
+      const folderName = rawName.toLowerCase();
+
+      // Special-case: treat common synonyms as the Home (primary) list
+      if (
+        primaryFolder &&
+        (
+          folderName === 'home' ||
+          folderName === 'home list' ||
+          folderName === 'my home list' ||
+          folderName === 'shopping list' ||
+          folderName === 'my shopping list'
+        )
+      ) {
+        return primaryFolder.id;
+      }
       
       // First check if it's a root folder (with fuzzy matching)
-      const rootFolder = this.findFolderByName(folders, folderName);
+      const rootFolder = this.findFolderByName(folders, rawName);
       if (rootFolder) {
         return rootFolder.id;
       }
       
       // If not found as root folder, search all categories recursively
-      const foundCategory = this.findSubfolderByName(folders, folderName);
+      const foundCategory = this.findSubfolderByName(folders, rawName);
       if (foundCategory) {
         return foundCategory.id;
       }
