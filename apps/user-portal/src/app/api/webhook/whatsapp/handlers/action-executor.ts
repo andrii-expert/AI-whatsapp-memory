@@ -5491,10 +5491,26 @@ export class ActionExecutor {
         const nextOccurrence = this.calculateNextReminderTime(reminder, userLocalTime, timezone);
         
         if (nextOccurrence) {
-          // Format the next occurrence date
-          const nextOccurrenceInUserTz = new Date(nextOccurrence.toLocaleString("en-US", { timeZone: timezone }));
-          const hours = nextOccurrenceInUserTz.getHours();
-          const minutes = nextOccurrenceInUserTz.getMinutes();
+          // Format the next occurrence date using Intl.DateTimeFormat to get correct timezone components
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false,
+          });
+          
+          const parts = formatter.formatToParts(nextOccurrence);
+          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+          
+          const day = parseInt(getPart('day'), 10);
+          const month = parseInt(getPart('month'), 10) - 1; // Convert to 0-indexed
+          const year = parseInt(getPart('year'), 10);
+          const hours = parseInt(getPart('hour'), 10);
+          const minutes = parseInt(getPart('minute'), 10);
           const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
           
           // Determine if it's today, tomorrow, or a specific date
@@ -5502,19 +5518,21 @@ export class ActionExecutor {
           today.setHours(0, 0, 0, 0);
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
-          const nextDateOnly = new Date(nextOccurrenceInUserTz);
-          nextDateOnly.setHours(0, 0, 0, 0);
+          
+          // Create date objects for comparison (in user's timezone)
+          const nextDateInUserTz = new Date(year, month, day);
+          const todayInUserTz = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day);
+          const tomorrowInUserTz = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day + 1);
           
           let dateLabel = 'Today';
-          if (nextDateOnly.getTime() === today.getTime()) {
+          if (nextDateInUserTz.getTime() === todayInUserTz.getTime()) {
             dateLabel = 'Today';
-          } else if (nextDateOnly.getTime() === tomorrow.getTime()) {
+          } else if (nextDateInUserTz.getTime() === tomorrowInUserTz.getTime()) {
             dateLabel = 'Tomorrow';
           } else {
-            const day = nextOccurrenceInUserTz.getDate();
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const month = monthNames[nextOccurrenceInUserTz.getMonth()];
-            dateLabel = `${day} ${month}`;
+            const monthName = monthNames[month];
+            dateLabel = `${day} ${monthName}`;
           }
           
           dateInfo = `${dateLabel} ${time24}`;
