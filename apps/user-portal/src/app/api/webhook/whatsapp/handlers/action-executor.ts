@@ -5376,10 +5376,10 @@ export class ActionExecutor {
         const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
         const monthAbbrs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
         
-        // Build regex pattern with both full and abbreviated month names
-        const monthPattern = `(?:${monthNames.join('|')}|${monthAbbrs.join('|')})`;
+        // Build regex pattern with both full and abbreviated month names (capturing group)
+        const monthPattern = `(${monthNames.join('|')}|${monthAbbrs.join('|')})`;
         
-        // Try pattern 1: "15th October" or "on the 15th October" or "on the 15th of October" or "23rd of December"
+        // Try pattern 1: "15th October" or "on the 15th October" or "on the 15th of October" or "23rd of December" or "on 19th October"
         let dateMatch = scheduleStr.match(new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of\\s+)?\\s+${monthPattern}`, 'i'));
         let dayNum: number;
         let monthName: string;
@@ -5389,7 +5389,7 @@ export class ActionExecutor {
           dayNum = parseInt(dateMatch[1], 10);
           monthName = dateMatch[2].toLowerCase();
         } else {
-          // Try pattern 2: "October 15th" or "Dec 23rd"
+          // Try pattern 2: "October 15th" or "Dec 23rd" (monthPattern already has capturing group)
           dateMatch = scheduleStr.match(new RegExp(`${monthPattern}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i'));
           if (dateMatch && dateMatch[1] && dateMatch[2]) {
             // Pattern 2: "October 15th" - dateMatch[1] = month, dateMatch[2] = day
