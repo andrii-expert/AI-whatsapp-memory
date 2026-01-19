@@ -5494,8 +5494,23 @@ export class ActionExecutor {
         }
       }
       
+      // Format frequency text
+      const frequencyLabels: Record<string, string> = {
+        'daily': 'Daily',
+        'hourly': 'Hourly',
+        'minutely': 'Every N minutes',
+        'once': 'Once',
+        'weekly': 'Weekly',
+        'monthly': 'Monthly',
+        'yearly': 'Yearly',
+      };
+      const frequencyText = frequencyLabels[reminder.frequency] || reminder.frequency;
+      
+      // Get category (default to "General" if not set)
+      const categoryText = reminder.category || 'General';
+      
       // Message header is bold - reminder title is NOT bold
-      const responseMessage = `✅ *New Reminder Created:*\nTitle: ${reminder.title}\n${dateInfo ? `Date: ${dateInfo}` : ''}`;
+      const responseMessage = `✅ *New Reminder Created:*\nTitle: ${reminder.title}\nCategory: ${categoryText}\nFrequency: ${frequencyText}${dateInfo ? `\nDate: ${dateInfo}` : ''}`;
 
       return {
         success: true,
