@@ -62,10 +62,25 @@ import { Home, ChevronLeft, Clock } from "lucide-react";
 
 type ReminderFrequency = "none" | "daily" | "hourly" | "minutely" | "once" | "weekly" | "monthly" | "yearly";
 
+const REMINDER_CATEGORIES = [
+  "General",
+  "Birthdays",
+  "Once off",
+  "Family & Home",
+  "Work and Business",
+  "Health and Wellness",
+  "Errands",
+  "Travel",
+  "Notes",
+] as const;
+
+type ReminderCategory = (typeof REMINDER_CATEGORIES)[number];
+
 interface Reminder {
   id: string;
   title: string;
   frequency: ReminderFrequency;
+  category?: ReminderCategory | null;
   time: string | null; // HH:MM format for daily/weekly
   minuteOfHour: number | null; // 0-59 for hourly
   intervalMinutes: number | null; // for minutely
@@ -83,6 +98,7 @@ interface ReminderFormData {
   id: string | null;
   title: string;
   frequency: ReminderFrequency;
+  category: ReminderCategory;
   time: string;
   minuteOfHour: number;
   intervalMinutes: number;
@@ -894,6 +910,7 @@ export default function RemindersPage() {
       id: null,
       title: "",
       frequency: "none",
+      category: "General",
       time: "09:00",
       minuteOfHour: 0,
       intervalMinutes: 5,
@@ -1215,6 +1232,7 @@ export default function RemindersPage() {
       id: reminder.id,
       title: reminder.title,
       frequency: reminder.frequency,
+      category: (reminder.category as ReminderCategory) || "General",
       time: reminder.time || "17:00",
       minuteOfHour: reminder.minuteOfHour || 0,
       intervalMinutes: reminder.intervalMinutes || 5,
@@ -1285,6 +1303,7 @@ export default function RemindersPage() {
     const payload: any = {
       title: form.title,
       frequency: form.frequency,
+      category: form.category,
       active: true, // Always active, no toggle
       time: null,
       minuteOfHour: null,
@@ -2150,6 +2169,30 @@ export default function RemindersPage() {
                   <SelectItem value="weekly">Weekly (specific days)</SelectItem>
                   <SelectItem value="monthly">Monthly (specific date)</SelectItem>
                   <SelectItem value="yearly">Yearly (specific date)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Category */}
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="category" className="text-sm font-medium text-gray-900">
+                Category
+              </Label>
+              <Select
+                value={form.category}
+                onValueChange={(value) =>
+                  setForm({ ...form, category: value as ReminderCategory })
+                }
+              >
+                <SelectTrigger className="h-10 sm:h-11 w-full" id="category">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[260px] z-50">
+                  {REMINDER_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

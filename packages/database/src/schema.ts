@@ -1279,6 +1279,7 @@ export const reminders = pgTable("reminders", {
   
   title: text("title").notNull(),
   frequency: reminderFrequencyEnum("frequency").notNull(),
+  category: text("category").default('General').notNull(),
   
   // For daily reminders - time in HH:MM format
   time: text("time"),

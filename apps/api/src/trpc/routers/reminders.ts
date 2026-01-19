@@ -17,10 +17,22 @@ const remindersAccessProcedure = protectedProcedure;
 
 // Reminder schemas
 const frequencyEnum = z.enum(["daily", "hourly", "minutely", "once", "weekly", "monthly", "yearly"]);
+const reminderCategoryEnum = z.enum([
+  "General",
+  "Birthdays",
+  "Once off",
+  "Family & Home",
+  "Work and Business",
+  "Health and Wellness",
+  "Errands",
+  "Travel",
+  "Notes",
+]);
 
 const createReminderSchema = z.object({
   title: z.string().min(1, "Reminder title is required").max(200),
   frequency: frequencyEnum,
+  category: reminderCategoryEnum.default("General"),
   time: z.string().nullish().transform((val) => val ?? undefined),
   minuteOfHour: z.number().min(0).max(59).nullish().transform((val) => val ?? undefined),
   intervalMinutes: z.number().min(1).max(1440).nullish().transform((val) => val ?? undefined),
@@ -72,6 +84,7 @@ const updateReminderSchema = z.object({
   id: z.string().uuid(),
   title: z.string().min(1).max(200).optional(),
   frequency: frequencyEnum.optional(),
+  category: reminderCategoryEnum.optional(),
   time: z.string().nullish().transform((val) => val ?? undefined),
   minuteOfHour: z.number().min(0).max(59).nullish().transform((val) => val ?? undefined),
   intervalMinutes: z.number().min(1).max(1440).nullish().transform((val) => val ?? undefined),

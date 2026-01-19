@@ -8,6 +8,7 @@ export interface CreateReminderInput {
   userId: string;
   title: string;
   frequency: ReminderFrequency;
+  category?: string;
   time?: string;
   minuteOfHour?: number;
   intervalMinutes?: number;
@@ -22,6 +23,7 @@ export interface CreateReminderInput {
 export interface UpdateReminderInput {
   title?: string;
   frequency?: ReminderFrequency;
+  category?: string;
   time?: string;
   minuteOfHour?: number;
   intervalMinutes?: number;
@@ -40,6 +42,7 @@ export async function createReminder(db: Database, input: CreateReminderInput) {
       userId: input.userId,
       title: input.title,
       frequency: input.frequency,
+      category: input.category ?? 'General',
       time: input.time,
       minuteOfHour: input.minuteOfHour,
       intervalMinutes: input.intervalMinutes,
