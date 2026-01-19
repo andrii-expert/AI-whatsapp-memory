@@ -1488,8 +1488,11 @@ export default function RemindersPage() {
 
         {/* Heading */}
         <div className="px-4 pt-6 pb-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Reminders</h1>
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col">
+              <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Reminders</h1>
+              <p className="text-sm text-[#6C7275] mt-1">Create and manage once off or re-occurring reminders from here or WhatsApp</p>
+            </div>
             <Button
               onClick={openNewForm}
               variant="outline"

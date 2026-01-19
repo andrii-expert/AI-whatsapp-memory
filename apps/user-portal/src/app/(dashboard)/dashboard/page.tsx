@@ -1845,7 +1845,7 @@ export default function DashboardPage() {
                 {getGreeting()}, {userName}! 👋
             </h1>
               <p className="text-[14px] font-normal leading-[130%] text-[#9999A5]">
-              Create and manage once off or re-occurring reminders from here or WhatsApp
+              Here's what's happening with your workspace today
             </p>
           </div>
 
