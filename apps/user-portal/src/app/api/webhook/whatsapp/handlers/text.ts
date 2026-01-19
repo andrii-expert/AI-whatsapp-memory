@@ -5254,26 +5254,32 @@ function parseReminderTemplateToAction(
   let reminderSchedule: string | undefined;
   let reminderStatus: string | undefined;
   let reminderChanges: string | undefined;
+  let reminderCategory: string | undefined;
   const missingFields: string[] = [];
 
   if (isCreate) {
     action = 'create';
-    // Parse: "Create a reminder: {title} - schedule: {schedule} - status: {active|paused}"
-    const titleMatch = template.match(/^Create a reminder:\s*(.+?)(?:\s*-\s*schedule:|\s*-\s*status:|$)/i);
+    // Parse: "Create a reminder: {title} - schedule: {schedule} - status: {active|paused} - category: {category}"
+    const titleMatch = template.match(/^Create a reminder:\s*(.+?)(?:\s*-\s*schedule:|\s*-\s*status:|\s*-\s*category:|$)/i);
     if (titleMatch && titleMatch[1]) {
       reminderTitle = titleMatch[1].trim();
     } else {
       missingFields.push('reminder title');
     }
 
-    const scheduleMatch = template.match(/\s*-\s*schedule:\s*(.+?)(?:\s*-\s*status:|$)/i);
+    const scheduleMatch = template.match(/\s*-\s*schedule:\s*(.+?)(?:\s*-\s*status:|\s*-\s*category:|$)/i);
     if (scheduleMatch && scheduleMatch[1]) {
       reminderSchedule = scheduleMatch[1].trim();
     }
 
-    const statusMatch = template.match(/\s*-\s*status:\s*(.+?)$/i);
+    const statusMatch = template.match(/\s*-\s*status:\s*(.+?)(?:\s*-\s*category:|$)/i);
     if (statusMatch && statusMatch[1]) {
       reminderStatus = statusMatch[1].trim().toLowerCase();
+    }
+
+    const categoryMatch = template.match(/\s*-\s*category:\s*(.+?)$/i);
+    if (categoryMatch && categoryMatch[1]) {
+      reminderCategory = categoryMatch[1].trim();
     }
   } else if (isUpdate) {
     action = 'edit';
@@ -5318,7 +5324,7 @@ function parseReminderTemplateToAction(
     throw new Error('Unknown reminder operation type');
   }
 
-  return {
+  const parsed: ParsedAction = {
     action,
     resourceType,
     taskName: reminderTitle, // Reuse taskName field for reminder title
@@ -5327,6 +5333,13 @@ function parseReminderTemplateToAction(
     status: reminderStatus, // Reuse status field for reminder status
     missingFields,
   };
+
+  // Add category if it was parsed (for create operations)
+  if (isCreate && reminderCategory) {
+    parsed.reminderCategory = reminderCategory;
+  }
+
+  return parsed;
 }
 
 /**

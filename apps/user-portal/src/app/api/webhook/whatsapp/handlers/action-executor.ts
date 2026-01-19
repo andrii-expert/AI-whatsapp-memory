@@ -5336,29 +5336,36 @@ export class ActionExecutor {
 
       const scheduleData = this.parseReminderSchedule(scheduleStr, timezone);
       
-      // Auto-detect category from title
-      const titleLower = parsed.taskName.toLowerCase();
-      let detectedCategory: string | undefined;
+      // Use category from AI analysis (parsed from AI response)
+      // If not provided by AI, default to "General"
+      let detectedCategory: string | undefined = parsed.reminderCategory || 'General';
       
-      // Category detection logic
-      if (titleLower.includes('birthday') || titleLower.includes('birth day') || titleLower.includes('birth')) {
-        detectedCategory = 'Birthdays';
-      } else if (titleLower.includes('work') || titleLower.includes('business') || titleLower.includes('meeting') || titleLower.includes('office')) {
-        detectedCategory = 'Work and Business';
-      } else if (titleLower.includes('family') || titleLower.includes('home') || titleLower.includes('house')) {
-        detectedCategory = 'Family & Home';
-      } else if (titleLower.includes('health') || titleLower.includes('wellness') || titleLower.includes('doctor') || titleLower.includes('medication') || titleLower.includes('appointment')) {
-        detectedCategory = 'Health and Wellness';
-      } else if (titleLower.includes('errand') || titleLower.includes('pick up') || titleLower.includes('buy') || titleLower.includes('grocery')) {
-        detectedCategory = 'Errands';
-      } else if (titleLower.includes('travel') || titleLower.includes('trip') || titleLower.includes('flight') || titleLower.includes('hotel')) {
-        detectedCategory = 'Travel';
-      } else if (titleLower.includes('note') || titleLower.includes('remember')) {
-        detectedCategory = 'Notes';
-      } else {
-        detectedCategory = 'General'; // Default category
-      }
+      // Normalize category name to match database values
+      const categoryMap: Record<string, string> = {
+        'birthdays': 'Birthdays',
+        'birthday': 'Birthdays',
+        'general': 'General',
+        'once off': 'Once off',
+        'onceoff': 'Once off',
+        'family & home': 'Family & Home',
+        'family and home': 'Family & Home',
+        'work and business': 'Work and Business',
+        'work': 'Work and Business',
+        'business': 'Work and Business',
+        'health and wellness': 'Health and Wellness',
+        'health': 'Health and Wellness',
+        'wellness': 'Health and Wellness',
+        'errands': 'Errands',
+        'errand': 'Errands',
+        'travel': 'Travel',
+        'notes': 'Notes',
+        'note': 'Notes',
+      };
       
+      const normalizedCategory = categoryMap[detectedCategory.toLowerCase()] || detectedCategory;
+      detectedCategory = normalizedCategory;
+      
+      // Check if it's a birthday for frequency override
       const isBirthday = detectedCategory === 'Birthdays';
       
       if (isBirthday) {
