@@ -1379,47 +1379,136 @@ async function processAIResponse(
       // Send combined results to user (filter out empty messages from button sends)
       const nonEmptyResults = results.filter(r => r.trim().length > 0);
       if (nonEmptyResults.length > 0) {
-        // Check if we have shopping list items to format specially
+        // Group similar messages together
         const shoppingItems: string[] = [];
+        const tasks: string[] = [];
+        const notes: string[] = [];
+        const events: string[] = [];
+        const reminders: string[] = [];
         const otherMessages: string[] = [];
         
         for (const result of nonEmptyResults) {
-          // Check for shopping item additions (new format: "✓ Added ..." or old format: "SHOPPING_ITEM_ADDED:")
+          // Check for shopping item additions
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (result.includes('Added') && result.includes('to Shopping Lists')) {
-            // Extract item name from "✓ Added "{item}" to Shopping Lists"
-            const match = result.match(/Added\s+"([^"]+)"\s+to\s+Shopping\s+Lists/i);
-            if (match && match[1]) {
-              shoppingItems.push(match[1]);
+            // Extract item name from "✅ *Added to Shopping Lists:*\nItem/s: {item}"
+            let itemName: string | null = null;
+            const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
+            if (match1 && match1[1]) {
+              itemName = match1[1].trim();
+            } else {
+              const match2 = result.match(/Added\s+"([^"]+)"\s+to\s+Shopping\s+Lists/i);
+              if (match2 && match2[1]) {
+                itemName = match2[1].trim();
+              }
+            }
+            if (itemName) {
+              shoppingItems.push(itemName);
             } else {
               otherMessages.push(result);
             }
-          } else {
+          } 
+          // Check for task creation
+          else if (result.includes('New Task Created')) {
+            const match = result.match(/Title:\s*([^\n]+)/i);
+            if (match && match[1]) {
+              tasks.push(match[1].trim());
+            } else {
+              otherMessages.push(result);
+            }
+          }
+          // Check for note creation
+          else if (result.includes('New Note Created') || result.includes('Note Created')) {
+            const match = result.match(/Title:\s*([^\n]+)/i);
+            if (match && match[1]) {
+              notes.push(match[1].trim());
+            } else {
+              otherMessages.push(result);
+            }
+          }
+          // Check for event creation
+          else if (result.includes('New Event Created')) {
+            const match = result.match(/\*Title:\*\s*([^\n]+)/i);
+            if (match && match[1]) {
+              events.push(match[1].trim());
+            } else {
+              otherMessages.push(result);
+            }
+          }
+          // Check for reminder creation
+          else if (result.includes('New Reminder Created')) {
+            const match = result.match(/Title:\s*([^\n]+)/i);
+            if (match && match[1]) {
+              reminders.push(match[1].trim());
+            } else {
+              otherMessages.push(result);
+            }
+          }
+          else {
             otherMessages.push(result);
           }
         }
         
         let combinedMessage = '';
+        const messageParts: string[] = [];
         
-        // Format shopping list items if any
+        // Format shopping list items
         if (shoppingItems.length > 0) {
           const itemsText = shoppingItems.length === 1
             ? shoppingItems[0]
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          combinedMessage = `✅ *Added to Shopping List:*\nItem/s: ${itemsText}`;
+          messageParts.push(`✅ *Added to Shopping List:*\nItem/s: ${itemsText}`);
+        }
+        
+        // Format tasks
+        if (tasks.length > 0) {
+          const tasksText = tasks.length === 1
+            ? tasks[0]
+            : tasks.length === 2
+            ? `${tasks[0]} and ${tasks[1]}`
+            : `${tasks.slice(0, -1).join(', ')} and ${tasks[tasks.length - 1]}`;
+          messageParts.push(`✅ *New Task${tasks.length > 1 ? 's' : ''} Created:*\nTitle${tasks.length > 1 ? 's' : ''}: ${tasksText}`);
+        }
+        
+        // Format notes
+        if (notes.length > 0) {
+          const notesText = notes.length === 1
+            ? notes[0]
+            : notes.length === 2
+            ? `${notes[0]} and ${notes[1]}`
+            : `${notes.slice(0, -1).join(', ')} and ${notes[notes.length - 1]}`;
+          messageParts.push(`✅ *New Note${notes.length > 1 ? 's' : ''} Created:*\nTitle${notes.length > 1 ? 's' : ''}: ${notesText}`);
+        }
+        
+        // Format events
+        if (events.length > 0) {
+          const eventsText = events.length === 1
+            ? events[0]
+            : events.length === 2
+            ? `${events[0]} and ${events[1]}`
+            : `${events.slice(0, -1).join(', ')} and ${events[events.length - 1]}`;
+          messageParts.push(`✅ *New Event${events.length > 1 ? 's' : ''} Created:*\nTitle${events.length > 1 ? 's' : ''}: ${eventsText}`);
+        }
+        
+        // Format reminders
+        if (reminders.length > 0) {
+          const remindersText = reminders.length === 1
+            ? reminders[0]
+            : reminders.length === 2
+            ? `${reminders[0]} and ${reminders[1]}`
+            : `${reminders.slice(0, -1).join(', ')} and ${reminders[reminders.length - 1]}`;
+          messageParts.push(`✅ *New Reminder${reminders.length > 1 ? 's' : ''} Created:*\nTitle${reminders.length > 1 ? 's' : ''}: ${remindersText}`);
         }
         
         // Add other messages
         if (otherMessages.length > 0) {
-          if (combinedMessage) {
-            combinedMessage += '\n\n' + otherMessages.join('\n');
-          } else {
-            combinedMessage = otherMessages.join('\n');
-          }
+          messageParts.push(...otherMessages);
         }
+        
+        combinedMessage = messageParts.join('\n\n');
         
         await whatsappService.sendTextMessage(recipient, combinedMessage);
         
