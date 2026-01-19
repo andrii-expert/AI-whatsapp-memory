@@ -1753,17 +1753,17 @@ export class ActionExecutor {
       let message: string;
       if (folderId) {
         if (isPrimaryFolder) {
-          // Primary folder - don't mention folder name
-          message = `✅ *Added to Shopping List:*\nItem/s: ${parsed.taskName}`;
+          // Primary folder - present as Home List
+          message = `✅ *Added to Home List:*\nItem/s: ${parsed.taskName}`;
         } else {
-          // Not primary folder - include folder name
+          // Not primary folder - include folder name, without the word "shopping"
           const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
-          const folderName = folder?.name || parsed.folderRoute || 'Shopping List';
-          message = `✅ *Added to ${folderName} Shopping List:*\nItem/s: ${parsed.taskName}`;
+          const folderName = folder?.name || parsed.folderRoute || 'List';
+          message = `✅ *Added to ${folderName} List:*\nItem/s: ${parsed.taskName}`;
         }
       } else {
-        // No folder (goes to "All Items") - use default message
-        message = `✅ *Added to Shopping List:*\nItem/s: ${parsed.taskName}`;
+        // No folder (goes to \"All Items\") - use Home List as the main list concept
+        message = `✅ *Added to Home List:*\nItem/s: ${parsed.taskName}`;
       }
 
       return {
@@ -3605,18 +3605,29 @@ export class ActionExecutor {
       // Resolve folder if specified
       let folderId: string | undefined = undefined;
       let folderName: string | undefined = undefined;
+      let isPrimaryFolder = false;
       if (parsed.folderRoute && parsed.folderRoute.toLowerCase() !== 'all') {
         const resolvedFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
         folderId = resolvedFolderId || undefined;
         if (!folderId) {
           return {
             success: false,
-            message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+            message: `I couldn't find the lists folder "${parsed.folderRoute}". Please make sure the list exists.`,
           };
         }
-        // Get the actual folder name from the database
+        // Get the actual folder name from the database and check if it's primary
         const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
         folderName = folder?.name;
+        const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
+        isPrimaryFolder = primaryFolder?.id === folderId;
+      } else {
+        // No specific folder requested - treat as Home (primary) list
+        const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
+        if (primaryFolder) {
+          folderId = primaryFolder.id;
+          folderName = primaryFolder.name;
+          isPrimaryFolder = true;
+        }
       }
 
       const items = await getUserShoppingListItems(this.db, this.userId, {
@@ -3626,15 +3637,15 @@ export class ActionExecutor {
 
       if (items.length === 0) {
         const statusText = statusFilter ? ` (${statusFilter})` : '';
-        const folderText = folderName ? ` in "${folderName}"` : '';
+        const listLabel = isPrimaryFolder || !folderName ? 'Home' : folderName;
         return {
           success: true,
-          message: `🛒 *Your shopping list${folderText} is empty${statusText}*`,
+          message: `🛒 *Your ${listLabel} List is empty${statusText}*`,
         };
       }
       const statusText = statusFilter ? ` (${statusFilter})` : '';
-      const folderText = folderName ? ` - ${folderName}` : '';
-      let message = `🛍️ *Shopping Lists${folderText}${statusText}:*\n`;
+      const listLabel = isPrimaryFolder || !folderName ? 'Home' : folderName;
+      let message = `🛍️ *${listLabel} List${statusText}:*\n`;
 
       const displayedItems = items.slice(0, 20);
       displayedItems.forEach((item, index) => {

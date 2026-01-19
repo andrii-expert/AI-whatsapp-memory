@@ -1346,10 +1346,9 @@ async function processAIResponse(
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (
             // Match both singular and plural forms, and our current formatted header
-            result.includes('Added to Shopping List') ||
-            result.includes('Added to Shopping Lists')
+            result.includes('Added to ') && result.includes(' List:')
           ) {
-            // Extract item name from "✅ *Added to Shopping List(s):*\nItem/s: {item}"
+            // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to Shopping List(s)'
             let itemName: string | null = null;
             const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
@@ -1530,10 +1529,9 @@ async function processAIResponse(
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (
             // Match both singular and plural forms, and our current formatted header
-            result.includes('Added to Shopping List') ||
-            result.includes('Added to Shopping Lists')
+            result.includes('Added to ') && result.includes(' List:')
           ) {
-            // Extract item name from "✅ *Added to Shopping List(s):*\nItem/s: {item}"
+            // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to Shopping List(s)'
             let itemName: string | null = null;
             const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
