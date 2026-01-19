@@ -5372,11 +5372,15 @@ export class ActionExecutor {
         // Override frequency to yearly for birthdays
         scheduleData.frequency = 'yearly';
         
-        // Try to extract date from schedule string (e.g., "on the 4th October", "4th October", "October 4th", "on the 15th of October")
+        // Try to extract date from schedule string (e.g., "on the 4th October", "4th October", "October 4th", "on the 15th of October", "23rd of December")
         const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+        const monthAbbrs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
         
-        // Try pattern 1: "15th October" or "on the 15th October" or "on the 15th of October"
-        let dateMatch = scheduleStr.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?(?:\s+of\s+)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i);
+        // Build regex pattern with both full and abbreviated month names
+        const monthPattern = `(?:${monthNames.join('|')}|${monthAbbrs.join('|')})`;
+        
+        // Try pattern 1: "15th October" or "on the 15th October" or "on the 15th of October" or "23rd of December"
+        let dateMatch = scheduleStr.match(new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of\\s+)?\\s+${monthPattern}`, 'i'));
         let dayNum: number;
         let monthName: string;
         
@@ -5385,12 +5389,20 @@ export class ActionExecutor {
           dayNum = parseInt(dateMatch[1], 10);
           monthName = dateMatch[2].toLowerCase();
         } else {
-          // Try pattern 2: "October 15th"
-          dateMatch = scheduleStr.match(/(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?/i);
+          // Try pattern 2: "October 15th" or "Dec 23rd"
+          dateMatch = scheduleStr.match(new RegExp(`${monthPattern}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i'));
           if (dateMatch && dateMatch[1] && dateMatch[2]) {
             // Pattern 2: "October 15th" - dateMatch[1] = month, dateMatch[2] = day
             monthName = dateMatch[1].toLowerCase();
             dayNum = parseInt(dateMatch[2], 10);
+          }
+        }
+        
+        // Normalize month name (handle abbreviations)
+        if (monthName) {
+          const abbrIndex = monthAbbrs.indexOf(monthName);
+          if (abbrIndex !== -1) {
+            monthName = monthNames[abbrIndex];
           }
         }
         
@@ -5405,6 +5417,8 @@ export class ActionExecutor {
                 parsedDay: dayNum,
                 parsedMonth: monthName,
                 monthIndex: monthIndex + 1,
+                storedMonth: scheduleData.month,
+                storedDayOfMonth: scheduleData.dayOfMonth,
               },
               'Successfully parsed birthday date'
             );
@@ -5415,6 +5429,7 @@ export class ActionExecutor {
               scheduleStr,
               parsedDay: dayNum,
               parsedMonth: monthName,
+              originalMatch: dateMatch,
             },
             'Failed to parse birthday date from schedule string'
           );
@@ -5474,7 +5489,16 @@ export class ActionExecutor {
 
       // Calculate next occurrence date for the reminder
       let dateInfo = '';
-      if (timezone) {
+      
+      // For yearly reminders with month and dayOfMonth, use the stored values directly (no timezone conversion)
+      if (reminder.frequency === 'yearly' && reminder.month && reminder.dayOfMonth) {
+        const day = reminder.dayOfMonth;
+        const monthIndex = reminder.month - 1; // Convert 1-12 to 0-11
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthName = monthNames[monthIndex];
+        const time = reminder.time || '09:00';
+        dateInfo = `${day} ${monthName} ${time}`;
+      } else if (timezone) {
         const timeComponents = this.getCurrentTimeInTimezone(timezone);
         const now = new Date();
         const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
