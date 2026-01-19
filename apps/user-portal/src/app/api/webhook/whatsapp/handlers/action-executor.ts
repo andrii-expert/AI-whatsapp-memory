@@ -123,6 +123,7 @@ export interface ParsedAction {
   permission?: 'view' | 'edit'; // For share operations: permission level
   itemNumbers?: number[]; // For deletion by numbers: [1, 3, 5]
   category?: string; // For shopping list items: category name
+  reminderCategory?: string; // For reminders: category name
 }
 
 // In-memory cache to store last displayed list context for each user
@@ -187,6 +188,7 @@ export class ActionExecutor {
     let listFilter: string | undefined;
     let category: string | undefined;
     let typeFilter: ReminderFrequency | undefined;
+    let reminderCategory: string | undefined;
     let isShoppingListFolder: boolean | undefined;
     let isFriendFolder: boolean | undefined;
     let email: string | undefined;
@@ -523,6 +525,23 @@ export class ActionExecutor {
           filterParts,
           originalMatch: match[1],
         }, 'Parsing reminder list filter');
+        
+        // Check for category filter (birthdays, general, work, etc.)
+        const reminderCategories = ['general', 'birthdays', 'once off', 'family & home', 'work and business', 'health and wellness', 'errands', 'travel', 'notes'];
+        for (const part of filterParts) {
+          const matchedCategory = reminderCategories.find(cat => 
+            part === cat.toLowerCase() || 
+            part.includes(cat.toLowerCase()) ||
+            (cat === 'birthdays' && (part.includes('birthday') || part.includes('birth'))) ||
+            (cat === 'work and business' && (part.includes('work') || part.includes('business'))) ||
+            (cat === 'family & home' && (part.includes('family') || part.includes('home'))) ||
+            (cat === 'health and wellness' && (part.includes('health') || part.includes('wellness')))
+          );
+          if (matchedCategory) {
+            reminderCategory = matchedCategory;
+            break;
+          }
+        }
         
         // Check for reminder type filter
         const reminderTypes: ReminderFrequency[] = ['daily', 'hourly', 'minutely', 'once', 'weekly', 'monthly', 'yearly'];
@@ -1274,6 +1293,7 @@ export class ActionExecutor {
       status,
       listFilter,
       typeFilter,
+      reminderCategory,
       missingFields,
       permission,
       category,
@@ -4159,6 +4179,23 @@ export class ActionExecutor {
       if (parsed.typeFilter) {
         filteredReminders = filteredReminders.filter(r => r.frequency === parsed.typeFilter);
       }
+      
+      // Filter by category if specified
+      if (parsed.reminderCategory) {
+        const categoryMap: Record<string, string> = {
+          'birthdays': 'Birthdays',
+          'general': 'General',
+          'once off': 'Once off',
+          'family & home': 'Family & Home',
+          'work and business': 'Work and Business',
+          'health and wellness': 'Health and Wellness',
+          'errands': 'Errands',
+          'travel': 'Travel',
+          'notes': 'Notes',
+        };
+        const normalizedCategory = categoryMap[parsed.reminderCategory.toLowerCase()] || parsed.reminderCategory;
+        filteredReminders = filteredReminders.filter(r => r.category === normalizedCategory);
+      }
 
       // Filter by time if specified (today, tomorrow, this week, this month)
       // Calculate date ranges based on user's timezone (not server timezone)
@@ -5299,9 +5336,30 @@ export class ActionExecutor {
 
       const scheduleData = this.parseReminderSchedule(scheduleStr, timezone);
       
-      // Auto-detect birthday and set to yearly
+      // Auto-detect category from title
       const titleLower = parsed.taskName.toLowerCase();
-      const isBirthday = titleLower.includes('birthday') || titleLower.includes('birth day');
+      let detectedCategory: string | undefined;
+      
+      // Category detection logic
+      if (titleLower.includes('birthday') || titleLower.includes('birth day') || titleLower.includes('birth')) {
+        detectedCategory = 'Birthdays';
+      } else if (titleLower.includes('work') || titleLower.includes('business') || titleLower.includes('meeting') || titleLower.includes('office')) {
+        detectedCategory = 'Work and Business';
+      } else if (titleLower.includes('family') || titleLower.includes('home') || titleLower.includes('house')) {
+        detectedCategory = 'Family & Home';
+      } else if (titleLower.includes('health') || titleLower.includes('wellness') || titleLower.includes('doctor') || titleLower.includes('medication') || titleLower.includes('appointment')) {
+        detectedCategory = 'Health and Wellness';
+      } else if (titleLower.includes('errand') || titleLower.includes('pick up') || titleLower.includes('buy') || titleLower.includes('grocery')) {
+        detectedCategory = 'Errands';
+      } else if (titleLower.includes('travel') || titleLower.includes('trip') || titleLower.includes('flight') || titleLower.includes('hotel')) {
+        detectedCategory = 'Travel';
+      } else if (titleLower.includes('note') || titleLower.includes('remember')) {
+        detectedCategory = 'Notes';
+      } else {
+        detectedCategory = 'General'; // Default category
+      }
+      
+      const isBirthday = detectedCategory === 'Birthdays';
       
       if (isBirthday) {
         // Override frequency to yearly for birthdays
@@ -5369,6 +5427,7 @@ export class ActionExecutor {
         month: scheduleData.month,
         daysOfWeek: scheduleData.daysOfWeek,
         active: parsed.status === 'paused' ? false : true,
+        category: detectedCategory,
       };
 
       logger.info(
