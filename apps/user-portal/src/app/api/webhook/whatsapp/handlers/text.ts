@@ -1334,6 +1334,8 @@ async function processAIResponse(
       if (nonEmptyResults.length > 0) {
         // Group similar messages together
         const shoppingItems: string[] = [];
+        let shoppingListLabel: string | null = null;
+        let shoppingListLabel: string | null = null;
         const tasks: string[] = [];
         const notes: string[] = [];
         const events: string[] = [];
@@ -1351,6 +1353,20 @@ async function processAIResponse(
             // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to Shopping List(s)'
             let itemName: string | null = null;
+            // Try to extract list label from header once
+            if (!shoppingListLabel) {
+              const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
+              if (headerMatch && headerMatch[1]) {
+                shoppingListLabel = headerMatch[1].trim();
+              }
+            }
+            // Try to extract list label from header once
+            if (!shoppingListLabel) {
+              const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
+              if (headerMatch && headerMatch[1]) {
+                shoppingListLabel = headerMatch[1].trim();
+              }
+            }
             const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
             if (match1 && match1[1]) {
               itemName = match1[1].trim();
@@ -1417,7 +1433,8 @@ async function processAIResponse(
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          messageParts.push(`✅ *Added to Shopping List:*\nItem/s: ${itemsText}`);
+          const listLabel = shoppingListLabel || 'Home';
+          messageParts.push(`✅ *Added to ${listLabel} List:*\nItem/s: ${itemsText}`);
         }
         
         // Format tasks
@@ -1600,7 +1617,8 @@ async function processAIResponse(
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          messageParts.push(`✅ *Added to Shopping List:*\nItem/s: ${itemsText}`);
+          const listLabel = shoppingListLabel || 'Home';
+          messageParts.push(`✅ *Added to ${listLabel} List:*\nItem/s: ${itemsText}`);
         }
         
         // Format tasks
