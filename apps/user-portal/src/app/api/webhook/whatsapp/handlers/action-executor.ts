@@ -3606,7 +3606,11 @@ export class ActionExecutor {
       let folderId: string | undefined = undefined;
       let folderName: string | undefined = undefined;
       let isPrimaryFolder = false;
-      if (parsed.folderRoute && parsed.folderRoute.toLowerCase() !== 'all') {
+
+      const folderRouteLower = parsed.folderRoute?.toLowerCase();
+
+      if (parsed.folderRoute && folderRouteLower !== 'all') {
+        // Specific list requested (e.g. "grocery list", "Groceries")
         const resolvedFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
         folderId = resolvedFolderId || undefined;
         if (!folderId) {
@@ -3620,14 +3624,19 @@ export class ActionExecutor {
         folderName = folder?.name;
         const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
         isPrimaryFolder = primaryFolder?.id === folderId;
-      } else {
-        // No specific folder requested - treat as Home (primary) list
+      } else if (!parsed.folderRoute) {
+        // No folder name mentioned -> show primary (Home) list
         const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
         if (primaryFolder) {
           folderId = primaryFolder.id;
           folderName = primaryFolder.name;
           isPrimaryFolder = true;
         }
+      } else if (folderRouteLower === 'all') {
+        // Explicitly asked for "all" -> do NOT filter by folderId (show items from all lists)
+        folderId = undefined;
+        folderName = 'All';
+        isPrimaryFolder = false;
       }
 
       const items = await getUserShoppingListItems(this.db, this.userId, {
@@ -3637,14 +3646,24 @@ export class ActionExecutor {
 
       if (items.length === 0) {
         const statusText = statusFilter ? ` (${statusFilter})` : '';
-        const listLabel = isPrimaryFolder || !folderName ? 'Home' : folderName;
+        const listLabel =
+          folderRouteLower === 'all'
+            ? 'All Items'
+            : isPrimaryFolder || !folderName
+            ? 'Home'
+            : folderName;
         return {
           success: true,
           message: `🛒 *Your ${listLabel} List is empty${statusText}*`,
         };
       }
       const statusText = statusFilter ? ` (${statusFilter})` : '';
-      const listLabel = isPrimaryFolder || !folderName ? 'Home' : folderName;
+      const listLabel =
+        folderRouteLower === 'all'
+          ? 'All Items'
+          : isPrimaryFolder || !folderName
+          ? 'Home'
+          : folderName;
       let message = `🛍️ *${listLabel} List${statusText}:*\n`;
 
       const displayedItems = items.slice(0, 20);
