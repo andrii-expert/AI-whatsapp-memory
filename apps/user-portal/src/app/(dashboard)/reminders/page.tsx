@@ -1817,6 +1817,14 @@ export default function RemindersPage() {
                             {frequencyText}
                           </span>
                         </div>
+                        {r.category && (
+                          <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#E6F3FF]">
+                            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#4A90E2" }} />
+                            <span className="text-[10px] font-medium" style={{ color: "#4A90E2" }}>
+                              {r.category}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       {/* Time and Duration Row */}
                       <div className="flex items-center gap-2">
