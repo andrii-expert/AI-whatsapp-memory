@@ -5372,32 +5372,52 @@ export class ActionExecutor {
         // Override frequency to yearly for birthdays
         scheduleData.frequency = 'yearly';
         
-        // Try to extract date from schedule string (e.g., "on the 4th October", "4th October", "October 4th")
-        const dateMatch = scheduleStr.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i) 
-          || scheduleStr.match(/(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?/i);
+        // Try to extract date from schedule string (e.g., "on the 4th October", "4th October", "October 4th", "on the 15th of October")
+        const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
         
-        if (dateMatch) {
-          const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-          let dayNum: number;
-          let monthName: string;
-          
-          if (dateMatch[1] && monthNames.includes(dateMatch[1].toLowerCase())) {
-            // Format: "October 4th"
+        // Try pattern 1: "15th October" or "on the 15th October" or "on the 15th of October"
+        let dateMatch = scheduleStr.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?(?:\s+of\s+)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i);
+        let dayNum: number;
+        let monthName: string;
+        
+        if (dateMatch && dateMatch[1] && dateMatch[2]) {
+          // Pattern 1: "15th October" or "on the 15th of October" - dateMatch[1] = day, dateMatch[2] = month
+          dayNum = parseInt(dateMatch[1], 10);
+          monthName = dateMatch[2].toLowerCase();
+        } else {
+          // Try pattern 2: "October 15th"
+          dateMatch = scheduleStr.match(/(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?/i);
+          if (dateMatch && dateMatch[1] && dateMatch[2]) {
+            // Pattern 2: "October 15th" - dateMatch[1] = month, dateMatch[2] = day
             monthName = dateMatch[1].toLowerCase();
-            dayNum = parseInt(dateMatch[2] || '1', 10);
-          } else {
-            // Format: "4th October"
-            dayNum = parseInt(dateMatch[1] || '1', 10);
-            monthName = dateMatch[2]?.toLowerCase() || '';
+            dayNum = parseInt(dateMatch[2], 10);
           }
-          
-          if (monthName && dayNum >= 1 && dayNum <= 31) {
-            const monthIndex = monthNames.indexOf(monthName);
-            if (monthIndex !== -1) {
-              scheduleData.dayOfMonth = dayNum;
-              scheduleData.month = monthIndex + 1; // 1-12
-            }
+        }
+        
+        if (monthName && dayNum >= 1 && dayNum <= 31 && monthNames.includes(monthName)) {
+          const monthIndex = monthNames.indexOf(monthName);
+          if (monthIndex !== -1) {
+            scheduleData.dayOfMonth = dayNum;
+            scheduleData.month = monthIndex + 1; // 1-12
+            logger.info(
+              {
+                scheduleStr,
+                parsedDay: dayNum,
+                parsedMonth: monthName,
+                monthIndex: monthIndex + 1,
+              },
+              'Successfully parsed birthday date'
+            );
           }
+        } else {
+          logger.warn(
+            {
+              scheduleStr,
+              parsedDay: dayNum,
+              parsedMonth: monthName,
+            },
+            'Failed to parse birthday date from schedule string'
+          );
         }
         
         // Default time to 9am for birthdays if not specified
