@@ -127,8 +127,8 @@ export interface ParsedAction {
 }
 
 // In-memory cache to store last displayed list context for each user
-// Key: userId, Value: { type: 'tasks' | 'notes' | 'shopping' | 'event', items: Array<{ id: string, number: number, name?: string, calendarId?: string }> }
-const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping' | 'event', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string }>();
+// Key: userId, Value: { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }> }
+const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string }>();
 const LIST_CONTEXT_TTL = 10 * 60 * 1000; // 10 minutes
 
 export class ActionExecutor {
@@ -142,7 +142,7 @@ export class ActionExecutor {
   /**
    * Store list context for number-based operations (deletion, viewing, etc.)
    */
-  private storeListContext(type: 'tasks' | 'notes' | 'shopping' | 'event', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string): void {
+  private storeListContext(type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string): void {
     listContextCache.set(this.userId, { type, items, folderRoute });
     // Auto-cleanup after TTL
     setTimeout(() => {
@@ -153,7 +153,7 @@ export class ActionExecutor {
   /**
    * Get list context for number-based operations (deletion, viewing, etc.)
    */
-  private getListContext(): { type: 'tasks' | 'notes' | 'shopping' | 'event', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string } | null {
+  private getListContext(): { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string } | null {
     return listContextCache.get(this.userId) || null;
   }
   
@@ -4416,6 +4416,16 @@ export class ActionExecutor {
         message += `... and ${remindersWithNextTime.length - 20} more reminders.`;
       }
 
+      // Store list context for number-based follow-up actions (delete by number)
+      this.storeListContext(
+        'reminder',
+        remindersWithNextTime.slice(0, 20).map(({ reminder }, index) => ({
+          id: reminder.id,
+          number: index + 1,
+          name: reminder.title,
+        }))
+      );
+
       return {
         success: true,
         message: message.trim(),
@@ -5953,6 +5963,28 @@ export class ActionExecutor {
         return {
           success: false,
           message: "I need to know which reminder you want to delete. Please provide the reminder title.",
+        };
+      }
+
+      // Support number-based deletion using last reminders list context
+      const numberOnlyMatch = parsed.taskName.trim().match(/^(\d+)$/);
+      if (numberOnlyMatch) {
+        const reminderNumber = parseInt(numberOnlyMatch[1], 10);
+        const listContext = this.getListContext();
+        if (listContext && listContext.type === 'reminder') {
+          const target = listContext.items.find(item => item.number === reminderNumber);
+          if (target) {
+            await deleteReminder(this.db, target.id, this.userId);
+            logger.info({ userId: this.userId, reminderId: target.id, reminderNumber }, 'Reminder deleted by number');
+            return {
+              success: true,
+              message: `⛔ *Reminder Deleted:*\nTitle: ${target.name ?? 'Reminder'}`,
+            };
+          }
+        }
+        return {
+          success: false,
+          message: "I couldn't map that reminder number to the last reminders list. Please list reminders again and retry.",
         };
       }
 
