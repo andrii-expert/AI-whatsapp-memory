@@ -5220,6 +5220,48 @@ export class ActionExecutor {
       } else if (scheduleLower.includes('later')) {
         // "later" means once, no specific time/date
         result.frequency = 'once';
+      } else if (/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(scheduleLower)) {
+        // Single weekday (e.g. "Friday") without "every"/"weekly" → treat as next occurrence of that day
+        const weekdayMatch = scheduleLower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+        if (weekdayMatch && weekdayMatch[1]) {
+          const targetDow = dayNames.indexOf(weekdayMatch[1].toLowerCase());
+          if (targetDow !== -1) {
+            if (timezone) {
+              const currentTime = this.getCurrentTimeInTimezone(timezone);
+              const currentDate = new Date(currentTime.year, currentTime.month, currentTime.day);
+              const currentDow = currentDate.getDay();
+              let diff = targetDow - currentDow;
+              if (diff < 0) diff += 7; // next occurrence (including today if same day)
+
+              const targetDate = new Date(currentTime.year, currentTime.month, currentTime.day + diff);
+
+              // Preserve existing time if present in schedule string; otherwise default to 09:00
+              let targetTime = '09:00';
+              const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+              if (timeMatch && timeMatch[1]) {
+                targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+              }
+
+              const [hours, minutes] = targetTime.split(':').map(Number);
+              result.targetDate = this.createDateInUserTimezone(
+                targetDate.getFullYear(),
+                targetDate.getMonth(),
+                targetDate.getDate(),
+                hours,
+                minutes,
+                timezone
+              );
+              result.time = targetTime;
+            } else {
+              // No timezone: use daysFromNow relative offset
+              const now = new Date();
+              const currentDow = now.getDay();
+              let diff = targetDow - currentDow;
+              if (diff < 0) diff += 7;
+              result.daysFromNow = diff;
+            }
+          }
+        }
       } else {
         // Extract time
         const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
