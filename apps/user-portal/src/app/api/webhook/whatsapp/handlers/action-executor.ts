@@ -5794,9 +5794,10 @@ export class ActionExecutor {
           }
         }
         
-        // Check for date changes - also check if the string contains month names (for birthday updates)
+        // Check for date changes - also check if the string contains month names (for birthday/weekday updates)
         const monthNamesCheck = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
         const hasMonthName = monthNamesCheck.some(month => changes.includes(month));
+        const hasExplicitTimeInChange = /(?:\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))/i.test(parsed.newName);
         
         if (changes.includes('date') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday') || hasMonthName) {
           const scheduleData = this.parseReminderSchedule(parsed.newName, timezone);
@@ -5804,7 +5805,15 @@ export class ActionExecutor {
             updateInput.daysFromNow = scheduleData.daysFromNow;
           }
           if (scheduleData.targetDate) {
-            updateInput.targetDate = scheduleData.targetDate;
+            // If user didn't specify a new time (e.g. \"date to tomorrow\"), keep existing reminder.time
+            if (!hasExplicitTimeInChange && reminder.time) {
+              const [h, m] = reminder.time.split(':').map((v) => parseInt(v, 10));
+              const adjusted = new Date(scheduleData.targetDate);
+              adjusted.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+              updateInput.targetDate = adjusted;
+            } else {
+              updateInput.targetDate = scheduleData.targetDate;
+            }
           }
           
           // For yearly reminders (especially birthdays), check if the date contains month name
