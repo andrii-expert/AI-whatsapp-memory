@@ -2667,8 +2667,26 @@ async function processAIResponse(
         }
       } else {
         // For create/update/delete/pause/resume, parse and execute with timezone
-        const parsed = parseReminderTemplateToAction(actionTemplate, isCreate, isUpdate, isDelete, isPause, isResume);
-        const result = await executor.executeAction(parsed, calendarTimezone);
+        // Support multi-line templates (e.g., multiple deletes)
+        const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const results: string[] = [];
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const line of actionLines) {
+          const parsed = parseReminderTemplateToAction(line, /^Create a reminder:/i.test(line), /^Update a reminder:/i.test(line), /^Delete a reminder:/i.test(line) || /^Delete all reminders$/i.test(line), /^Pause a reminder:/i.test(line), /^Resume a reminder:/i.test(line));
+          const result = await executor.executeAction(parsed, calendarTimezone);
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+          if (result.message.trim().length > 0) {
+            results.push(result.message);
+          }
+        }
+        
+        const combinedMessage = results.filter(Boolean).join('\n');
         
         try {
           const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
@@ -2677,7 +2695,7 @@ async function processAIResponse(
               whatsappNumberId: whatsappNumber.id,
               userId,
               messageType: 'text',
-              messageContent: result.message,
+              messageContent: combinedMessage,
               isFreeMessage: true,
             });
           }
@@ -2686,8 +2704,8 @@ async function processAIResponse(
         }
         
         // Skip if empty (e.g., when button was already sent)
-        if (result.message.trim().length > 0) {
-          await whatsappService.sendTextMessage(recipient, result.message);
+        if (combinedMessage.trim().length > 0) {
+          await whatsappService.sendTextMessage(recipient, combinedMessage);
         }
       }
     } else if (titleType === 'address') {
