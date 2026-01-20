@@ -1819,9 +1819,24 @@ export default function DashboardPage() {
   const totalFriends = useMemo(() => {
     return friends.length;
   }, [friends]);
+  
+  // Calculate birthdays today based on yearly "Birthdays" reminders
+  const birthdaysToday = useMemo(() => {
+    if (!reminders || reminders.length === 0) return 0;
 
-  // Calculate birthdays today (placeholder - set to 0 for now)
-  const birthdaysToday = 0;
+    const today = new Date();
+    const todayMonth = today.getMonth() + 1; // 1-12 to match reminder.month
+    const todayDay = today.getDate();
+
+    return reminders.filter((r: any) => {
+      if (!r.active) return false;
+      if (r.category !== "Birthdays") return false;
+      if (r.frequency !== "yearly") return false;
+      if (!r.month || !r.dayOfMonth) return false;
+
+      return r.month === todayMonth && r.dayOfMonth === todayDay;
+    }).length;
+  }, [reminders]);
 
   const userName = user?.firstName || "there";
   
@@ -1942,7 +1957,7 @@ export default function DashboardPage() {
                 borderColor="#FCF8EC"
                 blurColor="#FFF0C5"
                 icon={<CakeIcon />}
-                onClick={() => router.push("/friends")}
+                onClick={() => router.push("/reminders?dateFilter=today&category=Birthdays")}
               />
             </div>
 
