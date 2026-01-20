@@ -5726,14 +5726,73 @@ export class ActionExecutor {
           }
         }
         
-        // Check for date changes
-        if (changes.includes('date') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday')) {
+        // Check for date changes - also check if the string contains month names (for birthday updates)
+        const monthNamesCheck = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const hasMonthName = monthNamesCheck.some(month => changes.includes(month));
+        
+        if (changes.includes('date') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday') || hasMonthName) {
           const scheduleData = this.parseReminderSchedule(parsed.newName, timezone);
           if (scheduleData.daysFromNow !== undefined) {
             updateInput.daysFromNow = scheduleData.daysFromNow;
           }
           if (scheduleData.targetDate) {
             updateInput.targetDate = scheduleData.targetDate;
+          }
+          
+          // For yearly reminders (especially birthdays), check if the date contains month name
+          // This handles cases like "23th December", "December 23rd", etc.
+          if (reminder.frequency === 'yearly' || reminder.category === 'Birthdays') {
+            const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+            const monthAbbrs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+            const monthPattern = `(${monthNames.join('|')}|${monthAbbrs.join('|')})`;
+            
+            // Try pattern 1: "23th December" or "on the 23rd of December" or "on 23th December"
+            let dateMatch = parsed.newName.match(new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of\\s+)?\\s+${monthPattern}`, 'i'));
+            let dayNum: number;
+            let monthName: string;
+            
+            if (dateMatch && dateMatch[1] && dateMatch[2]) {
+              // Pattern 1: "23th December" - dateMatch[1] = day, dateMatch[2] = month
+              dayNum = parseInt(dateMatch[1], 10);
+              monthName = dateMatch[2].toLowerCase();
+            } else {
+              // Try pattern 2: "December 23rd"
+              dateMatch = parsed.newName.match(new RegExp(`${monthPattern}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i'));
+              if (dateMatch && dateMatch[1] && dateMatch[2]) {
+                // Pattern 2: "December 23rd" - dateMatch[1] = month, dateMatch[2] = day
+                monthName = dateMatch[1].toLowerCase();
+                dayNum = parseInt(dateMatch[2], 10);
+              }
+            }
+            
+            // Normalize month name (handle abbreviations)
+            if (monthName) {
+              const abbrIndex = monthAbbrs.indexOf(monthName);
+              if (abbrIndex !== -1) {
+                monthName = monthNames[abbrIndex];
+              }
+            }
+            
+            if (monthName && dayNum >= 1 && dayNum <= 31 && monthNames.includes(monthName)) {
+              const monthIndex = monthNames.indexOf(monthName);
+              if (monthIndex !== -1) {
+                updateInput.dayOfMonth = dayNum;
+                updateInput.month = monthIndex + 1; // 1-12
+                updateInput.frequency = 'yearly'; // Ensure it's yearly
+                
+                logger.info(
+                  {
+                    userId: this.userId,
+                    reminderId: reminder.id,
+                    parsedDay: dayNum,
+                    parsedMonth: monthName,
+                    monthIndex: monthIndex + 1,
+                    updateInput,
+                  },
+                  'Successfully parsed birthday date update'
+                );
+              }
+            }
           }
         }
         
@@ -5748,11 +5807,60 @@ export class ActionExecutor {
 
       const updated = await updateReminder(this.db, reminder.id, this.userId, updateInput);
 
-      logger.info({ userId: this.userId, reminderId: updated.id, timezone }, 'Reminder updated');
+      logger.info(
+        {
+          userId: this.userId,
+          reminderId: updated.id,
+          timezone,
+          updatedFrequency: updated.frequency,
+          updatedMonth: updated.month,
+          updatedDayOfMonth: updated.dayOfMonth,
+        },
+        'Reminder updated'
+      );
 
       // Calculate next occurrence date for the updated reminder
       let dateInfo = '';
-      if (timezone) {
+      
+      // For yearly reminders with month and dayOfMonth, use the stored values directly (no timezone conversion)
+      if (updated.frequency === 'yearly' && updated.month && updated.dayOfMonth) {
+        const day = updated.dayOfMonth;
+        const monthIndex = updated.month - 1; // Convert 1-12 to 0-11
+        
+        // Validate monthIndex is in valid range
+        if (monthIndex < 0 || monthIndex > 11) {
+          logger.error(
+            {
+              userId: this.userId,
+              reminderId: updated.id,
+              storedMonth: updated.month,
+              monthIndex,
+            },
+            'CRITICAL: Invalid month index for yearly reminder update - falling back to timezone calculation'
+          );
+        } else {
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthName = monthNames[monthIndex];
+          const time = updated.time || '09:00';
+          dateInfo = `${day} ${monthName} ${time}`;
+          
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: updated.id,
+              day,
+              monthIndex,
+              monthName,
+              time,
+              dateInfo,
+            },
+            'Formatted yearly reminder update date from stored values'
+          );
+        }
+      }
+      
+      // Fallback: Use timezone-based calculation if yearly reminder doesn't have month/dayOfMonth or if not yearly
+      if (!dateInfo && timezone) {
         const timeComponents = this.getCurrentTimeInTimezone(timezone);
         const now = new Date();
         const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
@@ -5769,10 +5877,26 @@ export class ActionExecutor {
         const nextOccurrence = this.calculateNextReminderTime(updated, userLocalTime, timezone);
         
         if (nextOccurrence) {
-          // Format the next occurrence date
-          const nextOccurrenceInUserTz = new Date(nextOccurrence.toLocaleString("en-US", { timeZone: timezone }));
-          const hours = nextOccurrenceInUserTz.getHours();
-          const minutes = nextOccurrenceInUserTz.getMinutes();
+          // Format the next occurrence date using Intl.DateTimeFormat to get correct timezone components
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false,
+          });
+          
+          const parts = formatter.formatToParts(nextOccurrence);
+          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+          
+          const day = parseInt(getPart('day'), 10);
+          const month = parseInt(getPart('month'), 10) - 1; // Convert to 0-indexed
+          const year = parseInt(getPart('year'), 10);
+          const hours = parseInt(getPart('hour'), 10);
+          const minutes = parseInt(getPart('minute'), 10);
           const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
           
           // Determine if it's today, tomorrow, or a specific date
@@ -5780,19 +5904,21 @@ export class ActionExecutor {
           today.setHours(0, 0, 0, 0);
           const tomorrow = new Date(today);
           tomorrow.setDate(tomorrow.getDate() + 1);
-          const nextDateOnly = new Date(nextOccurrenceInUserTz);
-          nextDateOnly.setHours(0, 0, 0, 0);
+          
+          // Create date objects for comparison (in user's timezone)
+          const nextDateInUserTz = new Date(year, month, day);
+          const todayInUserTz = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day);
+          const tomorrowInUserTz = new Date(userLocalTime.year, userLocalTime.month, userLocalTime.day + 1);
           
           let dateLabel = 'Today';
-          if (nextDateOnly.getTime() === today.getTime()) {
+          if (nextDateInUserTz.getTime() === todayInUserTz.getTime()) {
             dateLabel = 'Today';
-          } else if (nextDateOnly.getTime() === tomorrow.getTime()) {
+          } else if (nextDateInUserTz.getTime() === tomorrowInUserTz.getTime()) {
             dateLabel = 'Tomorrow';
           } else {
-            const day = nextOccurrenceInUserTz.getDate();
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const month = monthNames[nextOccurrenceInUserTz.getMonth()];
-            dateLabel = `${day} ${month}`;
+            const monthName = monthNames[month];
+            dateLabel = `${day} ${monthName}`;
           }
           
           dateInfo = `${dateLabel} ${time24}`;
