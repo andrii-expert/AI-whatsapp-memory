@@ -4263,46 +4263,80 @@ export class ActionExecutor {
         }, 'Filtering reminders by time');
 
         if (dateFilterRange) {
-          // Use the same filtering logic as reminders page
-          filteredReminders = filteredReminders.filter(reminder => {
-            // Prepare reminder object for checking (same structure as reminders page)
-            const reminderForCheck: any = {
-              ...reminder,
-              time: reminder.time ?? null,
-              minuteOfHour: reminder.minuteOfHour ?? null,
-              intervalMinutes: reminder.intervalMinutes ?? null,
-              daysFromNow: reminder.daysFromNow ?? null,
-              targetDate: reminder.targetDate ? (reminder.targetDate instanceof Date ? reminder.targetDate : new Date(reminder.targetDate)) : null,
-              dayOfMonth: reminder.dayOfMonth ?? null,
-              month: reminder.month ?? null,
-              daysOfWeek: reminder.daysOfWeek ?? null,
+          // Special case: "today" should use exact scheduled date logic
+          // to avoid edge cases with yearly/birthday reminders and timezones.
+          if (timeFilter === 'today') {
+            const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
+            const userLocalTimeDate = new Date(userTimeString);
+            const userLocalTime = {
+              year: userLocalTimeDate.getFullYear(),
+              month: userLocalTimeDate.getMonth(),
+              day: userLocalTimeDate.getDate(),
+              hours: userLocalTimeDate.getHours(),
+              minutes: userLocalTimeDate.getMinutes(),
+              seconds: userLocalTimeDate.getSeconds(),
+              date: userLocalTimeDate,
             };
-            
-            // Check if the reminder can occur on any date within the range
-            const canOccur = this.canReminderOccurInRange(
-              reminderForCheck,
-              dateFilterRange!.start,
-              dateFilterRange!.end,
-              userTimezone
-            );
-            
-            // Log for debugging
-            if (!canOccur) {
-              logger.debug({
-                reminderId: reminder.id,
-                reminderTitle: reminder.title,
-                frequency: reminder.frequency,
-                active: reminder.active,
-                dateRange: {
-                  start: dateFilterRange!.start.toISOString(),
-                  end: dateFilterRange!.end.toISOString(),
-                },
-                reason: 'Reminder cannot occur in date range',
-              }, 'Reminder filtered out by date range');
-            }
-            
-            return canOccur;
-          });
+
+            filteredReminders = filteredReminders.filter(reminder => {
+              const isToday = this.isReminderScheduledForDate(reminder, userLocalTime, userTimezone);
+
+              if (!isToday) {
+                logger.debug({
+                  reminderId: reminder.id,
+                  reminderTitle: reminder.title,
+                  frequency: reminder.frequency,
+                  active: reminder.active,
+                  userLocalDate: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+                  reason: 'Reminder not scheduled for today',
+                }, 'Reminder filtered out by exact "today" check');
+              }
+
+              return isToday;
+            });
+          } else {
+            // For other ranges (tomorrow, this week, this month, next week),
+            // use the same range-based logic as the reminders page.
+            filteredReminders = filteredReminders.filter(reminder => {
+              // Prepare reminder object for checking (same structure as reminders page)
+              const reminderForCheck: any = {
+                ...reminder,
+                time: reminder.time ?? null,
+                minuteOfHour: reminder.minuteOfHour ?? null,
+                intervalMinutes: reminder.intervalMinutes ?? null,
+                daysFromNow: reminder.daysFromNow ?? null,
+                targetDate: reminder.targetDate ? (reminder.targetDate instanceof Date ? reminder.targetDate : new Date(reminder.targetDate)) : null,
+                dayOfMonth: reminder.dayOfMonth ?? null,
+                month: reminder.month ?? null,
+                daysOfWeek: reminder.daysOfWeek ?? null,
+              };
+              
+              // Check if the reminder can occur on any date within the range
+              const canOccur = this.canReminderOccurInRange(
+                reminderForCheck,
+                dateFilterRange!.start,
+                dateFilterRange!.end,
+                userTimezone
+              );
+              
+              // Log for debugging
+              if (!canOccur) {
+                logger.debug({
+                  reminderId: reminder.id,
+                  reminderTitle: reminder.title,
+                  frequency: reminder.frequency,
+                  active: reminder.active,
+                  dateRange: {
+                    start: dateFilterRange!.start.toISOString(),
+                    end: dateFilterRange!.end.toISOString(),
+                  },
+                  reason: 'Reminder cannot occur in date range',
+                }, 'Reminder filtered out by date range');
+              }
+              
+              return canOccur;
+            });
+          }
           
           // Log final filtered count
           logger.info({
