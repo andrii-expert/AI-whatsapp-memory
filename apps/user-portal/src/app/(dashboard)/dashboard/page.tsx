@@ -2257,13 +2257,19 @@ export default function DashboardPage() {
                 <h4 className="text-sm font-semibold text-foreground">Reminder Date</h4>
                 {selectedReminder?.targetDate ? (
                   <p className="text-sm text-muted-foreground">
-                    {new Date(selectedReminder.targetDate).toLocaleDateString('en-US', { 
-                      year: 'numeric',
-                      month: 'long', 
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {(() => {
+                      const userTimezone = (userPreferences as any)?.timezone || 'Africa/Johannesburg';
+                      const baseDate = new Date(selectedReminder.targetDate);
+                      const inUserTz = new Date(baseDate.toLocaleString('en-US', { timeZone: userTimezone }));
+                      return inUserTz.toLocaleString('en-US', {
+                        timeZone: userTimezone,
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                    })()}
                   </p>
                 ) : selectedReminder?.daysFromNow !== undefined ? (
                   <p className="text-sm text-muted-foreground">
