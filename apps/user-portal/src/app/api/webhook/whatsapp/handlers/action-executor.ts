@@ -6094,8 +6094,7 @@ export class ActionExecutor {
             }
           }
           
-          // For yearly reminders (especially birthdays), check if the date contains month name
-          // This handles cases like "23th December", "December 23rd", etc.
+          // For yearly reminders (especially birthdays), update month and dayOfMonth
           if (reminder.frequency === 'yearly' || reminder.category === 'Birthdays') {
             const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
             const monthAbbrs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -6103,8 +6102,8 @@ export class ActionExecutor {
             
             // Try pattern 1: "23th December" or "on the 23rd of December" or "on 23th December"
             let dateMatch = parsed.newName.match(new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of\\s+)?\\s+${monthPattern}`, 'i'));
-            let dayNum: number;
-            let monthName: string;
+            let dayNum: number | undefined;
+            let monthName: string | undefined;
             
             if (dateMatch && dateMatch[1] && dateMatch[2]) {
               // Pattern 1: "23th December" - dateMatch[1] = day, dateMatch[2] = month
@@ -6120,6 +6119,41 @@ export class ActionExecutor {
               }
             }
             
+            // If no explicit month name found, extract from targetDate or calculate from daysFromNow
+            if (!monthName && timezone) {
+              let targetDateToUse: Date | undefined;
+              
+              if (scheduleData.targetDate) {
+                targetDateToUse = scheduleData.targetDate;
+              } else if (scheduleData.daysFromNow !== undefined) {
+                // Calculate target date from daysFromNow
+                const currentTime = this.getCurrentTimeInTimezone(timezone);
+                const targetDate = new Date(currentTime.year, currentTime.month, currentTime.day + scheduleData.daysFromNow);
+                targetDateToUse = targetDate;
+              }
+              
+              if (targetDateToUse) {
+                const targetDateInUserTz = new Date(targetDateToUse.toLocaleString('en-US', { timeZone: timezone }));
+                dayNum = targetDateInUserTz.getDate();
+                const monthIndex = targetDateInUserTz.getMonth(); // 0-indexed (0-11)
+                monthName = monthNames[monthIndex]; // Convert to month name
+                
+                logger.info(
+                  {
+                    userId: this.userId,
+                    reminderId: reminder.id,
+                    extractedFromTargetDate: true,
+                    dayNum,
+                    monthIndex,
+                    monthName,
+                    targetDate: targetDateToUse,
+                    daysFromNow: scheduleData.daysFromNow,
+                  },
+                  'Extracted month and day from targetDate/daysFromNow for yearly reminder update'
+                );
+              }
+            }
+            
             // Normalize month name (handle abbreviations)
             if (monthName) {
               const abbrIndex = monthAbbrs.indexOf(monthName);
@@ -6128,7 +6162,7 @@ export class ActionExecutor {
               }
             }
             
-            if (monthName && dayNum >= 1 && dayNum <= 31 && monthNames.includes(monthName)) {
+            if (monthName && dayNum !== undefined && dayNum >= 1 && dayNum <= 31 && monthNames.includes(monthName)) {
               const monthIndex = monthNames.indexOf(monthName);
               if (monthIndex !== -1) {
                 updateInput.dayOfMonth = dayNum;
