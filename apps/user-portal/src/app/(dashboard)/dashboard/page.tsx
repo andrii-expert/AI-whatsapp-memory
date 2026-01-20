@@ -1244,91 +1244,44 @@ export default function DashboardPage() {
     }
   };
 
-  // Helper function to calculate next occurrence time for sorting
-  const getNextOccurrenceTime = (reminder: any, userTimezone?: string): Date | null => {
-    if (!reminder.active) return null;
-    
-    const now = new Date();
-    
-    try {
-      // For daily reminders, calculate next occurrence today
-      if (reminder.frequency === "daily" && reminder.time) {
-        const [hours, minutes] = reminder.time.split(":").map(Number);
-        const today = new Date();
-        today.setHours(hours || 0, minutes || 0, 0, 0);
-        
-        // If time has passed today, it's tomorrow
-        if (today <= now) {
-          today.setDate(today.getDate() + 1);
-        }
-        return today;
-      }
-      
-      // For weekly reminders, find next occurrence
-      if (reminder.frequency === "weekly" && reminder.daysOfWeek && reminder.daysOfWeek.length > 0 && reminder.time) {
-        const [hours, minutes] = reminder.time.split(":").map(Number);
-        const today = new Date();
-        const currentDayOfWeek = today.getDay();
-        const sortedDays = [...reminder.daysOfWeek].sort((a, b) => a - b);
-        
-        // Find next day this week
-        for (const day of sortedDays) {
-          if (day > currentDayOfWeek) {
-            const nextDate = new Date(today);
-            const daysToAdd = day - currentDayOfWeek;
-            nextDate.setDate(nextDate.getDate() + daysToAdd);
-            nextDate.setHours(hours || 0, minutes || 0, 0, 0);
-            return nextDate;
-          }
-          if (day === currentDayOfWeek) {
-            const todayAtTime = new Date(today);
-            todayAtTime.setHours(hours || 0, minutes || 0, 0, 0);
-            if (todayAtTime > now) {
-              return todayAtTime;
-            }
-          }
-        }
-        
-        // If no day found this week, use first day of next week
-        const firstDay = sortedDays[0];
-        const nextDate = new Date(today);
-        const daysUntilNextWeek = 7 - currentDayOfWeek;
-        nextDate.setDate(nextDate.getDate() + daysUntilNextWeek + firstDay);
-        nextDate.setHours(hours || 0, minutes || 0, 0, 0);
-        return nextDate;
-      }
-      
-      // For other frequencies, return a default time today
-      return new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
-    } catch (error) {
-      return null;
-    }
-  };
-
-  // Filter active reminders that occur today
+  // Next Reminders: use same "next occurrence" logic as reminders page
   const activeReminders = useMemo(() => {
     const userTimezone = (userData as any)?.timezone;
-    
-    // Filter only active reminders (all active reminders, not just today)
-    const filtered = reminders
-      .map((r: any) => ({
-        ...r,
-        nextAt: getNextOccurrenceTime(r, userTimezone),
-      }))
-      .filter((r: any) => {
-      if (!r.active) return false;
-        // Only include reminders that have a valid next occurrence time
-        return r.nextAt !== null;
-    });
-    
-    // Sort by next occurrence time (earliest first)
-    const sorted = [...filtered].sort((a, b) => {
-      const timeA = a.nextAt?.getTime() || Infinity;
-      const timeB = b.nextAt?.getTime() || Infinity;
+
+    // Shape reminders like the Reminders page expects
+    const withNext = reminders
+      .map((r: any) => {
+        const reminderForCompute = {
+          ...r,
+          time: r.time ?? null,
+          minuteOfHour: r.minuteOfHour ?? null,
+          intervalMinutes: r.intervalMinutes ?? null,
+          daysFromNow: r.daysFromNow ?? null,
+          targetDate: r.targetDate ? (r.targetDate instanceof Date ? r.targetDate : new Date(r.targetDate)) : null,
+          dayOfMonth: r.dayOfMonth ?? null,
+          month: r.month ?? null,
+          daysOfWeek: r.daysOfWeek ?? null,
+          createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
+          updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
+        };
+
+        const nextAt = computeNext(reminderForCompute as any, new Date(), userTimezone);
+
+        return {
+          ...r,
+          nextAt,
+        };
+      })
+      .filter((r: any) => r.active && r.nextAt);
+
+    // Sort by next occurrence time (earliest upcoming first)
+    const sorted = [...withNext].sort((a, b) => {
+      const timeA = (a.nextAt instanceof Date ? a.nextAt : new Date(a.nextAt)).getTime();
+      const timeB = (b.nextAt instanceof Date ? b.nextAt : new Date(b.nextAt)).getTime();
       return timeA - timeB;
     });
-    
-    // Return next 3 reminders
+
+    // Only show the next 3 upcoming reminders
     return sorted.slice(0, 3);
   }, [reminders, userData]);
 
