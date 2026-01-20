@@ -5456,6 +5456,21 @@ export class ActionExecutor {
         'Parsed reminder schedule'
       );
       
+      // Validate that for yearly birthdays, we have month and dayOfMonth
+      if (isBirthday && scheduleData.frequency === 'yearly') {
+        if (!scheduleData.month || !scheduleData.dayOfMonth) {
+          logger.error(
+            {
+              userId: this.userId,
+              scheduleStr,
+              parsedSchedule: scheduleData,
+              isBirthday,
+            },
+            'CRITICAL: Yearly birthday reminder missing month or dayOfMonth - parsing may have failed'
+          );
+        }
+      }
+      
       const reminderInput: CreateReminderInput = {
         userId: this.userId,
         title: parsed.taskName,
@@ -5485,7 +5500,18 @@ export class ActionExecutor {
 
       const reminder = await createReminder(this.db, reminderInput);
 
-      logger.info({ userId: this.userId, reminderId: reminder.id, timezone }, 'Reminder created');
+      logger.info(
+        {
+          userId: this.userId,
+          reminderId: reminder.id,
+          timezone,
+          reminderFrequency: reminder.frequency,
+          reminderMonth: reminder.month,
+          reminderDayOfMonth: reminder.dayOfMonth,
+          reminderCategory: reminder.category,
+        },
+        'Reminder created'
+      );
 
       // Calculate next occurrence date for the reminder
       let dateInfo = '';
@@ -5494,10 +5520,57 @@ export class ActionExecutor {
       if (reminder.frequency === 'yearly' && reminder.month && reminder.dayOfMonth) {
         const day = reminder.dayOfMonth;
         const monthIndex = reminder.month - 1; // Convert 1-12 to 0-11
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const monthName = monthNames[monthIndex];
-        const time = reminder.time || '09:00';
-        dateInfo = `${day} ${monthName} ${time}`;
+        
+        // Validate monthIndex is in valid range
+        if (monthIndex < 0 || monthIndex > 11) {
+          logger.error(
+            {
+              userId: this.userId,
+              reminderId: reminder.id,
+              storedMonth: reminder.month,
+              monthIndex,
+              scheduleStr,
+            },
+            'CRITICAL: Invalid month index for yearly reminder - falling back to timezone calculation'
+          );
+        } else {
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthName = monthNames[monthIndex];
+          const time = reminder.time || '09:00';
+          dateInfo = `${day} ${monthName} ${time}`;
+          
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: reminder.id,
+              day,
+              monthIndex,
+              monthName,
+              time,
+              dateInfo,
+              scheduleStr,
+            },
+            'Formatted yearly reminder date from stored values'
+          );
+        }
+      } else if (reminder.frequency === 'yearly') {
+        // Yearly reminder but missing month or dayOfMonth - this indicates parsing failed
+        logger.error(
+          {
+            userId: this.userId,
+            reminderId: reminder.id,
+            reminderMonth: reminder.month,
+            reminderDayOfMonth: reminder.dayOfMonth,
+            scheduleStr,
+            reminderInputMonth: reminderInput.month,
+            reminderInputDayOfMonth: reminderInput.dayOfMonth,
+          },
+          'CRITICAL: Yearly reminder missing month or dayOfMonth - date parsing may have failed. Falling back to timezone calculation.'
+        );
+      }
+      
+      // Fallback: Use timezone-based calculation if yearly reminder doesn't have month/dayOfMonth or if not yearly
+      if (!dateInfo && timezone) {
       } else if (timezone) {
         const timeComponents = this.getCurrentTimeInTimezone(timezone);
         const now = new Date();
