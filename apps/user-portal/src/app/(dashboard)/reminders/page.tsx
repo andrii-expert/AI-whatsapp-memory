@@ -479,7 +479,7 @@ function nextForWeekly(daysOfWeek: number[], time: string, from: Date = new Date
   return d;
 }
 
-function computeNext(reminder: Reminder, from: Date = new Date(), timezone?: string): Date | null {
+export function computeNext(reminder: Reminder, from: Date = new Date(), timezone?: string): Date | null {
   if (!reminder.active) return null;
   switch (reminder.frequency) {
     case "daily":
