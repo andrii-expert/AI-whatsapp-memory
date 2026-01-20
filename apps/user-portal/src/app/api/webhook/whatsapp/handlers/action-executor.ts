@@ -5860,8 +5860,64 @@ export class ActionExecutor {
         // Parse changes
         const changes = parsed.newName.toLowerCase();
         
-        // Check for time changes
-        if (changes.includes('time') || changes.includes('at')) {
+        // Check for relative time patterns FIRST (e.g., "in 5 hours", "5 hours from now", "in 10 minutes", "schedule to in 5 hours")
+        // Match patterns like: "in 5 hours", "5 hours from now", "schedule to in 5 hours", "change to in 2 hours"
+        // First try to match patterns that already start with "in"
+        let relativeTimeMatch = parsed.newName.match(/in\s+(\d+)\s+(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)(?:\s+from\s+now)?/i);
+        let relativeTimeStr: string | null = null;
+        
+        if (relativeTimeMatch) {
+          // Already starts with "in", use as-is
+          relativeTimeStr = relativeTimeMatch[0];
+        } else {
+          // Try to match patterns with prefixes like "schedule to in", "change to in", etc.
+          relativeTimeMatch = parsed.newName.match(/(?:schedule\s+to|change\s+to|update\s+to|to)\s+in\s+(\d+)\s+(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)(?:\s+from\s+now)?/i);
+          if (relativeTimeMatch) {
+            // Extract just the "in X hours" part
+            relativeTimeStr = `in ${relativeTimeMatch[1]} ${relativeTimeMatch[2]}`;
+          }
+        }
+        
+        if (relativeTimeMatch && relativeTimeStr) {
+          
+          // Handle relative time update - parse the extracted relative time string
+          const scheduleData = this.parseReminderSchedule(relativeTimeStr, timezone);
+          
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: reminder.id,
+              parsedNewName: parsed.newName,
+              extractedRelativeTime: relativeTimeStr,
+              scheduleData,
+              timezone,
+            },
+            'Processing relative time update for reminder'
+          );
+          
+          if (scheduleData.targetDate) {
+            updateInput.targetDate = scheduleData.targetDate;
+            // Also update time if scheduleData has a time
+            if (scheduleData.time) {
+              updateInput.time = scheduleData.time;
+            }
+            // Clear daysFromNow since we're using targetDate
+            updateInput.daysFromNow = null;
+            // Ensure frequency is "once" for relative time updates
+            updateInput.frequency = 'once';
+          } else if (scheduleData.daysFromNow !== undefined) {
+            updateInput.daysFromNow = scheduleData.daysFromNow;
+            if (scheduleData.time) {
+              updateInput.time = scheduleData.time;
+            }
+            // Clear targetDate since we're using daysFromNow
+            updateInput.targetDate = null;
+            // Ensure frequency is "once" for relative time updates
+            updateInput.frequency = 'once';
+          }
+        }
+        // Check for time changes (absolute time like "at 5pm")
+        else if (changes.includes('time') || changes.includes('at')) {
           const timeMatch = parsed.newName.match(/(?:to|at)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
           if (timeMatch && timeMatch[1]) {
             updateInput.time = this.parseTimeTo24Hour(timeMatch[1].trim());
@@ -5873,7 +5929,8 @@ export class ActionExecutor {
         const hasMonthName = monthNamesCheck.some(month => changes.includes(month));
         const hasExplicitTimeInChange = /(?:\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))/i.test(parsed.newName);
         
-        if (changes.includes('date') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday') || hasMonthName) {
+        // Only process date changes if we haven't already handled a relative time update
+        if (!relativeTimeMatch && (changes.includes('date') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday') || hasMonthName)) {
           const scheduleData = this.parseReminderSchedule(parsed.newName, timezone);
           if (scheduleData.daysFromNow !== undefined) {
             updateInput.daysFromNow = scheduleData.daysFromNow;
