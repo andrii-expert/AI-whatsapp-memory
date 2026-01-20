@@ -78,6 +78,7 @@ type ReminderCategory = (typeof REMINDER_CATEGORIES)[number];
 
 interface Reminder {
   id: string;
+  userId?: string;
   title: string;
   frequency: ReminderFrequency;
   category?: ReminderCategory | null;
@@ -1004,9 +1005,13 @@ export default function RemindersPage() {
   // Calculate reminders for today and tomorrow
   const remindersWithNext = useMemo(() => {
     const now = new Date();
-    return reminders.map((r) => {
+    return reminders.map((r: any) => {
       const reminderForCompute: Reminder = {
-        ...r,
+        id: r.id,
+        userId: r.userId,
+        title: r.title,
+        frequency: r.frequency,
+        category: (r.category as ReminderCategory) ?? "General",
         time: r.time ?? null,
         minuteOfHour: r.minuteOfHour ?? null,
         intervalMinutes: r.intervalMinutes ?? null,
@@ -1015,12 +1020,13 @@ export default function RemindersPage() {
         dayOfMonth: r.dayOfMonth ?? null,
         month: r.month ?? null,
         daysOfWeek: r.daysOfWeek ?? null,
+        active: r.active,
         createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
         updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
       };
       return {
         ...r,
-        nextAt: computeNext(reminderForCompute, now, userTimezone)
+        nextAt: computeNext(reminderForCompute, now, userTimezone),
       };
     });
   }, [reminders, userTimezone]);
@@ -1134,9 +1140,12 @@ export default function RemindersPage() {
         
         // Date filter - check if reminder can occur on any date in the range
         if (dateFilter !== "all" && dateFilterRange) {
-          // Prepare reminder object for checking
           const reminderForCheck: Reminder = {
-            ...r,
+            id: r.id,
+            userId: (r as any).userId,
+            title: r.title,
+            frequency: r.frequency,
+            category: (r.category as ReminderCategory) ?? "General",
             time: r.time ?? null,
             minuteOfHour: r.minuteOfHour ?? null,
             intervalMinutes: r.intervalMinutes ?? null,
@@ -1145,11 +1154,11 @@ export default function RemindersPage() {
             dayOfMonth: r.dayOfMonth ?? null,
             month: r.month ?? null,
             daysOfWeek: r.daysOfWeek ?? null,
+            active: r.active,
             createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
             updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
           };
           
-          // Check if the reminder can occur on any date within the range
           return canReminderOccurInRange(
             reminderForCheck,
             dateFilterRange.start,

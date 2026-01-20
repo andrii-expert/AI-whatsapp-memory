@@ -5533,7 +5533,47 @@ export class ActionExecutor {
             'Failed to parse birthday date from schedule string'
           );
         }
-        
+
+        // If we still don't have a specific month/day (e.g. schedule was just "today" or "tomorrow"),
+        // derive them from the resolved targetDate or daysFromNow in the user's timezone so that
+        // birthdays are always stored as proper yearly reminders with month + dayOfMonth set.
+        if (!scheduleData.month || !scheduleData.dayOfMonth) {
+          let baseDate: Date | null = null;
+
+          if (scheduleData.targetDate) {
+            // Use the targetDate that was already computed (in user timezone if provided)
+            baseDate = timezone
+              ? new Date(scheduleData.targetDate.toLocaleString('en-US', { timeZone: timezone }))
+              : new Date(scheduleData.targetDate);
+          } else if (typeof scheduleData.daysFromNow === 'number') {
+            if (timezone) {
+              const currentTime = this.getCurrentTimeInTimezone(timezone);
+              baseDate = new Date(currentTime.year, currentTime.month, currentTime.day + scheduleData.daysFromNow);
+            } else {
+              const now = new Date();
+              baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + scheduleData.daysFromNow);
+            }
+          } else {
+            // Fallback: treat as "today" in user's timezone
+            if (timezone) {
+              const currentTime = this.getCurrentTimeInTimezone(timezone);
+              baseDate = new Date(currentTime.year, currentTime.month, currentTime.day);
+            } else {
+              const now = new Date();
+              baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            }
+          }
+
+          if (baseDate) {
+            scheduleData.month = baseDate.getMonth() + 1; // 1-12
+            scheduleData.dayOfMonth = baseDate.getDate();
+          }
+
+          // Clear relative/one-off fields so the DB stores a clean yearly birthday
+          scheduleData.daysFromNow = undefined;
+          scheduleData.targetDate = undefined;
+        }
+
         // Default time to 9am for birthdays if not specified
         if (!scheduleData.time) {
           scheduleData.time = '09:00';
