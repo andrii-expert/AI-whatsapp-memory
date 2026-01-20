@@ -5842,10 +5842,30 @@ export class ActionExecutor {
 
       // Find reminder by title
       const reminders = await getRemindersByUserId(this.db, this.userId);
-      const reminder = reminders.find(r => 
+      let reminder = reminders.find(r => 
         r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
         parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
       );
+
+      // Fallback: if AI used a generic name like "Reminder" or "this reminder",
+      // treat it as a reference to the most recently created reminder.
+      if (!reminder) {
+        const rawName = parsed.taskName!.trim().toLowerCase();
+        const isGenericName =
+          rawName === 'reminder' ||
+          rawName === 'a reminder' ||
+          rawName === 'this reminder' ||
+          rawName === 'that reminder' ||
+          rawName === 'it';
+
+        if (isGenericName && reminders.length > 0) {
+          reminder = [...reminders].sort((a, b) => {
+            const aCreated = new Date(a.createdAt as any).getTime();
+            const bCreated = new Date(b.createdAt as any).getTime();
+            return bCreated - aCreated; // newest first
+          })[0];
+        }
+      }
 
       if (!reminder) {
         return {
