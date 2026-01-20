@@ -5300,12 +5300,14 @@ function parseReminderTemplateToAction(
     if (template.match(/^Delete all reminders$/i)) {
       reminderTitle = 'all';
     } else {
-      // Parse: "Delete a reminder: {title}"
-      const deleteMatch = template.match(/^Delete a reminder:\s*(.+?)$/i);
+      // Parse: "Delete a reminder: {title}" (title can span multiple lines, e.g. numbers list)
+      const deleteMatch = template.match(/^Delete a reminder:\s*([\s\S]+)$/i);
       if (deleteMatch && deleteMatch[1]) {
         reminderTitle = deleteMatch[1].trim();
       } else {
-        missingFields.push('reminder title');
+        // Fallback: use the full template after the first colon, but DO NOT mark missingFields
+        const parts = template.split(':');
+        reminderTitle = (parts[1] || template).trim();
       }
     }
   } else if (isPause) {
