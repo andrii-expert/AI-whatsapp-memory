@@ -5839,12 +5839,31 @@ export class ActionExecutor {
             updateInput.daysFromNow = scheduleData.daysFromNow;
           }
           if (scheduleData.targetDate) {
-            // If user didn't specify a new time (e.g. \"date to tomorrow\"), keep existing reminder.time
+            // If user didn't specify a new time (e.g. "date to tomorrow"), keep existing reminder.time
+            // and ensure targetDate is constructed in the user's timezone so that the stored
+            // targetDate and time fields represent the same local time for the user.
             if (!hasExplicitTimeInChange && reminder.time) {
-              const [h, m] = reminder.time.split(':').map((v) => parseInt(v, 10));
-              const adjusted = new Date(scheduleData.targetDate);
-              adjusted.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
-              updateInput.targetDate = adjusted;
+              const [hRaw, mRaw] = reminder.time.split(':').map((v) => parseInt(v, 10));
+              const hours = isNaN(hRaw) ? 0 : hRaw;
+              const minutes = isNaN(mRaw) ? 0 : mRaw;
+
+              if (timezone) {
+                // Derive year/month/day in the user's timezone from the parsed targetDate
+                const baseInUserTz = new Date(scheduleData.targetDate.toLocaleString('en-US', { timeZone: timezone }));
+                const year = baseInUserTz.getFullYear();
+                const month = baseInUserTz.getMonth();
+                const day = baseInUserTz.getDate();
+
+                // Use the helper to create a Date that, when interpreted in the user's timezone,
+                // matches the existing reminder.time on the new date.
+                const adjusted = this.createDateInUserTimezone(year, month, day, hours, minutes, timezone);
+                updateInput.targetDate = adjusted;
+              } else {
+                // Fallback: no timezone information, adjust on the raw Date object
+                const adjusted = new Date(scheduleData.targetDate);
+                adjusted.setHours(hours, minutes, 0, 0);
+                updateInput.targetDate = adjusted;
+              }
             } else {
               updateInput.targetDate = scheduleData.targetDate;
             }
