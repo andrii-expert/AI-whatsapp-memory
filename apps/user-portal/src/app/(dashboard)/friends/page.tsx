@@ -93,8 +93,6 @@ export default function FriendsPage() {
   
   // User search states
   const [userSearchTerm, setUserSearchTerm] = useState("");
-  const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
-  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
   // View address modal state
   const [isViewAddressModalOpen, setIsViewAddressModalOpen] = useState(false);
@@ -238,8 +236,6 @@ export default function FriendsPage() {
     })
   );
 
-  // User search - using query directly in handleSearchUsers
-
   // Helper functions
   const resetAddressModal = () => {
     setAddressModalName("");
@@ -247,7 +243,6 @@ export default function FriendsPage() {
     setAddressModalConnectedUserId(null);
     setAddressModalConnectedUser(null);
     setUserSearchTerm("");
-    setUserSearchResults([]);
     setAddressModalType("");
     setAddressModalStreet("");
     setAddressModalCity("");
@@ -266,7 +261,7 @@ export default function FriendsPage() {
     ).length;
   };
 
-  const handleCreateAddress = () => {
+  const handleCreateAddress = async () => {
     if (!addressModalName.trim()) {
       toast({
         title: "Error",
@@ -275,10 +270,48 @@ export default function FriendsPage() {
       });
       return;
     }
+
+    let finalConnectedUserId = addressModalConnectedUserId;
+
+    // If user provided an email in the search field, check if user exists
+    if (userSearchTerm.trim() && !addressModalConnectedUserId) {
+      // Check if it looks like an email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (emailRegex.test(userSearchTerm.trim())) {
+        try {
+          const searchResults = await queryClient.fetchQuery(
+            trpc.friends.searchUsers.queryOptions({ searchTerm: userSearchTerm.trim() })
+          );
+          
+          if (searchResults.length === 0) {
+            // User doesn't exist, warn but allow creation
+            toast({
+              title: "User not found",
+              description: `No user found with email "${userSearchTerm.trim()}". The contact will be created without a connected account.`,
+              variant: "default",
+            });
+            finalConnectedUserId = null;
+          } else {
+            // User exists, use the first result
+            finalConnectedUserId = searchResults[0].id;
+          }
+        } catch (error) {
+          console.error("Error checking user:", error);
+          toast({
+            title: "Warning",
+            description: "Could not verify if user exists. The contact will be created without a connected account.",
+            variant: "default",
+          });
+          finalConnectedUserId = null;
+        }
+      }
+    }
+
+    // Create the contact
     createAddressMutation.mutate({
       name: addressModalName.trim(),
       folderId: null,
-      connectedUserId: addressModalConnectedUserId || null,
+      connectedUserId: finalConnectedUserId || null,
       addressType: addressModalType || undefined,
       street: addressModalStreet.trim() || undefined,
       city: addressModalCity.trim() || undefined,
@@ -313,32 +346,6 @@ export default function FriendsPage() {
     deleteAddressMutation.mutate({ id: itemToDelete.id });
   };
 
-  const handleSearchUsers = async (searchTerm: string) => {
-    if (!searchTerm.trim() || searchTerm.length < 2) {
-      setUserSearchResults([]);
-      return;
-    }
-
-    setIsSearchingUsers(true);
-    try {
-      const results = await queryClient.fetchQuery(
-        trpc.friends.searchUsers.queryOptions({ searchTerm: searchTerm.trim() })
-      );
-      setUserSearchResults(results);
-    } catch (error) {
-      console.error("Error searching users:", error);
-      setUserSearchResults([]);
-    } finally {
-      setIsSearchingUsers(false);
-    }
-  };
-
-  const handleSelectUser = (user: any) => {
-    setAddressModalConnectedUserId(user.id);
-    setAddressModalConnectedUser(user);
-    setUserSearchTerm("");
-    setUserSearchResults([]);
-  };
 
   const handleRemoveConnectedUser = () => {
     setAddressModalConnectedUserId(null);
@@ -767,10 +774,10 @@ export default function FriendsPage() {
             </div>
           </div>
           
-          <form onSubmit={(e) => {
+          <form onSubmit={async (e) => {
             e.preventDefault();
             if (addressModalMode === "add") {
-              handleCreateAddress();
+              await handleCreateAddress();
             } else {
               handleUpdateAddress();
             }
@@ -787,7 +794,7 @@ export default function FriendsPage() {
             </div>
 
             <div className="space-y-1.5 sm:space-y-2">
-              <Label className="text-[13px] font-medium text-gray-900">Connect to User</Label>
+              <Label className="text-[13px] font-medium text-gray-900">Connect to User (Optional)</Label>
               {addressModalConnectedUser ? (
                 <div className="border border-gray-200 rounded-lg p-3 flex items-center justify-between bg-gray-50">
                   <div>
@@ -808,52 +815,20 @@ export default function FriendsPage() {
               ) : (
                 <div className="space-y-2">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
-                      placeholder="Search by email or phone number..."
+                      type="email"
+                      placeholder="Enter email address..."
                       value={userSearchTerm}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         setUserSearchTerm(e.target.value);
-                        if (e.target.value.length >= 2) {
-                          handleSearchUsers(e.target.value);
-                        } else {
-                          setUserSearchResults([]);
-                        }
                       }}
                       className="pl-10 bg-gray-50 h-10 sm:h-11 w-full"
                     />
                   </div>
-                  {isSearchingUsers && (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                    </div>
-                  )}
-                  {userSearchResults.length > 0 && (
-                    <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto bg-white">
-                      {userSearchResults.map((user) => (
-                        <div
-                          key={user.id}
-                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
-                          onClick={() => handleSelectUser(user)}
-                        >
-                          <div className="font-medium text-gray-900">
-                            {user.firstName || user.name || "User"}
-                          </div>
-                          {user.email && (
-                            <div className="text-[13px] text-gray-500 mt-1">{user.email}</div>
-                          )}
-                          {user.phone && (
-                            <div className="text-[13px] text-gray-500 mt-1">{user.phone}</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {userSearchTerm.length >= 2 && !isSearchingUsers && userSearchResults.length === 0 && (
-                    <div className="text-[13px] text-gray-500 text-center py-4">
-                      No users found
-                    </div>
-                  )}
+                  <p className="text-[12px] text-gray-500">
+                    Enter an email address to connect this contact to an existing user account. If the user doesn't exist, you'll be notified when you click "Add Contact".
+                  </p>
                 </div>
               )}
             </div>
