@@ -4394,20 +4394,33 @@ export class ActionExecutor {
       let message = `🔔 *${filterTitle}*\n`;
       
       remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
-        // Format next time in user's timezone
+        let dateDisplay = '';
         let timeDisplay = '';
+        
         if (nextTime && nextTime.getTime() > 0 && userTimezone) {
           const nextTimeInUserTz = new Date(nextTime.toLocaleString("en-US", { timeZone: userTimezone }));
           const hours = nextTimeInUserTz.getHours();
           const minutes = nextTimeInUserTz.getMinutes();
-          // Use 24-hour format for professional look
+          const day = nextTimeInUserTz.getDate();
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const month = monthNames[nextTimeInUserTz.getMonth()];
+          
+          // Full date + time
+          dateDisplay = `${day} ${month}`;
           timeDisplay = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
         }
         
-        // Format: number. Title | Time (only list numbers are bold, not titles)
-        if (timeDisplay) {
+        // For birthdays, show only the date specially (no time)
+        if (reminder.category === 'Birthdays' && dateDisplay) {
+          message += `*${index + 1}.* ${reminder.title} | ${dateDisplay}\n`;
+        } else if (dateDisplay && timeDisplay) {
+          // Default: show full date & time
+          message += `*${index + 1}.* ${reminder.title} | ${dateDisplay} ${timeDisplay}\n`;
+        } else if (timeDisplay) {
+          // Fallback: only time if date not available
           message += `*${index + 1}.* ${reminder.title} | ${timeDisplay}\n`;
         } else {
+          // No date/time info
           message += `*${index + 1}.* ${reminder.title}\n`;
         }
       });

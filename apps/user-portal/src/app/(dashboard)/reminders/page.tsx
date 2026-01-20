@@ -275,27 +275,36 @@ function nextForMinutely(interval: number = 1, from: Date = new Date(), timezone
   return d;
 }
 
-function nextForOnce(daysFromNow: number | null, targetDate: Date | null, from: Date = new Date(), timezone?: string): Date | null {
+function nextForOnce(
+  daysFromNow: number | null,
+  targetDate: Date | null,
+  time: string | null,
+  from: Date = new Date(),
+  timezone?: string
+): Date | null {
   if (targetDate) {
     const target = new Date(targetDate);
     if (timezone) {
       const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
       const targetInTimezone = new Date(target.toLocaleString("en-US", { timeZone: timezone }));
-      return targetInTimezone > fromInTimezone ? target : null;
+      // Return the target in user's timezone if it's in the future
+      return targetInTimezone > fromInTimezone ? targetInTimezone : null;
     }
     return target > from ? target : null;
   }
   if (daysFromNow !== null) {
+    // Use provided time if available, otherwise default to 09:00
+    const [hours, minutes] = time ? time.split(":").map(Number) : [9, 0];
     if (timezone) {
       const fromInTimezone = new Date(from.toLocaleString("en-US", { timeZone: timezone }));
       const d = new Date(fromInTimezone);
       d.setDate(d.getDate() + daysFromNow);
-      d.setHours(9, 0, 0, 0); // Default to 9 AM
+      d.setHours(hours ?? 9, minutes ?? 0, 0, 0);
       return d;
     }
     const d = new Date(from);
     d.setDate(d.getDate() + daysFromNow);
-    d.setHours(9, 0, 0, 0); // Default to 9 AM
+    d.setHours(hours ?? 9, minutes ?? 0, 0, 0);
     return d;
   }
   return null;
@@ -480,7 +489,7 @@ function computeNext(reminder: Reminder, from: Date = new Date(), timezone?: str
     case "minutely":
       return nextForMinutely(Math.max(1, Number(reminder.intervalMinutes ?? 1)), from, timezone);
     case "once":
-      return nextForOnce(reminder.daysFromNow, reminder.targetDate, from, timezone);
+      return nextForOnce(reminder.daysFromNow, reminder.targetDate, reminder.time, from, timezone);
     case "weekly":
       return nextForWeekly(reminder.daysOfWeek || [], reminder.time || "09:00", from, timezone);
     case "monthly":
