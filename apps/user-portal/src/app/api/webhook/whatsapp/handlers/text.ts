@@ -2673,6 +2673,8 @@ async function processAIResponse(
         let successCount = 0;
         let failCount = 0;
         
+        const allActionsAreDeleteReminder = actionLines.every(l => /^Delete a reminder:/i.test(l) || /^Delete all reminders$/i.test(l));
+
         for (const line of actionLines) {
           const parsed = parseReminderTemplateToAction(line, /^Create a reminder:/i.test(line), /^Update a reminder:/i.test(line), /^Delete a reminder:/i.test(line) || /^Delete all reminders$/i.test(line), /^Pause a reminder:/i.test(line), /^Resume a reminder:/i.test(line));
           const result = await executor.executeAction(parsed, calendarTimezone);
@@ -2685,8 +2687,22 @@ async function processAIResponse(
             results.push(result.message);
           }
         }
-        
-        const combinedMessage = results.filter(Boolean).join('\n');
+
+        // If all actions are reminder deletions, aggregate into a single confirmation message
+        let combinedMessage: string;
+        if (allActionsAreDeleteReminder && results.length > 0) {
+          const titles = results.flatMap(msg => {
+            const matches = [...msg.matchAll(/Title:\s*(.+)/g)];
+            return matches.map(m => m[1].trim()).filter(Boolean);
+          });
+          if (titles.length > 0) {
+            combinedMessage = `⛔ Reminder Deleted:\n${titles.map(t => `Title: ${t}`).join('\n')}`;
+          } else {
+            combinedMessage = results.filter(Boolean).join('\n');
+          }
+        } else {
+          combinedMessage = results.filter(Boolean).join('\n');
+        }
         
         try {
           const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
