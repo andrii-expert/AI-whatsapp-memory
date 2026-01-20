@@ -5651,8 +5651,11 @@ export class ActionExecutor {
       // Get category (default to "General" if not set)
       const categoryText = reminder.category || 'General';
       
+      // If there's no specific date but we have a time, show it explicitly
+      const timeLine = !dateInfo && reminder.time ? `\nTime: ${reminder.time}` : '';
+      
       // Message header is bold - reminder title is NOT bold
-      const responseMessage = `✅ *New Reminder Created:*\nTitle: ${reminder.title}\nCategory: ${categoryText}\nFrequency: ${frequencyText}${dateInfo ? `\nDate: ${dateInfo}` : ''}`;
+      const responseMessage = `✅ *New Reminder Created:*\nTitle: ${reminder.title}\nCategory: ${categoryText}\nFrequency: ${frequencyText}${dateInfo ? `\nDate: ${dateInfo}` : ''}${timeLine}`;
 
       return {
         success: true,
@@ -5925,8 +5928,11 @@ export class ActionExecutor {
         }
       }
       
+      // If there's no specific date but we have a time, show it explicitly
+      const timeLine = !dateInfo && updated.time ? `\nTime: ${updated.time}` : '';
+      
       // Message header is bold - reminder title is NOT bold
-      const responseMessage = `⚠️ *Reminder Updated:*\nTitle: ${updated.title || reminder.title}\n${dateInfo ? `New Date: ${dateInfo}` : ''}`;
+      const responseMessage = `⚠️ *Reminder Updated:*\nTitle: ${updated.title || reminder.title}\n${dateInfo ? `New Date: ${dateInfo}` : ''}${timeLine}`;
 
       return {
         success: true,
