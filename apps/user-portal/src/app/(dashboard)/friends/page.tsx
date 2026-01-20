@@ -284,13 +284,13 @@ export default function FriendsPage() {
           );
           
           if (searchResults.length === 0) {
-            // User doesn't exist, warn but allow creation
+            // User doesn't exist, warn and don't create
             toast({
               title: "User not found",
-              description: `No user found with email "${userSearchTerm.trim()}". The contact will be created without a connected account.`,
-              variant: "default",
+              description: `No user found with email "${userSearchTerm.trim()}". Please enter a valid email address of an existing user or leave it empty to create a contact without connection.`,
+              variant: "destructive",
             });
-            finalConnectedUserId = null;
+            return; // Don't create the contact
           } else {
             // User exists, use the first result
             finalConnectedUserId = searchResults[0].id;
@@ -298,16 +298,24 @@ export default function FriendsPage() {
         } catch (error) {
           console.error("Error checking user:", error);
           toast({
-            title: "Warning",
-            description: "Could not verify if user exists. The contact will be created without a connected account.",
-            variant: "default",
+            title: "Error",
+            description: "Could not verify if user exists. Please try again.",
+            variant: "destructive",
           });
-          finalConnectedUserId = null;
+          return; // Don't create the contact if we can't verify
         }
+      } else {
+        // Invalid email format
+        toast({
+          title: "Invalid email",
+          description: "Please enter a valid email address or leave it empty.",
+          variant: "destructive",
+        });
+        return; // Don't create the contact
       }
     }
 
-    // Create the contact
+    // Create the contact only if all checks passed
     createAddressMutation.mutate({
       name: addressModalName.trim(),
       folderId: null,
