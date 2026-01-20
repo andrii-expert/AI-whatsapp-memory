@@ -5967,25 +5967,30 @@ export class ActionExecutor {
       }
 
       // Support number-based deletion using last reminders list context
-      const numberOnlyMatch = parsed.taskName.trim().match(/^(\d+)$/);
-      if (numberOnlyMatch) {
-        const reminderNumber = parseInt(numberOnlyMatch[1], 10);
+      const numberTokens = parsed.taskName
+        .split(/[\s,]+|and/i)
+        .map(t => t.trim())
+        .filter(Boolean)
+        .map(t => parseInt(t, 10))
+        .filter(n => !isNaN(n) && n > 0);
+
+      if (numberTokens.length > 0) {
         const listContext = this.getListContext();
         if (listContext && listContext.type === 'reminder') {
-          const target = listContext.items.find(item => item.number === reminderNumber);
-          if (target) {
-            await deleteReminder(this.db, target.id, this.userId);
-            logger.info({ userId: this.userId, reminderId: target.id, reminderNumber }, 'Reminder deleted by number');
+          const targets = listContext.items.filter(item => numberTokens.includes(item.number));
+          if (targets.length > 0) {
+            for (const target of targets) {
+              await deleteReminder(this.db, target.id, this.userId);
+              logger.info({ userId: this.userId, reminderId: target.id, reminderNumber: target.number }, 'Reminder deleted by number');
+            }
+            const titles = targets.map(t => t.name ?? 'Reminder');
             return {
               success: true,
-              message: `⛔ *Reminder Deleted:*\nTitle: ${target.name ?? 'Reminder'}`,
+              message: `⛔ *Reminders Deleted:*\n${titles.join(', ')}`,
             };
           }
         }
-        return {
-          success: false,
-          message: "I couldn't map that reminder number to the last reminders list. Please list reminders again and retry.",
-        };
+        // If context missing or no targets found, continue with title-based logic below
       }
 
       // Handle "delete all" case
