@@ -59,6 +59,7 @@ import {
 } from "@imaginecalendar/ui/dropdown-menu";
 import { ShareButton } from "@/components/share-button";
 import { ShareDetailsModal } from "@/components/share-details-modal";
+import { format } from "date-fns";
 
 export default function FriendsPage() {
   const trpc = useTRPC();
@@ -716,6 +717,11 @@ export default function FriendsPage() {
                           {!address.connectedUser && !address.email && (
                             <div className="text-[13px] text-gray-400 italic">
                               No contact information
+                            </div>
+                          )}
+                          {address.createdAt && (
+                            <div className="text-[12px] text-gray-400 mt-1">
+                              Added {format(new Date(address.createdAt), "MMM d, yyyy")}
                             </div>
                           )}
                         </div>
