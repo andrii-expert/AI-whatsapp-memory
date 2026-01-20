@@ -5331,36 +5331,115 @@ export class ActionExecutor {
           }
         }
         
-        // Check for specific date (e.g., "on the 1st")
-        const dayMatch = scheduleLower.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
-        if (dayMatch && dayMatch[1]) {
-          const dayNum = parseInt(dayMatch[1], 10);
-          if (dayNum >= 1 && dayNum <= 31) {
+        // Check for specific date with month name (e.g., "30th January", "January 30th", "on the 30th of January")
+        const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+        const monthAbbrs = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const monthPattern = `(${monthNames.join('|')}|${monthAbbrs.join('|')})`;
+        
+        // Try pattern 1: "30th January" or "on the 30th of January" or "on 30th January"
+        let dateWithMonthMatch = scheduleLower.match(new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of\\s+)?\\s+${monthPattern}`, 'i'));
+        let dayNum: number | undefined;
+        let monthName: string | undefined;
+        
+        if (dateWithMonthMatch && dateWithMonthMatch[1] && dateWithMonthMatch[2]) {
+          // Pattern 1: "30th January" - dateWithMonthMatch[1] = day, dateWithMonthMatch[2] = month
+          dayNum = parseInt(dateWithMonthMatch[1], 10);
+          monthName = dateWithMonthMatch[2].toLowerCase();
+        } else {
+          // Try pattern 2: "January 30th"
+          dateWithMonthMatch = scheduleLower.match(new RegExp(`${monthPattern}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i'));
+          if (dateWithMonthMatch && dateWithMonthMatch[1] && dateWithMonthMatch[2]) {
+            // Pattern 2: "January 30th" - dateWithMonthMatch[1] = month, dateWithMonthMatch[2] = day
+            monthName = dateWithMonthMatch[1].toLowerCase();
+            dayNum = parseInt(dateWithMonthMatch[2], 10);
+          }
+        }
+        
+        if (dayNum !== undefined && monthName && dayNum >= 1 && dayNum <= 31) {
+          // Normalize month name (handle abbreviations)
+          const abbrIndex = monthAbbrs.indexOf(monthName);
+          if (abbrIndex !== -1) {
+            monthName = monthNames[abbrIndex];
+          }
+          
+          const monthIndex = monthNames.indexOf(monthName);
+          if (monthIndex !== -1) {
+            // For "once" frequency, create a targetDate
             if (timezone) {
               const currentTime = this.getCurrentTimeInTimezone(timezone);
-              const currentDay = currentTime.day;
-              const currentMonth = currentTime.month; // 0-indexed (0-11)
+              const currentYear = currentTime.year;
+              const targetMonth = monthIndex; // 0-indexed (0-11)
               
-              // If day is in the past this month, schedule for next month
-              if (dayNum < currentDay) {
-                result.dayOfMonth = dayNum;
-                // Next month (currentMonth + 1), convert to 1-12 for database
-                result.month = currentMonth + 2 > 11 ? 1 : currentMonth + 2;
-              } else {
-                result.dayOfMonth = dayNum;
-                // Current month (currentMonth + 1), convert to 1-12 for database
-                result.month = currentMonth + 1;
+              // Determine year: if the date has passed this year, use next year
+              const targetDateThisYear = new Date(currentYear, targetMonth, dayNum);
+              const currentDate = new Date(currentTime.year, currentTime.month, currentTime.day);
+              
+              let targetYear = currentYear;
+              if (targetDateThisYear < currentDate) {
+                targetYear = currentYear + 1;
               }
+              
+              // Use existing time if specified, otherwise default to 09:00
+              let targetTime = result.time || '09:00';
+              const [hours, minutes] = targetTime.split(':').map(Number);
+              
+              result.targetDate = this.createDateInUserTimezone(
+                targetYear,
+                targetMonth,
+                dayNum,
+                hours,
+                minutes,
+                timezone
+              );
+              result.time = targetTime;
             } else {
+              // No timezone: calculate using UTC
               const now = new Date();
-              const currentDay = now.getDate();
-              // If day is in the past this month, schedule for next month
-              if (dayNum < currentDay) {
-                result.dayOfMonth = dayNum;
-                result.month = now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2;
+              const targetYear = now.getFullYear();
+              const targetDateThisYear = new Date(targetYear, monthIndex, dayNum);
+              
+              let finalYear = targetYear;
+              if (targetDateThisYear < now) {
+                finalYear = targetYear + 1;
+              }
+              
+              const targetDate = new Date(finalYear, monthIndex, dayNum);
+              result.targetDate = targetDate;
+              result.time = result.time || '09:00';
+            }
+          }
+        } else {
+          // Check for specific date without month (e.g., "on the 1st")
+          const dayMatch = scheduleLower.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
+          if (dayMatch && dayMatch[1]) {
+            const dayNumOnly = parseInt(dayMatch[1], 10);
+            if (dayNumOnly >= 1 && dayNumOnly <= 31) {
+              if (timezone) {
+                const currentTime = this.getCurrentTimeInTimezone(timezone);
+                const currentDay = currentTime.day;
+                const currentMonth = currentTime.month; // 0-indexed (0-11)
+                
+                // If day is in the past this month, schedule for next month
+                if (dayNumOnly < currentDay) {
+                  result.dayOfMonth = dayNumOnly;
+                  // Next month (currentMonth + 1), convert to 1-12 for database
+                  result.month = currentMonth + 2 > 11 ? 1 : currentMonth + 2;
+                } else {
+                  result.dayOfMonth = dayNumOnly;
+                  // Current month (currentMonth + 1), convert to 1-12 for database
+                  result.month = currentMonth + 1;
+                }
               } else {
-                result.dayOfMonth = dayNum;
-                result.month = now.getMonth() + 1;
+                const now = new Date();
+                const currentDay = now.getDate();
+                // If day is in the past this month, schedule for next month
+                if (dayNumOnly < currentDay) {
+                  result.dayOfMonth = dayNumOnly;
+                  result.month = now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2;
+                } else {
+                  result.dayOfMonth = dayNumOnly;
+                  result.month = now.getMonth() + 1;
+                }
               }
             }
           }
@@ -5840,30 +5919,59 @@ export class ActionExecutor {
         };
       }
 
-      // Find reminder by title
-      const reminders = await getRemindersByUserId(this.db, this.userId);
-      let reminder = reminders.find(r => 
-        r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
-        parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
-      );
+      // Support number-based updates using last reminders list context
+      const numberTokens = parsed.taskName
+        .split(/[\s,]+|and/i)
+        .map(t => t.trim())
+        .filter(Boolean)
+        .map(t => parseInt(t, 10))
+        .filter(n => !isNaN(n) && n > 0);
 
-      // Fallback: if AI used a generic name like "Reminder" or "this reminder",
-      // treat it as a reference to the most recently created reminder.
+      let reminder: any = null;
+
+      if (numberTokens.length > 0) {
+        const listContext = this.getListContext();
+        if (listContext && listContext.type === 'reminder') {
+          // Get the first number (for now, only support updating one reminder at a time)
+          const targetNumber = numberTokens[0];
+          const target = listContext.items.find(item => item.number === targetNumber);
+          if (target) {
+            const reminders = await getRemindersByUserId(this.db, this.userId);
+            reminder = reminders.find(r => r.id === target.id);
+            if (reminder) {
+              logger.info({ userId: this.userId, reminderId: reminder.id, reminderNumber: targetNumber }, 'Reminder found by number for update');
+            }
+          }
+        }
+        // If context missing or no target found, continue with title-based logic below
+      }
+
+      // Find reminder by title if not found by number
       if (!reminder) {
-        const rawName = parsed.taskName!.trim().toLowerCase();
-        const isGenericName =
-          rawName === 'reminder' ||
-          rawName === 'a reminder' ||
-          rawName === 'this reminder' ||
-          rawName === 'that reminder' ||
-          rawName === 'it';
+        const reminders = await getRemindersByUserId(this.db, this.userId);
+        reminder = reminders.find(r => 
+          r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+          parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
+        );
 
-        if (isGenericName && reminders.length > 0) {
-          reminder = [...reminders].sort((a, b) => {
-            const aCreated = new Date(a.createdAt as any).getTime();
-            const bCreated = new Date(b.createdAt as any).getTime();
-            return bCreated - aCreated; // newest first
-          })[0];
+        // Fallback: if AI used a generic name like "Reminder" or "this reminder",
+        // treat it as a reference to the most recently created reminder.
+        if (!reminder) {
+          const rawName = parsed.taskName!.trim().toLowerCase();
+          const isGenericName =
+            rawName === 'reminder' ||
+            rawName === 'a reminder' ||
+            rawName === 'this reminder' ||
+            rawName === 'that reminder' ||
+            rawName === 'it';
+
+          if (isGenericName && reminders.length > 0) {
+            reminder = [...reminders].sort((a, b) => {
+              const aCreated = new Date(a.createdAt as any).getTime();
+              const bCreated = new Date(b.createdAt as any).getTime();
+              return bCreated - aCreated; // newest first
+            })[0];
+          }
         }
       }
 
