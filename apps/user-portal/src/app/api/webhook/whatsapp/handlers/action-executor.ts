@@ -579,6 +579,19 @@ export class ActionExecutor {
             listFilter = todayMatch[1].toLowerCase();
           }
         }
+
+        // If still no time filter, check for explicit month names (e.g., "march", "april")
+        if (!listFilter) {
+          const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+          for (const part of filterParts) {
+            const cleaned = part.replace(/[^a-z]/gi, '');
+            const monthIndex = monthNames.findIndex(m => m === cleaned);
+            if (monthIndex !== -1) {
+              listFilter = monthNames[monthIndex];
+              break;
+            }
+          }
+        }
         
         // If no specific filters found, check if the whole text is a single filter
         if (!typeFilter && !status && !listFilter) {
