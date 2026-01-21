@@ -5651,6 +5651,10 @@ export class ActionExecutor {
       // Use category from AI analysis (parsed from AI response)
       // If not provided by AI, default to "General"
       let detectedCategory: string | undefined = parsed.reminderCategory || 'General';
+      // Fallback: if the title mentions "birthday", treat as Birthdays
+      if ((!detectedCategory || detectedCategory.toLowerCase() === 'general') && parsed.taskName?.toLowerCase().includes('birthday')) {
+        detectedCategory = 'Birthdays';
+      }
       
       // Normalize category name to match database values
       const categoryMap: Record<string, string> = {
@@ -5787,6 +5791,17 @@ export class ActionExecutor {
           scheduleData.targetDate = undefined;
         }
 
+        // Final safety: if month/day are still missing for a birthday, force them to tomorrow
+        if (!scheduleData.month || !scheduleData.dayOfMonth) {
+          const now = timezone
+            ? new Date(new Date().toLocaleString('en-US', { timeZone: timezone }))
+            : new Date();
+          const tomorrow = new Date(now);
+          tomorrow.setDate(now.getDate() + 1);
+          scheduleData.month = tomorrow.getMonth() + 1;
+          scheduleData.dayOfMonth = tomorrow.getDate();
+        }
+
         // Default time to 9am for birthdays if not specified
         if (!scheduleData.time) {
           scheduleData.time = '09:00';
@@ -5818,6 +5833,29 @@ export class ActionExecutor {
             scheduleData.targetDate = targetDate;
           } else {
             const targetDate = new Date(baseYear, scheduleData.month - 1, scheduleData.dayOfMonth);
+            targetDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
+            scheduleData.targetDate = targetDate;
+          }
+        }
+
+        // If targetDate still missing, build from month/day in user timezone or server time
+        if (!scheduleData.targetDate && scheduleData.month && scheduleData.dayOfMonth) {
+          const hours = parseInt(scheduleData.time?.split(':')[0] || '9', 10);
+          const minutes = parseInt(scheduleData.time?.split(':')[1] || '0', 10);
+          if (timezone) {
+            const currentTime = this.getCurrentTimeInTimezone(timezone);
+            const targetDate = this.createDateInUserTimezone(
+              currentTime.year,
+              scheduleData.month - 1,
+              scheduleData.dayOfMonth,
+              isNaN(hours) ? 9 : hours,
+              isNaN(minutes) ? 0 : minutes,
+              timezone
+            );
+            scheduleData.targetDate = targetDate;
+          } else {
+            const now = new Date();
+            const targetDate = new Date(now.getFullYear(), scheduleData.month - 1, scheduleData.dayOfMonth);
             targetDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
             scheduleData.targetDate = targetDate;
           }
