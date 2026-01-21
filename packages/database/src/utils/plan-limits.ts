@@ -27,7 +27,9 @@ export interface PlanMetadata {
  * Extract plan limits from plan metadata
  */
 export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLimits {
-  const tier = metadata?.tier as PlanTier | undefined;
+  // Keep tier detection consistent with getPlanTier:
+  // if no metadata or no explicit tier, treat as "free".
+  const tier = (metadata?.tier as PlanTier | undefined) ?? "free";
 
   // Default limits; friends default depends on tier
   const defaultLimits: PlanLimits = {
