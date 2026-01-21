@@ -5320,7 +5320,7 @@ export class ActionExecutor {
           const targetDate = new Date(currentDate);
           targetDate.setDate(currentDate.getDate() + daysToAdd);
 
-          const [hours, minutes] = targetTime.split(':').map(Number);
+          const [hours, minutes] = targetTimeForDate.split(':').map(Number);
           result.targetDate = this.createDateInUserTimezone(
             targetDate.getFullYear(),
             targetDate.getMonth(),
