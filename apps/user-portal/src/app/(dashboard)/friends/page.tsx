@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Home,
@@ -95,6 +95,8 @@ export default function FriendsPage() {
   
   // User search states
   const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   // View address modal state
   const [isViewAddressModalOpen, setIsViewAddressModalOpen] = useState(false);
@@ -193,6 +195,24 @@ export default function FriendsPage() {
   // Plan limits for friends
   const { limits, canAddFriend, getFriendsRemaining, tier, isLoading: isLoadingLimits } = usePlanLimits();
 
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(userSearchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userSearchTerm]);
+
+  // Search users query
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const trimmedSearchTerm = debouncedSearchTerm.trim();
+  const isValidEmail = Boolean(trimmedSearchTerm && emailRegex.test(trimmedSearchTerm));
+  
+  const { data: searchResults = [], isLoading: isSearching } = useQuery({
+    ...trpc.friends.searchUsers.queryOptions({ searchTerm: trimmedSearchTerm || "" }),
+    enabled: isValidEmail && showSearchResults && !addressModalConnectedUser,
+  });
+
   // Mutations for managing shares (roles & removal) from the friend view
   const updateSharePermissionMutation = useMutation(
     trpc.taskSharing.updatePermission.mutationOptions({
@@ -274,14 +294,14 @@ export default function FriendsPage() {
         setIsAddressModalOpen(false);
         resetAddressModal();
         toast({
-          title: "Address created",
-          description: "Address has been created successfully.",
+          title: "Friend created",
+          description: "Friend has been created successfully.",
         });
       },
       onError: (error) => {
         toast({
           title: "Error",
-          description: error.message || "Failed to create address",
+          description: error.message || "Failed to create friend",
           variant: "destructive",
         });
       },
@@ -295,14 +315,14 @@ export default function FriendsPage() {
         setIsAddressModalOpen(false);
         resetAddressModal();
         toast({
-          title: "Address updated",
-          description: "Address has been updated successfully.",
+          title: "Friend updated",
+          description: "Friend has been updated successfully.",
         });
       },
       onError: (error) => {
         toast({
           title: "Error",
-          description: error.message || "Failed to update address",
+          description: error.message || "Failed to update friend",
           variant: "destructive",
         });
       },
@@ -316,14 +336,14 @@ export default function FriendsPage() {
         setDeleteConfirmOpen(false);
         setItemToDelete(null);
         toast({
-          title: "Address deleted",
-          description: "Address has been deleted successfully.",
+          title: "Friend deleted",
+          description: "Friend has been deleted successfully.",
         });
       },
       onError: (error) => {
         toast({
           title: "Error",
-          description: error.message || "Failed to delete address",
+          description: error.message || "Failed to delete friend",
           variant: "destructive",
         });
       },
@@ -337,6 +357,8 @@ export default function FriendsPage() {
     setAddressModalConnectedUserId(null);
     setAddressModalConnectedUser(null);
     setUserSearchTerm("");
+    setDebouncedSearchTerm("");
+    setShowSearchResults(false);
     setAddressModalType("");
     setAddressModalStreet("");
     setAddressModalCity("");
@@ -346,6 +368,20 @@ export default function FriendsPage() {
     setAddressModalLatitude(null);
     setAddressModalLongitude(null);
     setAddressSearchQuery("");
+  };
+
+  const handleSelectUser = (user: any) => {
+    setAddressModalConnectedUserId(user.id);
+    setAddressModalConnectedUser({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      name: user.name,
+      phone: user.phone,
+    });
+    setUserSearchTerm(user.email || "");
+    setShowSearchResults(false);
   };
 
   // Get share count for a resource
@@ -359,7 +395,7 @@ export default function FriendsPage() {
     if (!addressModalName.trim()) {
       toast({
         title: "Error",
-        description: "Address name is required",
+        description: "Friend name is required",
         variant: "destructive",
       });
       return;
@@ -959,12 +995,78 @@ export default function FriendsPage() {
                       value={userSearchTerm}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         setUserSearchTerm(e.target.value);
+                        setShowSearchResults(true);
+                      }}
+                      onFocus={() => {
+                        if (isValidEmail) {
+                          setShowSearchResults(true);
+                        }
+                      }}
+                      onBlur={() => {
+                        // Delay hiding to allow clicks on results
+                        setTimeout(() => setShowSearchResults(false), 200);
                       }}
                       className="pl-10 bg-gray-50 h-10 sm:h-11 w-full"
                     />
+                    
+                    {/* Search Results Dropdown */}
+                    {showSearchResults && isValidEmail && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {isSearching ? (
+                          <div className="p-4 text-center text-sm text-gray-500">
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                            Searching...
+                          </div>
+                        ) : searchResults.length > 0 ? (
+                          <div className="py-1">
+                            {searchResults.map((user: any) => (
+                              <button
+                                key={user.id}
+                                type="button"
+                                onClick={() => handleSelectUser(user)}
+                                className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+                              >
+                                <div className="font-medium text-gray-900">
+                                  {user.firstName && user.lastName
+                                    ? `${user.firstName} ${user.lastName}`
+                                    : user.name || user.email}
+                                </div>
+                                {user.email && (
+                                  <div className="text-[12px] text-gray-500 mt-0.5">{user.email}</div>
+                                )}
+                                {user.phone && (
+                                  <div className="text-[12px] text-gray-500 mt-0.5">{user.phone}</div>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        ) : debouncedSearchTerm.trim() && !isSearching ? (
+                          <div className="p-4 text-center">
+                            <p className="text-sm text-gray-600 mb-3">
+                              No one found with this email address.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setIsAddressModalOpen(false);
+                                setIsInviteModalOpen(true);
+                                // Pre-fill invite modal with the email
+                                setInviteFriends([{ name: "", email: userSearchTerm.trim() }]);
+                              }}
+                              className="w-full"
+                            >
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Invite to CrackOn
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                   <p className="text-[12px] text-gray-500">
-                    Enter an email address to connect this contact to an existing user account. If the user doesn't exist, you'll be notified when you click "Add Contact".
+                    Enter an email address to search for existing users. If no user is found, you can invite them to join CrackOn.
                   </p>
                 </div>
               )}
@@ -1121,7 +1223,7 @@ export default function FriendsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Address Confirmation Dialog */}
+      {/* Delete Friend Confirmation Dialog */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent className="!w-[90vw] !max-w-[90vw] sm:!w-full sm:!max-w-lg p-4 sm:p-6">
           <div className="relative mb-4">
