@@ -3687,6 +3687,75 @@ async function handleSingleEventOperation(
             // Use normalized version for friend matching (but keep original for logging)
             const attendeeForMatching = normalizedAttendee;
             
+            // Check if attendee is a tag (before friend name matching)
+            const attendeeLower = attendeeForMatching.toLowerCase().trim();
+            const matchingTagFriends = friends.filter(friend => 
+              friend.tag && friend.tag.toLowerCase() === attendeeLower
+            );
+            
+            if (matchingTagFriends.length > 0) {
+              // Found friends with this tag - add all their emails
+              logger.info(
+                {
+                  userId,
+                  attendeeIndex: i,
+                  attendeeName: attendeeTrimmed,
+                  tag: attendeeTrimmed,
+                  matchingFriendsCount: matchingTagFriends.length,
+                  friendNames: matchingTagFriends.map(f => f.name),
+                },
+                `✅ Found tag "${attendeeTrimmed}" with ${matchingTagFriends.length} friends`
+              );
+              
+              let tagEmailsAdded = 0;
+              for (const tagFriend of matchingTagFriends) {
+                const friendEmail = tagFriend.email || tagFriend.connectedUser?.email;
+                if (friendEmail) {
+                  const emailLower = friendEmail.toLowerCase();
+                  if (!resolvedAttendees.includes(emailLower)) {
+                    resolvedAttendees.push(emailLower);
+                    tagEmailsAdded++;
+                    logger.info(
+                      {
+                        userId,
+                        attendeeIndex: i,
+                        tag: attendeeTrimmed,
+                        friendName: tagFriend.name,
+                        friendEmail: emailLower,
+                        tagEmailsAdded,
+                      },
+                      `Added email from tag friend: ${tagFriend.name} (${emailLower})`
+                    );
+                  }
+                }
+              }
+              
+              if (tagEmailsAdded > 0) {
+                logger.info(
+                  {
+                    userId,
+                    attendeeIndex: i,
+                    tag: attendeeTrimmed,
+                    tagEmailsAdded,
+                    totalResolved: resolvedAttendees.length,
+                  },
+                  `✅ Tag "${attendeeTrimmed}" resolved to ${tagEmailsAdded} email(s)`
+                );
+                continue; // Move to next attendee
+              } else {
+                logger.warn(
+                  {
+                    userId,
+                    attendeeIndex: i,
+                    tag: attendeeTrimmed,
+                    matchingFriendsCount: matchingTagFriends.length,
+                  },
+                  `Tag "${attendeeTrimmed}" found but no emails available from friends`
+                );
+                // Continue to try friend name matching as fallback
+              }
+            }
+            
             // Try to find matching friend by name (case-insensitive, with priority matching)
             // IMPORTANT: Reset matchingFriend for each attendee - no shared state
             let matchingFriend: typeof friends[0] | undefined = undefined;

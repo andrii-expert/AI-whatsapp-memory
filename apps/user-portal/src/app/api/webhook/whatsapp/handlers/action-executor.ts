@@ -2008,8 +2008,8 @@ export class ActionExecutor {
         };
       }
       
-      const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
-      if (!sharedWithUserId) {
+      const sharedWithUserIds = await this.resolveRecipients(parsed.recipient);
+      if (sharedWithUserIds.length === 0) {
         // Check if recipient looks like email or phone
         const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
         const hasDigits = /\d/.test(parsed.recipient);
@@ -2028,7 +2028,7 @@ export class ActionExecutor {
         } else {
           return {
             success: false,
-            message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+            message: `I couldn't find a user, friend, or tag with "${parsed.recipient}". Please provide the recipient's email address, phone number, friend name, or tag (e.g., "john@example.com", "+27123456789", "John Doe", or "Family").`,
           };
         }
       }
@@ -2037,18 +2037,26 @@ export class ActionExecutor {
         // Determine permission: use parsed permission if available, default to 'edit'
         const sharePermission = parsed.permission || 'edit';
 
-        await createFileShare(this.db, {
-          resourceType: 'file_folder',
-          resourceId: fileFolderId,
-          ownerId: this.userId,
-          sharedWithUserId,
-          permission: sharePermission,
-        });
+        // Share with all resolved users
+        const sharePromises = sharedWithUserIds.map(userId =>
+          createFileShare(this.db, {
+            resourceType: 'file_folder',
+            resourceId: fileFolderId,
+            ownerId: this.userId,
+            sharedWithUserId: userId,
+            permission: sharePermission,
+          })
+        );
+        await Promise.all(sharePromises);
 
         const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
+        const recipientText = sharedWithUserIds.length > 1 
+          ? `${sharedWithUserIds.length} people (${parsed.recipient} tag)`
+          : parsed.recipient;
+        
         return {
           success: true,
-          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nAccount: ${parsed.recipient}\nPermission: ${permissionLabel}`,
+          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${recipientText}\nPermission: ${permissionLabel}`,
         };
       } catch (error) {
         logger.error(
@@ -2065,8 +2073,8 @@ export class ActionExecutor {
     // Check if it's a file folder by name (for backward compatibility)
     const fileFolderId = await this.resolveFileFolderRoute(parsed.folderRoute);
     if (fileFolderId) {
-      const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
-      if (!sharedWithUserId) {
+      const sharedWithUserIds = await this.resolveRecipients(parsed.recipient);
+      if (sharedWithUserIds.length === 0) {
         // Check if recipient looks like email or phone
         const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
         const hasDigits = /\d/.test(parsed.recipient);
@@ -2085,7 +2093,7 @@ export class ActionExecutor {
         } else {
           return {
             success: false,
-            message: `I couldn't find a user with "${parsed.recipient}". Please provide the recipient's email address or phone number (e.g., "john@example.com" or "+27123456789").`,
+            message: `I couldn't find a user, friend, or tag with "${parsed.recipient}". Please provide the recipient's email address, phone number, friend name, or tag (e.g., "john@example.com", "+27123456789", "John Doe", or "Family").`,
           };
         }
       }
@@ -2094,18 +2102,26 @@ export class ActionExecutor {
         // Determine permission: use parsed permission if available, default to 'edit'
         const sharePermission = parsed.permission || 'edit';
 
-        await createFileShare(this.db, {
-          resourceType: 'file_folder',
-          resourceId: fileFolderId,
-          ownerId: this.userId,
-          sharedWithUserId,
-          permission: sharePermission,
-        });
+        // Share with all resolved users
+        const sharePromises = sharedWithUserIds.map(userId =>
+          createFileShare(this.db, {
+            resourceType: 'file_folder',
+            resourceId: fileFolderId,
+            ownerId: this.userId,
+            sharedWithUserId: userId,
+            permission: sharePermission,
+          })
+        );
+        await Promise.all(sharePromises);
 
         const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
+        const recipientText = sharedWithUserIds.length > 1 
+          ? `${sharedWithUserIds.length} people (${parsed.recipient} tag)`
+          : parsed.recipient;
+        
         return {
           success: true,
-          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nAccount: ${parsed.recipient}\nPermission: ${permissionLabel}`,
+          message: `🔁 *File Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${recipientText}\nPermission: ${permissionLabel}`,
         };
       } catch (error) {
         logger.error(
@@ -2127,8 +2143,8 @@ export class ActionExecutor {
       };
     }
 
-    const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
-    if (!sharedWithUserId) {
+    const sharedWithUserIds = await this.resolveRecipients(parsed.recipient);
+    if (sharedWithUserIds.length === 0) {
       // Check if recipient looks like email or phone
       const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
       const hasDigits = /\d/.test(parsed.recipient);
@@ -2147,7 +2163,7 @@ export class ActionExecutor {
       } else {
         return {
           success: false,
-          message: `I couldn't find a user or friend with "${parsed.recipient}". Please provide the recipient's email address, phone number, or friend name (e.g., "john@example.com", "+27123456789", or "John Doe").`,
+          message: `I couldn't find a user, friend, or tag with "${parsed.recipient}". Please provide the recipient's email address, phone number, friend name, or tag (e.g., "john@example.com", "+27123456789", "John Doe", or "Family").`,
         };
       }
     }
@@ -2156,18 +2172,26 @@ export class ActionExecutor {
       // Determine permission: use parsed permission if available, default to 'edit'
       const sharePermission = parsed.permission || 'edit';
 
-      await createTaskShare(this.db, {
-        resourceType: 'task_folder',
-        resourceId: folderId,
-        ownerId: this.userId,
-        sharedWithUserId,
-        permission: sharePermission,
-      });
+      // Share with all resolved users
+      const sharePromises = sharedWithUserIds.map(userId =>
+        createTaskShare(this.db, {
+          resourceType: 'task_folder',
+          resourceId: folderId,
+          ownerId: this.userId,
+          sharedWithUserId: userId,
+          permission: sharePermission,
+        })
+      );
+      await Promise.all(sharePromises);
 
       const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
+      const recipientText = sharedWithUserIds.length > 1 
+        ? `${sharedWithUserIds.length} people (${parsed.recipient} tag)`
+        : parsed.recipient;
+      
       return {
         success: true,
-        message: `🔁 *Task Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
+        message: `🔁 *Task Folder Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${recipientText}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(
@@ -2265,8 +2289,8 @@ export class ActionExecutor {
       };
     }
 
-    const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
-    if (!sharedWithUserId) {
+    const sharedWithUserIds = await this.resolveRecipients(parsed.recipient);
+    if (sharedWithUserIds.length === 0) {
       // Check if recipient looks like email or phone
       const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
       const hasDigits = /\d/.test(parsed.recipient);
@@ -2285,7 +2309,7 @@ export class ActionExecutor {
       } else {
         return {
           success: false,
-          message: `I couldn't find a user or friend with "${parsed.recipient}". Please provide the recipient's email address, phone number, or friend name (e.g., "john@example.com", "+27123456789", or "John Doe").`,
+          message: `I couldn't find a user, friend, or tag with "${parsed.recipient}". Please provide the recipient's email address, phone number, friend name, or tag (e.g., "john@example.com", "+27123456789", "John Doe", or "Family").`,
         };
       }
     }
@@ -2294,18 +2318,26 @@ export class ActionExecutor {
       // Determine permission: use parsed permission if available, default to 'edit'
       const sharePermission = parsed.permission || 'edit';
 
-      await createTaskShare(this.db, {
-        resourceType: 'shopping_list_folder',
-        resourceId: folderId,
-        ownerId: this.userId,
-        sharedWithUserId,
-        permission: sharePermission,
-      });
+      // Share with all resolved users
+      const sharePromises = sharedWithUserIds.map(userId =>
+        createTaskShare(this.db, {
+          resourceType: 'shopping_list_folder',
+          resourceId: folderId,
+          ownerId: this.userId,
+          sharedWithUserId: userId,
+          permission: sharePermission,
+        })
+      );
+      await Promise.all(sharePromises);
 
       const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
+      const recipientText = sharedWithUserIds.length > 1 
+        ? `${sharedWithUserIds.length} people (${parsed.recipient} tag)`
+        : parsed.recipient;
+      
       return {
         success: true,
-        message: `🔁 *Shopping List Shared*\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
+        message: `🔁 *Shopping List Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${recipientText}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(
@@ -2419,8 +2451,8 @@ export class ActionExecutor {
       };
     }
 
-    const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
-    if (!sharedWithUserId) {
+    const sharedWithUserIds = await this.resolveRecipients(parsed.recipient);
+    if (sharedWithUserIds.length === 0) {
       // Check if recipient looks like email or phone
       const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
       const hasDigits = /\d/.test(parsed.recipient);
@@ -2439,7 +2471,7 @@ export class ActionExecutor {
       } else {
         return {
           success: false,
-          message: `I couldn't find a user or friend with "${parsed.recipient}". Please provide the recipient's email address, phone number, or friend name (e.g., "john@example.com", "+27123456789", or "John Doe").`,
+          message: `I couldn't find a user, friend, or tag with "${parsed.recipient}". Please provide the recipient's email address, phone number, friend name, or tag (e.g., "john@example.com", "+27123456789", "John Doe", or "Family").`,
         };
       }
     }
@@ -2448,18 +2480,26 @@ export class ActionExecutor {
       // Determine permission: use parsed permission if available, default to 'edit'
       const sharePermission = parsed.permission || 'edit';
 
-      await createTaskShare(this.db, {
-        resourceType: 'task',
-        resourceId: task.id,
-        ownerId: this.userId,
-        sharedWithUserId,
-        permission: sharePermission,
-      });
+      // Share with all resolved users
+      const sharePromises = sharedWithUserIds.map(userId =>
+        createTaskShare(this.db, {
+          resourceType: 'task',
+          resourceId: task.id,
+          ownerId: this.userId,
+          sharedWithUserId: userId,
+          permission: sharePermission,
+        })
+      );
+      await Promise.all(sharePromises);
 
       const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
+      const recipientText = sharedWithUserIds.length > 1 
+        ? `${sharedWithUserIds.length} people (${parsed.recipient} tag)`
+        : parsed.recipient;
+      
       return {
         success: true,
-        message: `🔁 *Task Shared*\nTitle: ${parsed.taskName}\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
+        message: `🔁 *Task Shared*\nTitle: ${parsed.taskName}\nShare to: ${recipientText}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(
@@ -3484,11 +3524,11 @@ export class ActionExecutor {
       };
     }
 
-    // Try to find user by email, phone, or friend name
+    // Try to find user by email, phone, friend name, or tag
     // The searchUsersForFileSharing function now includes friend name search
-    const sharedWithUserId = await this.resolveRecipient(parsed.recipient);
+    const sharedWithUserIds = await this.resolveRecipients(parsed.recipient);
 
-    if (!sharedWithUserId) {
+    if (sharedWithUserIds.length === 0) {
       // Check if recipient looks like email or phone for better error messages
       const isEmail = parsed.recipient.includes('@') && parsed.recipient.includes('.');
       const hasDigits = /\d/.test(parsed.recipient);
@@ -3507,7 +3547,7 @@ export class ActionExecutor {
       } else {
         return {
           success: false,
-          message: `I couldn't find a user or friend with "${parsed.recipient}". Please provide the recipient's email address, phone number, or friend name (e.g., "john@example.com", "+27123456789", or "John Doe").`,
+          message: `I couldn't find a user, friend, or tag with "${parsed.recipient}". Please provide the recipient's email address, phone number, friend name, or tag (e.g., "john@example.com", "+27123456789", "John Doe", or "Family").`,
         };
       }
     }
@@ -3516,18 +3556,26 @@ export class ActionExecutor {
       // Determine permission: use parsed permission if available, default to 'edit'
       const sharePermission = parsed.permission || 'edit';
 
-      await createFileShare(this.db, {
-        resourceType: 'file',
-        resourceId: file.id,
-        ownerId: this.userId,
-        sharedWithUserId,
-        permission: sharePermission,
-      });
+      // Share with all resolved users
+      const sharePromises = sharedWithUserIds.map(userId =>
+        createFileShare(this.db, {
+          resourceType: 'file',
+          resourceId: file.id,
+          ownerId: this.userId,
+          sharedWithUserId: userId,
+          permission: sharePermission,
+        })
+      );
+      await Promise.all(sharePromises);
 
       const permissionLabel = sharePermission === 'edit' ? 'Editor' : 'View';
+      const recipientText = sharedWithUserIds.length > 1 
+        ? `${sharedWithUserIds.length} people (${parsed.recipient} tag)`
+        : parsed.recipient;
+      
       return {
         success: true,
-        message: `🔁 *File Shared*\nFile: ${parsed.taskName}\nShare to: ${parsed.recipient}\nPermission: ${permissionLabel}`,
+        message: `🔁 *File Shared*\nFile: ${parsed.taskName}\nShare to: ${recipientText}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(
@@ -9367,10 +9415,11 @@ export class ActionExecutor {
   }
 
   /**
-   * Resolve recipient email, phone number, or friend name to user ID
-   * Returns null if user not found (caller should ask for correct email/phone/name)
+   * Resolve recipient email, phone number, friend name, or tag to user IDs
+   * Returns array of user IDs (can be multiple if tag is used)
+   * Returns empty array if no users found
    */
-  private async resolveRecipient(recipient: string): Promise<string | null> {
+  private async resolveRecipients(recipient: string): Promise<string[]> {
     const trimmedRecipient = recipient.trim();
     
     // Check if recipient looks like an email address
@@ -9385,7 +9434,7 @@ export class ActionExecutor {
       try {
         const user = await getUserByEmail(this.db, trimmedRecipient.toLowerCase());
         if (user && user.id !== this.userId) {
-          return user.id;
+          return [user.id];
         }
       } catch (error) {
         logger.error(
@@ -9402,7 +9451,7 @@ export class ActionExecutor {
         const normalizedPhone = normalizePhoneNumber(trimmedRecipient);
         const user = await getUserByPhone(this.db, normalizedPhone, this.userId);
         if (user) {
-          return user.id;
+          return [user.id];
         }
       } catch (error) {
         logger.error(
@@ -9412,18 +9461,64 @@ export class ActionExecutor {
       }
     }
     
-    // If recipient doesn't look like email or phone, try searching by name/partial match
-    // This handles cases where user provided a name instead of email/phone
-    // This now includes searching by friend name
+    // If recipient doesn't look like email or phone, check if it's a tag
     if (!isEmail && !isPhone) {
-      const users = await searchUsersForSharing(this.db, trimmedRecipient, this.userId);
-      if (users.length > 0) {
-        return users[0].id;
+      try {
+        // Get all friends to check for tags
+        const friends = await getUserFriends(this.db, this.userId);
+        
+        // Check if recipient matches a tag (case-insensitive)
+        const matchingTagFriends = friends.filter(friend => 
+          friend.tag && friend.tag.toLowerCase() === trimmedRecipient.toLowerCase()
+        );
+        
+        if (matchingTagFriends.length > 0) {
+          // Found friends with this tag - return their connected user IDs
+          const userIds = matchingTagFriends
+            .map(friend => friend.connectedUserId)
+            .filter((userId): userId is string => userId !== null && userId !== undefined);
+          
+          if (userIds.length > 0) {
+            logger.info(
+              { tag: trimmedRecipient, friendCount: matchingTagFriends.length, userIdCount: userIds.length, userId: this.userId },
+              'Resolved tag to user IDs'
+            );
+            return userIds;
+          } else {
+            logger.warn(
+              { tag: trimmedRecipient, friendCount: matchingTagFriends.length, userId: this.userId },
+              'Tag found but no connected users'
+            );
+          }
+        }
+        
+        // If not a tag, try searching by name/partial match
+        // This handles cases where user provided a name instead of email/phone
+        // This now includes searching by friend name
+        const users = await searchUsersForSharing(this.db, trimmedRecipient, this.userId);
+        if (users.length > 0) {
+          return [users[0].id];
+        }
+      } catch (error) {
+        logger.error(
+          { error, recipient: trimmedRecipient, userId: this.userId },
+          'Error resolving recipients'
+        );
       }
     }
     
-    // User not found
-    return null;
+    // No users found
+    return [];
+  }
+
+  /**
+   * Resolve recipient email, phone number, or friend name to user ID
+   * Returns null if user not found (caller should ask for correct email/phone/name)
+   * @deprecated Use resolveRecipients for tag support. This is kept for backward compatibility.
+   */
+  private async resolveRecipient(recipient: string): Promise<string | null> {
+    const userIds = await this.resolveRecipients(recipient);
+    return userIds.length > 0 ? userIds[0] : null;
   }
 
   /**
