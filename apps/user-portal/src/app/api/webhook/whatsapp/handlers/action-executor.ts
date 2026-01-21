@@ -88,7 +88,7 @@ import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { CalendarService } from './calendar-service';
 import type { CalendarIntent } from '@imaginecalendar/ai-services';
 import { getCategorySuggestion } from '@/lib/shopping-list-categorization';
-import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
+import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, addMonths } from 'date-fns';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -562,9 +562,9 @@ export class ActionExecutor {
           status = 'all';
         }
         
-        // Check for time-based filter (today, tomorrow, this week, this month)
+        // Check for time-based filter (today, tomorrow, this week, next week, this month, next month)
         // Check longer phrases first to avoid partial matches
-        const timeFilters = ['this month', 'this week', 'next week', 'tomorrow', 'today'];
+        const timeFilters = ['next month', 'this month', 'this week', 'next week', 'tomorrow', 'today'];
         for (const timeFilter of timeFilters) {
           if (filterText.includes(timeFilter)) {
             listFilter = timeFilter;
@@ -574,7 +574,7 @@ export class ActionExecutor {
         
         // Also check for variations like "all reminders today" -> extract "today"
         if (!listFilter) {
-          const todayMatch = filterText.match(/\b(today|tomorrow|this\s+week|this\s+month|next\s+week)\b/i);
+          const todayMatch = filterText.match(/\b(today|tomorrow|this\s+week|this\s+month|next\s+week|next\s+month)\b/i);
           if (todayMatch && todayMatch[1]) {
             listFilter = todayMatch[1].toLowerCase();
           }
@@ -4262,10 +4262,16 @@ export class ActionExecutor {
           const start = startOfMonth(new Date(targetYear, targetMonth, 1));
           const end = endOfMonth(new Date(targetYear, targetMonth, 1));
           dateFilterRange = { start, end };
-        } else if (timeFilter.includes('this month') || timeFilter.includes('month')) {
+        } else if (timeFilter.includes('this month')) {
           dateFilterRange = {
             start: startOfMonth(userNow),
             end: endOfMonth(userNow),
+          };
+        } else if (timeFilter.includes('next month')) {
+          const nextMonthDate = addMonths(userNow, 1);
+          dateFilterRange = {
+            start: startOfMonth(nextMonthDate),
+            end: endOfMonth(nextMonthDate),
           };
         } else if (timeFilter.includes('next week')) {
           const nextWeekStart = addDays(startOfWeek(userNow, { weekStartsOn: 0 }), 7);
