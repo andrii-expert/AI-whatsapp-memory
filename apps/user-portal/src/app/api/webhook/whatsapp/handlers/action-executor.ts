@@ -6141,8 +6141,75 @@ export class ActionExecutor {
       if (parsed.newName) {
         // Parse changes
         const changes = parsed.newName.toLowerCase();
-        
-        // Check for relative time patterns FIRST (e.g., "in 5 hours", "5 hours from now", "in 10 minutes", "schedule to in 5 hours")
+
+        // 1) Check for explicit schedule changes (e.g., "schedule: every Friday", "schedule to every Monday at 8am")
+        const scheduleChangeMatch =
+          parsed.newName.match(/\bschedule\s*:\s*([^-\n]+)(?:\s*-\s*status:.*)?$/i) ||
+          parsed.newName.match(/\bschedule\s+to\s+(.+?)(?:\s*-\s*status:.*)?$/i);
+
+        if (scheduleChangeMatch && scheduleChangeMatch[1]) {
+          const rawSchedule = scheduleChangeMatch[1].trim();
+          const scheduleData = this.parseReminderSchedule(rawSchedule, timezone);
+
+          const hasExplicitTimeInSchedule = /(?:\d{1,2}:\d{2}|\d{1,2}\s*(am|pm)|morning|afternoon|evening|night|noon|midday|midnight)/i.test(
+            rawSchedule
+          );
+
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: reminder.id,
+              parsedNewName: parsed.newName,
+              rawSchedule,
+              scheduleData,
+              timezone,
+            },
+            'Processing schedule change for reminder'
+          );
+
+          // Apply frequency/type changes
+          if (scheduleData.frequency) {
+            updateInput.frequency = scheduleData.frequency;
+          }
+
+          // Weekly / daily / monthly / yearly / minutely / hourly fields
+          if (Array.isArray(scheduleData.daysOfWeek)) {
+            updateInput.daysOfWeek = scheduleData.daysOfWeek;
+          }
+          if (typeof scheduleData.dayOfMonth === 'number') {
+            updateInput.dayOfMonth = scheduleData.dayOfMonth;
+          }
+          if (typeof scheduleData.month === 'number') {
+            updateInput.month = scheduleData.month;
+          }
+          if (typeof scheduleData.minuteOfHour === 'number') {
+            updateInput.minuteOfHour = scheduleData.minuteOfHour;
+          }
+          if (typeof scheduleData.intervalMinutes === 'number') {
+            updateInput.intervalMinutes = scheduleData.intervalMinutes;
+          }
+
+          // For non-once/relative schedules, clear one-off fields
+          if (scheduleData.frequency && scheduleData.frequency !== 'once') {
+            updateInput.daysFromNow = null;
+            updateInput.targetDate = undefined;
+          } else {
+            // If this is a one-off schedule (e.g. "on 3rd February at 9am"), apply targetDate/daysFromNow as well
+            if (scheduleData.targetDate) {
+              updateInput.targetDate = scheduleData.targetDate;
+            }
+            if (typeof scheduleData.daysFromNow === 'number') {
+              updateInput.daysFromNow = scheduleData.daysFromNow;
+            }
+          }
+
+          // Time: only override if the user explicitly specified a time in the schedule text.
+          if (hasExplicitTimeInSchedule && scheduleData.time) {
+            updateInput.time = scheduleData.time;
+          }
+        }
+
+        // 2) Check for relative time patterns (e.g., "in 5 hours", "5 hours from now", "in 10 minutes", "schedule to in 5 hours")
         // Match patterns like: "in 5 hours", "5 hours from now", "schedule to in 5 hours", "change to in 2 hours"
         // First try to match patterns that already start with "in"
         let relativeTimeMatch = parsed.newName.match(/in\s+(\d+)\s+(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)(?:\s+from\s+now)?/i);
@@ -6198,7 +6265,7 @@ export class ActionExecutor {
             updateInput.frequency = 'once';
           }
         }
-        // Check for time changes (absolute time like "at 5pm" or "time to 3pm")
+        // 3) Check for time changes (absolute time like "at 5pm" or "time to 3pm")
         else if (changes.includes('time') || changes.includes('at')) {
           // 1) Prefer explicit "time to" or "at" patterns
           let timeMatch = parsed.newName.match(/(?:time\s+to|at)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
