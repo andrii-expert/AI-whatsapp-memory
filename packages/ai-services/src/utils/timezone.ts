@@ -91,8 +91,9 @@ export function formatDateToLocalLabel(
 
   const formatter = new Intl.DateTimeFormat('en-GB', {
     timeZone,
+    weekday: 'long',
     year: 'numeric',
-    month: '2-digit',
+    month: 'long',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
@@ -108,5 +109,13 @@ export function formatDateToLocalLabel(
     }
   }
 
-  return `${partsMap.year}-${partsMap.month}-${partsMap.day} ${partsMap.hour}:${partsMap.minute}`;
+  const weekday = partsMap.weekday;
+  const day = partsMap.day;
+  const month = partsMap.month;
+  const year = partsMap.year;
+  const hour = partsMap.hour;
+  const minute = partsMap.minute;
+
+  // Example: "Wednesday, 21 January 2026 14:35"
+  return `${weekday}, ${day} ${month} ${year} ${hour}:${minute}`;
 }
