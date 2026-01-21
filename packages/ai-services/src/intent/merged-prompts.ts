@@ -540,6 +540,8 @@ export function buildMergedWhatsappPrompt(
     "    • Type filters: daily, hourly, minutely, weekly, monthly, yearly, once",
     "    • Category filters: birthdays, general, work and business, family & home, health and wellness, errands, travel, notes",
     "    • Can combine filters: \"active daily today\", \"tomorrow weekly\", \"birthdays\", etc.",
+    "    • CRITICAL: When the user specifies BOTH a timeframe/month AND a category, you MUST include both. Never drop the month/timeframe when a category is present.",
+    "      Example: \"show all birthdays in October\" → List reminders: October - category: Birthdays (NOT \"all - category: Birthdays\")",
     "    • Format examples:",
     "      - \"List reminders: today\" (for today's reminders)",
     "      - \"List reminders: tomorrow\" (for tomorrow's reminders)",
