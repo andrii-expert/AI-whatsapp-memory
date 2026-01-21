@@ -200,6 +200,7 @@ export async function createFriend(
     country?: string | null;
     latitude?: number | null;
     longitude?: number | null;
+    tag?: string | null;
   }
 ) {
   return withMutationLogging(
@@ -218,6 +219,7 @@ export async function createFriend(
         state: data.state === "" ? null : data.state,
         zip: data.zip === "" ? null : data.zip,
         country: data.country === "" ? null : data.country,
+        tag: data.tag === "" ? null : data.tag,
       };
       
       const [friend] = await db.insert(friends).values(normalizedData).returning();
@@ -247,6 +249,7 @@ export async function updateFriend(
     country?: string | null;
     latitude?: number | null;
     longitude?: number | null;
+    tag?: string | null;
   }
 ) {
   return withMutationLogging(
@@ -311,6 +314,9 @@ export async function updateFriend(
       }
       if (data.longitude !== undefined) {
         normalizedData.longitude = data.longitude;
+      }
+      if (data.tag !== undefined) {
+        normalizedData.tag = data.tag === "" ? null : data.tag;
       }
       
       const [friend] = await db
@@ -381,6 +387,34 @@ export async function searchUsersByEmailOrPhoneForFriends(
       });
       
       return results;
+    }
+  );
+}
+
+/**
+ * Get all unique tags used by a user's friends
+ */
+export async function getUserFriendTags(db: Database, userId: string) {
+  return withQueryLogging(
+    'getUserFriendTags',
+    { userId },
+    async () => {
+      const allFriends = await db.query.friends.findMany({
+        where: eq(friends.userId, userId),
+        columns: {
+          tag: true,
+        },
+      });
+      
+      // Extract unique, non-null tags
+      const tags = new Set<string>();
+      allFriends.forEach(friend => {
+        if (friend.tag && friend.tag.trim()) {
+          tags.add(friend.tag.trim());
+        }
+      });
+      
+      return Array.from(tags).sort();
     }
   );
 }

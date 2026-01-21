@@ -11,6 +11,7 @@ import {
   deleteFriendFolder,
   searchUsersByEmailOrPhoneForFriends,
   linkPendingFriendsToUser,
+  getUserFriendTags,
 } from "@imaginecalendar/database/queries";
 import { getUserByEmail, getUserById } from "@imaginecalendar/database/queries";
 import { friends } from "@imaginecalendar/database/schema";
@@ -61,6 +62,7 @@ const createFriendSchema = z.object({
   country: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
+  tag: z.string().optional().or(z.literal("")),
 });
 
 const updateFriendSchema = z.object({
@@ -78,6 +80,7 @@ const updateFriendSchema = z.object({
   country: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
+  tag: z.string().optional().or(z.literal("")),
 });
 
 const folderSchema = z.object({
@@ -205,6 +208,11 @@ export const friendsRouter = createTRPCRouter({
     .query(async ({ ctx: { db, session }, input }) => {
       return searchUsersByEmailOrPhoneForFriends(db, input.searchTerm, session.user.id);
     }),
+
+  // Get all available tags
+  getTags: protectedProcedure.query(async ({ ctx: { db, session } }) => {
+    return getUserFriendTags(db, session.user.id);
+  }),
 
   // Invite friends
   invite: protectedProcedure

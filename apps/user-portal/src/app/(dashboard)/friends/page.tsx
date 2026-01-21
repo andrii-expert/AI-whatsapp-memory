@@ -98,6 +98,10 @@ export default function FriendsPage() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
 
+  // Tag state
+  const [addressModalTag, setAddressModalTag] = useState("");
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+
   // View address modal state
   const [isViewAddressModalOpen, setIsViewAddressModalOpen] = useState(false);
   const [viewAddressData, setViewAddressData] = useState<any>(null);
@@ -121,6 +125,11 @@ export default function FriendsPage() {
   // Fetch friends
   const { data: allAddresses = [], isLoading: isLoadingAddresses } = useQuery(
     trpc.friends.list.queryOptions()
+  );
+
+  // Fetch available tags
+  const { data: availableTags = [] } = useQuery(
+    trpc.friends.getTags.queryOptions()
   );
 
   // Fetch shopping list folders and items so we can show what is shared with each friend
@@ -368,6 +377,8 @@ export default function FriendsPage() {
     setAddressModalLatitude(null);
     setAddressModalLongitude(null);
     setAddressSearchQuery("");
+    setAddressModalTag("");
+    setShowTagSuggestions(false);
   };
 
   const handleSelectUser = (user: any) => {
@@ -458,6 +469,7 @@ export default function FriendsPage() {
       country: addressModalCountry.trim() || undefined,
       latitude: addressModalLatitude || undefined,
       longitude: addressModalLongitude || undefined,
+      tag: addressModalTag.trim() || undefined,
     });
   };
 
@@ -476,6 +488,7 @@ export default function FriendsPage() {
       country: addressModalCountry.trim() || undefined,
       latitude: addressModalLatitude || undefined,
       longitude: addressModalLongitude || undefined,
+      tag: addressModalTag.trim() || undefined,
     });
   };
 
@@ -509,6 +522,7 @@ export default function FriendsPage() {
     setAddressModalCountry(address.country || "");
     setAddressModalLatitude(address.latitude || null);
     setAddressModalLongitude(address.longitude || null);
+    setAddressModalTag(address.tag || "");
     setAddressSearchQuery(
       [address.street, address.city, address.state, address.zip, address.country]
         .filter(Boolean)
@@ -792,8 +806,14 @@ export default function FriendsPage() {
                         {/* Friend Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1 justify-between">
-                            <div className="font-bold text-gray-900 text-[15px] flex gap-2">
+                            <div className="font-bold text-gray-900 text-[15px] flex gap-2 items-center flex-wrap">
                               {address.name}
+                              {/* Tag badge */}
+                              {address.tag && (
+                                <span className="px-2 py-0.5 text-[11px] font-medium bg-blue-100 text-blue-800 rounded-full">
+                                  {address.tag}
+                                </span>
+                              )}
                               {/* Pending badge - show if email exists but no connectedUserId */}
                               {address.email && !address.connectedUserId && (
                                 <span className="px-2 py-0.5 text-[11px] font-medium bg-yellow-100 text-yellow-800 rounded-full">
@@ -1072,6 +1092,81 @@ export default function FriendsPage() {
               )}
             </div>
 
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label className="text-[13px] font-medium text-gray-900">Tag (Optional)</Label>
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Enter or select a tag..."
+                  value={addressModalTag}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    setAddressModalTag(e.target.value);
+                    setShowTagSuggestions(true);
+                  }}
+                  onFocus={() => {
+                    if (availableTags.length > 0 || addressModalTag.trim()) {
+                      setShowTagSuggestions(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    // Delay hiding to allow clicks on suggestions
+                    setTimeout(() => setShowTagSuggestions(false), 200);
+                  }}
+                  className="bg-gray-50 h-10 sm:h-11 w-full"
+                />
+                
+                {/* Tag Suggestions Dropdown */}
+                {showTagSuggestions && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {addressModalTag.trim() && 
+                     !availableTags.some(tag => tag.toLowerCase() === addressModalTag.trim().toLowerCase()) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddressModalTag(addressModalTag.trim());
+                          setShowTagSuggestions(false);
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors border-b border-gray-100"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Plus className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm text-gray-900">
+                            Create "{addressModalTag.trim()}"
+                          </span>
+                        </div>
+                      </button>
+                    )}
+                    {availableTags
+                      .filter(tag => 
+                        !addressModalTag.trim() || 
+                        tag.toLowerCase().includes(addressModalTag.trim().toLowerCase())
+                      )
+                      .map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            setAddressModalTag(tag);
+                            setShowTagSuggestions(false);
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="text-sm text-gray-900">{tag}</div>
+                        </button>
+                      ))}
+                    {availableTags.length === 0 && !addressModalTag.trim() && (
+                      <div className="p-4 text-center text-sm text-gray-500">
+                        No tags yet. Start typing to create one.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className="text-[12px] text-gray-500">
+                Add a tag to organize your friends (e.g., "Family", "Work", "Gym").
+              </p>
+            </div>
+
             <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
               <Button
                 type="submit"
@@ -1110,6 +1205,16 @@ export default function FriendsPage() {
           </div>
           
           <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
+            {viewAddressData?.tag && (
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label className="text-[13px] font-medium text-gray-900">Tag</Label>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1.5 text-[13px] font-medium bg-blue-100 text-blue-800 rounded-full">
+                    {viewAddressData.tag}
+                  </span>
+                </div>
+              </div>
+            )}
             {viewAddressData?.connectedUser && (
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[13px] font-medium text-gray-900">Friend</Label>

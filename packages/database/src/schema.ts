@@ -1605,6 +1605,9 @@ export const friends = pgTable("friends", {
   // Connected user (if linked to another user account)
   connectedUserId: text("connected_user_id").references(() => users.id, { onDelete: "set null" }),
   
+  // Tag for organizing friends
+  tag: text("tag"),
+  
   // Organization
   sortOrder: integer("sort_order").default(0).notNull(),
   
