@@ -758,21 +758,33 @@ export function ShareDetailsModal({
                           </div>
                           
                           {/* Permission Dropdown */}
-                          <Select
-                            value={share.permission}
-                            onValueChange={(value: "view" | "edit") =>
-                              handlePermissionChange(share.id, value)
-                            }
-                            disabled={updatePermissionMutation.isPending}
-                          >
-                            <SelectTrigger className="w-[120px] h-9 border border-gray-200 bg-white">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="view">Can view</SelectItem>
-                              <SelectItem value="edit">Can edit</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={share.permission}
+                              onValueChange={(value: "view" | "edit") =>
+                                handlePermissionChange(share.id, value)
+                              }
+                              disabled={updatePermissionMutation.isPending}
+                            >
+                              <SelectTrigger className="w-[120px] h-9 border border-gray-200 bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="view">Can view</SelectItem>
+                                <SelectItem value="edit">Can edit</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => setShareToDelete(share.id)}
+                              title="Remove access"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       );
                     });
