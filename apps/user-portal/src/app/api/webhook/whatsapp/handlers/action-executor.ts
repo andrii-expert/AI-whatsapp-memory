@@ -4093,25 +4093,26 @@ export class ActionExecutor {
     endDate: Date,
     timezone?: string
   ): boolean {
-    // Get date components for start and end dates in user's timezone
-    let startInTz: Date;
-    let endInTz: Date;
-    if (timezone) {
-      const startStr = startDate.toLocaleString("en-US", { timeZone: timezone });
-      const endStr = endDate.toLocaleString("en-US", { timeZone: timezone });
-      startInTz = new Date(startStr);
-      endInTz = new Date(endStr);
-    } else {
-      startInTz = new Date(startDate);
-      endInTz = new Date(endDate);
-    }
+    try {
+      // Get date components for start and end dates in user's timezone
+      let startInTz: Date;
+      let endInTz: Date;
+      if (timezone) {
+        const startStr = startDate.toLocaleString("en-US", { timeZone: timezone });
+        const endStr = endDate.toLocaleString("en-US", { timeZone: timezone });
+        startInTz = new Date(startStr);
+        endInTz = new Date(endStr);
+      } else {
+        startInTz = new Date(startDate);
+        endInTz = new Date(endDate);
+      }
     
-    const startYear = startInTz.getFullYear();
-    const startMonth = startInTz.getMonth() + 1;
-    const startDay = startInTz.getDate();
-    const endYear = endInTz.getFullYear();
-    const endMonth = endInTz.getMonth() + 1;
-    const endDay = endInTz.getDate();
+      const startYear = startInTz.getFullYear();
+      const startMonth = startInTz.getMonth() + 1;
+      const startDay = startInTz.getDate();
+      const endYear = endInTz.getFullYear();
+      const endMonth = endInTz.getMonth() + 1;
+      const endDay = endInTz.getDate();
     
     switch (reminder.frequency) {
       case "daily":
@@ -4189,11 +4190,7 @@ export class ActionExecutor {
         const reminderDay = reminder.dayOfMonth ?? 1;
         
         // For monthly reminders, we need to check only months that fall within the date range
-        // Start from the first day of the start month
-        const startYear = startInTz.getFullYear();
-        const startMonth = startInTz.getMonth() + 1; // 1-based
-        const endYear = endInTz.getFullYear();
-        const endMonth = endInTz.getMonth() + 1; // 1-based
+        // Use the already-defined startYear, startMonth, endYear, endMonth from the top of the function
         
         // Iterate through each month in the range
         for (let year = startYear; year <= endYear; year++) {
@@ -4204,11 +4201,23 @@ export class ActionExecutor {
             // Check if the reminder day in this month falls within the range
             const lastDayOfMonth = new Date(year, month, 0).getDate();
             const targetDay = Math.min(reminderDay, lastDayOfMonth);
-            const targetDate = new Date(year, month - 1, targetDay);
-            targetDate.setHours(0, 0, 0, 0);
+            
+            // Create target date and convert to user's timezone for comparison
+            const targetDateLocal = new Date(year, month - 1, targetDay);
+            targetDateLocal.setHours(0, 0, 0, 0);
+            
+            // Convert to user's timezone if provided
+            let targetDateInTz: Date;
+            if (timezone) {
+              const targetStr = targetDateLocal.toLocaleString("en-US", { timeZone: timezone });
+              targetDateInTz = new Date(targetStr);
+            } else {
+              targetDateInTz = new Date(targetDateLocal);
+            }
+            targetDateInTz.setHours(0, 0, 0, 0);
             
             // Check if this month's target day is within the range
-            if (targetDate >= startInTz && targetDate <= endInTz) {
+            if (targetDateInTz >= startInTz && targetDateInTz <= endInTz) {
               return true;
             }
           }
@@ -4250,6 +4259,10 @@ export class ActionExecutor {
         
       default:
         return false;
+    }
+    } catch (error) {
+      logger.error({ error, reminderId: reminder.id, userId: this.userId }, 'Error in canReminderOccurInRange');
+      return false;
     }
   }
 
