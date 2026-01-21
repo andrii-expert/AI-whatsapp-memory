@@ -4301,6 +4301,9 @@ export class ActionExecutor {
 
       // Filter by time if specified (today, tomorrow, this week, this month)
       // Calculate date ranges based on user's timezone (not server timezone)
+      // Declare dateFilterRange outside the if block so it's accessible later
+      let dateFilterRange: { start: Date; end: Date } | null = null;
+      
       if (parsed.listFilter && userTimezone) {
         const timeFilter = parsed.listFilter.toLowerCase().trim();
         
@@ -4318,9 +4321,6 @@ export class ActionExecutor {
           userNowISO: userNow.toISOString(),
           userNowLocal: userNow.toLocaleString("en-US", { timeZone: userTimezone }),
         }, 'Calculated user time for date filtering');
-        
-        // Calculate date filter range based on filter type using user's timezone
-        let dateFilterRange: { start: Date; end: Date } | null = null;
         
         // Support specific month names (e.g., "april", "may")
         const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -4566,8 +4566,25 @@ export class ActionExecutor {
           seconds: userLocalTimeDate.getSeconds(),
           date: userLocalTimeDate,
         };
+        
+        // Check if we're filtering by a specific month
+        const isSpecificMonthFilter = dateFilterRange && 
+          parsed.listFilter && 
+          /^(january|february|march|april|may|june|july|august|september|october|november|december)/i.test(parsed.listFilter);
+        
         remindersWithNextTime = filteredReminders.map(reminder => {
-          const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+          let nextTime: Date | null = null;
+          
+          if (isSpecificMonthFilter && dateFilterRange) {
+            // For specific month filters, calculate the occurrence WITHIN that month
+            nextTime = this.calculateReminderTimeInRange(reminder, dateFilterRange.start, dateFilterRange.end, userTimezone);
+          }
+          
+          // Fallback to next occurrence from today if not found in range
+          if (!nextTime) {
+            nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+          }
+          
           return { reminder, nextTime: nextTime || new Date(0) };
         }).sort((a, b) => a.nextTime.getTime() - b.nextTime.getTime());
       } else {
@@ -4831,6 +4848,124 @@ export class ActionExecutor {
     } catch (error) {
       logger.error({ error, reminderId: reminder.id }, 'Error checking if one-time reminder is scheduled for today');
       return false;
+    }
+  }
+
+  /**
+   * Calculate the reminder time within a specific date range (for filtered month display)
+   */
+  private calculateReminderTimeInRange(
+    reminder: any,
+    rangeStart: Date,
+    rangeEnd: Date,
+    timezone: string
+  ): Date | null {
+    try {
+      // Convert range to user's timezone for calculations
+      const startStr = rangeStart.toLocaleString("en-US", { timeZone: timezone });
+      const endStr = rangeEnd.toLocaleString("en-US", { timeZone: timezone });
+      const startInTz = new Date(startStr);
+      const endInTz = new Date(endStr);
+      
+      const startYear = startInTz.getFullYear();
+      const startMonth = startInTz.getMonth() + 1; // 1-based
+      const startDay = startInTz.getDate();
+      const endYear = endInTz.getFullYear();
+      const endMonth = endInTz.getMonth() + 1; // 1-based
+      const endDay = endInTz.getDate();
+      
+      // Extract time components
+      const timeParts = reminder.time ? reminder.time.split(':') : ['9', '0'];
+      const hours = timeParts[0] ? parseInt(timeParts[0], 10) : 9;
+      const minutes = timeParts[1] ? parseInt(timeParts[1], 10) : 0;
+      
+      switch (reminder.frequency) {
+        case 'once':
+          if (reminder.targetDate) {
+            const target = new Date(reminder.targetDate);
+            const targetStr = target.toLocaleString("en-US", { timeZone: timezone });
+            const targetInTz = new Date(targetStr);
+            if (targetInTz >= startInTz && targetInTz <= endInTz) {
+              return targetInTz;
+            }
+          }
+          return null;
+          
+        case 'monthly':
+          if (reminder.dayOfMonth) {
+            const reminderDay = reminder.dayOfMonth;
+            // Use the month from the range (should be the same month for month filters)
+            const targetYear = startYear;
+            const targetMonth = startMonth; // 1-based
+            const lastDayOfMonth = new Date(targetYear, targetMonth, 0).getDate();
+            const targetDay = Math.min(reminderDay, lastDayOfMonth);
+            
+            // Create date in user's timezone
+            // First create a date string in the target timezone, then parse it
+            const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+            const tempDate = new Date(dateStr);
+            const targetStr = tempDate.toLocaleString("en-US", { timeZone: timezone });
+            const targetInTz = new Date(targetStr);
+            
+            if (targetInTz >= startInTz && targetInTz <= endInTz) {
+              return targetInTz;
+            }
+          }
+          return null;
+          
+        case 'yearly':
+          if (reminder.month && reminder.dayOfMonth) {
+            const reminderMonth = reminder.month; // 1-based
+            const reminderDay = reminder.dayOfMonth;
+            
+            // Check if reminder month matches the range month
+            if (reminderMonth === startMonth && startYear === endYear) {
+              const targetYear = startYear;
+              const lastDayOfMonth = new Date(targetYear, reminderMonth, 0).getDate();
+              const targetDay = Math.min(reminderDay, lastDayOfMonth);
+              
+              // Create date in user's timezone
+              // First create a date string in the target timezone, then parse it
+              const dateStr = `${targetYear}-${String(reminderMonth).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+              const tempDate = new Date(dateStr);
+              const targetStr = tempDate.toLocaleString("en-US", { timeZone: timezone });
+              const targetInTz = new Date(targetStr);
+              
+              if (targetInTz >= startInTz && targetInTz <= endInTz) {
+                return targetInTz;
+              }
+            }
+          }
+          return null;
+          
+        case 'weekly':
+          if (reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
+            // Find first matching day of week in the range
+            const currentDate = new Date(startInTz);
+            while (currentDate <= endInTz) {
+              const dayOfWeek = currentDate.getDay();
+              if (reminder.daysOfWeek.includes(dayOfWeek)) {
+                const targetDate = new Date(currentDate);
+                targetDate.setHours(hours, minutes, 0, 0);
+                return targetDate;
+              }
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+          }
+          return null;
+          
+        case 'daily':
+          // Return first day in range with the specified time
+          const firstDay = new Date(startInTz);
+          firstDay.setHours(hours, minutes, 0, 0);
+          return firstDay;
+          
+        default:
+          return null;
+      }
+    } catch (error) {
+      logger.error({ error, reminderId: reminder.id }, 'Error calculating reminder time in range');
+      return null;
     }
   }
 
