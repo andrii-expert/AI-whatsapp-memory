@@ -6544,9 +6544,21 @@ export class ActionExecutor {
       
       // If there's no specific date but we have a time, show it explicitly
       const timeLine = !dateInfo && updated.time ? `\nTime: ${updated.time}` : '';
-      
+
+      // Frequency / schedule info
+      let frequencyLine = '';
+      if (updated.frequency) {
+        const freqLabel = updated.frequency.charAt(0).toUpperCase() + updated.frequency.slice(1);
+        frequencyLine = `\nFrequency: ${freqLabel}`;
+      }
+
       // Message header is bold - reminder title is NOT bold
-      const responseMessage = `⚠️ *Reminder Updated:*\nTitle: ${updated.title || reminder.title}\n${dateInfo ? `New Date: ${dateInfo}` : ''}${timeLine}`;
+      const responseMessage =
+        `⚠️ *Reminder Updated:*\n` +
+        `Title: ${updated.title || reminder.title}` +
+        `${dateInfo ? `\nNew Date: ${dateInfo}` : ''}` +
+        `${timeLine}` +
+        `${frequencyLine}`;
 
       return {
         success: true,
