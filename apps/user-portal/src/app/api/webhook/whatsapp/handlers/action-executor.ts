@@ -5791,6 +5791,28 @@ export class ActionExecutor {
         if (!scheduleData.time) {
           scheduleData.time = '09:00';
         }
+
+        // Ensure targetDate is set for birthdays so downstream logic and DB have a concrete Date
+        if (scheduleData.month && scheduleData.dayOfMonth) {
+          const hours = parseInt(scheduleData.time?.split(':')[0] || '9', 10);
+          const minutes = parseInt(scheduleData.time?.split(':')[1] || '0', 10);
+
+          if (timezone) {
+            const targetDate = this.createDateInUserTimezone(
+              userNow.getFullYear(),
+              scheduleData.month - 1,
+              scheduleData.dayOfMonth,
+              isNaN(hours) ? 9 : hours,
+              isNaN(minutes) ? 0 : minutes,
+              timezone
+            );
+            scheduleData.targetDate = targetDate;
+          } else {
+            const targetDate = new Date(userNow.getFullYear(), scheduleData.month - 1, scheduleData.dayOfMonth);
+            targetDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
+            scheduleData.targetDate = targetDate;
+          }
+        }
       }
       
       logger.info(
