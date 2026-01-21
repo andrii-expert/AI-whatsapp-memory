@@ -13,6 +13,8 @@ export interface UsePlanLimitsReturn {
   canAddCalendar: (currentCount: number) => boolean;
   getEventsRemaining: (currentCount: number) => number | null;
   getCalendarsRemaining: (currentCount: number) => number;
+  canAddFriend: (currentCount: number) => boolean;
+  getFriendsRemaining: (currentCount: number) => number | null;
 }
 
 /**
@@ -60,6 +62,15 @@ export function usePlanLimits(): UsePlanLimitsReturn {
     },
     getCalendarsRemaining: (currentCount: number) => {
       const remaining = limits.maxCalendars - currentCount;
+      return Math.max(0, remaining);
+    },
+    canAddFriend: (currentCount: number) => {
+      if (limits.maxFriends === null || limits.maxFriends === undefined) return true;
+      return currentCount < limits.maxFriends;
+    },
+    getFriendsRemaining: (currentCount: number) => {
+      if (limits.maxFriends === null || limits.maxFriends === undefined) return null;
+      const remaining = limits.maxFriends - currentCount;
       return Math.max(0, remaining);
     },
   };

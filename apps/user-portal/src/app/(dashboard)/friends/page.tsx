@@ -60,6 +60,8 @@ import {
 import { ShareButton } from "@/components/share-button";
 import { ShareDetailsModal } from "@/components/share-details-modal";
 import { format } from "date-fns";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
 
 export default function FriendsPage() {
   const trpc = useTRPC();
@@ -187,6 +189,9 @@ export default function FriendsPage() {
       };
     });
   }, [viewAddressData, myShares, shoppingFolders, getShoppingFolderStats]);
+
+  // Plan limits for friends
+  const { limits, canAddFriend, getFriendsRemaining, tier, isLoading: isLoadingLimits } = usePlanLimits();
 
   // Mutations for managing shares (roles & removal) from the friend view
   const updateSharePermissionMutation = useMutation(
@@ -647,12 +652,29 @@ export default function FriendsPage() {
                   variant="outline"
                   size="sm"
                   className="hidden lg:flex items-center gap-1.5"
+                  disabled={
+                    isLoadingLimits ||
+                    (!canAddFriend(allAddresses.length) && (limits.maxFriends ?? null) !== null)
+                  }
                 >
                   <Plus className="h-4 w-4" />
                   Add Contact
                 </Button>
               </div>
             </div>
+            {/* Free plan limit message */}
+            {!isLoadingLimits &&
+              (limits.maxFriends ?? null) !== null &&
+              !canAddFriend(allAddresses.length) && (
+                <div className="mt-3">
+                  <UpgradePrompt
+                    feature="Friends"
+                    requiredTier="silver"
+                    variant="alert"
+                    className="border-amber-200 bg-amber-50 text-amber-900"
+                  />
+                </div>
+              )}
           </div>
 
           {/* Search and Sort Bar */}
@@ -847,8 +869,26 @@ export default function FriendsPage() {
       {/* Floating Action Button - Mobile Only */}
       <button
         onClick={() => openAddAddressModal()}
-        className="lg:hidden fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50"
+        className="lg:hidden fixed bottom-20 left-6 w-14 h-14 rounded-xl shadow-lg flex items-center justify-center transition-all z-50 disabled:opacity-60 disabled:cursor-not-allowed"
+        style={{
+          backgroundColor:
+            !isLoadingLimits &&
+            (limits.maxFriends ?? null) !== null &&
+            !canAddFriend(allAddresses.length)
+              ? '#E5E7EB'
+              : '#2563EB',
+          color:
+            !isLoadingLimits &&
+            (limits.maxFriends ?? null) !== null &&
+            !canAddFriend(allAddresses.length)
+              ? '#6B7280'
+              : '#FFFFFF',
+        }}
         title="Add Friend"
+        disabled={
+          isLoadingLimits ||
+          (!canAddFriend(allAddresses.length) && (limits.maxFriends ?? null) !== null)
+        }
       >
         <Plus className="h-6 w-6" />
       </button>

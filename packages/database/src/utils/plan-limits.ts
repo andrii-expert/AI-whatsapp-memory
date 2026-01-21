@@ -11,6 +11,7 @@ export type PlanLimits = {
   hasNotes: boolean;
   hasSharedNotes: boolean;
   hasMultipleSubCalendars: boolean;
+  maxFriends?: number | null; // null = unlimited friends
 };
 
 export type PlanTier = 'free' | 'silver' | 'gold';
@@ -26,6 +27,9 @@ export interface PlanMetadata {
  * Extract plan limits from plan metadata
  */
 export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLimits {
+  const tier = metadata?.tier as PlanTier | undefined;
+
+  // Default limits; friends default depends on tier
   const defaultLimits: PlanLimits = {
     maxEvents: 15,
     maxCalendars: 10, // Allow multiple calendars by default
@@ -33,6 +37,8 @@ export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLim
     hasNotes: false,
     hasSharedNotes: false,
     hasMultipleSubCalendars: false,
+    // Free plan: explicitly limit friends to 2 unless overridden in metadata
+    maxFriends: tier === "free" ? 2 : null,
   };
 
   if (!metadata || !metadata.limits) {
@@ -47,6 +53,7 @@ export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLim
     hasNotes: limits.hasNotes ?? defaultLimits.hasNotes,
     hasSharedNotes: limits.hasSharedNotes ?? defaultLimits.hasSharedNotes,
     hasMultipleSubCalendars: limits.hasMultipleSubCalendars ?? defaultLimits.hasMultipleSubCalendars,
+    maxFriends: limits.maxFriends ?? defaultLimits.maxFriends,
   };
 }
 

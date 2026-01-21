@@ -82,6 +82,8 @@ import {
   createNoteShare,
   getVerifiedWhatsappNumberByPhone,
   logOutgoingWhatsAppMessage,
+  getUserSubscription,
+  getPlanById,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -8805,6 +8807,42 @@ export class ActionExecutor {
         return {
           success: false,
           message: "I need to know the friend's name. Please specify the name.",
+        };
+      }
+
+      // Enforce free-plan friend limit (e.g. max 2 friends)
+      // Fetch current friends count
+      const existingFriends = await getUserFriends(this.db, this.userId);
+
+      // Default free plan limit is 2 friends; paid plans can be configured via metadata.maxFriends
+      const defaultFreeFriendLimit = 2;
+
+      // Try to load subscription & plan metadata to see if there is a specific maxFriends limit
+      let effectiveMaxFriends: number | null = null;
+      try {
+        const subscription = await getUserSubscription(this.db, this.userId);
+        if (subscription?.plan) {
+          const plan = await getPlanById(this.db, subscription.plan);
+          const metadata = (plan?.metadata as any) || null;
+          const limits = getPlanLimits(metadata);
+          effectiveMaxFriends =
+            typeof limits.maxFriends === 'number' ? limits.maxFriends : null;
+        }
+      } catch (error) {
+        logger.warn(
+          { error, userId: this.userId },
+          'Failed to resolve subscription/plan for friend limit; falling back to default free limit'
+        );
+      }
+
+      const maxFriends =
+        effectiveMaxFriends !== null ? effectiveMaxFriends : defaultFreeFriendLimit;
+
+      if (existingFriends.length >= maxFriends) {
+        return {
+          success: false,
+          message:
+            "You’ve reached the maximum number of friends for your current plan. Please upgrade your subscription in the app to add more friends.",
         };
       }
 
