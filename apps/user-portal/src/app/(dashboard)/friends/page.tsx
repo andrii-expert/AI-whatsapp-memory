@@ -118,17 +118,24 @@ export default function FriendsPage() {
   const { data: allAddresses = [], isLoading: isLoadingAddresses } = useQuery(
     trpc.friends.list.queryOptions()
   );
-  // TODO: Add friends sharing functionality later if needed
-  // const { data: myShares = [] } = useQuery(
-  //   trpc.addressSharing.getMyShares.queryOptions()
-  // );
-  // const { data: sharedResources } = useQuery(
-  //   trpc.addressSharing.getSharedWithMe.queryOptions()
-  // );
-  const myShares: any[] = [];
+
+  // Fetch shopping list folders and items so we can show what is shared with each friend
+  const { data: shoppingFolders = [] } = useQuery(
+    trpc.shoppingList.folders.list.queryOptions()
+  );
+  const { data: shoppingItems = [] } = useQuery(
+    trpc.shoppingList.list.queryOptions({})
+  );
+
+  // Fetch all shares owned by the current user (tasks / shopping list folders, etc.)
+  const { data: myShares = [] } = useQuery(
+    trpc.taskSharing.getMyShares.queryOptions()
+  );
+
+  // Friends page currently doesn't use sharedResources for addresses
   const sharedResources: any = { addresses: [] };
 
-  // Extract shared addresses and folders from sharedResources
+  // Extract shared addresses and folders from sharedResources (not used yet for friends)
   const sharedAddresses = useMemo(() => {
     return (sharedResources?.addresses || []).map((address: any) => ({
       ...address,
@@ -137,6 +144,47 @@ export default function FriendsPage() {
       ownerId: address.shareInfo?.ownerId,
     }));
   }, [sharedResources]);
+
+  // Helper to compute shopping list stats for a given folder
+  const getShoppingFolderStats = useMemo(() => {
+    return (folderId: string) => {
+      const folderItems = shoppingItems.filter(
+        (item: any) => item.folderId === folderId && item.status !== "archived"
+      );
+      const totalItems = folderItems.length;
+      const openItems = folderItems.filter(
+        (item: any) => item.status === "open" || !item.status
+      ).length;
+      return { openItems, totalItems };
+    };
+  }, [shoppingItems]);
+
+  // For the currently viewed friend, compute the shopping lists shared with them
+  const friendSharedLists = useMemo(() => {
+    if (!viewAddressData?.connectedUserId) return [];
+
+    const friendUserId = viewAddressData.connectedUserId;
+    // Filter shares where this friend is the recipient and the resource is a shopping list folder
+    const sharesForFriend = myShares.filter(
+      (share: any) =>
+        share.resourceType === "shopping_list_folder" &&
+        share.sharedWithUser &&
+        share.sharedWithUser.id === friendUserId
+    );
+
+    return sharesForFriend.map((share: any) => {
+      const folder = shoppingFolders.find((f: any) => f.id === share.resourceId);
+      const stats = getShoppingFolderStats(share.resourceId);
+      return {
+        id: share.id,
+        folderId: share.resourceId,
+        name: folder?.name || "Shopping list",
+        permission: share.permission || "view",
+        openItems: stats.openItems,
+        totalItems: stats.totalItems,
+      };
+    });
+  }, [viewAddressData, myShares, shoppingFolders, getShoppingFolderStats]);
 
 
   // Filter addresses
@@ -291,7 +339,7 @@ export default function FriendsPage() {
               variant: "destructive",
             });
             return; // Don't create the contact
-          } else {
+          } else if (searchResults[0]?.id) {
             // User exists, use the first result
             finalConnectedUserId = searchResults[0].id;
           }
@@ -606,7 +654,7 @@ export default function FriendsPage() {
         </div>
 
         {/* Friends List */}
-        <div className="px-4 pb-20">
+        <div className="px-4 pb-20 pt-4">
           <div className="space-y-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -881,54 +929,75 @@ export default function FriendsPage() {
           <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
             {viewAddressData?.connectedUser && (
               <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[13px] font-medium text-gray-900">Connected User</Label>
+                <Label className="text-[13px] font-medium text-gray-900">Friend</Label>
                 <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
                   <div className="font-medium text-gray-900">
-                    {viewAddressData.connectedUser.firstName || viewAddressData.connectedUser.name || "User"}
+                    {viewAddressData.connectedUser.firstName ||
+                      viewAddressData.connectedUser.name ||
+                      viewAddressData.name ||
+                      "User"}
                   </div>
                   {viewAddressData.connectedUser.email && (
                     <div className="text-[13px] text-gray-500 mt-1 flex items-center gap-1.5">
                       <Mail className="h-3 w-3" />
-                      {viewAddressData.connectedUser.email}
+                      <span>{viewAddressData.connectedUser.email}</span>
                     </div>
                   )}
                   {viewAddressData.connectedUser.phone && (
                     <div className="text-[13px] text-gray-500 mt-1 flex items-center gap-1.5">
                       <Phone className="h-3 w-3" />
-                      {viewAddressData.connectedUser.phone}
+                      <span>{viewAddressData.connectedUser.phone}</span>
                     </div>
                   )}
                 </div>
               </div>
             )}
+
+            {/* Shared shopping lists with this friend */}
+            {viewAddressData?.connectedUserId && friendSharedLists.length > 0 && (
+              <div className="space-y-2 sm:space-y-3">
+                <Label className="text-[13px] font-medium text-gray-900">Shared with</Label>
+                <div className="space-y-2">
+                  {friendSharedLists.map((list) => {
+                    const remaining = Math.max(
+                      list.totalItems - list.openItems,
+                      0
+                    );
+                    return (
+                      <div
+                        key={list.id}
+                        className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5"
+                      >
+                        <div>
+                          <div className="text-[13px] font-semibold text-gray-900">
+                            {list.name}
+                          </div>
+                          {list.totalItems > 0 && (
+                            <div className="mt-1">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[11px] font-medium">
+                                {remaining} out of {list.totalItems} remaining
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-[12px] text-gray-600 font-medium">
+                          {list.permission === "edit" ? "Can edit" : "Can view"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {viewAddressData?.connectedUserId && friendSharedLists.length === 0 && (
+              <div className="text-[13px] text-gray-500">
+                This friend doesn't have any shared shopping lists yet.
+              </div>
+            )}
           </div>
           
           <AlertDialogFooter className="flex-col gap-2 sm:gap-2 pt-2 sm:pt-4">
-            {!viewAddressData?.isSharedWithMe && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setIsViewAddressModalOpen(false);
-                    if (viewAddressData) openEditAddressModal(viewAddressData);
-                  }}
-                  className="w-full border-gray-300 h-10 sm:h-11 text-[13px] sm:text-[15px]"
-                >
-                  Edit
-                </Button>
-                <Button
-                  onClick={() => {
-                    setIsViewAddressModalOpen(false);
-                    if (viewAddressData) {
-                      openShareModal("address", viewAddressData.id, viewAddressData.name);
-                    }
-                  }}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white h-10 sm:h-11 text-[13px] sm:text-[15px]"
-                >
-                  Share
-                </Button>
-              </>
-            )}
             <AlertDialogCancel 
               onClick={() => setIsViewAddressModalOpen(false)}
               className="w-full border-gray-300 h-10 sm:h-11 text-sm sm:text-base"
