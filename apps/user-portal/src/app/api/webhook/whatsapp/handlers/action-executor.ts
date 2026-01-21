@@ -4131,17 +4131,17 @@ export class ActionExecutor {
           } else {
             targetInTz = new Date(target);
           }
-          const targetYear = targetInTz.getFullYear();
-          const targetMonth = targetInTz.getMonth() + 1;
-          const targetDay = targetInTz.getDate();
+          
+          // Normalize times to start of day for accurate comparison
+          const targetNormalized = new Date(targetInTz);
+          targetNormalized.setHours(0, 0, 0, 0);
+          const startNormalized = new Date(startInTz);
+          startNormalized.setHours(0, 0, 0, 0);
+          const endNormalized = new Date(endInTz);
+          endNormalized.setHours(23, 59, 59, 999);
           
           // Check if target date is within range
-          if (targetYear < startYear || targetYear > endYear) return false;
-          if (targetYear === startYear && targetMonth < startMonth) return false;
-          if (targetYear === startYear && targetMonth === startMonth && targetDay < startDay) return false;
-          if (targetYear === endYear && targetMonth > endMonth) return false;
-          if (targetYear === endYear && targetMonth === endMonth && targetDay > endDay) return false;
-          return true;
+          return targetNormalized >= startNormalized && targetNormalized <= endNormalized;
         }
         if (reminder.daysFromNow !== null && reminder.daysFromNow !== undefined) {
           // Calculate the target date from daysFromNow
@@ -4187,21 +4187,31 @@ export class ActionExecutor {
       case "monthly":
         // Check if any date in the range matches the day of month
         const reminderDay = reminder.dayOfMonth ?? 1;
-        const currentMonthDate = new Date(startInTz);
-        while (currentMonthDate <= endInTz) {
-          const year = currentMonthDate.getFullYear();
-          const month = currentMonthDate.getMonth() + 1;
-          const lastDayOfMonth = new Date(year, month, 0).getDate();
-          const targetDay = Math.min(reminderDay, lastDayOfMonth);
+        
+        // For monthly reminders, we need to check only months that fall within the date range
+        // Start from the first day of the start month
+        const startYear = startInTz.getFullYear();
+        const startMonth = startInTz.getMonth() + 1; // 1-based
+        const endYear = endInTz.getFullYear();
+        const endMonth = endInTz.getMonth() + 1; // 1-based
+        
+        // Iterate through each month in the range
+        for (let year = startYear; year <= endYear; year++) {
+          const monthStart = year === startYear ? startMonth : 1;
+          const monthEnd = year === endYear ? endMonth : 12;
           
-          // Check if this month's target day is in range
-          const targetDate = new Date(year, month - 1, targetDay);
-          if (targetDate >= startInTz && targetDate <= endInTz) {
-            return true;
+          for (let month = monthStart; month <= monthEnd; month++) {
+            // Check if the reminder day in this month falls within the range
+            const lastDayOfMonth = new Date(year, month, 0).getDate();
+            const targetDay = Math.min(reminderDay, lastDayOfMonth);
+            const targetDate = new Date(year, month - 1, targetDay);
+            targetDate.setHours(0, 0, 0, 0);
+            
+            // Check if this month's target day is within the range
+            if (targetDate >= startInTz && targetDate <= endInTz) {
+              return true;
+            }
           }
-          // Move to next month
-          currentMonthDate.setMonth(currentMonthDate.getMonth() + 1);
-          currentMonthDate.setDate(1);
         }
         return false;
         
@@ -4331,14 +4341,28 @@ export class ActionExecutor {
             end: endOfWeek(userNow, { weekStartsOn: 0 }),
           };
         } else if (monthIndexFromFilter !== -1) {
-          // Specific month requested (e.g., "april", "may")
+          // Specific month requested (e.g., "april", "may", "october")
           const currentYear = userNow.getFullYear();
           const currentMonth = userNow.getMonth(); // 0-based
           const targetMonth = monthIndexFromFilter; // 0-based
           const targetYear = targetMonth < currentMonth ? currentYear + 1 : currentYear;
-          const start = startOfMonth(new Date(targetYear, targetMonth, 1));
-          const end = endOfMonth(new Date(targetYear, targetMonth, 1));
+          
+          // Create date range for the specific month
+          // Use date-fns functions which handle timezones correctly
+          const monthDate = new Date(targetYear, targetMonth, 1);
+          const start = startOfMonth(monthDate);
+          const end = endOfMonth(monthDate);
+          
           dateFilterRange = { start, end };
+          
+          logger.info({
+            userId: this.userId,
+            targetMonth: targetMonth + 1, // 1-based for logging
+            targetYear,
+            startISO: start.toISOString(),
+            endISO: end.toISOString(),
+            userTimezone,
+          }, 'Created date range for specific month filter');
         } else if (timeFilter.includes('this month')) {
           dateFilterRange = {
             start: startOfMonth(userNow),
