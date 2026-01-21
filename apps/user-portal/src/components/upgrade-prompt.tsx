@@ -34,6 +34,7 @@ const TIER_INFO = {
 export function UpgradePrompt({ feature, requiredTier, variant = 'alert', className }: UpgradePromptProps) {
   const tierInfo = TIER_INFO[requiredTier];
   const Icon = tierInfo.icon;
+  const isFriendsFeature = feature.toLowerCase() === 'friends';
 
   if (variant === 'inline') {
     return (
@@ -93,7 +94,13 @@ export function UpgradePrompt({ feature, requiredTier, variant = 'alert', classN
       </AlertTitle>
       <AlertDescription className="flex items-center justify-between mt-2">
         <span className="text-sm">
-          Upgrade to {tierInfo.name} to access {feature.toLowerCase()}
+          {isFriendsFeature ? (
+            <>
+              On the Free plan you can add up to 2 friends. Upgrade to {tierInfo.name} to add more friends and make planning your trips even easier.
+            </>
+          ) : (
+            <>Upgrade to {tierInfo.name} to access {feature.toLowerCase()}</>
+          )}
         </span>
         <Button asChild size="sm" variant="default">
           <Link href="/billing">
