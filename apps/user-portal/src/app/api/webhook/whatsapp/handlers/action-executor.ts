@@ -4237,7 +4237,18 @@ export class ActionExecutor {
         
         // Support specific month names (e.g., "april", "may")
         const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
-        const monthIndexFromFilter = monthNames.findIndex(m => timeFilter === m || timeFilter.includes(m));
+        // Extract month name from filter - handle cases like "october - category: birthdays"
+        // First, try to extract just the month name from the beginning of the filter string
+        let extractedMonth: string | null = null;
+        for (const month of monthNames) {
+          // Match month at the start of the string, optionally followed by space, dash, or end of string
+          const monthMatch = timeFilter.match(new RegExp(`^(${month})(?:\\s|\\s*-|$)`, 'i'));
+          if (monthMatch) {
+            extractedMonth = month;
+            break;
+          }
+        }
+        const monthIndexFromFilter = extractedMonth ? monthNames.indexOf(extractedMonth) : -1;
 
         if (timeFilter === 'today' || timeFilter.includes('today')) {
           dateFilterRange = {
@@ -4411,11 +4422,27 @@ export class ActionExecutor {
         let filterTitle = 'Reminders';
         if (parsed.listFilter) {
           const filter = parsed.listFilter.toLowerCase();
-          if (filter === 'today') filterTitle = "Todays Reminders";
-          else if (filter === 'tomorrow') filterTitle = "Tomorrows Reminders";
-          else if (filter.includes('week')) filterTitle = "This Weeks Reminders";
-          else if (filter.includes('month')) filterTitle = "This Months Reminders";
-          else filterTitle = `Reminders for ${parsed.listFilter}`;
+          if (filter === 'today') filterTitle = "Today's Reminders";
+          else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
+          else if (filter.includes('week')) filterTitle = "This Week's Reminders";
+          else if (filter.includes('month')) filterTitle = "This Month's Reminders";
+          else {
+            // Check if it's a month name and capitalize it
+            const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+            const capitalizedMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            const monthIndex = monthNames.findIndex(m => {
+              // Extract just the month part if there's additional text
+              const monthMatch = filter.match(new RegExp(`^(${m})(?:\\s|\\s*-|$)`, 'i'));
+              return monthMatch !== null;
+            });
+            if (monthIndex !== -1) {
+              filterTitle = `Reminders for ${capitalizedMonths[monthIndex]}`;
+            } else {
+              // Capitalize first letter of other filters
+              const capitalized = parsed.listFilter.charAt(0).toUpperCase() + parsed.listFilter.slice(1).toLowerCase();
+              filterTitle = `Reminders for ${capitalized}`;
+            }
+          }
         }
         return {
           success: true,
@@ -4455,7 +4482,23 @@ export class ActionExecutor {
         else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
         else if (filter.includes('week')) filterTitle = "This Week's Reminders";
         else if (filter.includes('month')) filterTitle = "This Month's Reminders";
-        else filterTitle = `Reminders for ${parsed.listFilter}`;
+        else {
+          // Check if it's a month name and capitalize it
+          const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+          const capitalizedMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+          const monthIndex = monthNames.findIndex(m => {
+            // Extract just the month part if there's additional text
+            const monthMatch = filter.match(new RegExp(`^(${m})(?:\\s|\\s*-|$)`, 'i'));
+            return monthMatch !== null;
+          });
+          if (monthIndex !== -1) {
+            filterTitle = `Reminders for ${capitalizedMonths[monthIndex]}`;
+          } else {
+            // Capitalize first letter of other filters
+            const capitalized = parsed.listFilter.charAt(0).toUpperCase() + parsed.listFilter.slice(1).toLowerCase();
+            filterTitle = `Reminders for ${capitalized}`;
+          }
+        }
       }
       
       // Message header is bold - only header and list numbers are bold
