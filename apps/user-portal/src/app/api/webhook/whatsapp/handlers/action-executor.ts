@@ -5293,6 +5293,98 @@ export class ActionExecutor {
       } else if (scheduleLower.includes('later')) {
         // "later" means once, no specific time/date
         result.frequency = 'once';
+      } else if (scheduleLower.includes('next week')) {
+        // Handle "next week" optionally with a weekday (e.g., "next week Thursday")
+        const weekdayMatch = scheduleLower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+        const targetDow = weekdayMatch ? dayNames.indexOf(weekdayMatch[1].toLowerCase()) : null;
+
+        // Pick a time if specified, else default to 09:00
+        let targetTime = '09:00';
+        const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+        if (timeMatch && timeMatch[1]) {
+          targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+        }
+
+        if (timezone) {
+          const currentTime = this.getCurrentTimeInTimezone(timezone);
+          const currentDate = new Date(currentTime.year, currentTime.month, currentTime.day);
+          let daysToAdd = 7; // base for "next week"
+
+          if (targetDow !== null) {
+            const currentDow = currentDate.getDay();
+            const diff = (targetDow - currentDow + 7) % 7;
+            daysToAdd += diff === 0 ? 7 : diff; // ensure it's the week after, not this week
+          }
+
+          const targetDate = new Date(currentDate);
+          targetDate.setDate(currentDate.getDate() + daysToAdd);
+
+          const [hours, minutes] = targetTime.split(':').map(Number);
+          result.targetDate = this.createDateInUserTimezone(
+            targetDate.getFullYear(),
+            targetDate.getMonth(),
+            targetDate.getDate(),
+            hours,
+            minutes,
+            timezone
+          );
+          result.time = targetTime;
+        } else {
+          // No timezone: use daysFromNow
+          let daysToAdd = 7;
+          if (targetDow !== null) {
+            const now = new Date();
+            const currentDow = now.getDay();
+            const diff = (targetDow - currentDow + 7) % 7;
+            daysToAdd += diff === 0 ? 7 : diff;
+          }
+          result.daysFromNow = daysToAdd;
+          result.time = targetTime;
+        }
+      } else if (scheduleLower.includes('next month')) {
+        // Handle "next month 3rd" or "next month 15"
+        const dayMatch = scheduleLower.match(/next\s+month\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
+        const dayNum = dayMatch && dayMatch[1] ? parseInt(dayMatch[1], 10) : null;
+
+        // Pick a time if specified, else default to 09:00
+        let targetTime = '09:00';
+        const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+        if (timeMatch && timeMatch[1]) {
+          targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+        }
+
+        if (timezone) {
+          const currentTime = this.getCurrentTimeInTimezone(timezone);
+          const currentYear = currentTime.year;
+          const currentMonth = currentTime.month; // 0-based
+          const targetMonth = currentMonth + 1;
+          const targetYear = targetMonth > 11 ? currentYear + 1 : currentYear;
+          const monthIndex = targetMonth % 12;
+
+          const lastDay = new Date(targetYear, monthIndex + 1, 0).getDate();
+          const chosenDay = dayNum ? Math.min(dayNum, lastDay) : Math.min(currentTime.day, lastDay);
+
+          const [hours, minutes] = targetTime.split(':').map(Number);
+          result.targetDate = this.createDateInUserTimezone(
+            targetYear,
+            monthIndex,
+            chosenDay,
+            hours,
+            minutes,
+            timezone
+          );
+          result.time = targetTime;
+        } else {
+          const now = new Date();
+          const targetYear = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+          const targetMonth = (now.getMonth() + 1) % 12;
+          const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+          const chosenDay = dayNum ? Math.min(dayNum, lastDay) : Math.min(now.getDate(), lastDay);
+
+          const targetDate = new Date(targetYear, targetMonth, chosenDay);
+          result.targetDate = targetDate;
+          result.time = targetTime;
+        }
       } else if (/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(scheduleLower)) {
         // Single weekday (e.g. "Friday") without "every"/"weekly" → treat as next occurrence of that day
         const weekdayMatch = scheduleLower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
