@@ -5807,59 +5807,10 @@ export class ActionExecutor {
           scheduleData.time = '09:00';
         }
 
-        // Ensure targetDate is set for birthdays so downstream logic and DB have a concrete Date
-        if (scheduleData.month && scheduleData.dayOfMonth) {
-          const hours = parseInt(scheduleData.time?.split(':')[0] || '9', 10);
-          const minutes = parseInt(scheduleData.time?.split(':')[1] || '0', 10);
-
-          // Use the current year in the user's timezone (or server year as fallback)
-          let baseYear: number;
-          if (timezone) {
-            const currentTime = this.getCurrentTimeInTimezone(timezone);
-            baseYear = currentTime.year;
-          } else {
-            baseYear = new Date().getFullYear();
-          }
-
-          if (timezone) {
-            const targetDate = this.createDateInUserTimezone(
-              baseYear,
-              scheduleData.month - 1,
-              scheduleData.dayOfMonth,
-              isNaN(hours) ? 9 : hours,
-              isNaN(minutes) ? 0 : minutes,
-              timezone
-            );
-            scheduleData.targetDate = targetDate;
-          } else {
-            const targetDate = new Date(baseYear, scheduleData.month - 1, scheduleData.dayOfMonth);
-            targetDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
-            scheduleData.targetDate = targetDate;
-          }
-        }
-
-        // If targetDate still missing, build from month/day in user timezone or server time
-        if (!scheduleData.targetDate && scheduleData.month && scheduleData.dayOfMonth) {
-          const hours = parseInt(scheduleData.time?.split(':')[0] || '9', 10);
-          const minutes = parseInt(scheduleData.time?.split(':')[1] || '0', 10);
-          if (timezone) {
-            const currentTime = this.getCurrentTimeInTimezone(timezone);
-            const targetDate = this.createDateInUserTimezone(
-              currentTime.year,
-              scheduleData.month - 1,
-              scheduleData.dayOfMonth,
-              isNaN(hours) ? 9 : hours,
-              isNaN(minutes) ? 0 : minutes,
-              timezone
-            );
-            scheduleData.targetDate = targetDate;
-          } else {
-            const now = new Date();
-            const targetDate = new Date(now.getFullYear(), scheduleData.month - 1, scheduleData.dayOfMonth);
-            targetDate.setHours(isNaN(hours) ? 9 : hours, isNaN(minutes) ? 0 : minutes, 0, 0);
-            scheduleData.targetDate = targetDate;
-          }
-        }
+        // For birthdays we store month/day + time; targetDate is optional and can remain unset.
+        // Clear targetDate/daysFromNow to avoid conflicts for yearly reminders.
+        scheduleData.targetDate = undefined;
+        scheduleData.daysFromNow = undefined;
       }
       
       logger.info(
