@@ -5298,12 +5298,13 @@ export class ActionExecutor {
         const weekdayMatch = scheduleLower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
         const targetDow = weekdayMatch ? dayNames.indexOf(weekdayMatch[1].toLowerCase()) : null;
 
-        // Pick a time if specified, else default to 09:00
-        let targetTime = '09:00';
+        // Pick a time if specified; otherwise leave undefined so update flow can keep existing time
+        let targetTime: string | undefined = undefined;
         const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
         if (timeMatch && timeMatch[1]) {
           targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
         }
+        const targetTimeForDate = targetTime || '09:00'; // fallback only for constructing a Date
 
         if (timezone) {
           const currentTime = this.getCurrentTimeInTimezone(timezone);
@@ -5328,7 +5329,9 @@ export class ActionExecutor {
             minutes,
             timezone
           );
-          result.time = targetTime;
+          if (targetTime) {
+            result.time = targetTime;
+          }
         } else {
           // No timezone: use daysFromNow
           let daysToAdd = 7;
@@ -5339,19 +5342,22 @@ export class ActionExecutor {
             daysToAdd += diff === 0 ? 7 : diff;
           }
           result.daysFromNow = daysToAdd;
-          result.time = targetTime;
+          if (targetTime) {
+            result.time = targetTime;
+          }
         }
       } else if (scheduleLower.includes('next month')) {
         // Handle "next month 3rd" or "next month 15"
         const dayMatch = scheduleLower.match(/next\s+month\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
         const dayNum = dayMatch && dayMatch[1] ? parseInt(dayMatch[1], 10) : null;
 
-        // Pick a time if specified, else default to 09:00
-        let targetTime = '09:00';
+        // Pick a time if specified; otherwise leave undefined so update flow can keep existing time
+        let targetTime: string | undefined = undefined;
         const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
         if (timeMatch && timeMatch[1]) {
           targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
         }
+        const targetTimeForDate = targetTime || '09:00'; // fallback only for constructing a Date
 
         if (timezone) {
           const currentTime = this.getCurrentTimeInTimezone(timezone);
@@ -5364,7 +5370,7 @@ export class ActionExecutor {
           const lastDay = new Date(targetYear, monthIndex + 1, 0).getDate();
           const chosenDay = dayNum ? Math.min(dayNum, lastDay) : Math.min(currentTime.day, lastDay);
 
-          const [hours, minutes] = targetTime.split(':').map(Number);
+          const [hours, minutes] = targetTimeForDate.split(':').map(Number);
           result.targetDate = this.createDateInUserTimezone(
             targetYear,
             monthIndex,
@@ -5373,7 +5379,9 @@ export class ActionExecutor {
             minutes,
             timezone
           );
-          result.time = targetTime;
+          if (targetTime) {
+            result.time = targetTime;
+          }
         } else {
           const now = new Date();
           const targetYear = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
@@ -5383,7 +5391,9 @@ export class ActionExecutor {
 
           const targetDate = new Date(targetYear, targetMonth, chosenDay);
           result.targetDate = targetDate;
-          result.time = targetTime;
+          if (targetTime) {
+            result.time = targetTime;
+          }
         }
       } else if (/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(scheduleLower)) {
         // Single weekday (e.g. "Friday") without "every"/"weekly" → treat as next occurrence of that day
