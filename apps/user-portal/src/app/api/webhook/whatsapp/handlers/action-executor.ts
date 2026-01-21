@@ -4220,6 +4220,10 @@ export class ActionExecutor {
         // Calculate date filter range based on filter type using user's timezone
         let dateFilterRange: { start: Date; end: Date } | null = null;
         
+        // Support specific month names (e.g., "april", "may")
+        const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+        const monthIndexFromFilter = monthNames.findIndex(m => timeFilter === m || timeFilter.includes(m));
+
         if (timeFilter === 'today' || timeFilter.includes('today')) {
           dateFilterRange = {
             start: startOfDay(userNow),
@@ -4236,6 +4240,15 @@ export class ActionExecutor {
             start: startOfWeek(userNow, { weekStartsOn: 0 }), // Sunday
             end: endOfWeek(userNow, { weekStartsOn: 0 }),
           };
+        } else if (monthIndexFromFilter !== -1) {
+          // Specific month requested (e.g., "april", "may")
+          const currentYear = userNow.getFullYear();
+          const currentMonth = userNow.getMonth(); // 0-based
+          const targetMonth = monthIndexFromFilter; // 0-based
+          const targetYear = targetMonth < currentMonth ? currentYear + 1 : currentYear;
+          const start = startOfMonth(new Date(targetYear, targetMonth, 1));
+          const end = endOfMonth(new Date(targetYear, targetMonth, 1));
+          dateFilterRange = { start, end };
         } else if (timeFilter.includes('this month') || timeFilter.includes('month')) {
           dateFilterRange = {
             start: startOfMonth(userNow),
