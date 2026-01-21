@@ -696,6 +696,148 @@ export class CalendarService implements ICalendarService {
         throw new Error('Event not found. Please provide more details about which event to update.');
       }
 
+      // Check if the event title is generic/ambiguous
+      const eventTitle = (intent.targetEventTitle || intent.title || '').toLowerCase().trim();
+      const genericTitles = ['event', 'meeting', 'meeting with', 'appointment', 'call', 'call with'];
+      const isGenericTitle = genericTitles.some(generic => 
+        eventTitle === generic || 
+        eventTitle === `${generic} ` ||
+        eventTitle.startsWith(`${generic} `) ||
+        eventTitle === generic.replace(' with', '')
+      );
+
+      // If multiple events found AND title is generic, ask user to clarify
+      if (targetEvents.length > 1 && isGenericTitle) {
+        logger.warn(
+          {
+            userId,
+            eventCount: targetEvents.length,
+            eventTitles: targetEvents.map(e => e.title),
+            intentTitle: intent.targetEventTitle || intent.title,
+            isGenericTitle,
+          },
+          'Multiple events found with generic title - asking user to clarify'
+        );
+
+        // Get calendar timezone for formatting
+        const calendarTimezone = await this.getUserTimezone(userId, calendarConnection);
+
+        // Format upcoming events for the user message
+        const now = new Date();
+        const upcomingEvents = targetEvents
+          .filter(e => new Date(e.start) >= now)
+          .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+          .slice(0, 5); // Limit to 5 most relevant
+
+        // Format date for display
+        const formatEventDate = (date: Date) => {
+          const eventDate = new Date(date);
+          const dateStr = eventDate.toLocaleDateString('en-US', {
+            day: 'numeric',
+            month: 'short',
+            timeZone: calendarTimezone,
+          });
+          const timeStr = eventDate.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: calendarTimezone,
+          });
+          return `${dateStr} at ${timeStr}`;
+        };
+
+        if (upcomingEvents.length > 0) {
+          const eventsList = upcomingEvents
+            .map((e, idx) => `${idx + 1}. ${e.title} - ${formatEventDate(e.start)}`)
+            .join('\n');
+          
+          throw new Error(
+            `I found multiple meetings matching "${intent.targetEventTitle || intent.title || 'your request'}". ` +
+            `Could you please specify which meeting you'd like to move? Here are your upcoming meetings:\n\n${eventsList}\n\n` +
+            `Please reply with the meeting name or number (e.g., "Meeting with Drala" or "1").`
+          );
+        } else {
+          // All events are in the past, show recent ones
+          const recentEvents = targetEvents
+            .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime())
+            .slice(0, 5);
+          
+          const eventsList = recentEvents
+            .map((e, idx) => `${idx + 1}. ${e.title} - ${formatEventDate(e.start)}`)
+            .join('\n');
+          
+          throw new Error(
+            `I found multiple meetings matching "${intent.targetEventTitle || intent.title || 'your request'}". ` +
+            `Could you please specify which meeting you'd like to move? Here are your recent meetings:\n\n${eventsList}\n\n` +
+            `Please reply with the meeting name or number (e.g., "Meeting with Drala" or "1").`
+          );
+        }
+      }
+
+      // Check if found events don't match the title well (when title is not generic)
+      if (!isGenericTitle && targetEvents.length > 0 && eventTitle) {
+        // Check if any of the found events actually match the title closely
+        const titleWords = eventTitle.split(/\s+/).filter(w => w.length > 2); // Filter out short words
+        const hasGoodMatch = targetEvents.some(event => {
+          const eventTitleLower = event.title.toLowerCase();
+          // Check if all significant words from intent title appear in event title
+          return titleWords.every(word => eventTitleLower.includes(word)) ||
+                 eventTitleLower.includes(eventTitle) ||
+                 eventTitle.includes(eventTitleLower);
+        });
+
+        // If no good match found and we have multiple events, ask for clarification
+        if (!hasGoodMatch && targetEvents.length > 1) {
+          logger.warn(
+            {
+              userId,
+              eventCount: targetEvents.length,
+              eventTitles: targetEvents.map(e => e.title),
+              intentTitle: intent.targetEventTitle || intent.title,
+              hasGoodMatch,
+            },
+            'Found events do not match title well - asking user to clarify'
+          );
+
+          const now = new Date();
+          const upcomingEvents = targetEvents
+            .filter(e => new Date(e.start) >= now)
+            .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+            .slice(0, 5);
+
+          // Get calendar timezone for formatting
+          const calendarTimezone = await this.getUserTimezone(userId, calendarConnection);
+
+          const formatEventDate = (date: Date) => {
+            const eventDate = new Date(date);
+            const dateStr = eventDate.toLocaleDateString('en-US', {
+              day: 'numeric',
+              month: 'short',
+              timeZone: calendarTimezone,
+            });
+            const timeStr = eventDate.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+              timeZone: calendarTimezone,
+            });
+            return `${dateStr} at ${timeStr}`;
+          };
+
+          if (upcomingEvents.length > 0) {
+            const eventsList = upcomingEvents
+              .map((e, idx) => `${idx + 1}. ${e.title} - ${formatEventDate(e.start)}`)
+              .join('\n');
+            
+            throw new Error(
+              `I couldn't find a meeting that exactly matches "${intent.targetEventTitle || intent.title}". ` +
+              `Could you please specify which meeting you'd like to move? Here are your upcoming meetings:\n\n${eventsList}\n\n` +
+              `Please reply with the meeting name or number (e.g., "Meeting with Drala" or "1").`
+            );
+          }
+        }
+      }
+
       // If multiple events found, try to select the most relevant one
       let targetEvent: CalendarEvent;
       if (targetEvents.length > 1) {
