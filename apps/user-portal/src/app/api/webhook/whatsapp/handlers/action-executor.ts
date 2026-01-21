@@ -4162,15 +4162,31 @@ export class ActionExecutor {
         const reminderMonth = reminder.month ?? 1;
         const reminderDayOfMonth = reminder.dayOfMonth ?? 1;
         
-        // Check each year in the range
+        // For yearly reminders, compare month/day components directly to avoid timezone issues
+        // Check if the reminder's month/day falls within the date range
+        // We need to check all years in the range, but compare by month/day components
+        
+        // If range spans multiple years, check each year
         for (let year = startYear; year <= endYear; year++) {
-          const lastDay = new Date(year, reminderMonth, 0).getDate();
-          const targetDay = Math.min(reminderDayOfMonth, lastDay);
-          const targetDate = new Date(year, reminderMonth - 1, targetDay);
+          // Check if this year's occurrence falls within the range
+          // Compare by month/day components, not full dates
           
-          if (targetDate >= startInTz && targetDate <= endInTz) {
-            return true;
+          // If reminder month is before start month, or after end month, skip this year
+          if (year === startYear && reminderMonth < startMonth) continue;
+          if (year === endYear && reminderMonth > endMonth) continue;
+          
+          // If same month as start, check day
+          if (year === startYear && reminderMonth === startMonth) {
+            if (reminderDayOfMonth < startDay) continue;
           }
+          
+          // If same month as end, check day
+          if (year === endYear && reminderMonth === endMonth) {
+            if (reminderDayOfMonth > endDay) continue;
+          }
+          
+          // If we get here, the reminder falls within the range
+          return true;
         }
         return false;
         
