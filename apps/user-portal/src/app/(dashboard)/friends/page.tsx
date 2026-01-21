@@ -176,15 +176,56 @@ export default function FriendsPage() {
       const folder = shoppingFolders.find((f: any) => f.id === share.resourceId);
       const stats = getShoppingFolderStats(share.resourceId);
       return {
-        id: share.id,
+        shareId: share.id,
         folderId: share.resourceId,
         name: folder?.name || "Shopping list",
-        permission: share.permission || "view",
+        icon: folder?.icon,
+        color: folder?.color,
+        permission: (share.permission as "view" | "edit") || "view",
         openItems: stats.openItems,
         totalItems: stats.totalItems,
       };
     });
   }, [viewAddressData, myShares, shoppingFolders, getShoppingFolderStats]);
+
+  // Mutations for managing shares (roles & removal) from the friend view
+  const updateSharePermissionMutation = useMutation(
+    trpc.taskSharing.updatePermission.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getMyShares.queryKey() });
+        toast({
+          title: "Permission updated",
+          description: "Share permission has been updated.",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update permission.",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
+  const deleteShareMutation = useMutation(
+    trpc.taskSharing.deleteShare.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.taskSharing.getMyShares.queryKey() });
+        toast({
+          title: "Share removed",
+          description: "This friend no longer has access.",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to remove sharing.",
+          variant: "destructive",
+        });
+      },
+    })
+  );
 
 
   // Filter addresses
@@ -963,25 +1004,57 @@ export default function FriendsPage() {
                       list.totalItems - list.openItems,
                       0
                     );
+                    const bgColor = "#FCE7F3";
                     return (
                       <div
-                        key={list.id}
-                        className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5"
+                        key={list.shareId}
+                        className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2.5"
                       >
-                        <div>
-                          <div className="text-[13px] font-semibold text-gray-900">
-                            {list.name}
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: bgColor }}
+                          >
+                            <span className="text-xl">{list.icon || "🎂"}</span>
                           </div>
-                          {list.totalItems > 0 && (
-                            <div className="mt-1">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[11px] font-medium">
-                                {remaining} out of {list.totalItems} remaining
-                              </span>
+                          <div>
+                            <div className="text-[13px] font-semibold text-gray-900">
+                              {list.name}
                             </div>
-                          )}
+                            {list.totalItems > 0 && (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[11px] font-medium">
+                                  {remaining} out of {list.totalItems} remaining
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-[12px] text-gray-600 font-medium">
-                          {list.permission === "edit" ? "Can edit" : "Can view"}
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={list.permission}
+                            onValueChange={(value: "view" | "edit") =>
+                              updateSharePermissionMutation.mutate({ shareId: list.shareId, permission: value })
+                            }
+                            disabled={updateSharePermissionMutation.isPending}
+                          >
+                            <SelectTrigger className="w-[110px] h-8 border border-gray-200 bg-white text-[12px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="view">Can view</SelectItem>
+                              <SelectItem value="edit">Can edit</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => deleteShareMutation.mutate({ shareId: list.shareId })}
+                            title="Remove sharing"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
                     );
