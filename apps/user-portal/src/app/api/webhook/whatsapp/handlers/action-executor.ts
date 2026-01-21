@@ -6198,9 +6198,16 @@ export class ActionExecutor {
             updateInput.frequency = 'once';
           }
         }
-        // Check for time changes (absolute time like "at 5pm")
+        // Check for time changes (absolute time like "at 5pm" or "time to 3pm")
         else if (changes.includes('time') || changes.includes('at')) {
-          const timeMatch = parsed.newName.match(/(?:to|at)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+          // 1) Prefer explicit "time to" or "at" patterns
+          let timeMatch = parsed.newName.match(/(?:time\s+to|at)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+
+          // 2) Fallback: handle "to 3pm" or "to 15:00" but avoid picking up date parts like "to 23rd January"
+          if (!timeMatch) {
+            timeMatch = parsed.newName.match(/to\s+(\d{1,2}(?::\d{2})\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))/i);
+          }
+
           if (timeMatch && timeMatch[1]) {
             updateInput.time = this.parseTimeTo24Hour(timeMatch[1].trim());
           }
