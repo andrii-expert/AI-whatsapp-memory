@@ -26,6 +26,8 @@ export interface CalendarOperationResult {
   event?: CalendarEvent;
   events?: CalendarEvent[]; // For QUERY operations
   message?: string;
+  requiresConfirmation?: boolean; // If true, user needs to confirm before proceeding
+  conflictEvents?: CalendarEvent[]; // Conflicting events if requiresConfirmation is true
 }
 
 export class CalendarService implements ICalendarService {
@@ -425,6 +427,39 @@ export class CalendarService implements ICalendarService {
         'Parsed event date/time using calendar timezone'
       );
 
+      // Check for conflicting events before creating (unless bypassConflictCheck flag is set)
+      const bypassConflictCheck = (intent as any).bypassConflictCheck === true;
+      
+      if (!bypassConflictCheck) {
+        const conflicts = await this.checkEventConflicts(
+          userId,
+          calendarConnection,
+          startDateTime,
+          endDateTime
+        );
+        
+        if (conflicts.length > 0) {
+        // Return special response asking for confirmation
+        const conflictMessages = conflicts.map((c, i) => 
+          `${i + 1}. "${c.title}" on ${new Date(c.start).toLocaleDateString('en-US', { 
+            weekday: 'short', 
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: calendarTimezone 
+          })}`
+        ).join('\n');
+        
+        return {
+          success: false,
+          action: 'CREATE',
+          requiresConfirmation: true,
+          conflictEvents: conflicts,
+          message: `⚠️ *Event Conflict Detected*\n\nYou have ${conflicts.length} conflicting event${conflicts.length > 1 ? 's' : ''}:\n\n${conflictMessages}\n\nPlease select another time, or if you want to overlap, reply "yes" to proceed.`,
+        };
+      }
+      
       // Create event via provider with token refresh
       const provider = createCalendarProvider(calendarConnection.provider);
       
@@ -1485,6 +1520,44 @@ export class CalendarService implements ICalendarService {
         }
       }
       
+      // Check for conflicting events if dates are being updated (unless bypassConflictCheck flag is set)
+      const bypassConflictCheck = (intent as any).bypassConflictCheck === true;
+      
+      if (isUpdatingDates && finalUpdates.start && finalUpdates.end && !bypassConflictCheck) {
+        // Exclude the event being updated from conflict check
+        const conflicts = await this.checkEventConflicts(
+          userId,
+          calendarConnection,
+          finalUpdates.start,
+          finalUpdates.end
+        );
+        
+        // Filter out the event being updated itself
+        const otherConflicts = conflicts.filter(c => c.id !== targetEvent.id);
+        
+        if (otherConflicts.length > 0) {
+          // Return special response asking for confirmation
+          const conflictMessages = otherConflicts.map((c, i) => 
+            `${i + 1}. "${c.title}" on ${new Date(c.start).toLocaleDateString('en-US', { 
+              weekday: 'short', 
+              month: 'short', 
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZone: calendarTimezone 
+            })}`
+          ).join('\n');
+          
+          return {
+            success: false,
+            action: 'UPDATE',
+            requiresConfirmation: true,
+            conflictEvents: otherConflicts,
+            message: `⚠️ *Event Conflict Detected*\n\nYou have ${otherConflicts.length} conflicting event${otherConflicts.length > 1 ? 's' : ''}:\n\n${conflictMessages}\n\nPlease select another time, or if you want to overlap, reply "yes" to proceed.`,
+          };
+        }
+      }
+      
       const updatedEvent = await this.withTokenRefresh(
         calendarConnection.id,
         calendarConnection.accessToken!,
@@ -2450,6 +2523,92 @@ export class CalendarService implements ICalendarService {
         errorStack: error.stack,
         userId
       }, 'Failed to fetch contacts');
+      return [];
+    }
+  }
+
+  /**
+   * Check for conflicting events in the given time range
+   * Returns array of conflicting events
+   */
+  private async checkEventConflicts(
+    userId: string,
+    calendarConnection: any,
+    startDateTime: Date,
+    endDateTime: Date
+  ): Promise<CalendarEvent[]> {
+    try {
+      const provider = createCalendarProvider(calendarConnection.provider);
+      
+      // Query events in the time range (with some buffer to catch overlapping events)
+      const bufferMinutes = 5; // Small buffer to catch events that start/end close to our event
+      const timeMin = new Date(startDateTime);
+      timeMin.setMinutes(timeMin.getMinutes() - bufferMinutes);
+      
+      const timeMax = new Date(endDateTime);
+      timeMax.setMinutes(timeMax.getMinutes() + bufferMinutes);
+      
+      const searchParams: any = {
+        calendarId: calendarConnection.calendarId || 'primary',
+        timeMin: timeMin,
+        timeMax: timeMax,
+        maxResults: 50,
+      };
+      
+      const foundEvents = await this.withTokenRefresh(
+        calendarConnection.id,
+        calendarConnection.accessToken!,
+        calendarConnection.refreshToken || null,
+        provider,
+        (token) => provider.searchEvents(token, searchParams)
+      );
+      
+      // Check for overlapping events
+      // Two events overlap if: (start1 < end2) && (start2 < end1)
+      const conflicts: CalendarEvent[] = [];
+      
+      for (const event of foundEvents) {
+        const eventStart = new Date(event.start);
+        const eventEnd = new Date(event.end);
+        
+        // Check if events overlap (excluding exact boundaries for same-time events)
+        const overlaps = 
+          (startDateTime < eventEnd) && 
+          (eventStart < endDateTime);
+        
+        if (overlaps) {
+          conflicts.push({
+            id: event.id,
+            title: event.title,
+            description: event.description,
+            start: eventStart,
+            end: eventEnd,
+            location: event.location,
+            provider: calendarConnection.provider as 'google' | 'microsoft',
+            htmlLink: event.htmlLink,
+            webLink: event.webLink,
+          });
+        }
+      }
+      
+      logger.info(
+        {
+          userId,
+          startDateTime: startDateTime.toISOString(),
+          endDateTime: endDateTime.toISOString(),
+          conflictsFound: conflicts.length,
+          conflictTitles: conflicts.map(c => c.title),
+        },
+        'Checked for event conflicts'
+      );
+      
+      return conflicts;
+    } catch (error) {
+      logger.error(
+        { error, userId, startDateTime: startDateTime.toISOString(), endDateTime: endDateTime.toISOString() },
+        'Failed to check for event conflicts'
+      );
+      // On error, don't block event creation - just log and continue
       return [];
     }
   }

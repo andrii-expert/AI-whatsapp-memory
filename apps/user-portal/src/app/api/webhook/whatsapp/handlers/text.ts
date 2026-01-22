@@ -7,6 +7,17 @@ import type { WebhookProcessingSummary } from '../types';
 import { CalendarService } from './calendar-service';
 import { ActionExecutor, type ParsedAction } from './action-executor';
 
+// Store pending event operations waiting for user confirmation (in-memory, keyed by userId)
+interface PendingEventOperation {
+  intent: CalendarIntent;
+  actionTemplate: string;
+  originalUserText: string;
+  recipient: string;
+  timestamp: Date;
+}
+
+const pendingEventOperations = new Map<string, PendingEventOperation>();
+
 type AnalysisIntent = 'task' | 'reminder' | 'note' | 'event';
 
 function isErrorOrFallbackResponse(text: string): boolean {
@@ -123,6 +134,115 @@ export async function handleTextMessage(
       'Ignoring text from unverified number'
     );
     return;
+  }
+
+  const userId = whatsappNumber.userId;
+  const recipient = message.from;
+  const whatsappService = new WhatsAppService();
+
+  // Check if user is confirming a pending event operation (conflict resolution)
+  const messageLower = messageText.toLowerCase().trim();
+  const isConfirmation = messageLower === 'yes' || messageLower === 'y' || messageLower === 'ok' || messageLower === 'okay' || messageLower === 'confirm' || messageLower === 'proceed';
+  
+  if (isConfirmation) {
+    const pendingOp = pendingEventOperations.get(userId);
+    if (pendingOp) {
+      // Check if pending operation is still valid (not older than 5 minutes)
+      const ageMinutes = (new Date().getTime() - pendingOp.timestamp.getTime()) / (1000 * 60);
+      if (ageMinutes > 5) {
+        // Pending operation expired
+        pendingEventOperations.delete(userId);
+        await whatsappService.sendTextMessage(
+          recipient,
+          "The pending operation has expired. Please try creating/updating the event again."
+        );
+        return;
+      }
+      
+      // User confirmed - proceed with the operation
+      logger.info(
+        {
+          userId,
+          action: pendingOp.intent.action,
+          pendingSince: pendingOp.timestamp.toISOString(),
+        },
+        'User confirmed pending event operation, proceeding with overlap'
+      );
+      
+      // Remove from pending operations
+      pendingEventOperations.delete(userId);
+      
+      // Proceed with the operation (bypass conflict check by setting bypassConflictCheck flag)
+      try {
+        const calendarService = new CalendarService(db);
+        // Set bypass flag to skip conflict check since user confirmed
+        const intentWithBypass = {
+          ...pendingOp.intent,
+          bypassConflictCheck: true,
+        };
+        
+        let result;
+        if (pendingOp.intent.action === 'CREATE') {
+          result = await calendarService.create(userId, intentWithBypass as CalendarIntent);
+        } else if (pendingOp.intent.action === 'UPDATE') {
+          result = await calendarService.update(userId, intentWithBypass as CalendarIntent);
+        } else {
+          throw new Error(`Unsupported action: ${pendingOp.intent.action}`);
+        }
+        
+        // Format and send success message
+        if (result.success && result.event) {
+          const event = result.event;
+          const eventDate = new Date(event.start);
+          
+          // Get calendar timezone for formatting
+          let calendarTimezone = 'Africa/Johannesburg';
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              calendarTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get calendar timezone for response formatting');
+          }
+          
+          const eventTime = eventDate.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: calendarTimezone,
+          });
+          const eventDateStr = eventDate.toLocaleDateString('en-US', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            timeZone: calendarTimezone,
+          });
+          
+          let successMessage = `✅ *Event ${pendingOp.intent.action === 'CREATE' ? 'Created' : 'Updated'}*\n\n`;
+          successMessage += `*Title:* ${event.title || 'Untitled Event'}\n`;
+          successMessage += `*Date:* ${eventDateStr}\n`;
+          successMessage += `*Time:* ${eventTime}\n`;
+          if (event.location) {
+            successMessage += `*Location:* ${event.location}\n`;
+          }
+          
+          await whatsappService.sendTextMessage(recipient, successMessage);
+        } else {
+          await whatsappService.sendTextMessage(
+            recipient,
+            result.message || `Event ${pendingOp.intent.action === 'CREATE' ? 'created' : 'updated'} successfully.`
+          );
+        }
+      } catch (error) {
+        logger.error({ error, userId }, 'Failed to proceed with confirmed event operation');
+        await whatsappService.sendTextMessage(
+          recipient,
+          "I'm sorry, I encountered an error while processing your confirmation. Please try again."
+        );
+      }
+      return; // Exit early after handling confirmation
+    }
   }
 
   try {
@@ -4350,11 +4470,57 @@ async function handleSingleEventOperation(
           userId,
           success: result.success,
           action: result.action,
+          requiresConfirmation: result.requiresConfirmation,
           resultEventAttendees: (result.event as any)?.attendees,
           resultEventAttendeesCount: (result.event as any)?.attendees?.length || 0,
         },
         '✅ Calendar operation executed - checking result attendees'
       );
+      
+      // Check if conflict was detected and confirmation is required
+      if (result.requiresConfirmation && result.conflictEvents) {
+        // Store pending operation for later confirmation
+        pendingEventOperations.set(userId, {
+          intent,
+          actionTemplate: actionTemplate,
+          originalUserText: originalUserText,
+          recipient: recipient,
+          timestamp: new Date(),
+        });
+        
+        logger.info(
+          {
+            userId,
+            action: intent.action,
+            conflictsCount: result.conflictEvents.length,
+          },
+          'Event conflict detected, stored pending operation and asking for confirmation'
+        );
+        
+        // Send conflict message to user
+        await whatsappService.sendTextMessage(recipient, result.message || 'Event conflict detected. Please confirm to proceed.');
+        
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: result.message || 'Event conflict detected. Please confirm to proceed.',
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing conflict message');
+        }
+        
+        if (onResult) {
+          onResult({ success: false, message: result.message });
+        }
+        return; // Exit early, don't proceed with event creation/update
+      }
     } catch (calendarError) {
       logger.error(
         {
