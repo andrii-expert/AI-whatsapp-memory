@@ -5310,21 +5310,29 @@ function parseEventTemplateToIntent(
       if (updateMatch[2]) {
         const changes = updateMatch[2].trim();
         
-        // Handle "reschedule to {date} at {time}" pattern
-        // Support both 24-hour (17:00) and 12-hour (5pm) formats
-        // Pattern: "reschedule to 2025-12-03 at 17:00" or "reschedule to 2025-12-03 at 5pm"
-        // First, try to match the full pattern with date and time separated by "at"
-        const rescheduleWithTimeMatch = changes.match(/reschedule\s+(?:to|for)\s+(.+?)\s+at\s+([\d:]+(?:\s*(?:am|pm))?)/i);
-        if (rescheduleWithTimeMatch && rescheduleWithTimeMatch[1] && rescheduleWithTimeMatch[2]) {
-          intent.startDate = parseRelativeDate(rescheduleWithTimeMatch[1].trim());
-          intent.startTime = parseTime(rescheduleWithTimeMatch[2].trim());
-        } else {
-          // Try to extract new date/time from changes using other patterns
-          const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) 
-            || changes.match(/reschedule\s+to\s+(.+?)(?:\s+at|\s|$)/i)
-            || changes.match(/(?:on|for)\s+(.+?)(?:\s+at|\s|$)/i)
-            || changes.match(/move\s+to\s+(.+?)(?:\s+at|\s|$)/i);
-          if (dateMatch && dateMatch[1]) {
+        // CRITICAL: Only parse date/time if user explicitly mentions date/time keywords
+        // Skip date/time parsing if only location, title, description, or attendees are being updated
+        const hasExplicitDateKeyword = /date\s+to|reschedule|move\s+to|time\s+to|on\s+(?:today|tomorrow|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2})/i.test(changes);
+        const hasExplicitTimeKeyword = /time\s+to|at\s+[\d:]+(?:\s*(?:am|pm))?/i.test(changes);
+        
+        // Only parse date/time if explicit keywords are present
+        if (hasExplicitDateKeyword || hasExplicitTimeKeyword) {
+          // Handle "reschedule to {date} at {time}" pattern
+          // Support both 24-hour (17:00) and 12-hour (5pm) formats
+          // Pattern: "reschedule to 2025-12-03 at 17:00" or "reschedule to 2025-12-03 at 5pm"
+          // First, try to match the full pattern with date and time separated by "at"
+          const rescheduleWithTimeMatch = changes.match(/reschedule\s+(?:to|for)\s+(.+?)\s+at\s+([\d:]+(?:\s*(?:am|pm))?)/i);
+          if (rescheduleWithTimeMatch && rescheduleWithTimeMatch[1] && rescheduleWithTimeMatch[2]) {
+            intent.startDate = parseRelativeDate(rescheduleWithTimeMatch[1].trim());
+            intent.startTime = parseTime(rescheduleWithTimeMatch[2].trim());
+          } else {
+            // Try to extract new date/time from changes using other patterns
+            // Only match explicit date patterns, not generic "on" or "for" that might match location strings
+            const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) 
+              || changes.match(/reschedule\s+to\s+(.+?)(?:\s+at|\s|$)/i)
+              || changes.match(/move\s+to\s+(.+?)(?:\s+at|\s|$)/i)
+              || changes.match(/(?:on|for)\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2})(?:\s+at|\s|$)/i);
+            if (dateMatch && dateMatch[1]) {
             const datePart = dateMatch[1].trim();
             // Check if date part contains time (e.g., "2025-12-03 17:00" or "2025-12-03 at 17:00")
             const dateTimeMatch = datePart.match(/^(.+?)(?:\s+at\s+|\s+)([\d:]+(?:\s*(?:am|pm))?)$/i);
@@ -5386,6 +5394,8 @@ function parseEventTemplateToIntent(
               );
             }
           }
+        }
+        // End of date/time parsing - only executed if explicit date/time keywords were found
         }
         
         // Check if title is being updated
