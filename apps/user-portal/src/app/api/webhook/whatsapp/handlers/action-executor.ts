@@ -7280,7 +7280,7 @@ export class ActionExecutor {
       let yearOnlyDate: string | undefined;
       let yearEndDate: string | undefined;
       if (!parsedDate && !monthOnlyDate) {
-        if (timeframeLower.includes('this year') || timeframeLower === 'this year' || timeframeLower.includes('for this year')) {
+        if (timeframeLower.includes('this year') || timeframeLower === 'this year' || timeframeLower.includes('for this year') || timeframeLower.includes('in this year')) {
           const now = new Date();
           const currentYear = now.getFullYear();
           
