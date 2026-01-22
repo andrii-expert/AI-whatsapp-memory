@@ -5228,12 +5228,26 @@ function parseEventTemplateToIntent(
         // Support patterns: "location to X", "add location X", "edit location to X", "location: X", "location - X"
         // Only match if location removal wasn't already detected
         if (!removeLocationMatch) {
-          const locationMatch = changes.match(/location\s+to\s+(.+?)(?:\s|$)/i) 
-            || changes.match(/address\s+to\s+(.+?)(?:\s|$)/i)
-            || changes.match(/place\s+to\s+(.+?)(?:\s|$)/i)
-            || changes.match(/(?:add|edit|set|change|update)\s+location\s+(?:to\s+)?(.+?)(?:\s|$)/i)
-            || changes.match(/location\s*[:=]\s*(.+?)(?:\s|$)/i)
-            || changes.match(/location\s*-\s*(.+?)(?:\s|$)/i);
+          // Capture full location value - use greedy match to get all words until end of string
+          // or until another change field pattern appears
+          // First try to match with lookahead for other change fields
+          let locationMatch = changes.match(/location\s+to\s+(.+?)(?:\s+(?:title|description|notes?|details?|date|time|attendees?)\s+to\s)/i) 
+            || changes.match(/address\s+to\s+(.+?)(?:\s+(?:title|description|notes?|details?|date|time|attendees?)\s+to\s)/i)
+            || changes.match(/place\s+to\s+(.+?)(?:\s+(?:title|description|notes?|details?|date|time|attendees?)\s+to\s)/i)
+            || changes.match(/(?:add|edit|set|change|update)\s+location\s+(?:to\s+)?(.+?)(?:\s+(?:title|description|notes?|details?|date|time|attendees?)\s+to\s)/i)
+            || changes.match(/location\s*[:=]\s*(.+?)(?:\s+(?:title|description|notes?|details?|date|time|attendees?)\s+to\s)/i)
+            || changes.match(/location\s*-\s*(.+?)(?:\s+(?:title|description|notes?|details?|date|time|attendees?)\s+to\s)/i);
+          
+          // If no match (meaning no other change fields), capture until end of string
+          if (!locationMatch) {
+            locationMatch = changes.match(/location\s+to\s+(.+)$/i) 
+              || changes.match(/address\s+to\s+(.+)$/i)
+              || changes.match(/place\s+to\s+(.+)$/i)
+              || changes.match(/(?:add|edit|set|change|update)\s+location\s+(?:to\s+)?(.+)$/i)
+              || changes.match(/location\s*[:=]\s*(.+)$/i)
+              || changes.match(/location\s*-\s*(.+)$/i);
+          }
+          
           if (locationMatch && locationMatch[1]) {
             const locationValue = locationMatch[1].trim();
             // Check if the location value is empty (e.g., "location to " with nothing after)
