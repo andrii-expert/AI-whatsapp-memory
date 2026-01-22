@@ -2909,25 +2909,73 @@ export default function CalendarsPage() {
             </div>
 
             {/* Calendar Header */}
-            <div className="flex items-center justify-center gap-3 mb-4">
-                          <button
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-4">
+              <button
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
                 aria-label="Previous month"
               >
                 <ChevronLeft className="h-4 w-4" />
-                          </button>
-              <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900">
-                {format(currentMonth, "MMMM yyyy")}
-              </h3>
-                              <button
+              </button>
+              
+              {/* Month Select */}
+              <Select
+                value={format(currentMonth, "MMMM")}
+                onValueChange={(monthName) => {
+                  const monthIndex = new Date(`${monthName} 1, 2000`).getMonth();
+                  const newDate = new Date(currentMonth);
+                  newDate.setMonth(monthIndex);
+                  setCurrentMonth(newDate);
+                }}
+              >
+                <SelectTrigger className="w-[110px] sm:w-[130px] h-9 sm:h-10 text-sm sm:text-base font-semibold text-gray-900">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    "January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December"
+                  ].map((month) => (
+                    <SelectItem key={month} value={month}>
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Year Select */}
+              <Select
+                value={format(currentMonth, "yyyy")}
+                onValueChange={(yearStr) => {
+                  const year = parseInt(yearStr, 10);
+                  const newDate = new Date(currentMonth);
+                  newDate.setFullYear(year);
+                  setCurrentMonth(newDate);
+                }}
+              >
+                <SelectTrigger className="w-[110px] sm:w-[130px] h-9 sm:h-10 text-sm sm:text-base font-semibold text-gray-900">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 21 }, (_, i) => {
+                    const year = new Date().getFullYear() - 10 + i;
+                    return (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+
+              <button
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
                 aria-label="Next month"
               >
                 <ChevronRight className="h-4 w-4" />
-                              </button>
-                        </div>
+              </button>
+            </div>
 
             {/* Calendar Grid - Monthly View Only */}
               <div className="bg-white rounded-lg overflow-hidden">
