@@ -5802,31 +5802,9 @@ function parseRelativeDate(dateStr: string): string {
     return `${year}-${month}-${day}`;
   }
   
-  // Handle "the [day]th" or "[day]" (e.g., "the 12th", "15", "15th")
-  const dayNumberMatch = lower.match(/(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/);
-  if (dayNumberMatch && dayNumberMatch[1]) {
-    const dayNum = parseInt(dayNumberMatch[1], 10);
-    if (dayNum >= 1 && dayNum <= 31) {
-      // Try current month first
-      const targetDate = new Date(currentYear, now.getMonth(), dayNum);
-      if (targetDate.getDate() === dayNum && targetDate >= now) {
-        const year = targetDate.getFullYear();
-        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
-        const day = String(targetDate.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      }
-      // If past, try next month
-      const nextMonthDate = new Date(currentYear, now.getMonth() + 1, dayNum);
-      if (nextMonthDate.getDate() === dayNum) {
-        const year = nextMonthDate.getFullYear();
-        const month = String(nextMonthDate.getMonth() + 1).padStart(2, '0');
-        const day = String(nextMonthDate.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      }
-    }
-  }
-  
-  // Handle "[day] [Month]" or "[Month] [day]" (e.g., "15 March", "March 15", "15th March")
+  // CRITICAL: Check for month names FIRST before checking day-only patterns
+  // This prevents "22nd January" from being matched as just "22nd" (which would use current month)
+  // Handle "[day] [Month]" or "[Month] [day]" (e.g., "15 March", "March 15", "15th March", "22nd January")
   const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
                       'july', 'august', 'september', 'october', 'november', 'december'];
   const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
@@ -5847,14 +5825,54 @@ function parseRelativeDate(dateStr: string): string {
     if (match) {
       const dayNum = parseInt(match[1] || match[2] || '0', 10);
       if (dayNum >= 1 && dayNum <= 31) {
-        const targetDate = new Date(currentYear, i, dayNum);
-        // If date is in the past, try next year
-        if (targetDate < now) {
-          targetDate.setFullYear(currentYear + 1);
+        // Compare dates using UTC to avoid timezone issues
+        // Note: JavaScript Date months are 0-indexed (0 = January, 11 = December)
+        // So 'i' from monthNames array (0-11) is correct
+        // Create UTC dates for comparison (year, month, day only, no time)
+        const targetYear = currentYear;
+        const targetMonth = i; // 0-indexed (0 = January, 11 = December)
+        const targetDay = dayNum;
+        
+        const nowYear = now.getUTCFullYear();
+        const nowMonth = now.getUTCMonth();
+        const nowDay = now.getUTCDate();
+        
+        // Compare year, month, day directly (no timezone conversion needed)
+        let finalYear = targetYear;
+        if (targetYear < nowYear || 
+            (targetYear === nowYear && targetMonth < nowMonth) ||
+            (targetYear === nowYear && targetMonth === nowMonth && targetDay < nowDay)) {
+          // Date is in the past, use next year
+          finalYear = currentYear + 1;
         }
-        const year = targetDate.getFullYear();
-        const month = String(targetDate.getMonth() + 1).padStart(2, '0');
-        const day = String(targetDate.getDate()).padStart(2, '0');
+        
+        // Return date string directly (no Date object creation to avoid timezone issues)
+        const year = finalYear;
+        const month = String(targetMonth + 1).padStart(2, '0'); // Convert 0-indexed to 1-indexed
+        const day = String(targetDay).padStart(2, '0');
+        
+        // Log for debugging
+        logger.info(
+          {
+            inputDateStr: dateStr,
+            matchedMonthIndex: i,
+            matchedMonthName: monthNames[i],
+            dayNum,
+            currentYear,
+            targetYear: targetYear,
+            targetMonth: targetMonth,
+            targetDay: targetDay,
+            nowYear,
+            nowMonth,
+            nowDay,
+            finalYear: year,
+            finalMonth: month,
+            finalDay: day,
+            wasInPast: finalYear > currentYear,
+          },
+          'Parsed date with month name'
+        );
+        
         return `${year}-${month}-${day}`;
       }
     }

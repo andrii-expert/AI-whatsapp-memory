@@ -1521,10 +1521,27 @@ export class CalendarService implements ICalendarService {
         }
       }
       
-      // Check for conflicting events if dates are being updated (unless bypassConflictCheck flag is set)
+      // CRITICAL: Only check for conflicts when dates/time are being updated
+      // When updating only location, title, description, or attendees (without changing date/time),
+      // automatically allow overlap - don't show conflict message
       const bypassConflictCheck = (intent as any).bypassConflictCheck === true;
       
+      // Only check conflicts if:
+      // 1. Dates are being updated (isUpdatingDates is true)
+      // 2. Start and end dates are in the update
+      // 3. Conflict check is not explicitly bypassed
       if (isUpdatingDates && finalUpdates.start && finalUpdates.end && !bypassConflictCheck) {
+        logger.info(
+          {
+            userId,
+            isUpdatingDates,
+            hasStart: !!finalUpdates.start,
+            hasEnd: !!finalUpdates.end,
+            bypassConflictCheck,
+          },
+          'Checking for event conflicts (dates are being updated)'
+        );
+        
         // Exclude the event being updated from conflict check
         const conflicts = await this.checkEventConflicts(
           userId,
@@ -1557,6 +1574,19 @@ export class CalendarService implements ICalendarService {
             message: `⚠️ *Event Conflict Detected*\n\nYou have ${otherConflicts.length} conflicting event${otherConflicts.length > 1 ? 's' : ''}:\n\n${conflictMessages}\n\nPlease select another time, or if you want to overlap, reply "yes" to proceed.`,
           };
         }
+      } else {
+        // Not updating dates - skip conflict check and allow auto-overlap
+        logger.info(
+          {
+            userId,
+            isUpdatingDates,
+            hasStart: !!finalUpdates.start,
+            hasEnd: !!finalUpdates.end,
+            bypassConflictCheck,
+            reason: 'not_updating_dates_or_bypassed',
+          },
+          'Skipping conflict check - not updating dates/time, allowing auto-overlap'
+        );
       }
       
       const updatedEvent = await this.withTokenRefresh(
