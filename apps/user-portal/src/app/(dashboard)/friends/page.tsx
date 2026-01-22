@@ -98,8 +98,9 @@ export default function FriendsPage() {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
 
-  // Tag state
-  const [addressModalTag, setAddressModalTag] = useState("");
+  // Tag state (multiple tags)
+  const [addressModalTags, setAddressModalTags] = useState<string[]>([]);
+  const [tagInputValue, setTagInputValue] = useState("");
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
 
   // View address modal state
@@ -377,7 +378,8 @@ export default function FriendsPage() {
     setAddressModalLatitude(null);
     setAddressModalLongitude(null);
     setAddressSearchQuery("");
-    setAddressModalTag("");
+    setAddressModalTags([]);
+    setTagInputValue("");
     setShowTagSuggestions(false);
   };
 
@@ -469,7 +471,7 @@ export default function FriendsPage() {
       country: addressModalCountry.trim() || undefined,
       latitude: addressModalLatitude || undefined,
       longitude: addressModalLongitude || undefined,
-      tag: addressModalTag.trim() || undefined,
+      tags: addressModalTags.length > 0 ? addressModalTags : undefined,
     });
   };
 
@@ -488,7 +490,7 @@ export default function FriendsPage() {
       country: addressModalCountry.trim() || undefined,
       latitude: addressModalLatitude || undefined,
       longitude: addressModalLongitude || undefined,
-      tag: addressModalTag.trim() || undefined,
+      tags: addressModalTags.length > 0 ? addressModalTags : undefined,
     });
   };
 
@@ -522,7 +524,7 @@ export default function FriendsPage() {
     setAddressModalCountry(address.country || "");
     setAddressModalLatitude(address.latitude || null);
     setAddressModalLongitude(address.longitude || null);
-    setAddressModalTag(address.tag || "");
+    setAddressModalTags(Array.isArray(address.tags) ? address.tags : (address.tag ? [address.tag] : []));
     setAddressSearchQuery(
       [address.street, address.city, address.state, address.zip, address.country]
         .filter(Boolean)
@@ -808,8 +810,13 @@ export default function FriendsPage() {
                           <div className="flex items-center gap-2 mb-1 justify-between">
                             <div className="font-bold text-gray-900 text-[15px] flex gap-2 items-center flex-wrap">
                               {address.name}
-                              {/* Tag badge */}
-                              {address.tag && (
+                              {/* Tag badges */}
+                              {Array.isArray(address.tags) && address.tags.length > 0 && address.tags.map((tag, idx) => (
+                                <span key={idx} className="px-2 py-0.5 text-[11px] font-medium bg-blue-100 text-blue-800 rounded-full">
+                                  {tag}
+                                </span>
+                              ))}
+                              {!Array.isArray(address.tags) && address.tag && (
                                 <span className="px-2 py-0.5 text-[11px] font-medium bg-blue-100 text-blue-800 rounded-full">
                                   {address.tag}
                                 </span>
@@ -1093,18 +1100,53 @@ export default function FriendsPage() {
             </div>
 
             <div className="space-y-1.5 sm:space-y-2">
-              <Label className="text-[13px] font-medium text-gray-900">Tag (Optional)</Label>
+              <Label className="text-[13px] font-medium text-gray-900">Tags (Optional)</Label>
+              
+              {/* Selected Tags Display */}
+              {addressModalTags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {addressModalTags.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[12px] font-medium bg-blue-100 text-blue-800 rounded-full"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddressModalTags(addressModalTags.filter((_, i) => i !== idx));
+                        }}
+                        className="ml-1 hover:text-blue-900"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              
               <div className="relative">
                 <Input
                   type="text"
                   placeholder="Enter or select a tag..."
-                  value={addressModalTag}
+                  value={tagInputValue}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setAddressModalTag(e.target.value);
+                    setTagInputValue(e.target.value);
                     setShowTagSuggestions(true);
                   }}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === 'Enter' && tagInputValue.trim()) {
+                      e.preventDefault();
+                      const trimmedTag = tagInputValue.trim();
+                      if (!addressModalTags.some(t => t.toLowerCase() === trimmedTag.toLowerCase())) {
+                        setAddressModalTags([...addressModalTags, trimmedTag]);
+                        setTagInputValue("");
+                        setShowTagSuggestions(false);
+                      }
+                    }
+                  }}
                   onFocus={() => {
-                    if (availableTags.length > 0 || addressModalTag.trim()) {
+                    if (availableTags.length > 0 || tagInputValue.trim()) {
                       setShowTagSuggestions(true);
                     }
                   }}
@@ -1118,43 +1160,52 @@ export default function FriendsPage() {
                 {/* Tag Suggestions Dropdown */}
                 {showTagSuggestions && (
                   <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {addressModalTag.trim() && 
-                     !availableTags.some(tag => tag.toLowerCase() === addressModalTag.trim().toLowerCase()) && (
+                    {tagInputValue.trim() && 
+                     !availableTags.some(tag => tag.toLowerCase() === tagInputValue.trim().toLowerCase()) &&
+                     !addressModalTags.some(tag => tag.toLowerCase() === tagInputValue.trim().toLowerCase()) && (
                       <button
                         type="button"
                         onClick={() => {
-                          setAddressModalTag(addressModalTag.trim());
-                          setShowTagSuggestions(false);
+                          const trimmedTag = tagInputValue.trim();
+                          if (!addressModalTags.some(t => t.toLowerCase() === trimmedTag.toLowerCase())) {
+                            setAddressModalTags([...addressModalTags, trimmedTag]);
+                            setTagInputValue("");
+                            setShowTagSuggestions(false);
+                          }
                         }}
                         className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors border-b border-gray-100"
                       >
                         <div className="flex items-center gap-2">
                           <Plus className="h-4 w-4 text-blue-600" />
                           <span className="text-sm text-gray-900">
-                            Create "{addressModalTag.trim()}"
+                            Create "{tagInputValue.trim()}"
                           </span>
                         </div>
                       </button>
                     )}
                     {availableTags
                       .filter(tag => 
-                        !addressModalTag.trim() || 
-                        tag.toLowerCase().includes(addressModalTag.trim().toLowerCase())
+                        !tagInputValue.trim() || 
+                        tag.toLowerCase().includes(tagInputValue.trim().toLowerCase())
                       )
+                      .filter(tag => !addressModalTags.some(t => t.toLowerCase() === tag.toLowerCase()))
                       .map((tag) => (
                         <button
                           key={tag}
                           type="button"
                           onClick={() => {
-                            setAddressModalTag(tag);
-                            setShowTagSuggestions(false);
+                            if (!addressModalTags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+                              setAddressModalTags([...addressModalTags, tag]);
+                              setTagInputValue("");
+                              setShowTagSuggestions(false);
+                            }
                           }}
                           className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors"
                         >
                           <div className="text-sm text-gray-900">{tag}</div>
                         </button>
                       ))}
-                    {availableTags.length === 0 && !addressModalTag.trim() && (
+                    {availableTags.length === 0 && !tagInputValue.trim() && addressModalTags.length === 0 && (
                       <div className="p-4 text-center text-sm text-gray-500">
                         No tags yet. Start typing to create one.
                       </div>
@@ -1163,7 +1214,7 @@ export default function FriendsPage() {
                 )}
               </div>
               <p className="text-[12px] text-gray-500">
-                Add a tag to organize your friends (e.g., "Family", "Work", "Gym").
+                Add tags to organize your friends (e.g., "Family", "Work", "Gym"). Press Enter to add a tag.
               </p>
             </div>
 
@@ -1205,13 +1256,21 @@ export default function FriendsPage() {
           </div>
           
           <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
-            {viewAddressData?.tag && (
+            {((Array.isArray(viewAddressData?.tags) && viewAddressData.tags.length > 0) || viewAddressData?.tag) && (
               <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[13px] font-medium text-gray-900">Tag</Label>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1.5 text-[13px] font-medium bg-blue-100 text-blue-800 rounded-full">
-                    {viewAddressData.tag}
-                  </span>
+                <Label className="text-[13px] font-medium text-gray-900">Tags</Label>
+                <div className="flex flex-wrap gap-2">
+                  {Array.isArray(viewAddressData?.tags) && viewAddressData.tags.length > 0 ? (
+                    viewAddressData.tags.map((tag: string, idx: number) => (
+                      <span key={idx} className="px-3 py-1.5 text-[13px] font-medium bg-blue-100 text-blue-800 rounded-full">
+                        {tag}
+                      </span>
+                    ))
+                  ) : viewAddressData?.tag ? (
+                    <span className="px-3 py-1.5 text-[13px] font-medium bg-blue-100 text-blue-800 rounded-full">
+                      {viewAddressData.tag}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             )}

@@ -200,7 +200,7 @@ export async function createFriend(
     country?: string | null;
     latitude?: number | null;
     longitude?: number | null;
-    tag?: string | null;
+    tags?: string[] | null;
   }
 ) {
   return withMutationLogging(
@@ -208,6 +208,12 @@ export async function createFriend(
     { userId: data.userId, name: data.name },
     async () => {
       // Normalize empty strings and invalid values to null as a safety net
+      // Filter out empty strings from tags array and normalize to null if empty
+      const normalizedTags = data.tags 
+        ? data.tags.filter(tag => tag && tag.trim()).map(tag => tag.trim())
+        : null;
+      const finalTags = normalizedTags && normalizedTags.length > 0 ? normalizedTags : null;
+      
       const normalizedData = {
         ...data,
         folderId: (data.folderId === "" || data.folderId === "uncategorized") ? null : data.folderId,
@@ -219,7 +225,7 @@ export async function createFriend(
         state: data.state === "" ? null : data.state,
         zip: data.zip === "" ? null : data.zip,
         country: data.country === "" ? null : data.country,
-        tag: data.tag === "" ? null : data.tag,
+        tags: finalTags,
       };
       
       const [friend] = await db.insert(friends).values(normalizedData).returning();
@@ -249,7 +255,7 @@ export async function updateFriend(
     country?: string | null;
     latitude?: number | null;
     longitude?: number | null;
-    tag?: string | null;
+    tags?: string[] | null;
   }
 ) {
   return withMutationLogging(
@@ -271,6 +277,7 @@ export async function updateFriend(
         country?: string | null;
         latitude?: number | null;
         longitude?: number | null;
+        tags?: string[] | null;
         updatedAt: Date;
       } = {
         updatedAt: new Date(),
@@ -315,8 +322,12 @@ export async function updateFriend(
       if (data.longitude !== undefined) {
         normalizedData.longitude = data.longitude;
       }
-      if (data.tag !== undefined) {
-        normalizedData.tag = data.tag === "" ? null : data.tag;
+      if (data.tags !== undefined) {
+        // Filter out empty strings from tags array and normalize to null if empty
+        const normalizedTags = data.tags 
+          ? data.tags.filter(tag => tag && tag.trim()).map(tag => tag.trim())
+          : null;
+        normalizedData.tags = normalizedTags && normalizedTags.length > 0 ? normalizedTags : null;
       }
       
       const [friend] = await db
@@ -402,15 +413,19 @@ export async function getUserFriendTags(db: Database, userId: string) {
       const allFriends = await db.query.friends.findMany({
         where: eq(friends.userId, userId),
         columns: {
-          tag: true,
+          tags: true,
         },
       });
       
-      // Extract unique, non-null tags
+      // Extract unique, non-null tags from all friends' tag arrays
       const tags = new Set<string>();
       allFriends.forEach(friend => {
-        if (friend.tag && friend.tag.trim()) {
-          tags.add(friend.tag.trim());
+        if (friend.tags && Array.isArray(friend.tags)) {
+          friend.tags.forEach(tag => {
+            if (tag && typeof tag === 'string' && tag.trim()) {
+              tags.add(tag.trim());
+            }
+          });
         }
       });
       

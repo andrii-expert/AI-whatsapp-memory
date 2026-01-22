@@ -9678,10 +9678,13 @@ export class ActionExecutor {
         // Get all friends to check for tags
         const friends = await getUserFriends(this.db, this.userId);
         
-        // Check if recipient matches a tag (case-insensitive)
-        const matchingTagFriends = friends.filter(friend => 
-          friend.tag && friend.tag.toLowerCase() === trimmedRecipient.toLowerCase()
-        );
+        // Check if recipient matches any tag in the friend's tags array (case-insensitive)
+        const matchingTagFriends = friends.filter(friend => {
+          if (!friend.tags || !Array.isArray(friend.tags)) return false;
+          return friend.tags.some(tag => 
+            tag && typeof tag === 'string' && tag.toLowerCase() === trimmedRecipient.toLowerCase()
+          );
+        });
         
         if (matchingTagFriends.length > 0) {
           // Found friends with this tag - return their connected user IDs

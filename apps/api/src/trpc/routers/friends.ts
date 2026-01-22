@@ -62,7 +62,7 @@ const createFriendSchema = z.object({
   country: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
-  tag: z.string().optional().or(z.literal("")),
+  tags: z.array(z.string()).optional(),
 });
 
 const updateFriendSchema = z.object({
@@ -80,7 +80,7 @@ const updateFriendSchema = z.object({
   country: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
-  tag: z.string().optional().or(z.literal("")),
+  tags: z.array(z.string()).optional(),
 });
 
 const folderSchema = z.object({
