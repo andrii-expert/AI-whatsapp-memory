@@ -439,25 +439,26 @@ export class CalendarService implements ICalendarService {
         );
         
         if (conflicts.length > 0) {
-        // Return special response asking for confirmation
-        const conflictMessages = conflicts.map((c, i) => 
-          `${i + 1}. "${c.title}" on ${new Date(c.start).toLocaleDateString('en-US', { 
-            weekday: 'short', 
-            month: 'short', 
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: calendarTimezone 
-          })}`
-        ).join('\n');
-        
-        return {
-          success: false,
-          action: 'CREATE',
-          requiresConfirmation: true,
-          conflictEvents: conflicts,
-          message: `⚠️ *Event Conflict Detected*\n\nYou have ${conflicts.length} conflicting event${conflicts.length > 1 ? 's' : ''}:\n\n${conflictMessages}\n\nPlease select another time, or if you want to overlap, reply "yes" to proceed.`,
-        };
+          // Return special response asking for confirmation
+          const conflictMessages = conflicts.map((c, i) => 
+            `${i + 1}. "${c.title}" on ${new Date(c.start).toLocaleDateString('en-US', { 
+              weekday: 'short', 
+              month: 'short', 
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZone: calendarTimezone 
+            })}`
+          ).join('\n');
+          
+          return {
+            success: false,
+            action: 'CREATE',
+            requiresConfirmation: true,
+            conflictEvents: conflicts,
+            message: `⚠️ *Event Conflict Detected*\n\nYou have ${conflicts.length} conflicting event${conflicts.length > 1 ? 's' : ''}:\n\n${conflictMessages}\n\nPlease select another time, or if you want to overlap, reply "yes" to proceed.`,
+          };
+        }
       }
       
       // Create event via provider with token refresh
