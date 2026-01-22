@@ -1837,14 +1837,46 @@ export class CalendarService implements ICalendarService {
           const month = parseInt(dateMatch[2], 10) - 1;
           const day = parseInt(dateMatch[3], 10);
           
+          // Check if this is a year-only query (day is 1 and month is 0 (January) and endDate is set to December 31)
+          // When user says "this year", we set startDate to January 1st and endDate to December 31st
+          const isYearOnlyQuery = intent.endDate && day === 1 && month === 0;
+          
           // Check if this is a month-only query (day is 1, which means user asked for entire month)
           // When user says "February" or "february", we set startDate to the 1st of that month
-          const isMonthOnlyQuery = day === 1;
+          const isMonthOnlyQuery = !isYearOnlyQuery && day === 1;
           
           let targetDateStart: Date;
           let targetDateEnd: Date;
           
-          if (isMonthOnlyQuery) {
+          if (isYearOnlyQuery && intent.endDate) {
+            // Filter for entire year
+            const endDateMatch = intent.endDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (endDateMatch) {
+              const endYear = parseInt(endDateMatch[1], 10);
+              const endMonth = parseInt(endDateMatch[2], 10) - 1;
+              const endDay = parseInt(endDateMatch[3], 10);
+              
+              targetDateStart = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0)); // January 1st
+              targetDateEnd = new Date(Date.UTC(endYear, endMonth, endDay, 23, 59, 59, 999)); // December 31st
+              
+              logger.info(
+                {
+                  userId,
+                  targetDate: dateString,
+                  endDate: intent.endDate,
+                  isYearOnlyQuery: true,
+                  year,
+                  targetDateStart: targetDateStart.toISOString(),
+                  targetDateEnd: targetDateEnd.toISOString(),
+                },
+                'Detected year-only query, filtering for entire year'
+              );
+            } else {
+              // Fallback: if endDate format is invalid, just use startDate logic
+              targetDateStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+              targetDateEnd = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+            }
+          } else if (isMonthOnlyQuery) {
             // Filter for entire month
             targetDateStart = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
             // Get last day of the month
@@ -1881,13 +1913,14 @@ export class CalendarService implements ICalendarService {
             {
               userId,
               targetDate: dateString,
+              isYearOnlyQuery,
               isMonthOnlyQuery,
               totalEvents: events.length,
               filteredEvents: filteredEvents.length,
               targetDateStart: targetDateStart.toISOString(),
               targetDateEnd: targetDateEnd.toISOString(),
             },
-            isMonthOnlyQuery ? 'Filtered events to month range' : 'Filtered events to specific date'
+            isYearOnlyQuery ? 'Filtered events to year range' : (isMonthOnlyQuery ? 'Filtered events to month range' : 'Filtered events to specific date')
           );
         }
       }

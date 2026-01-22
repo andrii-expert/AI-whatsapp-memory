@@ -7276,14 +7276,42 @@ export class ActionExecutor {
         }
       }
       
+      // Check if timeframe is "this year" - need to set date range for entire year
+      let yearOnlyDate: string | undefined;
+      let yearEndDate: string | undefined;
+      if (!parsedDate && !monthOnlyDate) {
+        if (timeframeLower.includes('this year') || timeframeLower === 'this year' || timeframeLower.includes('for this year')) {
+          const now = new Date();
+          const currentYear = now.getFullYear();
+          
+          // Set start date to January 1st of current year
+          yearOnlyDate = `${currentYear}-01-01`;
+          // Set end date to December 31st of current year
+          yearEndDate = `${currentYear}-12-31`;
+          
+          logger.info(
+            {
+              userId: this.userId,
+              originalTimeframe: timeframe,
+              currentYear,
+              yearOnlyDate,
+              yearEndDate,
+            },
+            'Parsed "this year" timeframe'
+          );
+        }
+      }
+      
       // Map timeframe strings to queryTimeframe values (if not a specific date)
       let queryTimeframe: 'today' | 'tomorrow' | 'this_week' | 'this_month' | 'all' | undefined;
       
-      if (parsedDate || monthOnlyDate) {
-        // Specific date or month found, don't set queryTimeframe
+      if (parsedDate || monthOnlyDate || yearOnlyDate) {
+        // Specific date, month, or year found, don't set queryTimeframe
         queryTimeframe = undefined;
-        // Use monthOnlyDate if available, otherwise use parsedDate
-        if (monthOnlyDate && !parsedDate) {
+        // Use yearOnlyDate if available, otherwise monthOnlyDate, otherwise parsedDate
+        if (yearOnlyDate && !parsedDate && !monthOnlyDate) {
+          parsedDate = yearOnlyDate;
+        } else if (monthOnlyDate && !parsedDate) {
           parsedDate = monthOnlyDate;
         }
       } else if (timeframeLower === 'today' || timeframeLower.includes("today's")) {
@@ -7325,6 +7353,7 @@ export class ActionExecutor {
         confidence: 0.9,
         ...(queryTimeframe ? { queryTimeframe } : {}),
         ...(parsedDate ? { startDate: parsedDate } : {}),
+        ...(yearEndDate ? { endDate: yearEndDate } : {}),
       };
       
       // Execute query using CalendarService
