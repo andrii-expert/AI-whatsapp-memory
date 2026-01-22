@@ -7219,12 +7219,73 @@ export class ActionExecutor {
         }
       }
       
+      // Check if timeframe is just a month name (without day number)
+      let monthOnlyDate: string | undefined;
+      if (!parsedDate) {
+        // Check if the timeframe is just a month name (e.g., "February", "feb", "february")
+        const monthOnlyMatch = timeframeLower.match(/^(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)$/);
+        if (monthOnlyMatch) {
+          const monthName = monthOnlyMatch[1];
+          let monthIndex = -1;
+          
+          // Find month index
+          if (monthNames.includes(monthName)) {
+            monthIndex = monthNames.indexOf(monthName);
+          } else if (monthAbbr.includes(monthName)) {
+            monthIndex = monthAbbr.indexOf(monthName);
+          }
+          
+          if (monthIndex >= 0) {
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth();
+            
+            // If the requested month is in the past (e.g., it's March and user asks for February),
+            // use next year. Otherwise use current year.
+            let targetYear = currentYear;
+            if (monthIndex < currentMonth) {
+              targetYear = currentYear + 1;
+            }
+            
+            // Create start and end dates for the month
+            const monthStart = new Date(targetYear, monthIndex, 1);
+            const monthEnd = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59, 999);
+            
+            // Format as date range - use start date for filtering
+            const year = monthStart.getFullYear();
+            const month = String(monthStart.getMonth() + 1).padStart(2, '0');
+            const day = String(monthStart.getDate()).padStart(2, '0');
+            monthOnlyDate = `${year}-${month}-${day}`;
+            
+            // Store end date for filtering (we'll need to pass this to calendar service)
+            // For now, we'll use startDate and let calendar service handle the range
+            logger.info(
+              {
+                userId: this.userId,
+                originalTimeframe: timeframe,
+                monthName,
+                monthIndex,
+                targetYear,
+                monthStart: monthStart.toISOString(),
+                monthEnd: monthEnd.toISOString(),
+                monthOnlyDate,
+              },
+              'Parsed month-only timeframe'
+            );
+          }
+        }
+      }
+      
       // Map timeframe strings to queryTimeframe values (if not a specific date)
       let queryTimeframe: 'today' | 'tomorrow' | 'this_week' | 'this_month' | 'all' | undefined;
       
-      if (parsedDate) {
-        // Specific date found, don't set queryTimeframe
+      if (parsedDate || monthOnlyDate) {
+        // Specific date or month found, don't set queryTimeframe
         queryTimeframe = undefined;
+        // Use monthOnlyDate if available, otherwise use parsedDate
+        if (monthOnlyDate && !parsedDate) {
+          parsedDate = monthOnlyDate;
+        }
       } else if (timeframeLower === 'today' || timeframeLower.includes("today's")) {
         queryTimeframe = 'today';
       } else if (timeframeLower === 'tomorrow') {

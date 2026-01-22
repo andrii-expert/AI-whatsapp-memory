@@ -1837,12 +1837,41 @@ export class CalendarService implements ICalendarService {
           const month = parseInt(dateMatch[2], 10) - 1;
           const day = parseInt(dateMatch[3], 10);
           
-          // Create date boundaries in UTC for the specific date
-          const targetDateStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-          const targetDateEnd = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+          // Check if this is a month-only query (day is 1, which means user asked for entire month)
+          // When user says "February" or "february", we set startDate to the 1st of that month
+          const isMonthOnlyQuery = day === 1;
           
-          // Filter events to only include those that fall on the target date
-          // Check if the event start date (in UTC) falls within the target date
+          let targetDateStart: Date;
+          let targetDateEnd: Date;
+          
+          if (isMonthOnlyQuery) {
+            // Filter for entire month
+            targetDateStart = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+            // Get last day of the month
+            const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0)).getDate();
+            targetDateEnd = new Date(Date.UTC(year, month, lastDayOfMonth, 23, 59, 59, 999));
+            
+            logger.info(
+              {
+                userId,
+                targetDate: dateString,
+                isMonthOnlyQuery: true,
+                month: month + 1,
+                year,
+                lastDayOfMonth,
+                targetDateStart: targetDateStart.toISOString(),
+                targetDateEnd: targetDateEnd.toISOString(),
+              },
+              'Detected month-only query, filtering for entire month'
+            );
+          } else {
+            // Filter for specific date only
+            targetDateStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+            targetDateEnd = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+          }
+          
+          // Filter events to only include those that fall within the date range
+          // Check if the event start date (in UTC) falls within the target date range
           filteredEvents = events.filter(event => {
             const eventStart = new Date(event.start);
             return eventStart >= targetDateStart && eventStart <= targetDateEnd;
@@ -1852,12 +1881,13 @@ export class CalendarService implements ICalendarService {
             {
               userId,
               targetDate: dateString,
+              isMonthOnlyQuery,
               totalEvents: events.length,
               filteredEvents: filteredEvents.length,
               targetDateStart: targetDateStart.toISOString(),
               targetDateEnd: targetDateEnd.toISOString(),
             },
-            'Filtered events to specific date'
+            isMonthOnlyQuery ? 'Filtered events to month range' : 'Filtered events to specific date'
           );
         }
       }
