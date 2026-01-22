@@ -167,6 +167,39 @@ export class ActionExecutor {
   }
 
   /**
+   * Normalize recipient name by removing indicator words that signal friend groups/tags
+   * Examples: "family friends" → "family", "work contacts" → "work", "everyone in work contact list" → "work"
+   */
+  private normalizeRecipient(recipient: string): string {
+    if (!recipient) return recipient;
+    
+    let normalized = recipient.trim();
+    
+    // Handle "everyone in [tag] [list/contact/folder]" pattern
+    const everyoneMatch = normalized.match(/^everyone\s+in\s+(.+?)(?:\s+(?:contact|list|folder))?$/i);
+    if (everyoneMatch) {
+      normalized = everyoneMatch[1].trim();
+    }
+    
+    // Remove indicator words: friends, contacts, group, guys, people
+    // Pattern: "[tag] [indicator]" → extract "[tag]" only
+    const indicatorWords = ['friends', 'contacts', 'group', 'guys', 'people'];
+    
+    for (const indicator of indicatorWords) {
+      // Match pattern: "[tag] [indicator]" (case-insensitive)
+      // Use case-insensitive regex on the original string to preserve case of the tag
+      const regex = new RegExp(`^(.+?)\\s+${indicator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+      const match = normalized.match(regex);
+      if (match) {
+        normalized = match[1].trim();
+        break; // Only remove one indicator word
+      }
+    }
+    
+    return normalized.trim();
+  }
+
+  /**
    * Parse AI template response into structured action
    */
   parseAction(aiResponse: string): ParsedAction | null {
@@ -1292,6 +1325,12 @@ export class ActionExecutor {
         trimmed.startsWith('Edit a friend folder:') ||
         trimmed.startsWith('Delete a friend folder:') ||
         trimmed.startsWith('List friend folders:');
+    }
+
+    // Normalize recipient to remove indicator words (friends, contacts, group, guys, people)
+    // and handle "everyone in [tag] [list/contact/folder]" patterns
+    if (recipient) {
+      recipient = this.normalizeRecipient(recipient);
     }
 
     return {
