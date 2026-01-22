@@ -682,12 +682,13 @@ export class ActionExecutor {
         // If nothing after "List events:", default to 'all'
         listFilter = 'all';
       }
-    } else if (trimmed.match(/^(Show|View|Get|See|Details? of|Overview of)\s+(?:event|events?)\s*(?:details?|overview|info|information)?/i) || 
-               trimmed.match(/^(Show|View|Get|See)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+(?:event|events?)?/i) ||
-               trimmed.match(/^(?:What|What's|Tell me about)\s+(?:event|events?)\s*(\d+)/i) ||
-               trimmed.match(/^(?:Show|View|Get|See)\s+(?:me\s+)?(?:event|events?)\s*(\d+)/i) ||
+    } else if (trimmed.match(/^(Show|View|Get|See|Details? of|Overview of)\s+event(?!s)\s*(?:details?|overview|info|information)?/i) || 
+               trimmed.match(/^(Show|View|Get|See)\s+(?:me\s+)?(?:the\s+)?(?:details?|overview|info|information)\s+(?:of|for)\s+event(?!s)/i) ||
+               trimmed.match(/^(?:What|What's|Tell me about)\s+event(?!s)\s*(\d+)/i) ||
+               trimmed.match(/^(?:Show|View|Get|See)\s+(?:me\s+)?event(?!s)\s*(\d+)/i) ||
                trimmed.match(/^Show\s+event\s+details:/i)) {
-      // Detect event detail requests
+      // Detect event detail requests (SINGULAR "event" only - not "events" plural)
+      // Use negative lookahead (?!s) to ensure we don't match "events" (plural)
       action = 'show';
       resourceType = 'event';
       
