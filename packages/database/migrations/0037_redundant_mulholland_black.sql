@@ -1,0 +1,1 @@
+ALTER TABLE "reminders" ADD COLUMN "category" text DEFAULT 'General' NOT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE "friends" RENAME COLUMN "tag" TO "tags";
