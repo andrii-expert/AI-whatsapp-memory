@@ -234,33 +234,75 @@ export async function handleTextMessage(
           logger.info({ userId, day, month, parsedDate }, 'Parsed date from conflict response');
         }
         
-        // Try to extract time (handle "17.pm", "17pm", "at 17.pm", "at 17:00", etc.)
-        // Pattern: optional "at" or "@", then number, optional dot or colon, optional minutes, optional am/pm
-        // Special handling for "17.pm" format where dot is between hour and period
-        const timeMatch = messageText.match(/(?:at|@)?\s*(\d{1,2})(?:\.|:)?(\d{2})?\s*(?:\.)?\s*(am|pm)?/i);
-        if (timeMatch && timeMatch[1]) {
-          const hour = timeMatch[1];
-          const minute = timeMatch[2] || '00';
-          const period = timeMatch[3] || '';
+        // Try to extract time - handle both single time and time range
+        // First check for time range: "change time from 15:00 to 16:20", "time from X to Y", etc.
+        const timeRangeMatch = messageText.match(/(?:change\s+)?time\s+(?:from|to)\s+(\d{1,2})(?:\.|:)?(\d{2})?\s*(?:\.)?\s*(am|pm)?\s+(?:to|until|-)\s+(\d{1,2})(?:\.|:)?(\d{2})?\s*(?:\.)?\s*(am|pm)?/i);
+        if (timeRangeMatch && timeRangeMatch[1] && timeRangeMatch[4]) {
+          // Time range detected - extract start and end times
+          const startHour = timeRangeMatch[1];
+          const startMinute = timeRangeMatch[2] || '00';
+          const startPeriod = timeRangeMatch[3] || '';
+          const endHour = timeRangeMatch[4];
+          const endMinute = timeRangeMatch[5] || '00';
+          const endPeriod = timeRangeMatch[6] || '';
           
-          // Handle "17.pm" format - if hour > 12 and period is pm, it's likely a typo (should be 5pm)
-          // But also handle "17pm" as 17:00 (5pm) in 12-hour format
-          let normalizedHour = hour;
-          let normalizedPeriod = period;
-          
-          // If hour > 12 and has period, treat as 12-hour format (e.g., "17pm" = 5pm)
-          if (parseInt(hour) > 12 && period) {
-            normalizedHour = String(parseInt(hour) - 12);
-            normalizedPeriod = period;
+          // Normalize times
+          let normalizedStartHour = startHour;
+          let normalizedStartPeriod = startPeriod;
+          if (parseInt(startHour) > 12 && startPeriod) {
+            normalizedStartHour = String(parseInt(startHour) - 12);
+            normalizedStartPeriod = startPeriod;
           }
           
-          // Normalize "17.pm" to "17pm" by removing dot, or use normalized values
-          const timeStr = period 
-            ? `${normalizedHour}:${minute}${normalizedPeriod}`.replace(/\./g, '')
-            : `${hour}:${minute}`.replace(/\./g, '');
+          let normalizedEndHour = endHour;
+          let normalizedEndPeriod = endPeriod;
+          if (parseInt(endHour) > 12 && endPeriod) {
+            normalizedEndHour = String(parseInt(endHour) - 12);
+            normalizedEndPeriod = endPeriod;
+          }
           
-          parsedTime = parseTime(timeStr);
-          logger.info({ userId, hour, minute, period, normalizedHour, normalizedPeriod, timeStr, parsedTime }, 'Parsed time from conflict response');
+          const startTimeStr = startPeriod 
+            ? `${normalizedStartHour}:${startMinute}${normalizedStartPeriod}`.replace(/\./g, '')
+            : `${startHour}:${startMinute}`.replace(/\./g, '');
+          const endTimeStr = endPeriod 
+            ? `${normalizedEndHour}:${endMinute}${normalizedEndPeriod}`.replace(/\./g, '')
+            : `${endHour}:${endMinute}`.replace(/\./g, '');
+          
+          parsedTime = parseTime(startTimeStr);
+          // Store endTime separately to add to intent later
+          const parsedEndTime = parseTime(endTimeStr);
+          logger.info({ userId, startTimeStr, endTimeStr, parsedTime, parsedEndTime }, 'Parsed time range from conflict response');
+          
+          // Store endTime in pendingOp to use when creating updatedIntent
+          (pendingOp as any).parsedEndTime = parsedEndTime;
+        } else {
+          // Try single time (handle "17.pm", "17pm", "at 17.pm", "at 17:00", etc.)
+          // Pattern: optional "at" or "@", then number, optional dot or colon, optional minutes, optional am/pm
+          const timeMatch = messageText.match(/(?:at|@|time\s+(?:to|is))?\s*(\d{1,2})(?:\.|:)?(\d{2})?\s*(?:\.)?\s*(am|pm)?/i);
+          if (timeMatch && timeMatch[1]) {
+            const hour = timeMatch[1];
+            const minute = timeMatch[2] || '00';
+            const period = timeMatch[3] || '';
+            
+            // Handle "17.pm" format - if hour > 12 and period is pm, it's likely a typo (should be 5pm)
+            // But also handle "17pm" as 17:00 (5pm) in 12-hour format
+            let normalizedHour = hour;
+            let normalizedPeriod = period;
+            
+            // If hour > 12 and has period, treat as 12-hour format (e.g., "17pm" = 5pm)
+            if (parseInt(hour) > 12 && period) {
+              normalizedHour = String(parseInt(hour) - 12);
+              normalizedPeriod = period;
+            }
+            
+            // Normalize "17.pm" to "17pm" by removing dot, or use normalized values
+            const timeStr = period 
+              ? `${normalizedHour}:${minute}${normalizedPeriod}`.replace(/\./g, '')
+              : `${hour}:${minute}`.replace(/\./g, '');
+            
+            parsedTime = parseTime(timeStr);
+            logger.info({ userId, hour, minute, period, normalizedHour, normalizedPeriod, timeStr, parsedTime }, 'Parsed single time from conflict response');
+          }
         }
         
         // If we found date or time, update the intent and re-execute
@@ -384,20 +426,53 @@ export async function handleTextMessage(
           
           return; // Exit early
         } else {
-          // Couldn't parse date/time, fall back to AI analysis with context
+          // Couldn't parse date/time, fall back to AI analysis with full context
           logger.warn({ userId, messageText }, 'Could not parse date/time from message, falling back to AI analysis with context');
-          // Include the original message in context so AI understands this is an update
-          const contextualMessage = `${pendingOp.originalUserText}. ${messageText}`;
+          // CRITICAL: Include the original CREATE request and conflict context
+          // This helps AI understand this is a continuation of CREATE, not a new UPDATE
+          const contextualMessage = `I was trying to create an event: "${pendingOp.originalUserText}". There was a conflict, and now I'm providing a new time: "${messageText}". Please create the event with this new time.`;
           pendingEventOperations.delete(userId);
-          await analyzeAndRespond(contextualMessage, recipient, userId, db);
+          
+          // Get message history to include conflict message
+          let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+          try {
+            const history = await getRecentMessageHistory(db, userId, 10);
+            messageHistory = history
+              .filter(msg => msg.content && msg.content.trim().length > 0)
+              .slice(0, 10)
+              .map(msg => ({
+                direction: msg.direction,
+                content: msg.content,
+              }));
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to retrieve message history for conflict response');
+          }
+          
+          await analyzeAndRespond(contextualMessage, recipient, userId, db, messageHistory);
           return;
         }
       } catch (error) {
         logger.error({ error, userId, messageText }, 'Failed to parse and update date/time from user message');
-        // Fall back to AI analysis with context
-        const contextualMessage = `${pendingOp.originalUserText}. ${messageText}`;
+        // Fall back to AI analysis with full context
+        const contextualMessage = `I was trying to create an event: "${pendingOp.originalUserText}". There was a conflict, and now I'm providing a new time: "${messageText}". Please create the event with this new time.`;
         pendingEventOperations.delete(userId);
-        await analyzeAndRespond(contextualMessage, recipient, userId, db);
+        
+        // Get message history to include conflict message
+        let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+        try {
+          const history = await getRecentMessageHistory(db, userId, 10);
+          messageHistory = history
+            .filter(msg => msg.content && msg.content.trim().length > 0)
+            .slice(0, 10)
+            .map(msg => ({
+              direction: msg.direction,
+              content: msg.content,
+            }));
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to retrieve message history for conflict response');
+        }
+        
+        await analyzeAndRespond(contextualMessage, recipient, userId, db, messageHistory);
         return;
       }
     } else if (isConfirmation) {
@@ -543,13 +618,15 @@ async function analyzeAndRespond(
   text: string,
   recipient: string,
   userId: string,
-  db: Database
+  db: Database,
+  providedMessageHistory?: Array<{ direction: 'incoming' | 'outgoing'; content: string }>
 ): Promise<void> {
   const analyzer = new WhatsappTextAnalysisService();
   const whatsappService = new WhatsAppService();
 
   // OPTIMIZATION: Check cache first, then parallelize independent database queries
-  let messageHistory = cache.get(cache.messageHistory, userId, cache.ttl.history);
+  // Use provided history if available, otherwise check cache
+  let messageHistory = providedMessageHistory || cache.get(cache.messageHistory, userId, cache.ttl.history);
   let calendarConnection = cache.get(cache.calendarConnections, userId, cache.ttl.calendar);
   let userTimezone = cache.get(cache.userTimezones, userId, cache.ttl.timezone);
   
