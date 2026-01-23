@@ -13,6 +13,7 @@ import {
   setDefaultCalendar,
 } from "@imaginecalendar/database/queries";
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 
 export const preferencesRouter = createTRPCRouter({
   get: protectedProcedure.query(async ({ ctx: { db, session } }) => {
