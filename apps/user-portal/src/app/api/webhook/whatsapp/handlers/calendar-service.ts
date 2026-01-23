@@ -2531,9 +2531,27 @@ export class CalendarService implements ICalendarService {
       return end;
     }
 
-    // If end date/time provided, use it
+    // If end date provided, use it (with optional end time)
     if (endDateString) {
       return this.parseDateTime(endDateString, endTimeString);
+    }
+
+    // If end time provided (but no end date), use same date as start with the end time
+    if (endTimeString) {
+      const end = new Date(startDate);
+      const [hours, minutes] = endTimeString.split(':').map(Number);
+      if (!isNaN(hours) && !isNaN(minutes)) {
+        end.setHours(hours, minutes, 0, 0);
+        logger.info(
+          {
+            startDate: startDate.toISOString(),
+            endTimeString,
+            parsedEnd: end.toISOString(),
+          },
+          'Parsed end time on same date as start'
+        );
+        return end;
+      }
     }
 
     // If duration provided, add to start time
@@ -2543,7 +2561,7 @@ export class CalendarService implements ICalendarService {
       return end;
     }
 
-    // Default: 1 hour after start
+    // Default: 1 hour after start (only if no time was provided)
     const end = new Date(startDate);
     end.setHours(end.getHours() + 1);
     return end;

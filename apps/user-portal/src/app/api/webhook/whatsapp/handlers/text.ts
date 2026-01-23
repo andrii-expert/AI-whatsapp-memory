@@ -5414,10 +5414,39 @@ function parseEventTemplateToIntent(
       intent.startDate = parseRelativeDate(dateMatch[1].trim());
     }
     
-    // Extract time
+    // Extract time (can be a single time or a time range like "10:00 to 11:30")
     const timeMatch = template.match(/\s*-\s*time:\s*(.+?)(?:\s*-\s*calendar:|\s*-\s*location:|\s*-\s*attendees:|$)/i);
     if (timeMatch && timeMatch[1]) {
-      intent.startTime = parseTime(timeMatch[1].trim());
+      const timeStr = timeMatch[1].trim();
+      
+      // Check for time range patterns: "10:00 to 11:30", "from 10:00 to 11:30", "10:00-11:30", "10:00 until 11:30"
+      // Pattern matches: optional "from", start time, "to"/"-"/"until", end time
+      const timeRangeMatch = timeStr.match(/(?:from\s+)?([\d:]+(?:\s*(?:am|pm))?)\s+(?:to|-|until)\s+([\d:]+(?:\s*(?:am|pm))?)/i);
+      if (timeRangeMatch && timeRangeMatch[1] && timeRangeMatch[2]) {
+        // Time range detected - extract start and end times
+        intent.startTime = parseTime(timeRangeMatch[1].trim());
+        intent.endTime = parseTime(timeRangeMatch[2].trim());
+        logger.info(
+          {
+            timeStr,
+            startTime: intent.startTime,
+            endTime: intent.endTime,
+            template,
+          },
+          '✅ Parsed time range from event template'
+        );
+      } else {
+        // Single time - just parse it
+        intent.startTime = parseTime(timeStr);
+        logger.info(
+          {
+            timeStr,
+            parsedTime: intent.startTime,
+            template,
+          },
+          '✅ Parsed single time from event template'
+        );
+      }
     }
     
     // Extract location
