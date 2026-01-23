@@ -397,6 +397,78 @@ export class CalendarService implements ICalendarService {
         throw new Error('Event start date is required');
       }
 
+      // Check for existing events with the same title and add indexing if needed
+      let finalEventTitle = intent.title.trim();
+      try {
+        // Query calendar for events with the same title
+        const searchIntent: CalendarIntent = {
+          action: 'QUERY',
+          confidence: 0.9,
+          title: finalEventTitle,
+          queryTimeframe: 'all',
+        };
+        
+        const queryResult = await this.query(userId, searchIntent);
+        const baseTitle = intent.title.trim();
+        
+        if (queryResult.success && queryResult.events) {
+          // Find all events that start with the base title (exact match or with -N suffix)
+          const matchingEvents = queryResult.events.filter(e => {
+            const eventTitle = e.title.trim();
+            // Exact match
+            if (eventTitle === baseTitle) return true;
+            // Match with -N suffix (e.g., "Meeting-1", "Meeting-2")
+            const suffixMatch = eventTitle.match(new RegExp(`^${baseTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`));
+            return !!suffixMatch;
+          });
+          
+          if (matchingEvents.length > 0) {
+            // Extract all index numbers from matching events
+            const indices: number[] = [];
+            matchingEvents.forEach(e => {
+              const eventTitle = e.title.trim();
+              if (eventTitle === baseTitle) {
+                // Exact match counts as index 0 (no suffix)
+                indices.push(0);
+              } else {
+                const suffixMatch = eventTitle.match(new RegExp(`^${baseTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`));
+                if (suffixMatch && suffixMatch[1]) {
+                  indices.push(parseInt(suffixMatch[1], 10));
+                }
+              }
+            });
+            
+            // Find the next available index
+            const maxIndex = Math.max(...indices, -1);
+            const nextIndex = maxIndex + 1;
+            
+            if (nextIndex === 0) {
+              // First duplicate - add -1 to the new one
+              finalEventTitle = `${baseTitle}-1`;
+            } else {
+              finalEventTitle = `${baseTitle}-${nextIndex}`;
+            }
+            
+            logger.info(
+              {
+                userId,
+                originalTitle: intent.title,
+                finalTitle: finalEventTitle,
+                matchingCount: matchingEvents.length,
+                indices,
+                nextIndex,
+              },
+              'Added indexing to event title due to duplicates'
+            );
+          }
+        }
+      } catch (error) {
+        logger.warn({ error, userId, title: intent.title }, 'Failed to check for duplicate event titles, using original title');
+      }
+      
+      // Update intent title with indexed version
+      intent.title = finalEventTitle;
+
       // Parse dates with calendar's timezone
       const startDateTime = this.parseDateTime(
         intent.startDate,

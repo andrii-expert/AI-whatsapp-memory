@@ -6164,9 +6164,69 @@ export class ActionExecutor {
         }
       }
       
+      // Check for existing reminders with the same title and add indexing if needed
+      let finalTitle = parsed.taskName;
+      try {
+        const existingReminders = await getRemindersByUserId(this.db, this.userId);
+        const baseTitle = parsed.taskName.trim();
+        
+        // Find all reminders that start with the base title (exact match or with -N suffix)
+        const matchingReminders = existingReminders.filter(r => {
+          const reminderTitle = r.title.trim();
+          // Exact match
+          if (reminderTitle === baseTitle) return true;
+          // Match with -N suffix (e.g., "Meeting-1", "Meeting-2")
+          const suffixMatch = reminderTitle.match(new RegExp(`^${baseTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`));
+          return !!suffixMatch;
+        });
+        
+        if (matchingReminders.length > 0) {
+          // Extract all index numbers from matching reminders
+          const indices: number[] = [];
+          matchingReminders.forEach(r => {
+            const reminderTitle = r.title.trim();
+            if (reminderTitle === baseTitle) {
+              // Exact match counts as index 0 (no suffix)
+              indices.push(0);
+            } else {
+              const suffixMatch = reminderTitle.match(new RegExp(`^${baseTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`));
+              if (suffixMatch && suffixMatch[1]) {
+                indices.push(parseInt(suffixMatch[1], 10));
+              }
+            }
+          });
+          
+          // Find the next available index
+          const maxIndex = Math.max(...indices, -1);
+          const nextIndex = maxIndex + 1;
+          
+          if (nextIndex === 0) {
+            // First duplicate - keep original name, rename existing to -1
+            // But actually, we should add -1 to the new one to avoid confusion
+            finalTitle = `${baseTitle}-1`;
+          } else {
+            finalTitle = `${baseTitle}-${nextIndex}`;
+          }
+          
+          logger.info(
+            {
+              userId: this.userId,
+              originalTitle: parsed.taskName,
+              finalTitle,
+              matchingCount: matchingReminders.length,
+              indices,
+              nextIndex,
+            },
+            'Added indexing to reminder title due to duplicates'
+          );
+        }
+      } catch (error) {
+        logger.warn({ error, userId: this.userId, title: parsed.taskName }, 'Failed to check for duplicate reminder titles, using original title');
+      }
+      
       const reminderInput: CreateReminderInput = {
         userId: this.userId,
-        title: parsed.taskName,
+        title: finalTitle,
         frequency: scheduleData.frequency || 'once',
         time: scheduleData.time,
         minuteOfHour: scheduleData.minuteOfHour,
