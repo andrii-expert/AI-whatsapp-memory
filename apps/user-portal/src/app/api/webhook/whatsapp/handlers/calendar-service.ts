@@ -482,7 +482,8 @@ export class CalendarService implements ICalendarService {
         intent.endDate,
         intent.endTime,
         intent.duration,
-        intent.isAllDay
+        intent.isAllDay,
+        calendarTimezone
       );
 
       // Log date/time parsing for debugging
@@ -1290,7 +1291,8 @@ export class CalendarService implements ICalendarService {
             intent.endDate,
             intent.endTime,
             intent.duration,
-            allDayToUse
+            allDayToUse,
+            calendarTimezone
           );
         } else {
           // Calculate end based on the original event's duration
@@ -1382,7 +1384,8 @@ export class CalendarService implements ICalendarService {
           intent.endDate,
           intent.endTime,
           intent.duration,
-          intent.isAllDay
+          intent.isAllDay,
+          calendarTimezone
         );
       }
       
@@ -2521,7 +2524,8 @@ export class CalendarService implements ICalendarService {
     endDateString?: string,
     endTimeString?: string,
     duration?: number,
-    isAllDay?: boolean
+    isAllDay?: boolean,
+    timezone?: string
   ): Date {
     // If all-day event, end is next day at midnight
     if (isAllDay) {
@@ -2533,24 +2537,61 @@ export class CalendarService implements ICalendarService {
 
     // If end date provided, use it (with optional end time)
     if (endDateString) {
-      return this.parseDateTime(endDateString, endTimeString);
+      return this.parseDateTime(endDateString, endTimeString, false, timezone || 'Africa/Johannesburg');
     }
 
     // If end time provided (but no end date), use same date as start with the end time
+    // CRITICAL: Must use timezone-aware parsing to match the start time's timezone
     if (endTimeString) {
-      const end = new Date(startDate);
-      const [hours, minutes] = endTimeString.split(':').map(Number);
-      if (!isNaN(hours) && !isNaN(minutes)) {
-        end.setHours(hours, minutes, 0, 0);
-        logger.info(
-          {
-            startDate: startDate.toISOString(),
-            endTimeString,
-            parsedEnd: end.toISOString(),
-          },
-          'Parsed end time on same date as start'
-        );
-        return end;
+      if (timezone) {
+        // Extract the date from startDate in the target timezone
+        const dateFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        const dateParts = dateFormatter.formatToParts(startDate);
+        const year = parseInt(dateParts.find(p => p.type === 'year')?.value || '0', 10);
+        const month = parseInt(dateParts.find(p => p.type === 'month')?.value || '0', 10);
+        const day = parseInt(dateParts.find(p => p.type === 'day')?.value || '0', 10);
+        
+        // Parse the end time
+        const [hours, minutes] = endTimeString.split(':').map(Number);
+        if (!isNaN(hours) && !isNaN(minutes) && year > 0 && month > 0 && day > 0) {
+          // Use parseDateTime to ensure timezone-aware parsing
+          const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const end = this.parseDateTime(dateString, endTimeString, false, timezone);
+          logger.info(
+            {
+              startDate: startDate.toISOString(),
+              endTimeString,
+              timezone,
+              dateString,
+              parsedEnd: end.toISOString(),
+              parsedEndLocal: end.toLocaleString('en-US', { timeZone: timezone }),
+            },
+            'Parsed end time on same date as start (timezone-aware)'
+          );
+          return end;
+        }
+      } else {
+        // Fallback: use direct time setting (not timezone-aware, but better than nothing)
+        const end = new Date(startDate);
+        const [hours, minutes] = endTimeString.split(':').map(Number);
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          end.setHours(hours, minutes, 0, 0);
+          logger.info(
+            {
+              startDate: startDate.toISOString(),
+              endTimeString,
+              parsedEnd: end.toISOString(),
+              warning: 'No timezone provided, using direct time setting',
+            },
+            'Parsed end time on same date as start (no timezone)'
+          );
+          return end;
+        }
       }
     }
 
