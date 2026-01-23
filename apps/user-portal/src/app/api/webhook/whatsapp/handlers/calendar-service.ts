@@ -511,13 +511,35 @@ export class CalendarService implements ICalendarService {
         );
         
         if (conflicts.length > 0) {
+          // Format conflict message with meeting titles in bold
+          const conflictDetails = conflicts.map((conflict, index) => {
+            const conflictDate = new Date(conflict.start);
+            const conflictTime = conflictDate.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+              timeZone: calendarTimezone,
+            });
+            const conflictDateStr = conflictDate.toLocaleDateString('en-US', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              timeZone: calendarTimezone,
+            });
+            return `*${conflict.title || 'Untitled Event'}* on ${conflictDateStr} at ${conflictTime}`;
+          }).join('\n');
+          
+          const conflictMessage = conflicts.length === 1
+            ? `Ahh, you are double booked. You already have *${conflicts[0].title || 'a meeting'}* at that time. Should we leave it as is? Or would you like to change the date or time. Let us know and we will adjust where needed.`
+            : `Ahh, you are double booked. You already have ${conflicts.length} meetings at that time:\n\n${conflictDetails}\n\nShould we leave it as is? Or would you like to change the date or time. Let us know and we will adjust where needed.`;
+          
           // Return special response asking for confirmation
           return {
             success: false,
             action: 'CREATE',
             requiresConfirmation: true,
             conflictEvents: conflicts,
-            message: `Ahh, you are double booked. Should we leave it as is? Or would you like to change the date or time. Let us know and we will adjust where needed.`,
+            message: conflictMessage,
           };
         }
       }
@@ -1615,13 +1637,35 @@ export class CalendarService implements ICalendarService {
         const otherConflicts = conflicts.filter(c => c.id !== targetEvent.id);
         
         if (otherConflicts.length > 0) {
+          // Format conflict message with meeting titles in bold
+          const conflictDetails = otherConflicts.map((conflict, index) => {
+            const conflictDate = new Date(conflict.start);
+            const conflictTime = conflictDate.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+              timeZone: calendarTimezone,
+            });
+            const conflictDateStr = conflictDate.toLocaleDateString('en-US', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              timeZone: calendarTimezone,
+            });
+            return `*${conflict.title || 'Untitled Event'}* on ${conflictDateStr} at ${conflictTime}`;
+          }).join('\n');
+          
+          const conflictMessage = otherConflicts.length === 1
+            ? `Ahh, you are double booked. You already have *${otherConflicts[0].title || 'a meeting'}* at that time. Should we leave it as is? Or would you like to change the date or time. Let us know and we will adjust where needed.`
+            : `Ahh, you are double booked. You already have ${otherConflicts.length} meetings at that time:\n\n${conflictDetails}\n\nShould we leave it as is? Or would you like to change the date or time. Let us know and we will adjust where needed.`;
+          
           // Return special response asking for confirmation
           return {
             success: false,
             action: 'UPDATE',
             requiresConfirmation: true,
             conflictEvents: otherConflicts,
-            message: `Ahh, you are double booked. Should we leave it as is? Or would you like to change the date or time. Let us know and we will adjust where needed.`,
+            message: conflictMessage,
           };
         }
       } else {
