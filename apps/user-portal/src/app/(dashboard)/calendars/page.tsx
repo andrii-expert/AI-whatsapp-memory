@@ -5351,5 +5351,3 @@ export default function CalendarsPage() {
     </div>
   );
 }
-
-}
