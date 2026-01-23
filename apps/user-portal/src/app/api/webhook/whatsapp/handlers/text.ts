@@ -512,7 +512,8 @@ async function processAIResponse(
     if (originalUserText) {
       try {
         // OPTIMIZATION: Reuse cached message history and timezone if available
-        let eventViewMessageHistory = messageHistory || [];
+        // OPTIMIZATION: Use cache first
+        let eventViewMessageHistory = messageHistory || cache.get(cache.messageHistory, userId, cache.ttl.history) || [];
         let eventViewTimezone = userTimezone || 'Africa/Johannesburg';
         
         // Only fetch if we don't have cached data
@@ -580,20 +581,29 @@ async function processAIResponse(
               '✅ AI detected multiple event view requests, showing each event overview'
             );
 
-            // Show event overview for each requested number
-            for (const eventNumber of eventViewAnalysis.eventNumbers) {
+            // OPTIMIZATION: Parallelize multiple event number processing
+            const eventPromises = eventViewAnalysis.eventNumbers.map(async (eventNumber) => {
               const eventActionTemplate = `Show event details: ${eventNumber}`;
               const parsed = executor.parseAction(eventActionTemplate);
               if (parsed) {
                 parsed.resourceType = 'event';
                 const result = await executor.executeAction(parsed, eventTimezone);
-                if (result.success && result.message) {
-                  await whatsappService.sendTextMessage(recipient, result.message);
-                  
-                  // OPTIMIZATION: Non-blocking logging
-                  logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
-                } else if (!result.success && result.message) {
-                  await whatsappService.sendTextMessage(recipient, result.message);
+                return { eventNumber, result, parsed: true };
+              }
+              return { eventNumber, result: null, parsed: false };
+            });
+            
+            const eventResults = await Promise.allSettled(eventPromises);
+            
+            // Send messages in order (but processed in parallel)
+            for (const result of eventResults) {
+              if (result.status === 'fulfilled' && result.value.parsed && result.value.result) {
+                const { result: execResult } = result.value;
+                if (execResult.success && execResult.message) {
+                  await whatsappService.sendTextMessage(recipient, execResult.message);
+                  logOutgoingMessageNonBlocking(db, recipient, userId, execResult.message);
+                } else if (!execResult.success && execResult.message) {
+                  await whatsappService.sendTextMessage(recipient, execResult.message);
                 }
               }
             }
@@ -1068,30 +1078,45 @@ async function processAIResponse(
               '✅ Early detection: Multiple numbers detected, will show event overviews for each'
             );
             
-            // Get timezone for event operations
-            let eventTimezone = userTimezone || 'Africa/Johannesburg';
-            try {
-              const calendarConnection = await getPrimaryCalendar(db, userId);
-              if (calendarConnection) {
-                const calendarService = new CalendarService(db);
-                eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            // OPTIMIZATION: Use cached timezone or fetch once
+            let eventTimezone = userTimezone || cache.get(cache.userTimezones, userId, cache.ttl.timezone) || 'Africa/Johannesburg';
+            if (!userTimezone || eventTimezone === 'Africa/Johannesburg') {
+              try {
+                const calendarConnection = cache.get(cache.calendarConnections, userId, cache.ttl.calendar) || await getPrimaryCalendar(db, userId);
+                if (calendarConnection) {
+                  if (!cache.get(cache.calendarConnections, userId, cache.ttl.calendar)) {
+                    cache.set(cache.calendarConnections, userId, calendarConnection);
+                  }
+                  const calendarService = new CalendarService(db);
+                  eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+                  cache.set(cache.userTimezones, userId, eventTimezone);
+                }
+              } catch (error) {
+                logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
               }
-            } catch (error) {
-              logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
             }
             
-            // Show event overview for each requested number
-            for (const eventNumber of requestedNumbers) {
+            // OPTIMIZATION: Parallelize multiple event number processing
+            const eventPromises = requestedNumbers.map(async (eventNumber) => {
               const eventActionTemplate = `Show event details: ${eventNumber}`;
               const parsed = executor.parseAction(eventActionTemplate);
               if (parsed) {
                 parsed.resourceType = 'event';
                 const result = await executor.executeAction(parsed, eventTimezone);
-                if (result.message.trim().length > 0) {
-                  await whatsappService.sendTextMessage(recipient, result.message);
-                  
-                  // OPTIMIZATION: Non-blocking logging
-                  logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
+                return { eventNumber, result, parsed: true };
+              }
+              return { eventNumber, result: null, parsed: false };
+            });
+            
+            const eventResults = await Promise.allSettled(eventPromises);
+            
+            // Send messages in order (but processed in parallel)
+            for (const result of eventResults) {
+              if (result.status === 'fulfilled' && result.value.parsed && result.value.result) {
+                const { result: execResult } = result.value;
+                if (execResult.message.trim().length > 0) {
+                  await whatsappService.sendTextMessage(recipient, execResult.message);
+                  logOutgoingMessageNonBlocking(db, recipient, userId, execResult.message);
                 }
               }
             }
@@ -1357,20 +1382,8 @@ async function processAIResponse(
               logger.info({ originalUserText, parsed }, 'Fallback: Created shopping item deletion from original user text');
               const result = await executor.executeAction(parsed, userTimezone);
               if (result.message.trim().length > 0) {
-                try {
-                  const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-                  if (whatsappNumber) {
-                    await logOutgoingWhatsAppMessage(db, {
-                      whatsappNumberId: whatsappNumber.id,
-                      userId,
-                      messageType: 'text',
-                      messageContent: result.message,
-                      isFreeMessage: true,
-                    });
-                  }
-                } catch (logError) {
-                  logger.warn({ error: logError, userId }, 'Failed to log outgoing shopping message');
-                }
+                // OPTIMIZATION: Non-blocking logging
+                logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
                 await whatsappService.sendTextMessage(recipient, result.message);
               }
               return;
@@ -2011,31 +2024,45 @@ async function processAIResponse(
         
         // Use AI to analyze if this is an event view request
         try {
-          // Get message history for context
-          let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
-          try {
-            const history = await getRecentMessageHistory(db, userId, 10);
-            messageHistory = history
-              .filter(msg => msg.content && msg.content.trim().length > 0)
-              .slice(0, 10)
-              .map(msg => ({
-                direction: msg.direction,
-                content: msg.content,
-              }));
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
-          }
-
-          // Get user's calendar timezone
-          let eventViewTimezone = userTimezone || 'Africa/Johannesburg';
-          try {
-            const calendarConnection = await getPrimaryCalendar(db, userId);
-            if (calendarConnection) {
-              const calendarService = new CalendarService(db);
-              eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+          // OPTIMIZATION: Use cache first, then parallelize if needed
+          let messageHistory = cache.get(cache.messageHistory, userId, cache.ttl.history) || [];
+          let eventViewTimezone = userTimezone || cache.get(cache.userTimezones, userId, cache.ttl.timezone) || 'Africa/Johannesburg';
+          let calendarConnection = cache.get(cache.calendarConnections, userId, cache.ttl.calendar);
+          
+          // Only fetch if not in cache
+          if (messageHistory.length === 0 || !eventViewTimezone || eventViewTimezone === 'Africa/Johannesburg' || !calendarConnection) {
+            const [historyResult, calendarResult] = await Promise.allSettled([
+              messageHistory.length === 0 ? getRecentMessageHistory(db, userId, 10) : Promise.resolve(null),
+              !calendarConnection ? getPrimaryCalendar(db, userId) : Promise.resolve(null),
+            ]);
+            
+            // Process message history
+            if (messageHistory.length === 0 && historyResult.status === 'fulfilled' && historyResult.value) {
+              messageHistory = historyResult.value
+                .filter(msg => msg.content && msg.content.trim().length > 0)
+                .slice(0, 10)
+                .map(msg => ({
+                  direction: msg.direction,
+                  content: msg.content,
+                }));
+              cache.set(cache.messageHistory, userId, messageHistory);
             }
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+            
+            // Process calendar connection and timezone
+            if (!calendarConnection && calendarResult.status === 'fulfilled' && calendarResult.value) {
+              calendarConnection = calendarResult.value;
+              cache.set(cache.calendarConnections, userId, calendarConnection);
+            }
+            
+            if ((!eventViewTimezone || eventViewTimezone === 'Africa/Johannesburg') && calendarConnection) {
+              try {
+                const calendarService = new CalendarService(db);
+                eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+                cache.set(cache.userTimezones, userId, eventViewTimezone);
+              } catch (error) {
+                logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+              }
+            }
           }
 
           // Analyze with AI
@@ -2060,17 +2087,8 @@ async function processAIResponse(
           if (eventViewAnalysis.isEventViewRequest && eventViewAnalysis.eventNumbers && eventViewAnalysis.eventNumbers.length > 0) {
             const executor = new ActionExecutor(db, userId, whatsappService, recipient);
             
-            // Get timezone for event operations
-            let eventTimezone = eventViewTimezone;
-            try {
-              const calendarConnection = await getPrimaryCalendar(db, userId);
-              if (calendarConnection) {
-                const calendarService = new CalendarService(db);
-                eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
-              }
-            } catch (error) {
-              logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
-            }
+            // OPTIMIZATION: Reuse cached timezone (already fetched above)
+            const eventTimezone = eventViewTimezone;
 
             // Handle multiple event numbers
             if (eventViewAnalysis.eventNumbers.length > 1) {
@@ -2084,33 +2102,29 @@ async function processAIResponse(
                 '✅ AI detected multiple event view requests in catch-all, showing each event overview'
               );
 
-              // Show event overview for each requested number
-              for (const eventNumber of eventViewAnalysis.eventNumbers) {
+              // OPTIMIZATION: Parallelize multiple event number processing
+              const eventPromises = eventViewAnalysis.eventNumbers.map(async (eventNumber) => {
                 const eventActionTemplate = `Show event details: ${eventNumber}`;
                 const parsed = executor.parseAction(eventActionTemplate);
                 if (parsed) {
                   parsed.resourceType = 'event';
                   const result = await executor.executeAction(parsed, eventTimezone);
-                  if (result.success && result.message) {
-                    await whatsappService.sendTextMessage(recipient, result.message);
-                    
-                    // Log outgoing message
-                    try {
-                      const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-                      if (whatsappNumber) {
-                        await logOutgoingWhatsAppMessage(db, {
-                          whatsappNumberId: whatsappNumber.id,
-                          userId,
-                          messageType: 'text',
-                          messageContent: result.message,
-                          isFreeMessage: true,
-                        });
-                      }
-                    } catch (error) {
-                      logger.warn({ error, userId }, 'Failed to log outgoing message');
-                    }
-                  } else if (!result.success && result.message) {
-                    await whatsappService.sendTextMessage(recipient, result.message);
+                  return { eventNumber, result, parsed: true };
+                }
+                return { eventNumber, result: null, parsed: false };
+              });
+              
+              const eventResults = await Promise.allSettled(eventPromises);
+              
+              // Send messages in order (but processed in parallel)
+              for (const result of eventResults) {
+                if (result.status === 'fulfilled' && result.value.parsed && result.value.result) {
+                  const { result: execResult } = result.value;
+                  if (execResult.success && execResult.message) {
+                    await whatsappService.sendTextMessage(recipient, execResult.message);
+                    logOutgoingMessageNonBlocking(db, recipient, userId, execResult.message);
+                  } else if (!execResult.success && execResult.message) {
+                    await whatsappService.sendTextMessage(recipient, execResult.message);
                   }
                 }
               }
@@ -3812,7 +3826,9 @@ async function handleSingleEventOperation(
             // Check if attendee is a tag (before friend name matching)
             const attendeeLower = attendeeForMatching.toLowerCase().trim();
             const matchingTagFriends = friends.filter(friend => 
-              friend.tag && friend.tag.toLowerCase() === attendeeLower
+              friend.tags && Array.isArray(friend.tags) && friend.tags.some(tag => 
+                tag && typeof tag === 'string' && tag.toLowerCase() === attendeeLower
+              )
             );
             
             if (matchingTagFriends.length > 0) {
