@@ -18,6 +18,46 @@ interface PendingEventOperation {
 
 const pendingEventOperations = new Map<string, PendingEventOperation>();
 
+// OPTIMIZATION: In-memory cache for frequently accessed data (with TTL)
+interface CachedData<T> {
+  data: T;
+  timestamp: number;
+}
+
+const cache = {
+  calendarConnections: new Map<string, CachedData<any>>(),
+  userTimezones: new Map<string, CachedData<string>>(),
+  messageHistory: new Map<string, CachedData<Array<{ direction: 'incoming' | 'outgoing'; content: string }>>>(),
+  
+  // Cache TTL: 30 seconds for calendar/timezone, 10 seconds for message history
+  ttl: {
+    calendar: 30 * 1000,
+    timezone: 30 * 1000,
+    history: 10 * 1000,
+  },
+  
+  get<T>(map: Map<string, CachedData<T>>, key: string, ttl: number): T | null {
+    const cached = map.get(key);
+    if (cached && (Date.now() - cached.timestamp) < ttl) {
+      return cached.data;
+    }
+    if (cached) {
+      map.delete(key); // Remove expired entry
+    }
+    return null;
+  },
+  
+  set<T>(map: Map<string, CachedData<T>>, key: string, data: T): void {
+    map.set(key, { data, timestamp: Date.now() });
+  },
+  
+  clear(userId: string): void {
+    this.calendarConnections.delete(userId);
+    this.userTimezones.delete(userId);
+    this.messageHistory.delete(userId);
+  },
+};
+
 type AnalysisIntent = 'task' | 'reminder' | 'note' | 'event';
 
 function isErrorOrFallbackResponse(text: string): boolean {
@@ -245,15 +285,15 @@ export async function handleTextMessage(
     }
   }
 
-  try {
-    await logIncomingWhatsAppMessage(db, {
-      whatsappNumberId: whatsappNumber.id,
-      userId: whatsappNumber.userId,
-      messageId: message.id,
-      messageType: 'text',
-      messageContent: messageText, // Store message content for history
-    });
-  } catch (error) {
+  // OPTIMIZATION: Non-blocking logging and typing indicator (fire-and-forget)
+  // Don't await these operations to improve response time
+  logIncomingWhatsAppMessage(db, {
+    whatsappNumberId: whatsappNumber.id,
+    userId: whatsappNumber.userId,
+    messageId: message.id,
+    messageType: 'text',
+    messageContent: messageText, // Store message content for history
+  }).catch((error) => {
     logger.error(
       {
         error,
@@ -262,9 +302,12 @@ export async function handleTextMessage(
       },
       'Failed to log incoming text message'
     );
-  }
+  });
 
-  await sendTypingIndicatorSafely(message.from, message.id);
+  // Send typing indicator in parallel (don't await)
+  sendTypingIndicatorSafely(message.from, message.id).catch((error) => {
+    logger.warn({ error, senderPhone: message.from }, 'Failed to send typing indicator');
+  });
 
   try {
     await analyzeAndRespond(messageText, message.from, whatsappNumber.userId, db);
@@ -301,33 +344,61 @@ async function analyzeAndRespond(
   const analyzer = new WhatsappTextAnalysisService();
   const whatsappService = new WhatsAppService();
 
-  // Get last 10 message history for context
-  let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
-  try {
-    const history = await getRecentMessageHistory(db, userId, 10);
-    messageHistory = history
-      .filter(msg => msg.content && msg.content.trim().length > 0)
-      .slice(0, 10) // Ensure we only use last 10
-      .map(msg => ({
-        direction: msg.direction,
-        content: msg.content,
-      }));
-  } catch (error) {
-    logger.warn({ error, userId }, 'Failed to retrieve message history, continuing without history');
-  }
+  // OPTIMIZATION: Check cache first, then parallelize independent database queries
+  let messageHistory = cache.get(cache.messageHistory, userId, cache.ttl.history);
+  let calendarConnection = cache.get(cache.calendarConnections, userId, cache.ttl.calendar);
+  let userTimezone = cache.get(cache.userTimezones, userId, cache.ttl.timezone);
+  
+  // If not in cache, fetch in parallel
+  if (!messageHistory || !calendarConnection || !userTimezone) {
+    const [historyResult, calendarResult] = await Promise.allSettled([
+      messageHistory ? Promise.resolve(null) : getRecentMessageHistory(db, userId, 10),
+      calendarConnection ? Promise.resolve(null) : getPrimaryCalendar(db, userId),
+    ]);
 
-  // Get user's calendar timezone for accurate date/time context (used for AI analysis and list operations)
-  let userTimezone = 'Africa/Johannesburg'; // Default fallback
-  try {
-    const calendarConnection = await getPrimaryCalendar(db, userId);
-    if (calendarConnection) {
-      const calendarService = new CalendarService(db);
-      // Access the private getUserTimezone method using bracket notation
-      // This method will fetch timezone from calendar, fallback to user preferences, then default
-      userTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+    // Process message history
+    if (!messageHistory) {
+      if (historyResult.status === 'fulfilled' && historyResult.value) {
+        messageHistory = historyResult.value
+          .filter(msg => msg.content && msg.content.trim().length > 0)
+          .slice(0, 10) // Ensure we only use last 10
+          .map(msg => ({
+            direction: msg.direction,
+            content: msg.content,
+          }));
+        cache.set(cache.messageHistory, userId, messageHistory);
+      } else {
+        logger.warn({ error: historyResult.status === 'rejected' ? historyResult.reason : 'No history', userId }, 'Failed to retrieve message history, continuing without history');
+        messageHistory = [];
+      }
     }
-  } catch (error) {
-    logger.warn({ error, userId }, 'Failed to get user timezone, using default');
+
+    // Get user's calendar timezone for accurate date/time context (used for AI analysis and list operations)
+    if (!userTimezone) {
+      userTimezone = 'Africa/Johannesburg'; // Default fallback
+      if (calendarResult.status === 'fulfilled' && calendarResult.value) {
+        try {
+          calendarConnection = calendarResult.value;
+          cache.set(cache.calendarConnections, userId, calendarConnection);
+          
+          const calendarService = new CalendarService(db);
+          // Access the private getUserTimezone method using bracket notation
+          // This method will fetch timezone from calendar, fallback to user preferences, then default
+          userTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+          cache.set(cache.userTimezones, userId, userTimezone);
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to get user timezone, using default');
+        }
+      } else {
+        logger.warn({ error: calendarResult.status === 'rejected' ? calendarResult.reason : 'No calendar', userId }, 'Failed to get calendar connection, using default timezone');
+      }
+    } else if (!calendarConnection) {
+      // We have timezone but not connection - try to get it for future use
+      if (calendarResult.status === 'fulfilled' && calendarResult.value) {
+        calendarConnection = calendarResult.value;
+        cache.set(cache.calendarConnections, userId, calendarConnection);
+      }
+    }
   }
 
   // Step 1: Analyze message with merged prompt
@@ -414,7 +485,7 @@ async function processAIResponse(
 ): Promise<void> {
   try {
     // Parse the Title from response
-    const titleMatch = aiResponse.match(/^Title:\s*(shopping|task|note|reminder|event|document|address|friend|verification|normal)/i);
+    const titleMatch = aiResponse.match(/^Title:\s*(shopping|reminder|event|friend|verification|normal)/i);
     if (!titleMatch || !titleMatch[1]) {
       logger.warn(
         {
@@ -440,37 +511,43 @@ async function processAIResponse(
     // This must happen BEFORE any other processing to catch cases where AI misclassifies
     if (originalUserText) {
       try {
-        // Get message history for context
-        let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
-        try {
-          const history = await getRecentMessageHistory(db, userId, 10);
-          messageHistory = history
-            .filter(msg => msg.content && msg.content.trim().length > 0)
-            .slice(0, 10)
-            .map(msg => ({
-              direction: msg.direction,
-              content: msg.content,
-            }));
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
-        }
-
-        // Get user's calendar timezone
+        // OPTIMIZATION: Reuse cached message history and timezone if available
+        let eventViewMessageHistory = messageHistory || [];
         let eventViewTimezone = userTimezone || 'Africa/Johannesburg';
-        try {
-          const calendarConnection = await getPrimaryCalendar(db, userId);
-          if (calendarConnection) {
-            const calendarService = new CalendarService(db);
-            eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+        
+        // Only fetch if we don't have cached data
+        if (eventViewMessageHistory.length === 0) {
+          try {
+            const history = await getRecentMessageHistory(db, userId, 10);
+            eventViewMessageHistory = history
+              .filter(msg => msg.content && msg.content.trim().length > 0)
+              .slice(0, 10)
+              .map(msg => ({
+                direction: msg.direction,
+                content: msg.content,
+              }));
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
           }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+        }
+        
+        // Only fetch timezone if not already cached
+        if (!userTimezone || userTimezone === 'Africa/Johannesburg') {
+          try {
+            const calendarConnection = await getPrimaryCalendar(db, userId);
+            if (calendarConnection) {
+              const calendarService = new CalendarService(db);
+              eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+            }
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+          }
         }
 
         // Analyze with AI
         const analyzer = new WhatsappTextAnalysisService();
         const eventViewAnalysis = await analyzer.analyzeEventViewRequest(originalUserText, {
-          messageHistory,
+          messageHistory: eventViewMessageHistory,
           currentDate: new Date(),
           timezone: eventViewTimezone,
         });
@@ -488,17 +565,8 @@ async function processAIResponse(
         if (eventViewAnalysis.isEventViewRequest && eventViewAnalysis.eventNumbers && eventViewAnalysis.eventNumbers.length > 0) {
           const executor = new ActionExecutor(db, userId, whatsappService, recipient);
           
-          // Get timezone for event operations
-          let eventTimezone = eventViewTimezone;
-          try {
-            const calendarConnection = await getPrimaryCalendar(db, userId);
-            if (calendarConnection) {
-              const calendarService = new CalendarService(db);
-              eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
-            }
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
-          }
+          // OPTIMIZATION: Reuse cached timezone
+          const eventTimezone = eventViewTimezone;
 
           // Handle multiple event numbers
           if (eventViewAnalysis.eventNumbers.length > 1) {
@@ -522,21 +590,8 @@ async function processAIResponse(
                 if (result.success && result.message) {
                   await whatsappService.sendTextMessage(recipient, result.message);
                   
-                  // Log outgoing message
-                  try {
-                    const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-                    if (whatsappNumber) {
-                      await logOutgoingWhatsAppMessage(db, {
-                        whatsappNumberId: whatsappNumber.id,
-                        userId,
-                        messageType: 'text',
-                        messageContent: result.message,
-                        isFreeMessage: true,
-                      });
-                    }
-                  } catch (error) {
-                    logger.warn({ error, userId }, 'Failed to log outgoing message');
-                  }
+                  // OPTIMIZATION: Non-blocking logging
+                  logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
                 } else if (!result.success && result.message) {
                   await whatsappService.sendTextMessage(recipient, result.message);
                 }
@@ -629,20 +684,8 @@ async function processAIResponse(
           logger.info({ originalUserText, parsed }, 'Handling shopping item deletion directly from user text');
           const result = await executor.executeAction(parsed, userTimezone);
           if (result.message.trim().length > 0) {
-            try {
-              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-              if (whatsappNumber) {
-                await logOutgoingWhatsAppMessage(db, {
-                  whatsappNumberId: whatsappNumber.id,
-                  userId,
-                  messageType: 'text',
-                  messageContent: result.message,
-                  isFreeMessage: true,
-                });
-              }
-            } catch (logError) {
-              logger.warn({ error: logError, userId }, 'Failed to log outgoing shopping message');
-            }
+            // OPTIMIZATION: Non-blocking logging
+            logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
             await whatsappService.sendTextMessage(recipient, result.message);
           }
           return;
@@ -796,21 +839,8 @@ async function processAIResponse(
                 if (result.success && result.message) {
                   await whatsappService.sendTextMessage(recipient, result.message);
                   
-                  // Log outgoing message
-                  try {
-                    const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-                    if (whatsappNumber) {
-                      await logOutgoingWhatsAppMessage(db, {
-                        whatsappNumberId: whatsappNumber.id,
-                        userId,
-                        messageType: 'text',
-                        messageContent: result.message,
-                        isFreeMessage: true,
-                      });
-                    }
-                  } catch (error) {
-                    logger.warn({ error, userId }, 'Failed to log outgoing message');
-                  }
+                  // OPTIMIZATION: Non-blocking logging
+                  logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
                 } else if (!result.success && result.message) {
                   await whatsappService.sendTextMessage(recipient, result.message);
                 }
@@ -836,21 +866,8 @@ async function processAIResponse(
       // Send it to the user
       await whatsappService.sendTextMessage(recipient, actionTemplate);
       
-      // Log outgoing message
-      try {
-        const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-        if (whatsappNumber) {
-          await logOutgoingWhatsAppMessage(db, {
-            whatsappNumberId: whatsappNumber.id,
-            userId,
-            messageType: 'text',
-            messageContent: actionTemplate,
-            isFreeMessage: true,
-          });
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to log outgoing message');
-      }
+      // OPTIMIZATION: Non-blocking logging
+      logOutgoingMessageNonBlocking(db, recipient, userId, actionTemplate);
       
       logger.info(
         {
@@ -1073,21 +1090,8 @@ async function processAIResponse(
                 if (result.message.trim().length > 0) {
                   await whatsappService.sendTextMessage(recipient, result.message);
                   
-                  // Log outgoing message
-                  try {
-                    const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-                    if (whatsappNumber) {
-                      await logOutgoingWhatsAppMessage(db, {
-                        whatsappNumberId: whatsappNumber.id,
-                        userId,
-                        messageType: 'text',
-                        messageContent: result.message,
-                        isFreeMessage: true,
-                      });
-                    }
-                  } catch (error) {
-                    logger.warn({ error, userId }, 'Failed to log outgoing message');
-                  }
+                  // OPTIMIZATION: Non-blocking logging
+                  logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
                 }
               }
             }
@@ -1192,7 +1196,7 @@ async function processAIResponse(
     }
     
     // Handle list operations for all types (tasks, notes, reminders, events, documents, addresses)
-    if (isListOperation && (titleType === 'shopping' || titleType === 'task' || titleType === 'note' || titleType === 'reminder' || titleType === 'event' || titleType === 'document' || titleType === 'address' || titleType === 'friend')) {
+    if (isListOperation && (titleType === 'shopping' || titleType === 'reminder' || titleType === 'event' || titleType === 'friend')) {
       try {
         logger.info(
           {
@@ -1228,21 +1232,8 @@ async function processAIResponse(
               recipient,
               `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
             );
-            // Log outgoing message
-            try {
-              const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-              if (whatsappNumber) {
-                await logOutgoingWhatsAppMessage(db, {
-                  whatsappNumberId: whatsappNumber.id,
-                  userId,
-                  messageType: 'text',
-                  messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
-                  isFreeMessage: true,
-                });
-              }
-            } catch (error) {
-              logger.warn({ error, userId }, 'Failed to log outgoing AI response message');
-            }
+            // OPTIMIZATION: Non-blocking logging
+            logOutgoingMessageNonBlocking(db, recipient, userId, `🤖 AI Response:\n${aiResponse.substring(0, 500)}`);
           } catch (error) {
             logger.warn({ error, userId }, 'Failed to send AI response to user');
           }
@@ -1677,8 +1668,18 @@ async function processAIResponse(
       return;
     }
     
-    // Handle non-list task operations
-    if (titleType === 'task') {
+    // Handle unsupported operations (task, note, document, address removed)
+    if (titleType === 'task' || titleType === 'note' || titleType === 'document' || titleType === 'address') {
+      logger.warn({ userId, titleType }, `${titleType} operations are no longer supported`);
+      await whatsappService.sendTextMessage(
+        recipient,
+        `I'm sorry, ${titleType} operations are not currently supported. I can help you with reminders, events, shopping lists, and friends.`
+      );
+      return;
+    }
+    
+    // Legacy handlers removed - kept for reference only
+    if (false && titleType === 'task') {
       // Split action template into individual lines for multi-item support (e.g., shopping list)
       const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       
@@ -1910,11 +1911,11 @@ async function processAIResponse(
       } else {
         logger.info({ userId, titleType }, 'No actions parsed from template');
       }
-      return; // Exit early after handling task operation
+      return; // Exit early after handling task operation (legacy - disabled)
     }
     
-    // Handle non-list document operations
-    if (titleType === 'document') {
+    // Legacy document handler removed (disabled)
+    if (false && titleType === 'document') {
       // Send AI response to user (as requested)
       try {
         await whatsappService.sendTextMessage(
@@ -2139,21 +2140,8 @@ async function processAIResponse(
                 if (result.success && result.message) {
                   await whatsappService.sendTextMessage(recipient, result.message);
                   
-                  // Log outgoing message
-                  try {
-                    const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-                    if (whatsappNumber) {
-                      await logOutgoingWhatsAppMessage(db, {
-                        whatsappNumberId: whatsappNumber.id,
-                        userId,
-                        messageType: 'text',
-                        messageContent: result.message,
-                        isFreeMessage: true,
-                      });
-                    }
-                  } catch (error) {
-                    logger.warn({ error, userId }, 'Failed to log outgoing message');
-                  }
+                  // OPTIMIZATION: Non-blocking logging
+                  logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
                 } else if (!result.success && result.message) {
                   await whatsappService.sendTextMessage(recipient, result.message);
                 }
@@ -2689,9 +2677,6 @@ async function processAIResponse(
           "I'm sorry, I encountered an error processing your event request. Please try again."
         );
       }
-    } else if (titleType === 'note') {
-      // For non-list operations on notes, log as TODO
-      logger.info({ userId, titleType, actionTemplate: actionTemplate.substring(0, 100) }, `${titleType} executor not yet implemented for this operation`);
     } else if (titleType === 'reminder') {
       // Handle reminder operations
       const isCreate = /^Create a reminder:/i.test(actionTemplate);
@@ -2709,36 +2694,36 @@ async function processAIResponse(
             recipient,
             `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
           );
-          // Log outgoing message
-          try {
-            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-            if (whatsappNumber) {
-              await logOutgoingWhatsAppMessage(db, {
-                whatsappNumberId: whatsappNumber.id,
-                userId,
-                messageType: 'text',
-                messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
-                isFreeMessage: true,
-              });
-            }
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to log outgoing AI response message');
-          }
+          // OPTIMIZATION: Non-blocking logging
+          logOutgoingMessageNonBlocking(db, recipient, userId, `🤖 AI Response:\n${aiResponse.substring(0, 500)}`);
         } catch (error) {
           logger.warn({ error, userId }, 'Failed to send AI response to user');
         }
       }
       
-      // Get calendar timezone for reminder operations
-      let calendarTimezone = 'Africa/Johannesburg'; // Default fallback
-      try {
-        const calendarConnection = await getPrimaryCalendar(db, userId);
-        if (calendarConnection) {
+      // OPTIMIZATION: Reuse cached calendar connection and timezone
+      let calendarTimezone = userTimezone || 'Africa/Johannesburg'; // Default fallback
+      let calendarConnection = cache.get(cache.calendarConnections, userId, cache.ttl.calendar);
+      
+      if (!calendarConnection) {
+        try {
+          calendarConnection = await getPrimaryCalendar(db, userId);
+          if (calendarConnection) {
+            cache.set(cache.calendarConnections, userId, calendarConnection);
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to get calendar connection for reminder operations');
+        }
+      }
+      
+      if (calendarConnection && (!userTimezone || userTimezone === 'Africa/Johannesburg')) {
+        try {
           const calendarService = new CalendarService(db);
           calendarTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+          cache.set(cache.userTimezones, userId, calendarTimezone);
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to get calendar timezone for reminder operations, using default');
         }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to get calendar timezone for reminder operations, using default');
       }
       
       // Handle reminder operations
@@ -2752,21 +2737,8 @@ async function processAIResponse(
             recipient,
             `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
           );
-          // Log outgoing message
-          try {
-            const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-            if (whatsappNumber) {
-              await logOutgoingWhatsAppMessage(db, {
-                whatsappNumberId: whatsappNumber.id,
-                userId,
-                messageType: 'text',
-                messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
-                isFreeMessage: true,
-              });
-            }
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to log outgoing AI response message');
-          }
+          // OPTIMIZATION: Non-blocking logging
+          logOutgoingMessageNonBlocking(db, recipient, userId, `🤖 AI Response:\n${aiResponse.substring(0, 500)}`);
         } catch (error) {
           logger.warn({ error, userId }, 'Failed to send AI response to user');
         }
@@ -2866,6 +2838,17 @@ async function processAIResponse(
         }
       }
     } else if (titleType === 'address') {
+      // Address operations no longer supported - removed handler
+      logger.warn({ userId, titleType }, 'Address operations are no longer supported');
+      await whatsappService.sendTextMessage(
+        recipient,
+        "I'm sorry, address operations are not currently supported. I can help you with reminders, events, shopping lists, and friends."
+      );
+      return;
+    }
+    
+    // Legacy address handler removed - kept for reference only
+    if (false && titleType === 'address') {
       // Check if AI misclassified an event location update as an address update
       // This happens when user says "edit location to paul office" but AI generates "Update an address: Paul - changes: location to Office"
       const isUpdateAddress = actionTemplate.toLowerCase().startsWith('update an address:') || 
@@ -5964,6 +5947,36 @@ function parseTime(timeStr: string): string {
   // Default to current time if can't parse
   const now = new Date();
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * OPTIMIZATION: Non-blocking logging helper
+ * Logs outgoing messages without blocking the main workflow
+ */
+function logOutgoingMessageNonBlocking(
+  db: Database,
+  recipient: string,
+  userId: string,
+  messageContent: string,
+  messageType: 'text' | 'interactive' = 'text',
+  isFreeMessage: boolean = true
+): void {
+  // Fire-and-forget logging to improve response time
+  getVerifiedWhatsappNumberByPhone(db, recipient)
+    .then((whatsappNumber) => {
+      if (whatsappNumber) {
+        return logOutgoingWhatsAppMessage(db, {
+          whatsappNumberId: whatsappNumber.id,
+          userId,
+          messageType,
+          messageContent,
+          isFreeMessage,
+        });
+      }
+    })
+    .catch((error) => {
+      logger.warn({ error, userId, recipient }, 'Failed to log outgoing message (non-blocking)');
+    });
 }
 
 async function sendTypingIndicatorSafely(recipient: string, messageId: string | undefined): Promise<void> {
