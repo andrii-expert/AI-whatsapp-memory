@@ -180,26 +180,61 @@ export async function handleTextMessage(
   const recipient = message.from;
   const whatsappService = new WhatsAppService();
 
-  // Check if user is confirming a pending event operation (conflict resolution)
-  const messageLower = messageText.toLowerCase().trim();
-  const isConfirmation = messageLower === 'yes' || messageLower === 'y' || messageLower === 'ok' || messageLower === 'okay' || messageLower === 'confirm' || messageLower === 'proceed';
-  
-  if (isConfirmation) {
-    const pendingOp = pendingEventOperations.get(userId);
-    if (pendingOp) {
-      // Check if pending operation is still valid (not older than 5 minutes)
-      const ageMinutes = (new Date().getTime() - pendingOp.timestamp.getTime()) / (1000 * 60);
-      if (ageMinutes > 5) {
-        // Pending operation expired
-        pendingEventOperations.delete(userId);
+  // Check if user is responding to a pending event operation (conflict resolution)
+  const pendingOp = pendingEventOperations.get(userId);
+  if (pendingOp) {
+    // Check if pending operation is still valid (not older than 5 minutes)
+    const ageMinutes = (new Date().getTime() - pendingOp.timestamp.getTime()) / (1000 * 60);
+    if (ageMinutes > 5) {
+      // Pending operation expired
+      pendingEventOperations.delete(userId);
+      await whatsappService.sendTextMessage(
+        recipient,
+        "The pending operation has expired. Please try creating/updating the event again."
+      );
+      return;
+    }
+    
+    const messageLower = messageText.toLowerCase().trim();
+    const isConfirmation = messageLower === 'yes' || messageLower === 'y' || messageLower === 'ok' || messageLower === 'okay' || messageLower === 'confirm' || messageLower === 'proceed' || messageLower === 'leave it as is' || messageLower.includes('leave it');
+    
+    // Check if user provided a new date/time instead of just confirming
+    // Look for date/time patterns in the message
+    const hasDatePattern = /(?:on|for|at|tomorrow|today|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)|january|february|march|april|may|june|july|august|september|october|november|december)/i.test(messageText);
+    const hasTimePattern = /(?:at|@)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{1,2}(?::\d{2})?\s*(?:am|pm)/i.test(messageText);
+    const hasNewDateTime = hasDatePattern || hasTimePattern;
+    
+    if (hasNewDateTime && !isConfirmation) {
+      // User provided a new date/time - parse it and update the intent
+      logger.info(
+        {
+          userId,
+          action: pendingOp.intent.action,
+          userMessage: messageText,
+          hasDatePattern,
+          hasTimePattern,
+        },
+        'User provided new date/time for pending event operation'
+      );
+      
+      // Remove from pending operations
+      pendingEventOperations.delete(userId);
+      
+      // Parse the new date/time from the user's message
+      try {
+        // Use the AI analysis to parse the new date/time
+        await analyzeAndRespond(messageText, recipient, userId, db);
+        return; // Exit early - analyzeAndRespond will handle the new request
+      } catch (error) {
+        logger.error({ error, userId }, 'Failed to parse new date/time from user message');
         await whatsappService.sendTextMessage(
           recipient,
-          "The pending operation has expired. Please try creating/updating the event again."
+          "I'm sorry, I couldn't understand the new date or time you provided. Please try again with a clearer format (e.g., 'tomorrow at 2pm' or '25th January at 3pm')."
         );
         return;
       }
-      
-      // User confirmed - proceed with the operation
+    } else if (isConfirmation) {
+      // User confirmed - proceed with the operation (leave it as is / overlap)
       logger.info(
         {
           userId,
@@ -283,6 +318,8 @@ export async function handleTextMessage(
       }
       return; // Exit early after handling confirmation
     }
+    // If neither confirmation nor new date/time, continue with normal processing
+    // (user might be asking something else, or the message will be processed normally)
   }
 
   // OPTIMIZATION: Non-blocking logging and typing indicator (fire-and-forget)
