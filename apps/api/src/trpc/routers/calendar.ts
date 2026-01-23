@@ -7,6 +7,7 @@ import {
   updateCalendarConnection,
   deleteCalendarConnection,
   setPrimaryCalendar,
+  getPrimaryCalendar,
 } from "@imaginecalendar/database/queries";
 import {
   updateWhatsAppCalendarSettings,
@@ -252,40 +253,64 @@ export const calendarRouter = createTRPCRouter({
           totalCalendars: providerCalendars.length
         }, "Calendar connections processed successfully");
 
-        // Auto-select newly created calendars for WhatsApp
-        if (createdConnections.length > 0) {
-          try {
-            // Get current WhatsApp calendar IDs
-            const currentWhatsAppCalendarIds = await getWhatsAppCalendars(db, session.user.id);
-            
-            // Get calendar IDs of newly created calendars (only those with calendarId set)
+        // Auto-select calendars for WhatsApp
+        // Priority: 1) Primary calendar (main calendar), 2) All newly created calendars
+        try {
+          // Get current WhatsApp calendar IDs
+          const currentWhatsAppCalendarIds = await getWhatsAppCalendars(db, session.user.id);
+          
+          // Get the user's primary calendar (may be from this connection or existing)
+          const userPrimaryCalendar = await getPrimaryCalendar(db, session.user.id);
+          
+          // Calendar IDs to add
+          const calendarIdsToAdd: string[] = [];
+          
+          // 1. Always add primary calendar if it exists and has a calendarId
+          if (userPrimaryCalendar && userPrimaryCalendar.calendarId) {
+            calendarIdsToAdd.push(userPrimaryCalendar.calendarId);
+            logger.info({
+              userId: session.user.id,
+              provider: input.provider,
+              primaryCalendarId: userPrimaryCalendar.calendarId,
+              primaryCalendarName: userPrimaryCalendar.calendarName,
+            }, "Found primary calendar to auto-select for WhatsApp");
+          }
+          
+          // 2. Add all newly created calendars (if any)
+          if (createdConnections.length > 0) {
             const newCalendarIds = createdConnections
               .map(conn => conn.calendarId)
               .filter((id): id is string => Boolean(id));
-            
-            // Combine current and new calendar IDs, removing duplicates
-            const updatedWhatsAppCalendarIds = [
-              ...new Set([...currentWhatsAppCalendarIds, ...newCalendarIds])
-            ];
-            
+            calendarIdsToAdd.push(...newCalendarIds);
+          }
+          
+          // Combine current and new calendar IDs, removing duplicates
+          const updatedWhatsAppCalendarIds = [
+            ...new Set([...currentWhatsAppCalendarIds, ...calendarIdsToAdd])
+          ];
+          
+          // Only update if there are new calendars to add
+          if (calendarIdsToAdd.length > 0) {
             // Update WhatsApp calendar settings
             await updateWhatsAppCalendarSettings(db, session.user.id, updatedWhatsAppCalendarIds);
             
             logger.info({
               userId: session.user.id,
               provider: input.provider,
-              newCalendarIds,
+              primaryCalendarId: userPrimaryCalendar?.calendarId,
+              newCalendarIds: createdConnections.map(c => c.calendarId).filter(Boolean),
+              calendarIdsToAdd,
               previousCount: currentWhatsAppCalendarIds.length,
               updatedCount: updatedWhatsAppCalendarIds.length,
-            }, "Auto-selected newly created calendars for WhatsApp");
-          } catch (error: any) {
-            // Log error but don't fail the connection process
-            logger.error({
-              userId: session.user.id,
-              provider: input.provider,
-              error: error.message,
-            }, "Failed to auto-select calendars for WhatsApp");
+            }, "Auto-selected primary and newly created calendars for WhatsApp");
           }
+        } catch (error: any) {
+          // Log error but don't fail the connection process
+          logger.error({
+            userId: session.user.id,
+            provider: input.provider,
+            error: error.message,
+          }, "Failed to auto-select calendars for WhatsApp");
         }
 
         // Return the primary calendar connection (or first one if no primary)
