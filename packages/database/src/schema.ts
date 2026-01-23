@@ -266,7 +266,6 @@ export const userPreferences = pgTable("user_preferences", {
   calendarNotificationMinutes: integer("calendar_notification_minutes").default(10).notNull(),
   defaultCalendarId: text("default_calendar_id"),
   whatsappCalendarIds: jsonb("whatsapp_calendar_ids"),
-  visibleCalendarIds: jsonb("visible_calendar_ids"), // Calendar IDs visible on web calendar page
   
   // Locale settings
   timezone: text("timezone").default("Africa/Johannesburg").notNull(),

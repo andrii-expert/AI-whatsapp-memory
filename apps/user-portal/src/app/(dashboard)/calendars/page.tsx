@@ -820,7 +820,14 @@ export default function CalendarsPage() {
   const [eventAttendees, setEventAttendees] = useState<string[]>([]); // Array of email addresses
   const [manualAttendeeInput, setManualAttendeeInput] = useState(""); // For manual email/phone entry
   const [attendeeSearchOpen, setAttendeeSearchOpen] = useState(false); // For autocomplete popover
-  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
+    // Try to load from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCalendarIds');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
   // Removed viewMode - only monthly calendar view is supported
   const [calendarSelectionDialog, setCalendarSelectionDialog] = useState<{
     open: boolean;
@@ -963,17 +970,6 @@ export default function CalendarsPage() {
   const { data: calendars = [], isLoading, refetch } = useQuery(
     trpc.calendar.list.queryOptions()
   );
-
-  // Fetch visible calendar IDs from database
-  const { data: visibleCalendarIds = [] } = useQuery(
-    trpc.preferences.getVisibleCalendars.queryOptions()
-  );
-
-  // Mutation to update visible calendar IDs
-  const updateVisibleCalendarsMutation = useMutation({
-    mutationFn: (calendarIds: string[]) =>
-      trpc.preferences.updateVisibleCalendars.mutate({ visibleCalendarIds: calendarIds }),
-  });
 
   // Fetch addresses
   const { data: addresses = [] } = useQuery(trpc.addresses.list.queryOptions());
@@ -1341,22 +1337,16 @@ export default function CalendarsPage() {
     }
   };
 
-  // Load visible calendar IDs from database when they're available
+  // Save selectedCalendarIds to localStorage whenever it changes
   useEffect(() => {
-    if (visibleCalendarIds.length > 0 && selectedCalendarIds.length === 0) {
-      // Filter to only include active calendars
-      const activeCalendarIds = calendars
-        .filter((cal: any) => cal.isActive && visibleCalendarIds.includes(cal.id))
-        .map((cal: any) => cal.id);
-      if (activeCalendarIds.length > 0) {
-        setSelectedCalendarIds(activeCalendarIds);
-      }
+    if (typeof window !== 'undefined' && selectedCalendarIds.length > 0) {
+      localStorage.setItem('selectedCalendarIds', JSON.stringify(selectedCalendarIds));
     }
-  }, [visibleCalendarIds, calendars, selectedCalendarIds.length]);
+  }, [selectedCalendarIds]);
 
-  // Auto-select primary calendar (or first active calendar) when calendars load (only if no saved selection from database)
+  // Auto-select primary calendar (or first active calendar) when calendars load (only if no saved selection)
   useEffect(() => {
-    if (calendars.length > 0 && selectedCalendarIds.length === 0 && visibleCalendarIds.length === 0) {
+    if (calendars.length > 0 && selectedCalendarIds.length === 0) {
       const activeCalendars = calendars.filter((cal: any) => cal.isActive);
       if (activeCalendars.length > 0) {
         // Prefer primary calendar, otherwise use first active calendar
@@ -1364,27 +1354,10 @@ export default function CalendarsPage() {
         const defaultCalendar = primaryCalendar || activeCalendars[0];
         if (defaultCalendar) {
           setSelectedCalendarIds([defaultCalendar.id]);
-          // Also save to database
-          updateVisibleCalendarsMutation.mutate([defaultCalendar.id]);
         }
       }
     }
-  }, [calendars, selectedCalendarIds.length, visibleCalendarIds.length]);
-
-  // Save selectedCalendarIds to database whenever it changes (debounced)
-  useEffect(() => {
-    if (selectedCalendarIds.length > 0) {
-      // Also save to localStorage for quick access
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('selectedCalendarIds', JSON.stringify(selectedCalendarIds));
-      }
-      // Save to database (debounced to avoid too many updates)
-      const timeoutId = setTimeout(() => {
-        updateVisibleCalendarsMutation.mutate(selectedCalendarIds);
-      }, 500);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [selectedCalendarIds]);
+  }, [calendars, selectedCalendarIds.length]);
 
   // Close mobile sidebar on Escape key
   useEffect(() => {

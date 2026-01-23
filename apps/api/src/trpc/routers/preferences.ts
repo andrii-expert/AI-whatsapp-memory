@@ -7,13 +7,10 @@ import {
   updateLocaleSettings,
   updateCalendarSettings,
   updateWhatsAppCalendarSettings,
-  updateVisibleCalendarSettings,
-  getVisibleCalendars,
   resetPreferencesToDefault,
   setDefaultCalendar,
 } from "@imaginecalendar/database/queries";
 import { TRPCError } from "@trpc/server";
-import { z } from "zod";
 
 export const preferencesRouter = createTRPCRouter({
   get: protectedProcedure.query(async ({ ctx: { db, session } }) => {
@@ -86,20 +83,5 @@ export const preferencesRouter = createTRPCRouter({
   reset: protectedProcedure
     .mutation(async ({ ctx: { db, session } }) => {
       return resetPreferencesToDefault(db, session.user.id);
-    }),
-
-  getVisibleCalendars: protectedProcedure
-    .query(async ({ ctx: { db, session } }) => {
-      return getVisibleCalendars(db, session.user.id);
-    }),
-
-  updateVisibleCalendars: protectedProcedure
-    .input(
-      z.object({
-        visibleCalendarIds: z.array(z.string()),
-      })
-    )
-    .mutation(async ({ ctx: { db, session }, input }) => {
-      return updateVisibleCalendarSettings(db, session.user.id, input.visibleCalendarIds);
     }),
 });
