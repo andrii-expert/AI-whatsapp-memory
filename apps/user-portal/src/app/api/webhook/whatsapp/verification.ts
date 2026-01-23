@@ -4,7 +4,7 @@ import {
   logIncomingWhatsAppMessage,
   getUserById,
 } from '@imaginecalendar/database/queries';
-import type { WhatsAppParsedMessage, CTAButtonMessage } from '@imaginecalendar/whatsapp';
+import type { WhatsAppParsedMessage } from '@imaginecalendar/whatsapp';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
 import { extractVerificationCode } from '@imaginecalendar/whatsapp';
 import { metrics } from '@/lib/metrics';
@@ -97,17 +97,10 @@ export async function handleVerificationMessage(
           
           welcomeResponse = await whatsappService.sendTextMessage(phoneNumber, updateMessage);
         } else {
-          // New verification during onboarding - send welcome message with CTA button
-          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://crackon.ai';
-          const finishSetupUrl = `${baseUrl}/onboarding/whatsapp`;
+          // New verification during onboarding - send welcome message without button
+          const welcomeMessage = `*👋Welcome to CrackOn ${userName}*\n\nYour number is verified and you are one step closer to being more efficient, effective and organised.\n\n*Please go back to your browser to complete your signup process.*`;
           
-          const welcomeMessage: CTAButtonMessage = {
-            bodyText: `*👋Welcome to CrackOn ${userName}*\n\nYour number is verified and you are one step closer to being more efficient, effective and organised. Tap the button below to complete your setup.`,
-            buttonText: 'Finish setup',
-            buttonUrl: finishSetupUrl,
-          };
-          
-          welcomeResponse = await whatsappService.sendCTAButtonMessage(phoneNumber, welcomeMessage);
+          welcomeResponse = await whatsappService.sendTextMessage(phoneNumber, welcomeMessage);
         }
         
         // Log the outgoing message
@@ -119,7 +112,7 @@ export async function handleVerificationMessage(
             whatsappNumberId: verificationResult.whatsappNumberId,
             userId: verificationResult.userId,
             messageId: welcomeResponse.messages?.[0]?.id,
-            messageType: isUpdate ? 'text' : 'interactive',
+            messageType: 'text',
             isFreeMessage,
           });
         } catch (logError) {
