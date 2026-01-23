@@ -259,24 +259,44 @@ export const calendarRouter = createTRPCRouter({
           // Get current WhatsApp calendar IDs
           const currentWhatsAppCalendarIds = await getWhatsAppCalendars(db, session.user.id);
           
-          // Get the user's primary calendar (may be from this connection or existing)
-          const userPrimaryCalendar = await getPrimaryCalendar(db, session.user.id);
-          
           // Calendar IDs to add
           const calendarIdsToAdd: string[] = [];
           
-          // 1. Always add primary calendar if it exists and has a calendarId
-          if (userPrimaryCalendar && userPrimaryCalendar.calendarId) {
-            calendarIdsToAdd.push(userPrimaryCalendar.calendarId);
+          // 1. Find primary calendar - check newly created connections first, then database
+          let primaryCalendarId: string | undefined;
+          
+          // Check if any newly created connection is marked as primary
+          const primaryInCreated = createdConnections.find(conn => conn.isPrimary);
+          if (primaryInCreated && primaryInCreated.calendarId) {
+            primaryCalendarId = primaryInCreated.calendarId;
             logger.info({
               userId: session.user.id,
               provider: input.provider,
-              primaryCalendarId: userPrimaryCalendar.calendarId,
-              primaryCalendarName: userPrimaryCalendar.calendarName,
-            }, "Found primary calendar to auto-select for WhatsApp");
+              primaryCalendarId: primaryInCreated.calendarId,
+              primaryCalendarName: primaryInCreated.calendarName,
+              source: 'newly_created',
+            }, "Found primary calendar in newly created connections");
+          } else {
+            // If not in newly created, get from database
+            const userPrimaryCalendar = await getPrimaryCalendar(db, session.user.id);
+            if (userPrimaryCalendar && userPrimaryCalendar.calendarId) {
+              primaryCalendarId = userPrimaryCalendar.calendarId;
+              logger.info({
+                userId: session.user.id,
+                provider: input.provider,
+                primaryCalendarId: userPrimaryCalendar.calendarId,
+                primaryCalendarName: userPrimaryCalendar.calendarName,
+                source: 'database',
+              }, "Found primary calendar in database");
+            }
           }
           
-          // 2. Add all newly created calendars (if any)
+          // Always add primary calendar if it exists
+          if (primaryCalendarId) {
+            calendarIdsToAdd.push(primaryCalendarId);
+          }
+          
+          // 2. Add all newly created calendars (if any) - this will include primary if it was just created
           if (createdConnections.length > 0) {
             const newCalendarIds = createdConnections
               .map(conn => conn.calendarId)
@@ -289,21 +309,19 @@ export const calendarRouter = createTRPCRouter({
             ...new Set([...currentWhatsAppCalendarIds, ...calendarIdsToAdd])
           ];
           
-          // Only update if there are new calendars to add
-          if (calendarIdsToAdd.length > 0) {
-            // Update WhatsApp calendar settings
-            await updateWhatsAppCalendarSettings(db, session.user.id, updatedWhatsAppCalendarIds);
-            
-            logger.info({
-              userId: session.user.id,
-              provider: input.provider,
-              primaryCalendarId: userPrimaryCalendar?.calendarId,
-              newCalendarIds: createdConnections.map(c => c.calendarId).filter(Boolean),
-              calendarIdsToAdd,
-              previousCount: currentWhatsAppCalendarIds.length,
-              updatedCount: updatedWhatsAppCalendarIds.length,
-            }, "Auto-selected primary and newly created calendars for WhatsApp");
-          }
+          // Always update to ensure primary calendar is selected (even if no new calendars)
+          // This ensures primary calendar is always ticked
+          await updateWhatsAppCalendarSettings(db, session.user.id, updatedWhatsAppCalendarIds);
+          
+          logger.info({
+            userId: session.user.id,
+            provider: input.provider,
+            primaryCalendarId,
+            newCalendarIds: createdConnections.map(c => c.calendarId).filter(Boolean),
+            calendarIdsToAdd: [...new Set(calendarIdsToAdd)],
+            previousCount: currentWhatsAppCalendarIds.length,
+            updatedCount: updatedWhatsAppCalendarIds.length,
+          }, "Auto-selected primary and newly created calendars for WhatsApp");
         } catch (error: any) {
           // Log error but don't fail the connection process
           logger.error({
