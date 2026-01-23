@@ -12,6 +12,8 @@ import {
 import {
   updateWhatsAppCalendarSettings,
   getWhatsAppCalendars,
+  updateVisibleCalendarSettings,
+  getVisibleCalendars,
 } from "@imaginecalendar/database/queries";
 import { createCalendarProvider } from "@imaginecalendar/calendar-integrations";
 import { logger } from "@imaginecalendar/logger";
@@ -345,6 +347,99 @@ export const calendarRouter = createTRPCRouter({
             provider: input.provider,
             error: error.message,
           }, "Failed to auto-select calendars for WhatsApp");
+        }
+
+        // Auto-select calendars for web display (visible on calendar page)
+        // Priority: 1) Primary calendar (main calendar), 2) All newly created calendars
+        try {
+          // Get current visible calendar IDs (database connection IDs, not provider calendar IDs)
+          const currentVisibleCalendarIds = await getVisibleCalendars(db, session.user.id);
+          
+          // Calendar IDs to add (these are database connection IDs, not provider calendar IDs)
+          const visibleCalendarIdsToAdd: string[] = [];
+          
+          // 1. Find primary calendar connection ID
+          let primaryConnectionId: string | undefined;
+          
+          // Check if any newly created connection is marked as primary
+          const primaryInCreated = createdConnections.find(conn => conn.isPrimary);
+          if (primaryInCreated && primaryInCreated.id) {
+            primaryConnectionId = primaryInCreated.id;
+            logger.info({
+              userId: session.user.id,
+              provider: input.provider,
+              primaryConnectionId: primaryInCreated.id,
+              primaryCalendarName: primaryInCreated.calendarName,
+              source: 'newly_created',
+            }, "Found primary calendar connection for web display");
+          } else {
+            // If not in newly created, get from database
+            const userPrimaryCalendar = await getPrimaryCalendar(db, session.user.id);
+            if (userPrimaryCalendar && userPrimaryCalendar.id) {
+              primaryConnectionId = userPrimaryCalendar.id;
+              logger.info({
+                userId: session.user.id,
+                provider: input.provider,
+                primaryConnectionId: userPrimaryCalendar.id,
+                primaryCalendarName: userPrimaryCalendar.calendarName,
+                source: 'database',
+              }, "Found primary calendar connection in database for web display");
+            } else if (createdConnections.length > 0) {
+              // If no primary calendar exists yet, use the provider's primary calendar (main calendar)
+              const providerPrimaryCalendar = providerCalendars.find((cal) => cal.primary) || providerCalendars[0];
+              const mainCalendarConnection = createdConnections.find(conn => conn.calendarId === providerPrimaryCalendar.id);
+              if (mainCalendarConnection && mainCalendarConnection.id) {
+                primaryConnectionId = mainCalendarConnection.id;
+                logger.info({
+                  userId: session.user.id,
+                  provider: input.provider,
+                  primaryConnectionId: mainCalendarConnection.id,
+                  primaryCalendarName: mainCalendarConnection.calendarName,
+                  source: 'provider_main_calendar',
+                }, "Using provider's main calendar connection for web display");
+              }
+            }
+          }
+          
+          // Always add primary calendar connection ID if it exists
+          if (primaryConnectionId) {
+            visibleCalendarIdsToAdd.push(primaryConnectionId);
+          }
+          
+          // 2. Add all newly created calendar connection IDs (if any)
+          if (createdConnections.length > 0) {
+            const newConnectionIds = createdConnections
+              .map(conn => conn.id)
+              .filter((id): id is string => Boolean(id));
+            visibleCalendarIdsToAdd.push(...newConnectionIds);
+          }
+          
+          // Combine current and new calendar connection IDs, removing duplicates
+          const updatedVisibleCalendarIds = [
+            ...new Set([...currentVisibleCalendarIds, ...visibleCalendarIdsToAdd])
+          ];
+          
+          // Always update to ensure primary calendar is visible (even if no new calendars)
+          // This ensures primary calendar is always ticked on the web
+          await updateVisibleCalendarSettings(db, session.user.id, updatedVisibleCalendarIds);
+          
+          logger.info({
+            userId: session.user.id,
+            provider: input.provider,
+            primaryConnectionId,
+            newConnectionIds: createdConnections.map(c => c.id).filter(Boolean),
+            visibleCalendarIdsToAdd: [...new Set(visibleCalendarIdsToAdd)],
+            previousCount: currentVisibleCalendarIds.length,
+            updatedCount: updatedVisibleCalendarIds.length,
+            hasPrimary: !!primaryConnectionId,
+          }, "Auto-selected primary and newly created calendars for web display");
+        } catch (error: any) {
+          // Log error but don't fail the connection process
+          logger.error({
+            userId: session.user.id,
+            provider: input.provider,
+            error: error.message,
+          }, "Failed to auto-select calendars for web display");
         }
 
         // Return the primary calendar connection (or first one if no primary)
