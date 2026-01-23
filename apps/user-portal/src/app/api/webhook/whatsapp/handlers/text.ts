@@ -196,7 +196,7 @@ export async function handleTextMessage(
     }
     
     const messageLower = messageText.toLowerCase().trim();
-    const isConfirmation = messageLower === 'yes' || messageLower === 'y' || messageLower === 'ok' || messageLower === 'okay' || messageLower === 'confirm' || messageLower === 'proceed' || messageLower === 'leave it as is' || messageLower.includes('leave it');
+    const isConfirmation = messageLower === 'yes' || messageLower === 'y' || messageLower === 'ok' || messageLower === 'okay' || messageLower === 'confirm' || messageLower === 'proceed' || messageLower === 'leave it as is' || messageLower.includes('leave it') || messageLower.includes('overlap') || messageLower === 'overlap it' || messageLower === 'overlap';
     
     // Check if user provided a new date/time instead of just confirming
     // Look for date/time patterns in the message
@@ -5400,12 +5400,19 @@ function parseEventTemplateToIntent(
 
   if (isCreate) {
     // Parse: "Create an event: {title} - date: {date} - time: {time} - calendar: {calendar}"
-    // Can also have: - location: {location} - attendees: {name1, name2}
+    // Can also have: - location: {location} - attendees: {name1, name2} - overlap: yes
     
     // Extract title (everything after "Create an event:" until first " - ")
-    const titleMatch = template.match(/^Create an event:\s*(.+?)(?:\s*-\s*date:|\s*-\s*time:|\s*-\s*calendar:|\s*-\s*location:|\s*-\s*attendees:|$)/i);
+    const titleMatch = template.match(/^Create an event:\s*(.+?)(?:\s*-\s*date:|\s*-\s*time:|\s*-\s*calendar:|\s*-\s*location:|\s*-\s*attendees:|\s*-\s*overlap:|$)/i);
     if (titleMatch && titleMatch[1]) {
       intent.title = titleMatch[1].trim();
+    }
+    
+    // Extract overlap flag (for conflict confirmations)
+    const overlapMatch = template.match(/\s*-\s*overlap:\s*(yes|true|1)/i);
+    if (overlapMatch) {
+      (intent as any).bypassConflictCheck = true;
+      logger.info({ template }, '✅ Parsed overlap: yes from event template, setting bypassConflictCheck');
     }
     
     // Extract date
@@ -5533,11 +5540,17 @@ function parseEventTemplateToIntent(
       intent.startDate = parseRelativeDate('today');
     }
   } else if (isUpdate) {
-    // Parse: "Update an event: {title} - changes: {details} - calendar: {calendar}"
-    const updateMatch = template.match(/^Update an event:\s*(.+?)(?:\s*-\s*changes:\s*(.+?))?(?:\s*-\s*calendar:\s*(.+?))?$/i);
+    // Parse: "Update an event: {title} - changes: {details} - calendar: {calendar} - overlap: yes"
+    const updateMatch = template.match(/^Update an event:\s*(.+?)(?:\s*-\s*changes:\s*(.+?))?(?:\s*-\s*calendar:\s*(.+?))?(?:\s*-\s*overlap:\s*(yes|true|1))?$/i);
     
     if (updateMatch && updateMatch[1]) {
       intent.targetEventTitle = updateMatch[1].trim();
+      
+      // Extract overlap flag (for conflict confirmations)
+      if (updateMatch[4]) {
+        (intent as any).bypassConflictCheck = true;
+        logger.info({ template }, '✅ Parsed overlap: yes from UPDATE event template, setting bypassConflictCheck');
+      }
       
       if (updateMatch[2]) {
         const changes = updateMatch[2].trim();
