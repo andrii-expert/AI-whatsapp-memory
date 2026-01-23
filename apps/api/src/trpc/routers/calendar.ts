@@ -8,6 +8,10 @@ import {
   deleteCalendarConnection,
   setPrimaryCalendar,
 } from "@imaginecalendar/database/queries";
+import {
+  updateWhatsAppCalendarSettings,
+  getWhatsAppCalendars,
+} from "@imaginecalendar/database/queries";
 import { createCalendarProvider } from "@imaginecalendar/calendar-integrations";
 import { logger } from "@imaginecalendar/logger";
 import { TRPCError } from "@trpc/server";
@@ -247,6 +251,42 @@ export const calendarRouter = createTRPCRouter({
           updatedCount: updatedConnections.length,
           totalCalendars: providerCalendars.length
         }, "Calendar connections processed successfully");
+
+        // Auto-select newly created calendars for WhatsApp
+        if (createdConnections.length > 0) {
+          try {
+            // Get current WhatsApp calendar IDs
+            const currentWhatsAppCalendarIds = await getWhatsAppCalendars(db, session.user.id);
+            
+            // Get calendar IDs of newly created calendars (only those with calendarId set)
+            const newCalendarIds = createdConnections
+              .map(conn => conn.calendarId)
+              .filter((id): id is string => Boolean(id));
+            
+            // Combine current and new calendar IDs, removing duplicates
+            const updatedWhatsAppCalendarIds = [
+              ...new Set([...currentWhatsAppCalendarIds, ...newCalendarIds])
+            ];
+            
+            // Update WhatsApp calendar settings
+            await updateWhatsAppCalendarSettings(db, session.user.id, updatedWhatsAppCalendarIds);
+            
+            logger.info({
+              userId: session.user.id,
+              provider: input.provider,
+              newCalendarIds,
+              previousCount: currentWhatsAppCalendarIds.length,
+              updatedCount: updatedWhatsAppCalendarIds.length,
+            }, "Auto-selected newly created calendars for WhatsApp");
+          } catch (error: any) {
+            // Log error but don't fail the connection process
+            logger.error({
+              userId: session.user.id,
+              provider: input.provider,
+              error: error.message,
+            }, "Failed to auto-select calendars for WhatsApp");
+          }
+        }
 
         // Return the primary calendar connection (or first one if no primary)
         const primaryConnection = allConnections.find(conn => conn.calendarId === primaryCalendar.id);
