@@ -189,6 +189,50 @@ export async function setDefaultCalendar(db: Database, userId: string, calendarI
   );
 }
 
+export async function updateVisibleCalendarSettings(
+  db: Database,
+  userId: string,
+  visibleCalendarIds: string[]
+) {
+  return withMutationLogging(
+    'updateVisibleCalendarSettings',
+    { userId, visibleCalendarIds },
+    async () => {
+      const [updated] = await db
+        .update(userPreferences)
+        .set({
+          visibleCalendarIds,
+          updatedAt: new Date(),
+        })
+        .where(eq(userPreferences.userId, userId))
+        .returning();
+
+      return updated;
+    }
+  );
+}
+
+export async function getVisibleCalendars(
+  db: Database,
+  userId: string
+): Promise<string[]> {
+  return withQueryLogging(
+    'getVisibleCalendars',
+    { userId },
+    async () => {
+      const preferences = await db
+        .select({
+          visibleCalendarIds: userPreferences.visibleCalendarIds,
+        })
+        .from(userPreferences)
+        .where(eq(userPreferences.userId, userId))
+        .limit(1);
+
+      return preferences[0]?.visibleCalendarIds || [];
+    }
+  );
+}
+
 export async function resetPreferencesToDefault(db: Database, userId: string) {
   return withMutationLogging(
     'resetPreferencesToDefault',
