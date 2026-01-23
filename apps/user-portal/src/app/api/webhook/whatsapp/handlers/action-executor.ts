@@ -7273,26 +7273,12 @@ export class ActionExecutor {
             const now = new Date();
             const currentYear = now.getFullYear();
             
-            // Try current year first
+            // Use current year for the date (allow past dates - don't automatically move to next year)
             let targetDate = new Date(currentYear, i, dayNum);
             
             // Check if the date is valid (handles cases like Feb 30)
             if (targetDate.getDate() === dayNum) {
-              // For past dates in the current month, still use current year (user might want to see past events)
-              // Only go to next year if the date is more than a month in the past
-              const oneMonthAgo = new Date(now);
-              oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-              
-              if (targetDate < oneMonthAgo) {
-                // Date is more than a month in the past, try next year
-                targetDate = new Date(currentYear + 1, i, dayNum);
-                // Verify the next year date is also valid
-                if (targetDate.getDate() !== dayNum) {
-                  // Invalid date in next year, use current year anyway
-                  targetDate = new Date(currentYear, i, dayNum);
-                }
-              }
-              
+              // Allow past dates - use the date as specified by the user
               const year = targetDate.getFullYear();
               const month = String(targetDate.getMonth() + 1).padStart(2, '0');
               const day = String(targetDate.getDate()).padStart(2, '0');
@@ -7328,22 +7314,14 @@ export class ActionExecutor {
             const now = new Date();
             const currentYear = now.getFullYear();
             
-            // Try current month first
+            // Use current month (allow past dates - don't automatically move to next month)
             let targetDate = new Date(currentYear, now.getMonth(), dayNum);
-            if (targetDate.getDate() === dayNum && targetDate >= now) {
+            if (targetDate.getDate() === dayNum) {
+              // Allow past dates - use the date as specified by the user
               const year = targetDate.getFullYear();
               const month = String(targetDate.getMonth() + 1).padStart(2, '0');
               const day = String(targetDate.getDate()).padStart(2, '0');
               parsedDate = `${year}-${month}-${day}`;
-            } else {
-              // If past, try next month
-              const nextMonthDate = new Date(currentYear, now.getMonth() + 1, dayNum);
-              if (nextMonthDate.getDate() === dayNum) {
-                const year = nextMonthDate.getFullYear();
-                const month = String(nextMonthDate.getMonth() + 1).padStart(2, '0');
-                const day = String(nextMonthDate.getDate()).padStart(2, '0');
-                parsedDate = `${year}-${month}-${day}`;
-              }
             }
           }
         }
