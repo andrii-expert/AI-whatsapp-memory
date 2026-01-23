@@ -6262,9 +6262,79 @@ export class ActionExecutor {
         );
       }
       
-      // Fallback: Use timezone-based calculation if yearly reminder doesn't have month/dayOfMonth or if not yearly
+      // For "once" reminders with targetDate, format it directly
+      if (!dateInfo && reminder.frequency === 'once' && reminder.targetDate) {
+        const targetDate = new Date(reminder.targetDate);
+        
+        if (timezone) {
+          // Format the target date using Intl.DateTimeFormat to get correct timezone components
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false,
+          });
+          
+          const parts = formatter.formatToParts(targetDate);
+          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+          
+          const day = parseInt(getPart('day'), 10);
+          const month = parseInt(getPart('month'), 10) - 1; // Convert to 0-indexed
+          const year = parseInt(getPart('year'), 10);
+          const hours = parseInt(getPart('hour'), 10);
+          const minutes = parseInt(getPart('minute'), 10);
+          const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+          
+          // Get current time in user's timezone for comparison
+          const timeComponents = this.getCurrentTimeInTimezone(timezone);
+          const todayInUserTz = new Date(timeComponents.year, timeComponents.month, timeComponents.day);
+          const tomorrowInUserTz = new Date(timeComponents.year, timeComponents.month, timeComponents.day + 1);
+          const nextDateInUserTz = new Date(year, month, day);
+          
+          let dateLabel = 'Today';
+          if (nextDateInUserTz.getTime() === todayInUserTz.getTime()) {
+            dateLabel = 'Today';
+          } else if (nextDateInUserTz.getTime() === tomorrowInUserTz.getTime()) {
+            dateLabel = 'Tomorrow';
+          } else {
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const monthName = monthNames[month];
+            dateLabel = `${day} ${monthName}`;
+          }
+          
+          dateInfo = `${dateLabel} ${time24}`;
+          
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: reminder.id,
+              targetDate: targetDate.toISOString(),
+              dateLabel,
+              time24,
+              dateInfo,
+            },
+            'Formatted once reminder date from targetDate'
+          );
+        } else {
+          // No timezone: format using local date
+          const day = targetDate.getDate();
+          const month = targetDate.getMonth();
+          const hours = targetDate.getHours();
+          const minutes = targetDate.getMinutes();
+          const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+          
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthName = monthNames[month];
+          dateInfo = `${day} ${monthName} ${time24}`;
+        }
+      }
+      
+      // Fallback: Use timezone-based calculation if dateInfo still not set
       if (!dateInfo && timezone) {
-      } else if (timezone) {
         const timeComponents = this.getCurrentTimeInTimezone(timezone);
         const now = new Date();
         const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
