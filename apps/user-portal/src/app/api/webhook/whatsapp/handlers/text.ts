@@ -205,7 +205,7 @@ export async function handleTextMessage(
     const hasNewDateTime = hasDatePattern || hasTimePattern;
     
     if (hasNewDateTime && !isConfirmation) {
-      // User provided a new date/time - parse it and update the intent
+      // User provided a new date/time - parse it and update the pending intent
       logger.info(
         {
           userId,
@@ -213,24 +213,191 @@ export async function handleTextMessage(
           userMessage: messageText,
           hasDatePattern,
           hasTimePattern,
+          originalIntent: pendingOp.intent,
         },
         'User provided new date/time for pending event operation'
       );
       
-      // Remove from pending operations
-      pendingEventOperations.delete(userId);
-      
-      // Parse the new date/time from the user's message
+      // Parse date and time from the user's message
       try {
-        // Use the AI analysis to parse the new date/time
-        await analyzeAndRespond(messageText, recipient, userId, db);
-        return; // Exit early - analyzeAndRespond will handle the new request
+        // Extract date and time from message
+        // Patterns: "27th Jan at 17.pm", "27th Jan 17pm", "change it to 27th Jan at 17.pm", etc.
+        let parsedDate: string | undefined;
+        let parsedTime: string | undefined;
+        
+        // Try to extract date with month name (e.g., "27th Jan", "27 Jan", "Jan 27th")
+        const dateMatch = messageText.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|may|june|july|august|september|october|november|december)/i);
+        if (dateMatch && dateMatch[1] && dateMatch[2]) {
+          const day = dateMatch[1];
+          const month = dateMatch[2];
+          parsedDate = parseRelativeDate(`${day} ${month}`);
+          logger.info({ userId, day, month, parsedDate }, 'Parsed date from conflict response');
+        }
+        
+        // Try to extract time (handle "17.pm", "17pm", "at 17.pm", "at 17:00", etc.)
+        // Pattern: optional "at" or "@", then number, optional dot or colon, optional minutes, optional am/pm
+        // Special handling for "17.pm" format where dot is between hour and period
+        const timeMatch = messageText.match(/(?:at|@)?\s*(\d{1,2})(?:\.|:)?(\d{2})?\s*(?:\.)?\s*(am|pm)?/i);
+        if (timeMatch && timeMatch[1]) {
+          const hour = timeMatch[1];
+          const minute = timeMatch[2] || '00';
+          const period = timeMatch[3] || '';
+          
+          // Handle "17.pm" format - if hour > 12 and period is pm, it's likely a typo (should be 5pm)
+          // But also handle "17pm" as 17:00 (5pm) in 12-hour format
+          let normalizedHour = hour;
+          let normalizedPeriod = period;
+          
+          // If hour > 12 and has period, treat as 12-hour format (e.g., "17pm" = 5pm)
+          if (parseInt(hour) > 12 && period) {
+            normalizedHour = String(parseInt(hour) - 12);
+            normalizedPeriod = period;
+          }
+          
+          // Normalize "17.pm" to "17pm" by removing dot, or use normalized values
+          const timeStr = period 
+            ? `${normalizedHour}:${minute}${normalizedPeriod}`.replace(/\./g, '')
+            : `${hour}:${minute}`.replace(/\./g, '');
+          
+          parsedTime = parseTime(timeStr);
+          logger.info({ userId, hour, minute, period, normalizedHour, normalizedPeriod, timeStr, parsedTime }, 'Parsed time from conflict response');
+        }
+        
+        // If we found date or time, update the intent and re-execute
+        if (parsedDate || parsedTime) {
+          // Remove from pending operations
+          pendingEventOperations.delete(userId);
+          
+          // Update the intent with new date/time
+          const updatedIntent: CalendarIntent = {
+            ...pendingOp.intent,
+            ...(parsedDate ? { startDate: parsedDate } : {}),
+            ...(parsedTime ? { startTime: parsedTime } : {}),
+          };
+          
+          logger.info(
+            {
+              userId,
+              action: pendingOp.intent.action,
+              originalDate: pendingOp.intent.startDate,
+              originalTime: pendingOp.intent.startTime,
+              newDate: parsedDate,
+              newTime: parsedTime,
+              updatedIntent,
+            },
+            'Updated pending event intent with new date/time, re-executing operation'
+          );
+          
+          // Re-execute the event operation with updated intent
+          // Directly call calendar service with updated intent (bypass template parsing)
+          try {
+            const calendarService = new CalendarService(db);
+            
+            logger.info(
+              {
+                userId,
+                action: updatedIntent.action,
+                updatedDate: updatedIntent.startDate,
+                updatedTime: updatedIntent.startTime,
+                originalIntent: pendingOp.intent,
+              },
+              'Re-executing event operation with updated date/time from conflict response'
+            );
+            
+            // Execute the operation with updated intent
+            let result;
+            if (updatedIntent.action === 'CREATE') {
+              result = await calendarService.create(userId, updatedIntent);
+            } else if (updatedIntent.action === 'UPDATE') {
+              result = await calendarService.update(userId, updatedIntent);
+            } else {
+              throw new Error(`Unsupported action: ${updatedIntent.action}`);
+            }
+            
+            // Handle the result
+            if (result.success && result.event) {
+              const event = result.event;
+              const eventDate = new Date(event.start);
+              
+              // Get calendar timezone for formatting
+              let calendarTimezone = 'Africa/Johannesburg';
+              try {
+                const calendarConnection = await getPrimaryCalendar(db, userId);
+                if (calendarConnection) {
+                  calendarTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+                }
+              } catch (error) {
+                logger.warn({ error, userId }, 'Failed to get calendar timezone for response formatting');
+              }
+              
+              const eventTime = eventDate.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: calendarTimezone,
+              });
+              const eventDateStr = eventDate.toLocaleDateString('en-US', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                timeZone: calendarTimezone,
+              });
+              
+              let successMessage = `✅ *Event ${updatedIntent.action === 'CREATE' ? 'Created' : 'Updated'}*\n\n`;
+              successMessage += `*Title:* ${event.title || 'Untitled Event'}\n`;
+              successMessage += `*Date:* ${eventDateStr}\n`;
+              successMessage += `*Time:* ${eventTime}\n`;
+              if (event.location) {
+                successMessage += `*Location:* ${event.location}\n`;
+              }
+              
+              await whatsappService.sendTextMessage(pendingOp.recipient, successMessage);
+              
+              // Log outgoing message
+              logOutgoingMessageNonBlocking(db, pendingOp.recipient, userId, successMessage);
+            } else if (result.requiresConfirmation && result.conflictEvents) {
+              // New conflict detected with the updated time - store and ask again
+              pendingEventOperations.set(userId, {
+                intent: updatedIntent,
+                actionTemplate: pendingOp.actionTemplate,
+                originalUserText: pendingOp.originalUserText + ' ' + messageText,
+                recipient: pendingOp.recipient,
+                timestamp: new Date(),
+              });
+              
+              await whatsappService.sendTextMessage(pendingOp.recipient, result.message || 'Event conflict detected. Please confirm to proceed.');
+              logOutgoingMessageNonBlocking(db, pendingOp.recipient, userId, result.message || 'Event conflict detected. Please confirm to proceed.');
+            } else {
+              await whatsappService.sendTextMessage(
+                pendingOp.recipient,
+                result.message || `Event ${updatedIntent.action === 'CREATE' ? 'created' : 'updated'} successfully.`
+              );
+              logOutgoingMessageNonBlocking(db, pendingOp.recipient, userId, result.message || `Event ${updatedIntent.action === 'CREATE' ? 'created' : 'updated'} successfully.`);
+            }
+          } catch (error) {
+            logger.error({ error, userId, updatedIntent }, 'Failed to re-execute event operation with updated date/time');
+            await whatsappService.sendTextMessage(
+              pendingOp.recipient,
+              "I'm sorry, I encountered an error while updating the event with the new date/time. Please try again."
+            );
+          }
+          
+          return; // Exit early
+        } else {
+          // Couldn't parse date/time, fall back to AI analysis with context
+          logger.warn({ userId, messageText }, 'Could not parse date/time from message, falling back to AI analysis with context');
+          // Include the original message in context so AI understands this is an update
+          const contextualMessage = `${pendingOp.originalUserText}. ${messageText}`;
+          pendingEventOperations.delete(userId);
+          await analyzeAndRespond(contextualMessage, recipient, userId, db);
+          return;
+        }
       } catch (error) {
-        logger.error({ error, userId }, 'Failed to parse new date/time from user message');
-        await whatsappService.sendTextMessage(
-          recipient,
-          "I'm sorry, I couldn't understand the new date or time you provided. Please try again with a clearer format (e.g., 'tomorrow at 2pm' or '25th January at 3pm')."
-        );
+        logger.error({ error, userId, messageText }, 'Failed to parse and update date/time from user message');
+        // Fall back to AI analysis with context
+        const contextualMessage = `${pendingOp.originalUserText}. ${messageText}`;
+        pendingEventOperations.delete(userId);
+        await analyzeAndRespond(contextualMessage, recipient, userId, db);
         return;
       }
     } else if (isConfirmation) {
