@@ -6028,29 +6028,16 @@ function parseRelativeDate(dateStr: string): string {
     if (match) {
       const dayNum = parseInt(match[1] || match[2] || '0', 10);
       if (dayNum >= 1 && dayNum <= 31) {
-        // Compare dates using UTC to avoid timezone issues
+        // Use the current year for the date (allow past dates - don't automatically move to next year)
         // Note: JavaScript Date months are 0-indexed (0 = January, 11 = December)
         // So 'i' from monthNames array (0-11) is correct
-        // Create UTC dates for comparison (year, month, day only, no time)
         const targetYear = currentYear;
         const targetMonth = i; // 0-indexed (0 = January, 11 = December)
         const targetDay = dayNum;
         
-        const nowYear = now.getUTCFullYear();
-        const nowMonth = now.getUTCMonth();
-        const nowDay = now.getUTCDate();
-        
-        // Compare year, month, day directly (no timezone conversion needed)
-        let finalYear = targetYear;
-        if (targetYear < nowYear || 
-            (targetYear === nowYear && targetMonth < nowMonth) ||
-            (targetYear === nowYear && targetMonth === nowMonth && targetDay < nowDay)) {
-          // Date is in the past, use next year
-          finalYear = currentYear + 1;
-        }
-        
         // Return date string directly (no Date object creation to avoid timezone issues)
-        const year = finalYear;
+        // Allow past dates - use the date as specified by the user
+        const year = targetYear;
         const month = String(targetMonth + 1).padStart(2, '0'); // Convert 0-indexed to 1-indexed
         const day = String(targetDay).padStart(2, '0');
         
@@ -6065,15 +6052,11 @@ function parseRelativeDate(dateStr: string): string {
             targetYear: targetYear,
             targetMonth: targetMonth,
             targetDay: targetDay,
-            nowYear,
-            nowMonth,
-            nowDay,
             finalYear: year,
             finalMonth: month,
             finalDay: day,
-            wasInPast: finalYear > currentYear,
           },
-          'Parsed date with month name'
+          'Parsed date with month name (allowing past dates)'
         );
         
         return `${year}-${month}-${day}`;
