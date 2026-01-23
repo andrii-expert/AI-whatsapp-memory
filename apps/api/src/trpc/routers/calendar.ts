@@ -288,6 +288,21 @@ export const calendarRouter = createTRPCRouter({
                 primaryCalendarName: userPrimaryCalendar.calendarName,
                 source: 'database',
               }, "Found primary calendar in database");
+            } else if (createdConnections.length > 0) {
+              // If no primary calendar exists yet, use the provider's primary calendar (main calendar)
+              // This happens when adding the first calendar or when primary isn't set
+              const providerPrimaryCalendar = providerCalendars.find((cal) => cal.primary) || providerCalendars[0];
+              const mainCalendarConnection = createdConnections.find(conn => conn.calendarId === providerPrimaryCalendar.id);
+              if (mainCalendarConnection && mainCalendarConnection.calendarId) {
+                primaryCalendarId = mainCalendarConnection.calendarId;
+                logger.info({
+                  userId: session.user.id,
+                  provider: input.provider,
+                  primaryCalendarId: mainCalendarConnection.calendarId,
+                  primaryCalendarName: mainCalendarConnection.calendarName,
+                  source: 'provider_main_calendar',
+                }, "Using provider's main calendar as primary for WhatsApp");
+              }
             }
           }
           
@@ -321,6 +336,7 @@ export const calendarRouter = createTRPCRouter({
             calendarIdsToAdd: [...new Set(calendarIdsToAdd)],
             previousCount: currentWhatsAppCalendarIds.length,
             updatedCount: updatedWhatsAppCalendarIds.length,
+            hasPrimary: !!primaryCalendarId,
           }, "Auto-selected primary and newly created calendars for WhatsApp");
         } catch (error: any) {
           // Log error but don't fail the connection process
