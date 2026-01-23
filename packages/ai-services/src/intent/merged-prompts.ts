@@ -1488,14 +1488,67 @@ export function buildMergedWhatsappPrompt(
     "CONVERSATION HISTORY (for context)",
     "═══════════════════════════════════════════════════════════════",
     "",
+    "⚠️ HOW TO USE CONVERSATION HISTORY:",
+    "   • Each exchange shows a User message followed by the Assistant's response",
+    "   • Exchanges are numbered chronologically (1 = oldest, N = most recent)",
+    "   • Use this history to:",
+    "     - Understand context from previous messages",
+    "     - See what clarifications were already asked and answered",
+    "     - Understand references (e.g., \"that meeting\", \"the list\", \"item 3\")",
+    "     - Track the conversation flow and avoid repeating questions",
+    "   • When user responds to a clarifying question, combine the original request with the clarification",
+    "   • If user says \"delete 1,3\" after listing items, check the most recent exchange to see what was listed",
+    "   • If user refers to something mentioned earlier, find it in the history",
+    "",
     ...(options?.messageHistory && options.messageHistory.length > 0
       ? [
-          "The following is the recent conversation history. Use this to understand context and references:",
+          "The following is the recent conversation history. Each user message is paired with the assistant's response:",
           "",
-          ...options.messageHistory.map((msg, idx) => {
-            const role = msg.direction === 'incoming' ? 'User' : 'Assistant';
-            return `${role}: ${msg.content}`;
-          }),
+          (() => {
+            // Group messages into conversation pairs (User message + Assistant response)
+            // Messages are in chronological order (oldest first)
+            const pairs: Array<{ user: string; assistant?: string }> = [];
+            let currentPair: { user: string; assistant?: string } | null = null;
+            
+            for (const msg of options.messageHistory!) {
+              if (msg.direction === 'incoming') {
+                // New user message - start a new pair
+                if (currentPair && currentPair.user) {
+                  // Save previous pair if it exists
+                  pairs.push(currentPair);
+                }
+                currentPair = { user: msg.content };
+              } else if (msg.direction === 'outgoing') {
+                // Assistant response
+                if (currentPair) {
+                  // Add to current pair if we have one
+                  currentPair.assistant = msg.content;
+                } else {
+                  // Orphaned assistant message (no preceding user message) - create a pair with empty user
+                  pairs.push({ user: '(Previous context)', assistant: msg.content });
+                }
+              }
+            }
+            
+            // Add the last pair if it exists
+            if (currentPair && currentPair.user) {
+              pairs.push(currentPair);
+            }
+            
+            // Format pairs for display in chronological order (oldest to newest)
+            // This helps AI understand the conversation flow
+            return pairs.map((pair, idx) => {
+              const exchangeNumber = idx + 1; // Number from oldest (1) to newest
+              let formatted = `--- Exchange ${exchangeNumber} ---`;
+              formatted += `\nUser: ${pair.user}`;
+              if (pair.assistant && pair.assistant.trim()) {
+                formatted += `\nAssistant: ${pair.assistant}`;
+              } else {
+                formatted += `\nAssistant: (Awaiting response)`;
+              }
+              return formatted;
+            }).join('\n\n');
+          })(),
           "",
           "Current user message:",
         ]
