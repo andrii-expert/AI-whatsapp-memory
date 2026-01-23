@@ -105,8 +105,11 @@ export async function GET(request: NextRequest) {
       email,
     });
 
-    // Redirect to dashboard
-    const redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai"}/dashboard`;
+    // Redirect:
+    // - New Google signups should go directly to onboarding step 2 (WhatsApp) to avoid a dashboard -> onboarding bounce.
+    // - Existing users can go to dashboard.
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://dashboard.crackon.ai";
+    const redirectUrl = isNewUser ? `${baseUrl}/onboarding/whatsapp` : `${baseUrl}/dashboard`;
 
     const response = NextResponse.redirect(redirectUrl);
 
