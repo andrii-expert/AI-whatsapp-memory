@@ -5579,31 +5579,47 @@ function parseEventTemplateToIntent(
           // Try to extract time separately if not already extracted
           // Handle patterns like "time to 12:00 tomorrow" or "time to 12:00 on tomorrow"
           if (!intent.startTime) {
-            // First, try "time to {time} {date}" pattern (e.g., "time to 12:00 tomorrow", "time to 12:00 on tomorrow")
-            // This pattern matches: "time to" followed by time, then optional "on", then date keyword
-            const timeWithDateMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2}|.+?)(?:\s|$)/i);
-            if (timeWithDateMatch && timeWithDateMatch[1] && timeWithDateMatch[2]) {
-              intent.startTime = parseTime(timeWithDateMatch[1].trim());
-              // Only set date if it wasn't already set
-              if (!intent.startDate) {
-                intent.startDate = parseRelativeDate(timeWithDateMatch[2].trim());
-              }
+            // First, try time range pattern: "time to 10:00 to 11:30" or "time to 10:00-11:30"
+            const timeRangeMatch = changes.match(/time\s+to\s+(?:from\s+)?([\d:]+(?:\s*(?:am|pm))?)\s+(?:to|-|until)\s+([\d:]+(?:\s*(?:am|pm))?)/i);
+            if (timeRangeMatch && timeRangeMatch[1] && timeRangeMatch[2]) {
+              // Time range detected - extract start and end times
+              intent.startTime = parseTime(timeRangeMatch[1].trim());
+              intent.endTime = parseTime(timeRangeMatch[2].trim());
               logger.info(
                 {
                   changes,
-                  extractedTime: timeWithDateMatch[1],
-                  extractedDate: timeWithDateMatch[2],
-                  parsedStartDate: intent.startDate,
-                  parsedStartTime: intent.startTime,
+                  startTime: intent.startTime,
+                  endTime: intent.endTime,
                 },
-                '✅ Extracted time and date from "time to {time} {date}" pattern'
+                '✅ Parsed time range from UPDATE changes'
               );
             } else {
-              // Try simple "time to {time}" pattern (e.g., "time to 12:00")
-              const timeMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i) 
-                || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
-              if (timeMatch && timeMatch[1]) {
-                intent.startTime = parseTime(timeMatch[1].trim());
+              // Try "time to {time} {date}" pattern (e.g., "time to 12:00 tomorrow", "time to 12:00 on tomorrow")
+              // This pattern matches: "time to" followed by time, then optional "on", then date keyword
+              const timeWithDateMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2}|.+?)(?:\s|$)/i);
+              if (timeWithDateMatch && timeWithDateMatch[1] && timeWithDateMatch[2]) {
+                intent.startTime = parseTime(timeWithDateMatch[1].trim());
+                // Only set date if it wasn't already set
+                if (!intent.startDate) {
+                  intent.startDate = parseRelativeDate(timeWithDateMatch[2].trim());
+                }
+                logger.info(
+                  {
+                    changes,
+                    extractedTime: timeWithDateMatch[1],
+                    extractedDate: timeWithDateMatch[2],
+                    parsedStartDate: intent.startDate,
+                    parsedStartTime: intent.startTime,
+                  },
+                  '✅ Extracted time and date from "time to {time} {date}" pattern'
+                );
+              } else {
+                // Try simple "time to {time}" pattern (e.g., "time to 12:00")
+                const timeMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i) 
+                  || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
+                if (timeMatch && timeMatch[1]) {
+                  intent.startTime = parseTime(timeMatch[1].trim());
+                }
               }
             }
           }
