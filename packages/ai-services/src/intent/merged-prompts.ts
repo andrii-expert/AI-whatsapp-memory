@@ -35,6 +35,48 @@ export function buildMergedWhatsappPrompt(
   const currentDate = options?.currentDate ?? new Date();
   const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
   const currentLabel = formatDateToLocalLabel(currentDate, timezone);
+  
+  // Calculate next week dates (Sunday through Saturday) in user's timezone
+  // Get current day of week in user's timezone by creating a date string and parsing it
+  const currentDateStr = currentDate.toLocaleDateString('en-US', { timeZone: timezone });
+  const currentDateInTz = new Date(currentDateStr + ' ' + currentDate.toLocaleTimeString('en-US', { timeZone: timezone }));
+  const currentDayNumTz = currentDateInTz.getDay(); // 0 = Sunday, 6 = Saturday
+  
+  // Calculate days until next Sunday
+  const daysUntilNextSunday = currentDayNumTz === 0 ? 7 : (7 - currentDayNumTz);
+  
+  // Calculate next week's dates
+  const nextWeekDates: Record<string, string> = {};
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
+  // Helper function for ordinal suffix
+  const ordinalSuffix = (day: number): string => {
+    if (day > 3 && day < 21) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+  
+  for (let i = 0; i < 7; i++) {
+    // Calculate target date: current date + days until next Sunday + day offset
+    const targetDate = new Date(currentDate);
+    targetDate.setDate(currentDate.getDate() + daysUntilNextSunday + i);
+    
+    // Format date in user's timezone
+    const day = parseInt(targetDate.toLocaleDateString('en-US', { day: 'numeric', timeZone: timezone }));
+    const month = targetDate.toLocaleDateString('en-US', { month: 'long', timeZone: timezone });
+    const year = targetDate.getFullYear();
+    
+    const dayName = dayNames[i];
+    nextWeekDates[dayName] = `${day}${ordinalSuffix(day)} ${month} ${year}`;
+  }
+  
+  const nextWeekDatesText = Object.entries(nextWeekDates)
+    .map(([day, date]) => `  • Next week ${day}: ${date}`)
+    .join('\n');
 
   return [
     "You are the CrackOn WhatsApp Assistant.",
@@ -125,6 +167,21 @@ export function buildMergedWhatsappPrompt(
     "",
     `IMPORTANT: The current local date and time is: ${currentLabel}`,
     `This string already includes weekday, day, month, year, and time in the user's timezone.`,
+    "",
+    "═══════════════════════════════════════════════════════════════",
+    "NEXT WEEK DATES (Pre-calculated for your reference)",
+    "═══════════════════════════════════════════════════════════════",
+    "",
+    "Based on the current date above, here are the dates for next week:",
+    "",
+    nextWeekDatesText,
+    "",
+    "⚠️ CRITICAL: When user asks about \"next week [day]\", use the date from the list above!",
+    "  • \"next week Sunday\" → Use the date shown above for \"Next week Sunday\"",
+    "  • \"next week Monday\" → Use the date shown above for \"Next week Monday\"",
+    "  • \"next week Tuesday\" → Use the date shown above for \"Next week Tuesday\"",
+    "  • And so on for all days of the week",
+    "",
     "",
     "⚠️ CRITICAL: When user asks general date/time questions (e.g., \"what is today\", \"what day is it\", \"what's the date\", \"what time is it\"),",
     `  → You MUST answer using this current date/time: ${currentLabel}`,
