@@ -44,10 +44,11 @@ function CalendarConnectionForm() {
     enabled: isLoaded && !!user && (user.setupStep ?? 1) === 2, // Only poll while on step 2
   });
 
-  // Fetch user's calendar connections to check sync status
-  const { data: calendars = [], refetch: refetchCalendars } = useQuery(
-    trpc.calendar.list.queryOptions()
-  );
+  // Fetch user's calendar connections to check sync status - poll every 1 second
+  const { data: calendars = [], refetch: refetchCalendars } = useQuery({
+    ...trpc.calendar.list.queryOptions(),
+    refetchInterval: 1000, // Poll every 1 second to check connection status
+  });
 
   // Connect calendar mutation for OAuth callback handling
   const connectCalendarMutation = useMutation(
@@ -55,6 +56,7 @@ function CalendarConnectionForm() {
       onSuccess: async () => {
         setConnectingProvider(null);
         // Refetch calendars to update the UI immediately
+        // Note: Polling every 1 second will also keep this updated
         await refetchCalendars();
       },
       onError: (error) => {
@@ -63,6 +65,19 @@ function CalendarConnectionForm() {
       },
     })
   );
+
+  // Clear connecting state when calendar is successfully connected (detected via polling)
+  useEffect(() => {
+    if (connectingProvider) {
+      const isConnected = calendars.some(
+        (cal) => cal.provider === connectingProvider && cal.isActive && cal.accessToken
+      );
+      if (isConnected) {
+        // Calendar connection successful, clear connecting state
+        setConnectingProvider(null);
+      }
+    }
+  }, [calendars, connectingProvider]);
 
   // Handle OAuth callback from cookies (when redirected back from OAuth provider)
   useEffect(() => {
