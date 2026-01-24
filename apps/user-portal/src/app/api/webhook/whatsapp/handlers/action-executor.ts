@@ -6744,7 +6744,83 @@ export class ActionExecutor {
           }
 
           if (timeMatch && timeMatch[1]) {
-            updateInput.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+            const newTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+            updateInput.time = newTime;
+            
+            // ⚠️ CRITICAL: When only time is updated (no date change), preserve the original targetDate
+            // Update targetDate to use the new time but keep the same date
+            if (reminder.targetDate) {
+              // Preserve the original date, just update the time
+              const originalDate = new Date(reminder.targetDate);
+              
+              if (timezone) {
+                // Get date components in user's timezone
+                const formatter = new Intl.DateTimeFormat('en-US', {
+                  timeZone: timezone,
+                  year: 'numeric',
+                  month: 'numeric',
+                  day: 'numeric',
+                });
+                const parts = formatter.formatToParts(originalDate);
+                const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+                
+                const year = parseInt(getPart('year'), 10);
+                const month = parseInt(getPart('month'), 10) - 1; // 0-indexed
+                const day = parseInt(getPart('day'), 10);
+                
+                // Parse new time
+                const [hours, minutes] = newTime.split(':').map(Number);
+                
+                // Create new date with original date but new time
+                updateInput.targetDate = this.createDateInUserTimezone(year, month, day, hours, minutes, timezone);
+                
+                logger.info(
+                  {
+                    userId: this.userId,
+                    reminderId: reminder.id,
+                    originalTargetDate: reminder.targetDate,
+                    originalTime: reminder.time,
+                    newTime,
+                    updatedTargetDate: updateInput.targetDate,
+                    timezone,
+                  },
+                  'Time-only update: preserving original date, updating time'
+                );
+              } else {
+                // Fallback: no timezone, adjust on the raw Date object
+                const [hours, minutes] = newTime.split(':').map(Number);
+                const adjusted = new Date(originalDate);
+                adjusted.setHours(hours, minutes, 0, 0);
+                updateInput.targetDate = adjusted;
+                
+                logger.info(
+                  {
+                    userId: this.userId,
+                    reminderId: reminder.id,
+                    originalTargetDate: reminder.targetDate,
+                    originalTime: reminder.time,
+                    newTime,
+                    updatedTargetDate: updateInput.targetDate,
+                  },
+                  'Time-only update: preserving original date, updating time (no timezone)'
+                );
+              }
+            } else if (reminder.daysFromNow !== null && reminder.daysFromNow !== undefined) {
+              // If reminder uses daysFromNow, preserve it (don't convert to targetDate)
+              // Just update the time
+              updateInput.daysFromNow = reminder.daysFromNow;
+              
+              logger.info(
+                {
+                  userId: this.userId,
+                  reminderId: reminder.id,
+                  originalDaysFromNow: reminder.daysFromNow,
+                  originalTime: reminder.time,
+                  newTime,
+                },
+                'Time-only update: preserving daysFromNow, updating time'
+              );
+            }
           }
         }
         
@@ -6907,8 +6983,65 @@ export class ActionExecutor {
       // Calculate next occurrence date for the updated reminder
       let dateInfo = '';
       
+      // For "once" frequency reminders with targetDate, format directly from targetDate
+      if (updated.frequency === 'once' && updated.targetDate) {
+        if (timezone) {
+          // Format targetDate in user's timezone
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hour12: false,
+          });
+          
+          const parts = formatter.formatToParts(new Date(updated.targetDate));
+          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+          
+          const day = parseInt(getPart('day'), 10);
+          const month = parseInt(getPart('month'), 10) - 1; // 0-indexed
+          const year = parseInt(getPart('year'), 10);
+          const hours = parseInt(getPart('hour'), 10);
+          const minutes = parseInt(getPart('minute'), 10);
+          const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+          
+          // Get current date in user's timezone for comparison
+          const timeComponents = this.getCurrentTimeInTimezone(timezone);
+          const today = new Date(timeComponents.year, timeComponents.month, timeComponents.day);
+          const tomorrow = new Date(timeComponents.year, timeComponents.month, timeComponents.day + 1);
+          const nextDateInUserTz = new Date(year, month, day);
+          
+          let dateLabel = '';
+          if (nextDateInUserTz.getTime() === today.getTime()) {
+            dateLabel = 'Today';
+          } else if (nextDateInUserTz.getTime() === tomorrow.getTime()) {
+            dateLabel = 'Tomorrow';
+          } else {
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const monthName = monthNames[month];
+            dateLabel = `${day} ${monthName}`;
+          }
+          
+          dateInfo = `${dateLabel} ${time24}`;
+          
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: updated.id,
+              targetDate: updated.targetDate,
+              dateInfo,
+              timezone,
+            },
+            'Formatted dateInfo directly from targetDate for once reminder'
+          );
+        }
+      }
+      
       // For yearly reminders with month and dayOfMonth, use the stored values directly (no timezone conversion)
-      if (updated.frequency === 'yearly' && updated.month && updated.dayOfMonth) {
+      if (!dateInfo && updated.frequency === 'yearly' && updated.month && updated.dayOfMonth) {
         const day = updated.dayOfMonth;
         const monthIndex = updated.month - 1; // Convert 1-12 to 0-11
         
