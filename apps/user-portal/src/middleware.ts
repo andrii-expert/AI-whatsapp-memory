@@ -3,9 +3,9 @@ import { verifyToken } from "@/lib/auth";
 
 // Define public routes that don't require authentication
 const publicRoutes = [
-  "/",
   "/sign-in",
   "/sign-up",
+  "/verify-email",
   "/api/auth",
   "/api/webhooks/clerk",
   "/api/webhook/payfast",
@@ -42,6 +42,29 @@ function getHost(req: NextRequest): string {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Handle root route - redirect based on auth status
+  if (pathname === "/") {
+    const token = req.cookies.get("auth-token")?.value;
+    const host = getHost(req);
+    
+    if (!token) {
+      // No token, redirect to sign-in
+      return NextResponse.redirect(new URL("/sign-in", host));
+    }
+    
+    // Verify token
+    const payload = verifyToken(token);
+    if (!payload) {
+      // Invalid token, redirect to sign-in and clear cookie
+      const response = NextResponse.redirect(new URL("/sign-in", host));
+      response.cookies.delete("auth-token");
+      return response;
+    }
+    
+    // Authenticated, redirect to dashboard
+    return NextResponse.redirect(new URL("/dashboard", host));
+  }
 
   // Allow public routes
   if (isPublicRoute(pathname)) {
