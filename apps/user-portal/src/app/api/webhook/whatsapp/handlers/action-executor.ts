@@ -5621,7 +5621,11 @@ export class ActionExecutor {
         // "later" means once, no specific time/date
         result.frequency = 'once';
       } else if (scheduleLower.includes('next week')) {
-        // Handle "next week" optionally with a weekday (e.g., "next week Thursday")
+        // Handle "next week" optionally with a weekday (e.g., "next week Thursday", "Tuesday next week")
+        // CRITICAL: "next week [day]" means the [day] of next week (starting from next Sunday)
+        // Calculation: Find next Sunday, then find [day] in that week
+        
+        // Check for weekday - can be before or after "next week" (e.g., "Tuesday next week" or "next week Tuesday")
         const weekdayMatch = scheduleLower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
         const targetDow = weekdayMatch ? dayNames.indexOf(weekdayMatch[1].toLowerCase()) : null;
 
@@ -5636,12 +5640,19 @@ export class ActionExecutor {
         if (timezone) {
           const currentTime = this.getCurrentTimeInTimezone(timezone);
           const currentDate = new Date(currentTime.year, currentTime.month, currentTime.day);
-          let daysToAdd = 7; // base for "next week"
-
+          const currentDow = currentDate.getDay(); // 0 = Sunday, 6 = Saturday
+          
+          let daysToAdd: number;
+          
           if (targetDow !== null) {
-            const currentDow = currentDate.getDay();
-            const diff = (targetDow - currentDow + 7) % 7;
-            daysToAdd += diff === 0 ? 7 : diff; // ensure it's the week after, not this week
+            // "next week [day]" calculation:
+            // Step 1: Find days until next Sunday (0 = Sunday, so if today is Sunday, next Sunday is in 7 days)
+            const daysUntilNextSunday = currentDow === 0 ? 7 : (7 - currentDow);
+            // Step 2: From next Sunday, find the target day (Sunday = 0, so targetDow is the offset)
+            daysToAdd = daysUntilNextSunday + targetDow;
+          } else {
+            // Just "next week" without a specific day - use 7 days (next week same day)
+            daysToAdd = 7;
           }
 
           const targetDate = new Date(currentDate);
@@ -5661,13 +5672,19 @@ export class ActionExecutor {
           }
         } else {
           // No timezone: use daysFromNow
-          let daysToAdd = 7;
+          const now = new Date();
+          const currentDow = now.getDay();
+          
+          let daysToAdd: number;
+          
           if (targetDow !== null) {
-            const now = new Date();
-            const currentDow = now.getDay();
-            const diff = (targetDow - currentDow + 7) % 7;
-            daysToAdd += diff === 0 ? 7 : diff;
+            // "next week [day]" calculation (same as above)
+            const daysUntilNextSunday = currentDow === 0 ? 7 : (7 - currentDow);
+            daysToAdd = daysUntilNextSunday + targetDow;
+          } else {
+            daysToAdd = 7;
           }
+          
           result.daysFromNow = daysToAdd;
           if (targetTime) {
             result.time = targetTime;
