@@ -930,7 +930,7 @@ export default function ShoppingListPage() {
     const date = new Date(dateTimeStr);
     if (isNaN(date.getTime())) return "";
     
-    const timezone = userPreferences?.timezone || "Africa/Johannesburg";
+    const timezone = user?.timezone || "Africa/Johannesburg";
     
     // Use Intl.DateTimeFormat to format date in user's timezone
     const formatter = new Intl.DateTimeFormat("en-US", {

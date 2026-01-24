@@ -116,17 +116,8 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Get user's timezone from preferences (preferences.timezone takes precedence over user.timezone)
-        const userTimezone = (user as any).preferences?.timezone || (user as any).timezone;
-        if (!userTimezone) {
-          logger.warn({ 
-            userId, 
-            hasPreferences: !!(user as any).preferences,
-            preferencesTimezone: (user as any).preferences?.timezone,
-            userTimezone: (user as any).timezone,
-          }, 'User has no timezone set, skipping reminders');
-          continue; // Skip users without timezone set
-        }
+        // Get user's timezone from users table
+        const userTimezone = (user as any).timezone || 'Africa/Johannesburg';
 
         // Get current time in user's timezone using Intl.DateTimeFormat for accurate conversion
         const formatter = new Intl.DateTimeFormat('en-US', {

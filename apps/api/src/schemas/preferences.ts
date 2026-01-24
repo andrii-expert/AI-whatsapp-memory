@@ -19,7 +19,6 @@ export const updatePreferencesSchema = z.object({
   }).optional(),
 
   locale: z.object({
-    timezone: z.string().optional(),
     dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]).optional(),
     timeFormat: z.enum(["12h", "24h"]).optional(),
   }).optional(),
@@ -35,7 +34,6 @@ export const preferencesSchema = z.object({
   calendarNotificationMinutes: z.number(),
   defaultCalendarId: z.string().nullable(),
   whatsappCalendarIds: z.array(z.string()).nullable(),
-  timezone: z.string(),
   dateFormat: z.enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]),
   timeFormat: z.enum(["12h", "24h"]),
 });

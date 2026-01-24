@@ -268,7 +268,6 @@ export const userPreferences = pgTable("user_preferences", {
   whatsappCalendarIds: jsonb("whatsapp_calendar_ids"),
   
   // Locale settings
-  timezone: text("timezone").default("Africa/Johannesburg").notNull(),
   dateFormat: dateFormatEnum("date_format").default("DD/MM/YYYY").notNull(),
   timeFormat: timeFormatEnum("time_format").default("24h").notNull(),
   

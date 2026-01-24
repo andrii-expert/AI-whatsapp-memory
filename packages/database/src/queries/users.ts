@@ -426,7 +426,6 @@ export async function updateUserPreferences(
     reminderNotifications?: boolean;
     reminderMinutes?: number;
     defaultCalendarId?: string;
-    timezone?: string;
     dateFormat?: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
     timeFormat?: "12h" | "24h";
   }

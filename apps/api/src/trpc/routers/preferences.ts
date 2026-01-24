@@ -9,6 +9,7 @@ import {
   updateWhatsAppCalendarSettings,
   resetPreferencesToDefault,
   setDefaultCalendar,
+  createUserPreferences,
 } from "@imaginecalendar/database/queries";
 import { TRPCError } from "@trpc/server";
 

@@ -114,6 +114,7 @@ export default function TasksPage() {
   const { data: userPreferences, isLoading: isLoadingPreferences } = useQuery(
     trpc.preferences.get.queryOptions()
   );
+  const { data: user } = useQuery(trpc.user.me.queryOptions());
 
   // Check if initial data is loading
   const isLoadingInitialData = isLoadingFolders || isLoadingTasks || isLoadingShares || isLoadingSharedResources || isLoadingPreferences;
@@ -1005,7 +1006,7 @@ export default function TasksPage() {
     
     const dateFormat = userPreferences?.dateFormat || "DD/MM/YYYY";
     const timeFormat = userPreferences?.timeFormat || "24h";
-    const timezone = userPreferences?.timezone || "Africa/Johannesburg";
+    const timezone = user?.timezone || "Africa/Johannesburg";
     
     // Use Intl.DateTimeFormat to get date components in user's timezone
     const formatter = new Intl.DateTimeFormat("en-US", {

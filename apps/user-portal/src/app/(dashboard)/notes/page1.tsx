@@ -143,6 +143,7 @@ export default function NotesPage() {
   const { data: userPreferences } = useQuery(
     trpc.preferences.get.queryOptions()
   );
+  const { data: user } = useQuery(trpc.user.me.queryOptions());
 
   // Extract shared notes and folders from sharedResources with proper permission metadata
   const sharedNotes = useMemo(() => {
@@ -751,7 +752,7 @@ export default function NotesPage() {
     
     const dateFormat = userPreferences?.dateFormat || "DD/MM/YYYY";
     const timeFormat = userPreferences?.timeFormat || "24h";
-    const timezone = userPreferences?.timezone || "Africa/Johannesburg";
+    const timezone = user?.timezone || "Africa/Johannesburg";
     
     // Use Intl.DateTimeFormat to get date components in user's timezone
     const formatter = new Intl.DateTimeFormat("en-US", {

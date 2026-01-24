@@ -1476,7 +1476,7 @@ export default function DashboardPage() {
                     "bg-blue-500";
       
       // Use user's timezone from database
-      const userTimezone = userPreferences?.timezone || 'Africa/Johannesburg';
+      const userTimezone = user?.timezone || 'Africa/Johannesburg';
       
       return {
         id: event.id,
@@ -1520,8 +1520,8 @@ export default function DashboardPage() {
                        startDate.getSeconds() === 0 &&
                        (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
       
-      // Get user timezone from event (set in processedEvents) or fallback to userPreferences
-      const userTimezone = event.userTimezone || userPreferences?.timezone || 'Africa/Johannesburg';
+      // Get user timezone from event (set in processedEvents) or fallback to user
+      const userTimezone = event.userTimezone || user?.timezone || 'Africa/Johannesburg';
       
       // Format time range using user timezone (same as calendars page)
       const startTimeStr = new Intl.DateTimeFormat('en-US', {
@@ -2258,7 +2258,7 @@ export default function DashboardPage() {
                 {selectedReminder?.targetDate ? (
                   <p className="text-sm text-muted-foreground">
                     {(() => {
-                      const userTimezone = (userPreferences as any)?.timezone || 'Africa/Johannesburg';
+                      const userTimezone = user?.timezone || 'Africa/Johannesburg';
                       const baseDate = new Date(selectedReminder.targetDate);
                       const inUserTz = new Date(baseDate.toLocaleString('en-US', { timeZone: userTimezone }));
                       return inUserTz.toLocaleString('en-US', {
@@ -3071,8 +3071,8 @@ export default function DashboardPage() {
                     const formatTimeForDisplay = () => {
                       if (!event?.start) return "N/A";
                       const date = new Date(event.start);
-                      // Always use userPreferences timezone from database
-                      const timezone = userPreferences?.timezone || 'Africa/Johannesburg';
+                      // Always use user timezone from users table
+                      const timezone = user?.timezone || 'Africa/Johannesburg';
                       
                       // Format time in 12-hour format
                       const timeStr = new Intl.DateTimeFormat('en-US', {

@@ -2,7 +2,7 @@
 // Copied from voice-worker for use in text message handling
 
 import type { Database } from '@imaginecalendar/database/client';
-import { getPrimaryCalendar, updateCalendarTokens, getUserPreferences, getWhatsAppCalendars, getCalendarsByIds, getCalendarsByProviderCalendarIds } from '@imaginecalendar/database/queries';
+import { getPrimaryCalendar, updateCalendarTokens, getWhatsAppCalendars, getCalendarsByIds, getCalendarsByProviderCalendarIds } from '@imaginecalendar/database/queries';
 import { createCalendarProvider } from '@imaginecalendar/calendar-integrations/factory';
 import type { Contact, CalendarProvider } from '@imaginecalendar/calendar-integrations/types';
 import type { ICalendarService, CalendarIntent } from '@imaginecalendar/ai-services';
@@ -187,27 +187,28 @@ export class CalendarService implements ICalendarService {
             userId,
             calendarId: calendarConnection.calendarId,
           },
-          'Failed to get calendar timezone from provider, falling back to preferences'
+          'Failed to get calendar timezone from provider, falling back to user timezone'
         );
       }
     }
     
-    // Fallback to user preferences
+    // Fallback to user timezone from users table
     try {
-      const preferences = await getUserPreferences(this.db, userId);
-      if (preferences?.timezone) {
+      const { getUserById } = await import("@imaginecalendar/database/queries");
+      const user = await getUserById(this.db, userId);
+      if (user?.timezone) {
         logger.info(
           {
             userId,
-            timezone: preferences.timezone,
-            source: 'user_preferences',
+            timezone: user.timezone,
+            source: 'users.timezone',
           },
-          'Using timezone from user preferences'
+          'Using timezone from users table'
         );
-        return preferences.timezone;
+        return user.timezone;
       }
     } catch (error) {
-      logger.warn({ error, userId }, 'Failed to get user timezone from preferences');
+      logger.warn({ error, userId }, 'Failed to get user timezone from users table');
     }
     
     // Final fallback to default

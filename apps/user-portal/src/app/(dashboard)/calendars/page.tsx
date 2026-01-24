@@ -1587,7 +1587,7 @@ export default function CalendarsPage() {
     document.head.appendChild(script);
   }, []);
 
-  // Fetch user preferences for timezone
+  // Fetch user preferences
   const { data: userPreferences } = useQuery(
     trpc.preferences.get.queryOptions()
   );
@@ -2592,8 +2592,8 @@ export default function CalendarsPage() {
     const color = event.color || "bg-blue-500";
     const colorHex = event.colorHex || "#3b82f6";
 
-    // Use user's timezone instead of calendar timezone
-    const userTimezone = userPreferences?.timezone || 'Africa/Johannesburg';
+    // Use user's timezone from users table
+    const userTimezone = user?.timezone || 'Africa/Johannesburg';
 
     const startDate = new Date(event.start);
     const endDate = new Date(event.end);
@@ -3091,7 +3091,7 @@ export default function CalendarsPage() {
                                      (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
                     
                     // Format time range using user timezone (same as other places)
-                    const userTimezone = event.userTimezone || userPreferences?.timezone || 'Africa/Johannesburg';
+                    const userTimezone = event.userTimezone || user?.timezone || 'Africa/Johannesburg';
                     // Use 12-hour format for time range
                     const startTimeStr = new Intl.DateTimeFormat('en-US', {
                       timeZone: userTimezone,
@@ -3269,7 +3269,7 @@ export default function CalendarsPage() {
                                          (endDate.getTime() - startDate.getTime() >= 24 * 60 * 60 * 1000);
                         
                         // Format time range using user timezone
-                        const userTimezone = event.userTimezone || userPreferences?.timezone || 'Africa/Johannesburg';
+                        const userTimezone = event.userTimezone || user?.timezone || 'Africa/Johannesburg';
                         // Use 12-hour format for time range
                         const startTimeStr = new Intl.DateTimeFormat('en-US', {
                           timeZone: userTimezone,
@@ -4943,8 +4943,8 @@ export default function CalendarsPage() {
                     const formatTimeForDisplay = () => {
                       if (!event?.start) return "N/A";
                       const date = new Date(event.start);
-                      // Always use userPreferences timezone from database
-                      const timezone = userPreferences?.timezone || 'Africa/Johannesburg';
+                      // Always use user timezone from users table
+                      const timezone = user?.timezone || 'Africa/Johannesburg';
                       
                       // Format time in 12-hour format
                       const timeStr = new Intl.DateTimeFormat('en-US', {

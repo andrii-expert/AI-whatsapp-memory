@@ -78,7 +78,6 @@ export async function updateLocaleSettings(
   db: Database,
   userId: string,
   locale: {
-    timezone?: string;
     dateFormat?: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
     timeFormat?: "12h" | "24h";
   }
@@ -204,7 +203,6 @@ export async function resetPreferencesToDefault(db: Database, userId: string) {
           reminderMinutes: 10,
           calendarNotificationMinutes: 10,
           defaultCalendarId: null,
-          timezone: "Africa/Johannesburg",
           dateFormat: "DD/MM/YYYY",
           timeFormat: "24h",
           updatedAt: new Date(),

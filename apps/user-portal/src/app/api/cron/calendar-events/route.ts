@@ -99,14 +99,14 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Get user's timezone from database - priority: user.timezone > userPreferences.timezone > default
+        // Get user's timezone from users table
+        const userTimezone = (user as any).timezone || 'Africa/Johannesburg';
+        
+        // Get user's preferences for notification settings
         const userPrefsRaw = (user as any).preferences;
         const userPreferences = Array.isArray(userPrefsRaw) 
           ? userPrefsRaw[0] 
           : userPrefsRaw;
-        
-        // CRITICAL: Use user.timezone from users table first, then preferences
-        const userTimezone = (user as any).timezone || userPreferences?.timezone || 'Africa/Johannesburg';
         
         // Get user's calendar notification minutes from preferences
         const calendarNotificationMinutes = userPreferences?.calendarNotificationMinutes || 10;
@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
             userId,
             userTimezone,
             calendarNotificationMinutes,
-            timezoneSource: (user as any).timezone ? 'user' : userPreferences?.timezone ? 'userPreferences' : 'default',
+            timezoneSource: (user as any).timezone ? 'users.timezone' : 'default',
           },
           'Processing user calendar events'
         );
