@@ -6604,10 +6604,36 @@ export class ActionExecutor {
           );
         } else {
           // Try to find by exact or partial title match
-          reminder = reminders.find(r => 
+          const matchingReminders = reminders.filter(r => 
             r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
             parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
           );
+          
+          if (matchingReminders.length === 0) {
+            reminder = null;
+          } else if (matchingReminders.length === 1) {
+            // Single match - use it
+            reminder = matchingReminders[0];
+          } else {
+            // Multiple matches - prioritize the MOST RECENTLY CREATED reminder
+            reminder = [...matchingReminders].sort((a, b) => {
+              const aCreated = new Date(a.createdAt as any).getTime();
+              const bCreated = new Date(b.createdAt as any).getTime();
+              return bCreated - aCreated; // newest first
+            })[0];
+            
+            logger.info(
+              {
+                userId: this.userId,
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                parsedTaskName: parsed.taskName,
+                totalMatches: matchingReminders.length,
+                allMatches: matchingReminders.map(r => ({ id: r.id, title: r.title, createdAt: r.createdAt })),
+              },
+              'Multiple reminders matched, using most recently created one (update)'
+            );
+          }
         }
       }
 
@@ -7295,10 +7321,36 @@ export class ActionExecutor {
         );
       } else {
         // Try to find by exact or partial title match
-        reminder = reminders.find(r => 
+        const matchingReminders = reminders.filter(r => 
           r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
           parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
         );
+        
+        if (matchingReminders.length === 0) {
+          reminder = null;
+        } else if (matchingReminders.length === 1) {
+          // Single match - use it
+          reminder = matchingReminders[0];
+        } else {
+          // Multiple matches - prioritize the MOST RECENTLY CREATED reminder
+          reminder = [...matchingReminders].sort((a, b) => {
+            const aCreated = new Date(a.createdAt as any).getTime();
+            const bCreated = new Date(b.createdAt as any).getTime();
+            return bCreated - aCreated; // newest first
+          })[0];
+          
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: reminder.id,
+              reminderTitle: reminder.title,
+              parsedTaskName: parsed.taskName,
+              totalMatches: matchingReminders.length,
+              allMatches: matchingReminders.map(r => ({ id: r.id, title: r.title, createdAt: r.createdAt })),
+            },
+            'Multiple reminders matched, using most recently created one (delete)'
+          );
+        }
       }
 
       if (!reminder) {
