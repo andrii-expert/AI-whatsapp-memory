@@ -38,7 +38,6 @@ import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/rea
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useSetupRedirect } from "@/hooks/use-setup-redirect";
-import { OnboardingLoading } from "@/components/onboarding-loading";
 import {
   Calendar,
   MessageSquare,
@@ -502,14 +501,12 @@ function GoogleMap({
 export default function DashboardPage() {
   const router = useRouter();
   const trpc = useTRPC();
-  const { user, isLoaded, isSignedIn } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   // Redirect if setup is incomplete
   useSetupRedirect();
-  
-  // All state declarations must be before any conditional returns (React rules of hooks)
   const [selectedNote, setSelectedNote] = useState<any | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
@@ -554,17 +551,6 @@ export default function DashboardPage() {
   const [editManualAttendeeInput, setEditManualAttendeeInput] = useState("");
   const [editAttendeeSearchOpen, setEditAttendeeSearchOpen] = useState(false);
   const [editAttendeeSearchTerm, setEditAttendeeSearchTerm] = useState("");
-  
-  // Show full-page loading state while checking authentication
-  if (!isLoaded) {
-    return <OnboardingLoading />;
-  }
-  
-  // If auth check is complete but user is not signed in, show loading
-  // (useSetupRedirect will handle the redirect)
-  if (!isSignedIn || !user) {
-    return <OnboardingLoading />;
-  }
 
   // Fetch all data
   const { data: userData } = useQuery(trpc.user.me.queryOptions());
