@@ -6870,16 +6870,40 @@ export class ActionExecutor {
         const hasExplicitTimeInChange = /(?:\d{1,2}:\d{2}|\d{1,2}\s*(am|pm))/i.test(parsed.newName);
         
         // Only process date changes if we haven't already handled a relative time update
-        if (!relativeTimeMatch && (changes.includes('date') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday') || hasMonthName)) {
-          const scheduleData = this.parseReminderSchedule(parsed.newName, timezone);
+        if (!relativeTimeMatch && (changes.includes('date') || changes.includes('today') || changes.includes('tomorrow') || changes.includes('monday') || changes.includes('tuesday') || changes.includes('wednesday') || changes.includes('thursday') || changes.includes('friday') || changes.includes('saturday') || changes.includes('sunday') || hasMonthName)) {
+          // Extract just the date part from "date to today" or "date to tomorrow" etc.
+          // This helps parseReminderSchedule correctly identify "today" or "tomorrow"
+          let scheduleToParse = parsed.newName;
+          
+          // If the string contains "date to [something]", extract just the date part for parsing
+          const dateToMatch = parsed.newName.match(/date\s+to\s+([^-]+?)(?:\s*-\s*time|$)/i);
+          if (dateToMatch && dateToMatch[1]) {
+            // Extract the date part (e.g., "today", "tomorrow", "25th January")
+            scheduleToParse = dateToMatch[1].trim();
+            // If there's also a time specified, append it
+            const timeMatch = parsed.newName.match(/time\s+to\s+([^-]+?)(?:\s*-\s*|$)/i);
+            if (timeMatch && timeMatch[1]) {
+              scheduleToParse += ` at ${timeMatch[1].trim()}`;
+            }
+          }
+          
+          const scheduleData = this.parseReminderSchedule(scheduleToParse, timezone);
           if (scheduleData.daysFromNow !== undefined) {
             updateInput.daysFromNow = scheduleData.daysFromNow;
+            // Clear targetDate when using daysFromNow
+            updateInput.targetDate = null;
           }
           if (scheduleData.targetDate) {
-            // If user didn't specify a new time (e.g. "date to tomorrow"), keep existing reminder.time
-            // and ensure targetDate is constructed in the user's timezone so that the stored
-            // targetDate and time fields represent the same local time for the user.
-            if (!hasExplicitTimeInChange && reminder.time) {
+            // If user specified a time in the change (e.g., "date to today - time to 08:00"),
+            // use the time from scheduleData (which was parsed from the combined string)
+            if (hasExplicitTimeInChange && scheduleData.time) {
+              // scheduleData.targetDate already includes the correct time from parseReminderSchedule
+              updateInput.targetDate = scheduleData.targetDate;
+              updateInput.time = scheduleData.time;
+            } else if (!hasExplicitTimeInChange && reminder.time) {
+              // If user didn't specify a new time (e.g. "date to tomorrow"), keep existing reminder.time
+              // and ensure targetDate is constructed in the user's timezone so that the stored
+              // targetDate and time fields represent the same local time for the user.
               const [hRaw, mRaw] = reminder.time.split(':').map((v) => parseInt(v, 10));
               const hours = isNaN(hRaw) ? 0 : hRaw;
               const minutes = isNaN(mRaw) ? 0 : mRaw;
@@ -6902,7 +6926,11 @@ export class ActionExecutor {
                 updateInput.targetDate = adjusted;
               }
             } else {
+              // No explicit time in change and no existing time - use targetDate as-is
               updateInput.targetDate = scheduleData.targetDate;
+              if (scheduleData.time) {
+                updateInput.time = scheduleData.time;
+              }
             }
           }
           
