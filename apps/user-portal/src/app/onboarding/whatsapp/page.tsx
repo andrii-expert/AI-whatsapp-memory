@@ -183,19 +183,6 @@ function WhatsAppLinkingForm() {
       return;
     }
     // If setupStep is 1, stay on this page (correct step)
-    
-    // Update temporary credentials step when landing on this page
-    if (setupStep === 1) {
-      fetch("/api/auth/update-signup-step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ currentStep: "whatsapp" }),
-      }).catch((err) => {
-        // Silently fail - step update is not critical
-        console.error("Failed to update signup step:", err);
-      });
-    }
   }, [user, polledUser, isLoaded, router]);
 
   // Refetch WhatsApp numbers when user becomes available (e.g., after auto-login)
@@ -464,19 +451,6 @@ function WhatsAppLinkingForm() {
         utcOffset,
         setupStep: 2, // Move to next step: Calendar setup
       });
-
-      // Update temporary credentials step
-      try {
-        await fetch("/api/auth/update-signup-step", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ currentStep: "calendar" }),
-        });
-      } catch (err) {
-        // Silently fail - step update is not critical
-        console.error("Failed to update signup step:", err);
-      }
 
       // Redirect to calendar connection page
       router.push("/onboarding/calendar");

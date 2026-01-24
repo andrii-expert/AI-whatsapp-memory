@@ -29,55 +29,6 @@ function SignInForm() {
     }
   }, [searchParams]);
 
-  // Check for existing signup session on mount
-  useEffect(() => {
-    const checkSignupSession = async () => {
-      try {
-        // Get device fingerprint from localStorage or generate it
-        const getDeviceFingerprint = async (): Promise<string> => {
-          const stored = localStorage.getItem("device_fingerprint");
-          if (stored) return stored;
-          
-          // Generate fingerprint using Web Crypto API (SHA256) for consistency with server
-          const userAgent = navigator.userAgent || "";
-          const language = navigator.language || "";
-          const acceptEncoding = "gzip, deflate, br";
-          const data = [userAgent, language, acceptEncoding].join("|");
-          
-          const encoder = new TextEncoder();
-          const dataBuffer = encoder.encode(data);
-          const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
-          const hashArray = Array.from(new Uint8Array(hashBuffer));
-          const fingerprint = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-          
-          localStorage.setItem("device_fingerprint", fingerprint);
-          return fingerprint;
-        };
-
-        const deviceFingerprint = await getDeviceFingerprint();
-
-        const response = await fetch("/api/auth/restore-signup-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ deviceFingerprint }),
-        });
-
-        const data = await response.json();
-
-        if (data.hasSession && data.redirectUrl) {
-          // Auto-login and redirect to the appropriate step
-          router.push(data.redirectUrl);
-          router.refresh();
-        }
-      } catch (err) {
-        // Silently fail - user can still sign in manually
-        console.error("Failed to check signup session:", err);
-      }
-    };
-
-    checkSignupSession();
-  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

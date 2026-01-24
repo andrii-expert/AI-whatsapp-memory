@@ -83,19 +83,6 @@ function VerifyEmailForm() {
         description: "Your email has been verified successfully.",
       });
 
-      // Update temporary credentials step
-      try {
-        await fetch("/api/auth/update-signup-step", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ currentStep: "whatsapp" }),
-        });
-      } catch (err) {
-        // Silently fail - step update is not critical
-        console.error("Failed to update signup step:", err);
-      }
-
       // Redirect to WhatsApp linking page
       router.push("/onboarding/whatsapp");
       router.refresh();

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
 import { verifyToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
-import { getVerifiedWhatsappNumberByPhone, getUserById, getUserWhatsAppNumbers, logOutgoingWhatsAppMessage, updateUser, deleteTemporaryCredentials } from "@imaginecalendar/database/queries";
+import { getVerifiedWhatsappNumberByPhone, getUserById, getUserWhatsAppNumbers, logOutgoingWhatsAppMessage, updateUser } from "@imaginecalendar/database/queries";
 import { WhatsAppService } from "@imaginecalendar/whatsapp";
 
 export async function POST(req: NextRequest) {
@@ -29,15 +29,6 @@ export async function POST(req: NextRequest) {
     await updateUser(db, decoded.userId, {
       setupStep: 4, // Setup complete
     });
-
-    // Clean up temporary signup credentials
-    try {
-      await deleteTemporaryCredentials(db, decoded.userId);
-      logger.info({ userId: decoded.userId }, "Temporary signup credentials cleaned up");
-    } catch (cleanupError) {
-      // Log but don't fail if cleanup fails
-      logger.error({ error: cleanupError, userId: decoded.userId }, "Failed to cleanup temporary credentials");
-    }
 
     // Get user's verified WhatsApp numbers
     const whatsappNumbers = await getUserWhatsAppNumbers(db, decoded.userId);

@@ -127,18 +127,6 @@ function CalendarConnectionForm() {
         if (isRedirectingRef.current) return;
         isRedirectingRef.current = true;
         
-        // Update temporary credentials step
-        try {
-          await fetch("/api/auth/update-signup-step", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ currentStep: "billing" }),
-          });
-        } catch (err) {
-          // Silently fail - step update is not critical
-          console.error("Failed to update signup step:", err);
-        }
         // Redirect to billing page
         router.push("/onboarding/billing");
         router.refresh();
@@ -182,19 +170,6 @@ function CalendarConnectionForm() {
       return;
     }
     // If setupStep is 2, stay on this page (correct step)
-    
-    // Update temporary credentials step when landing on this page
-    if (setupStep === 2) {
-      fetch("/api/auth/update-signup-step", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ currentStep: "calendar" }),
-      }).catch((err) => {
-        // Silently fail - step update is not critical
-        console.error("Failed to update signup step:", err);
-      });
-    }
   }, [user, polledUser, isLoaded, router]);
 
   if (!isLoaded || !user) {
