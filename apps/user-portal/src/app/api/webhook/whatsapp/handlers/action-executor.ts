@@ -6571,29 +6571,43 @@ export class ActionExecutor {
       // Find reminder by title if not found by number
       if (!reminder) {
         const reminders = await getRemindersByUserId(this.db, this.userId);
-        reminder = reminders.find(r => 
-          r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
-          parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
-        );
+        const rawName = parsed.taskName!.trim().toLowerCase();
+        
+        // ⚠️ CRITICAL: Check if this is a generic reminder name (e.g., "Reminder", "Reminder-1", "Reminder-2")
+        // If so, prioritize the MOST RECENTLY CREATED reminder
+        const isGenericName =
+          rawName === 'reminder' ||
+          rawName === 'a reminder' ||
+          rawName === 'this reminder' ||
+          rawName === 'that reminder' ||
+          rawName === 'it' ||
+          /^reminder-\d+$/i.test(rawName) || // Matches "Reminder-1", "Reminder-2", etc.
+          /^reminder\s*\d*$/i.test(rawName); // Matches "Reminder", "Reminder 1", etc.
 
-        // Fallback: if AI used a generic name like "Reminder" or "this reminder",
-        // treat it as a reference to the most recently created reminder.
-        if (!reminder) {
-          const rawName = parsed.taskName!.trim().toLowerCase();
-          const isGenericName =
-            rawName === 'reminder' ||
-            rawName === 'a reminder' ||
-            rawName === 'this reminder' ||
-            rawName === 'that reminder' ||
-            rawName === 'it';
-
-          if (isGenericName && reminders.length > 0) {
-            reminder = [...reminders].sort((a, b) => {
-              const aCreated = new Date(a.createdAt as any).getTime();
-              const bCreated = new Date(b.createdAt as any).getTime();
-              return bCreated - aCreated; // newest first
-            })[0];
-          }
+        if (isGenericName && reminders.length > 0) {
+          // Sort by creation date (newest first) and use the most recent one
+          reminder = [...reminders].sort((a, b) => {
+            const aCreated = new Date(a.createdAt as any).getTime();
+            const bCreated = new Date(b.createdAt as any).getTime();
+            return bCreated - aCreated; // newest first
+          })[0];
+          
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: reminder.id,
+              reminderTitle: reminder.title,
+              parsedTaskName: parsed.taskName,
+              totalReminders: reminders.length,
+            },
+            'Using most recently created reminder for generic name'
+          );
+        } else {
+          // Try to find by exact or partial title match
+          reminder = reminders.find(r => 
+            r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+            parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
+          );
         }
       }
 
@@ -7004,8 +7018,18 @@ export class ActionExecutor {
           const day = parseInt(getPart('day'), 10);
           const month = parseInt(getPart('month'), 10) - 1; // 0-indexed
           const year = parseInt(getPart('year'), 10);
-          const hours = parseInt(getPart('hour'), 10);
-          const minutes = parseInt(getPart('minute'), 10);
+          
+          // ⚠️ CRITICAL: Use updated.time if available (for time-only updates), otherwise use time from targetDate
+          let hours: number;
+          let minutes: number;
+          if (updated.time) {
+            const [h, m] = updated.time.split(':').map(Number);
+            hours = h;
+            minutes = m;
+          } else {
+            hours = parseInt(getPart('hour'), 10);
+            minutes = parseInt(getPart('minute'), 10);
+          }
           const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
           
           // Get current date in user's timezone for comparison
@@ -7236,10 +7260,46 @@ export class ActionExecutor {
 
       // Find reminder by title
       const reminders = await getRemindersByUserId(this.db, this.userId);
-      const reminder = reminders.find(r => 
-        r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
-        parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
-      );
+      const rawName = parsed.taskName!.trim().toLowerCase();
+      
+      // ⚠️ CRITICAL: Check if this is a generic reminder name (e.g., "Reminder", "Reminder-1", "Reminder-2")
+      // If so, prioritize the MOST RECENTLY CREATED reminder
+      const isGenericName =
+        rawName === 'reminder' ||
+        rawName === 'a reminder' ||
+        rawName === 'this reminder' ||
+        rawName === 'that reminder' ||
+        rawName === 'it' ||
+        /^reminder-\d+$/i.test(rawName) || // Matches "Reminder-1", "Reminder-2", etc.
+        /^reminder\s*\d*$/i.test(rawName); // Matches "Reminder", "Reminder 1", etc.
+
+      let reminder: any = null;
+      
+      if (isGenericName && reminders.length > 0) {
+        // Sort by creation date (newest first) and use the most recent one
+        reminder = [...reminders].sort((a, b) => {
+          const aCreated = new Date(a.createdAt as any).getTime();
+          const bCreated = new Date(b.createdAt as any).getTime();
+          return bCreated - aCreated; // newest first
+        })[0];
+        
+        logger.info(
+          {
+            userId: this.userId,
+            reminderId: reminder.id,
+            reminderTitle: reminder.title,
+            parsedTaskName: parsed.taskName,
+            totalReminders: reminders.length,
+          },
+          'Using most recently created reminder for generic name (delete)'
+        );
+      } else {
+        // Try to find by exact or partial title match
+        reminder = reminders.find(r => 
+          r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+          parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
+        );
+      }
 
       if (!reminder) {
         return {
