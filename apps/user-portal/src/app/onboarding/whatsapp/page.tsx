@@ -364,10 +364,18 @@ function WhatsAppLinkingForm() {
     })
   );
 
-  // Detect mobile device
+  // Detect mobile device (including iOS Safari)
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      // Check screen width
+      const isSmallScreen = window.innerWidth < 768;
+      // Check user agent for mobile devices (especially iOS)
+      const userAgent = navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+      const isAndroid = /Android/.test(userAgent);
+      const isMobileUA = isIOS || isAndroid || /Mobile/.test(userAgent);
+      
+      setIsMobile(isSmallScreen || isMobileUA);
     };
     checkMobile();
     window.addEventListener('resize', checkMobile);
@@ -401,7 +409,16 @@ function WhatsAppLinkingForm() {
     const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
     const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
     const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    
+    // Use window.location.href for mobile devices (especially iOS Safari)
+    // window.open() is blocked by popup blockers when called from async callbacks
+    // window.location.href works reliably on all mobile browsers including iOS Safari
+    if (isMobile) {
+      window.location.href = whatsappUrl;
+    } else {
+      // For desktop, use window.open as fallback
+      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   // Handle Open WhatsApp / Verify WhatsApp button click
