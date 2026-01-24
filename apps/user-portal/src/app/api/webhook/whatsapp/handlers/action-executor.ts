@@ -5546,7 +5546,7 @@ export class ActionExecutor {
             }
           }
           
-          const [hours, minutes] = targetTimeForDate.split(':').map(Number);
+          const [hours, minutes] = targetTime.split(':').map(Number);
           const tomorrowDate = new Date(currentTime.year, currentTime.month, currentTime.day + 1);
           
           result.targetDate = this.createDateInUserTimezone(
