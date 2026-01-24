@@ -57,6 +57,9 @@ import {
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import Link from "next/link";
 import { Home, ChevronLeft, Clock } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useSetupRedirect } from "@/hooks/use-setup-redirect";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 
 // ==================== TYPES ====================
 
@@ -873,6 +876,21 @@ export default function RemindersPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user: authUser, isLoaded, isSignedIn } = useAuth();
+  
+  // Redirect if setup is incomplete
+  useSetupRedirect();
+  
+  // Show full-page loading state while checking authentication
+  if (!isLoaded) {
+    return <OnboardingLoading />;
+  }
+  
+  // If auth check is complete but user is not signed in, show loading
+  // (useSetupRedirect will handle the redirect)
+  if (!isSignedIn || !authUser) {
+    return <OnboardingLoading />;
+  }
 
   // Fetch user data to get timezone
   const { data: user } = useQuery(trpc.user.me.queryOptions());

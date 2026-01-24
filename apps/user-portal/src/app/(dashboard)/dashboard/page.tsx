@@ -38,6 +38,7 @@ import { useMutation, useQuery, useQueries, useQueryClient } from "@tanstack/rea
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useSetupRedirect } from "@/hooks/use-setup-redirect";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 import {
   Calendar,
   MessageSquare,
@@ -554,29 +555,15 @@ export default function DashboardPage() {
   const [editAttendeeSearchOpen, setEditAttendeeSearchOpen] = useState(false);
   const [editAttendeeSearchTerm, setEditAttendeeSearchTerm] = useState("");
   
-  // Show loading state while checking authentication
+  // Show full-page loading state while checking authentication
   if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <OnboardingLoading />;
   }
   
-  // If auth check is complete but user is not signed in, don't render content
+  // If auth check is complete but user is not signed in, show loading
   // (useSetupRedirect will handle the redirect)
   if (!isSignedIn || !user) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-gray-600">Redirecting...</p>
-        </div>
-      </div>
-    );
+    return <OnboardingLoading />;
   }
 
   // Fetch all data

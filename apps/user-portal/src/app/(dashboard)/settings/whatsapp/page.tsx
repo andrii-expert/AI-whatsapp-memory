@@ -12,6 +12,9 @@ import { Badge } from "@imaginecalendar/ui/badge";
 import { PhoneInput } from "@imaginecalendar/ui/phone-input";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { normalizePhoneNumber } from "@imaginecalendar/ui/phone-utils";
+import { useAuth } from "@/hooks/use-auth";
+import { useSetupRedirect } from "@/hooks/use-setup-redirect";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 
 // Component to handle phone saving and verification flow
 function PhoneVerificationFlow({
@@ -115,6 +118,21 @@ function WhatsAppVerificationPageContent() {
   const searchParams = useSearchParams();
   const redirectFrom = searchParams.get("from");
   const { toast } = useToast();
+  const { user, isLoaded, isSignedIn } = useAuth();
+  
+  // Redirect if setup is incomplete
+  useSetupRedirect();
+  
+  // Show full-page loading state while checking authentication
+  if (!isLoaded) {
+    return <OnboardingLoading />;
+  }
+  
+  // If auth check is complete but user is not signed in, show loading
+  // (useSetupRedirect will handle the redirect)
+  if (!isSignedIn || !user) {
+    return <OnboardingLoading />;
+  }
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isVerified, setIsVerified] = useState(false);
   const [showVerification, setShowVerification] = useState(false);

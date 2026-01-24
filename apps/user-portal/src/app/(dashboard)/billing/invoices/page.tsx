@@ -17,8 +17,26 @@ import { Badge } from "@imaginecalendar/ui/badge";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { Download, FileText, Loader2, Receipt, CheckCircle2, Clock, DollarSign } from "lucide-react";
 import { format } from "date-fns";
+import { useAuth } from "@/hooks/use-auth";
+import { useSetupRedirect } from "@/hooks/use-setup-redirect";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 
 export default function InvoicesPage() {
+  const { user, isLoaded, isSignedIn } = useAuth();
+  
+  // Redirect if setup is incomplete
+  useSetupRedirect();
+  
+  // Show full-page loading state while checking authentication
+  if (!isLoaded) {
+    return <OnboardingLoading />;
+  }
+  
+  // If auth check is complete but user is not signed in, show loading
+  // (useSetupRedirect will handle the redirect)
+  if (!isSignedIn || !user) {
+    return <OnboardingLoading />;
+  }
   const trpc = useTRPC();
   const { toast } = useToast();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);

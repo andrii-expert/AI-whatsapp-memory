@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useSetupRedirect } from "@/hooks/use-setup-redirect";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 import { cn } from "@imaginecalendar/ui/cn";
 import {
   AlertDialog,
@@ -138,11 +139,22 @@ export default function ShoppingListPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, isLoaded, isSignedIn } = useAuth();
   const userId = user?.id;
   
   // Redirect if setup is incomplete
   useSetupRedirect();
+  
+  // Show full-page loading state while checking authentication
+  if (!isLoaded) {
+    return <OnboardingLoading />;
+  }
+  
+  // If auth check is complete but user is not signed in, show loading
+  // (useSetupRedirect will handle the redirect)
+  if (!isSignedIn || !user) {
+    return <OnboardingLoading />;
+  }
 
   // State - default to folder list when landing on the page
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);

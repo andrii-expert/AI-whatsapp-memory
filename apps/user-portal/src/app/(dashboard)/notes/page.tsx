@@ -4,8 +4,26 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@imaginecalendar/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useSetupRedirect } from "@/hooks/use-setup-redirect";
+import { OnboardingLoading } from "@/components/onboarding-loading";
 
 export default function NotesPage() {
+  const { user, isLoaded, isSignedIn } = useAuth();
+  
+  // Redirect if setup is incomplete
+  useSetupRedirect();
+  
+  // Show full-page loading state while checking authentication
+  if (!isLoaded) {
+    return <OnboardingLoading />;
+  }
+  
+  // If auth check is complete but user is not signed in, show loading
+  // (useSetupRedirect will handle the redirect)
+  if (!isSignedIn || !user) {
+    return <OnboardingLoading />;
+  }
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="max-w-md w-full text-center space-y-8 py-12">
