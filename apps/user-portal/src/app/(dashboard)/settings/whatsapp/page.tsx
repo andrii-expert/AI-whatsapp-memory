@@ -118,7 +118,7 @@ function WhatsAppVerificationPageContent() {
   const searchParams = useSearchParams();
   const redirectFrom = searchParams.get("from");
   const { toast } = useToast();
-  const { user, isLoaded, isSignedIn } = useAuth();
+  const { user: authUser, isLoaded, isSignedIn } = useAuth();
   
   // Redirect if setup is incomplete
   useSetupRedirect();
@@ -130,7 +130,7 @@ function WhatsAppVerificationPageContent() {
   
   // If auth check is complete but user is not signed in, show loading
   // (useSetupRedirect will handle the redirect)
-  if (!isSignedIn || !user) {
+  if (!isSignedIn || !authUser) {
     return <OnboardingLoading />;
   }
   const [phoneNumber, setPhoneNumber] = useState("");
