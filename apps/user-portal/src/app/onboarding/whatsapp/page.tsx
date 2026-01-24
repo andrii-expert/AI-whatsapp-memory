@@ -62,10 +62,11 @@ function PhoneVerificationFlow({
   const [hasNotifiedVerified, setHasNotifiedVerified] = useState(false);
   const trpc = useTRPC();
   
-  // Poll for verification status
-  const { data: whatsappNumbers = [], refetch } = useQuery(
-    trpc.whatsapp.getMyNumbers.queryOptions()
-  );
+  // Poll for verification status every 1 second
+  const { data: whatsappNumbers = [], refetch } = useQuery({
+    ...trpc.whatsapp.getMyNumbers.queryOptions(),
+    refetchInterval: 1000, // Poll every 1 second
+  });
 
   // Check if phone needs to be saved
   useEffect(() => {
@@ -99,7 +100,7 @@ function PhoneVerificationFlow({
     }
   }, [whatsappNumbers, normalizedPhone, onVerified, hasNotifiedVerified]);
 
-  // Poll every 3 seconds if not verified
+  // Poll every 1 second if not verified (query already polls, but we also refetch on demand)
   useEffect(() => {
     if (!phoneSaved) return;
     
@@ -107,13 +108,14 @@ function PhoneVerificationFlow({
       num.phoneNumber === normalizedPhone && num.isVerified
     );
     
-    const interval = setInterval(() => {
-      if (!verifiedNumber) {
+    // If not verified, ensure we're polling (query already handles this, but we can trigger refetch)
+    if (!verifiedNumber) {
+      const interval = setInterval(() => {
         refetch();
-      }
-    }, 3000);
+      }, 1000); // Poll every 1 second
 
-    return () => clearInterval(interval);
+      return () => clearInterval(interval);
+    }
   }, [phoneSaved, whatsappNumbers, normalizedPhone, refetch]);
 
   // Return null - this component only handles background polling
@@ -152,10 +154,11 @@ function WhatsAppLinkingForm() {
     enabled: isLoaded && !!user && (user.setupStep ?? 1) === 1, // Only poll while on step 1
   });
 
-  // Fetch WhatsApp numbers - will be refetched when user becomes available after auto-login
-  const { data: whatsappNumbers = [], refetch: refetchNumbers, isLoading: isLoadingNumbers } = useQuery(
-    trpc.whatsapp.getMyNumbers.queryOptions()
-  );
+  // Fetch WhatsApp numbers - poll every 1 second to check verification status
+  const { data: whatsappNumbers = [], refetch: refetchNumbers, isLoading: isLoadingNumbers } = useQuery({
+    ...trpc.whatsapp.getMyNumbers.queryOptions(),
+    refetchInterval: 1000, // Poll every 1 second to check verification status
+  });
 
   // Redirect if user has already completed this step or is on wrong step
   // Also check polled user data for setupStep changes
@@ -207,6 +210,7 @@ function WhatsAppLinkingForm() {
   }, [isLoaded, user, refetchNumbers]);
 
   // Check if user has verified WhatsApp and initialize phone number
+  // This effect runs every time whatsappNumbers changes (polled every 1 second)
   useEffect(() => {
     // Wait for WhatsApp numbers to finish loading
     if (isLoadingNumbers) return;
@@ -218,16 +222,25 @@ function WhatsAppLinkingForm() {
       if (verifiedNumber?.phoneNumber) {
         // User has a verified WhatsApp number
         const verifiedPhone = verifiedNumber.phoneNumber;
+        const normalizedVerifiedPhone = normalizePhoneNumber(verifiedPhone);
+        const normalizedCurrentPhone = phoneNumber ? normalizePhoneNumber(phoneNumber) : null;
+        
+        // Check if the verified number matches the current phone number
+        const isCurrentPhoneVerified = normalizedCurrentPhone === normalizedVerifiedPhone;
         
         // Always use the verified WhatsApp number
-        setPhoneNumber(verifiedPhone);
+        if (normalizedCurrentPhone !== normalizedVerifiedPhone) {
+          setPhoneNumber(verifiedPhone);
+        }
         
-        // Mark as verified
-        setIsVerified(true);
-        setShowVerification(false);
-        setHasInitiatedVerification(false);
-        setShowQRCode(false);
-        setVerificationCode("");
+        // Mark as verified if not already verified
+        if (!isVerified || !isCurrentPhoneVerified) {
+          setIsVerified(true);
+          setShowVerification(false);
+          setHasInitiatedVerification(false);
+          setShowQRCode(false);
+          setVerificationCode("");
+        }
         
         // Ensure user's profile phone matches the verified number
         // This will be handled when they proceed to next step
@@ -235,14 +248,34 @@ function WhatsAppLinkingForm() {
       }
     }
     
-    // No verified WhatsApp number found
-    setIsVerified(false);
-    
-    // Fallback to user's profile phone if no phone number is set yet
-    if (user?.phone && !phoneNumber) {
-      setPhoneNumber(user.phone);
+    // No verified WhatsApp number found - check if current phone is verified
+    if (phoneNumber) {
+      const normalizedCurrentPhone = normalizePhoneNumber(phoneNumber);
+      const currentNumberVerified = whatsappNumbers.some((num: any) => 
+        normalizePhoneNumber(num.phoneNumber) === normalizedCurrentPhone && num.isVerified
+      );
+      
+      if (!currentNumberVerified && isVerified) {
+        // Phone number changed or verification was removed
+        setIsVerified(false);
+      } else if (currentNumberVerified && !isVerified) {
+        // Just got verified
+        setIsVerified(true);
+        setShowVerification(false);
+        setHasInitiatedVerification(false);
+        setShowQRCode(false);
+        setVerificationCode("");
+      }
+    } else {
+      // No phone number set yet
+      setIsVerified(false);
+      
+      // Fallback to user's profile phone if no phone number is set yet
+      if (user?.phone && !phoneNumber) {
+        setPhoneNumber(user.phone);
+      }
     }
-  }, [whatsappNumbers, user?.phone, isLoadingNumbers, phoneNumber]);
+  }, [whatsappNumbers, user?.phone, isLoadingNumbers, phoneNumber, isVerified]);
 
   // Initialize country from existing timezone or default to South Africa
   useEffect(() => {
