@@ -501,12 +501,14 @@ function GoogleMap({
 export default function DashboardPage() {
   const router = useRouter();
   const trpc = useTRPC();
-  const { user } = useAuth();
+  const { user, isLoaded, isSignedIn } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   // Redirect if setup is incomplete
   useSetupRedirect();
+  
+  // All state declarations must be before any conditional returns (React rules of hooks)
   const [selectedNote, setSelectedNote] = useState<any | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
@@ -551,6 +553,31 @@ export default function DashboardPage() {
   const [editManualAttendeeInput, setEditManualAttendeeInput] = useState("");
   const [editAttendeeSearchOpen, setEditAttendeeSearchOpen] = useState(false);
   const [editAttendeeSearchTerm, setEditAttendeeSearchTerm] = useState("");
+  
+  // Show loading state while checking authentication
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-sm text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // If auth check is complete but user is not signed in, don't render content
+  // (useSetupRedirect will handle the redirect)
+  if (!isSignedIn || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="text-sm text-gray-600">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Fetch all data
   const { data: userData } = useQuery(trpc.user.me.queryOptions());
