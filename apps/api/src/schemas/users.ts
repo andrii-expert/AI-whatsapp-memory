@@ -16,7 +16,7 @@ export const updateUserSchema = z.object({
   avatarUrl: z.string().url().optional(),
   timezone: z.string().optional(),
   utcOffset: z.string().optional(),
-  setupStep: z.number().int().min(1).max(3).optional(), // 1 = WhatsApp setup, 2 = Calendar setup, 3 = Complete
+  setupStep: z.number().int().min(1).max(4).optional(), // 1 = WhatsApp setup, 2 = Calendar setup, 3 = Billing setup, 4 = Complete
   showWelcomeModal: z.boolean().optional(),
 });
 

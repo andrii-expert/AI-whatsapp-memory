@@ -174,6 +174,7 @@ export async function updateUser(
     avatarUrl?: string;
     timezone?: string;
     utcOffset?: string;
+    setupStep?: number; // 1 = WhatsApp setup, 2 = Calendar setup, 3 = Billing setup, 4 = Complete
     showWelcomeModal?: boolean;
   }
 ) {

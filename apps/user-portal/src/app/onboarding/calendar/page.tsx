@@ -127,9 +127,16 @@ function CalendarConnectionForm() {
         if (isRedirectingRef.current) return;
         isRedirectingRef.current = true;
         
-        // Redirect to billing page
-        router.push("/onboarding/billing");
-        router.refresh();
+        try {
+          // Use window.location.href as a more reliable redirect method
+          // This works better on mobile devices and ensures navigation happens
+          window.location.href = "/onboarding/billing";
+        } catch (error) {
+          // Fallback to router.push if window.location fails
+          console.error("Failed to redirect with window.location, using router:", error);
+          router.push("/onboarding/billing");
+          router.refresh();
+        }
       },
       onError: (error) => {
         console.error("Failed to update setup step:", error);
@@ -211,28 +218,38 @@ function CalendarConnectionForm() {
   };
 
   const handleNextStep = async () => {
+    // Prevent multiple clicks
+    if (isCompleting || isRedirectingRef.current) return;
+    
     setIsCompleting(true);
     try {
       await updateUserMutation.mutateAsync({
         setupStep: 3, // Move to next step: Billing setup
       });
       // Redirect is handled in mutation's onSuccess
+      // If mutation succeeds but redirect doesn't happen, the polling query will detect the change
     } catch (error) {
       console.error("Failed to update setup step:", error);
       setIsCompleting(false);
+      isRedirectingRef.current = false;
     }
   };
 
   const handleSkip = async () => {
+    // Prevent multiple clicks
+    if (isCompleting || isRedirectingRef.current) return;
+    
     setIsCompleting(true);
     try {
       await updateUserMutation.mutateAsync({
         setupStep: 3, // Move to next step: Billing setup
       });
       // Redirect is handled in mutation's onSuccess
+      // If mutation succeeds but redirect doesn't happen, the polling query will detect the change
     } catch (error) {
       console.error("Failed to update setup step:", error);
       setIsCompleting(false);
+      isRedirectingRef.current = false;
     }
   };
 
