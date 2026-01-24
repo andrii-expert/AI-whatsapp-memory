@@ -13,9 +13,6 @@ import { useToast } from "@imaginecalendar/ui/use-toast";
 import { useZodForm } from "@/hooks/use-zod-form";
 import { Loader2 } from "lucide-react";
 import { z } from "zod";
-import { useAuth } from "@/hooks/use-auth";
-import { useSetupRedirect } from "@/hooks/use-setup-redirect";
-import { OnboardingLoading } from "@/components/onboarding-loading";
 
 // Define the form schema
 const preferencesSchema = z.object({
@@ -28,22 +25,6 @@ export default function PreferencesPage() {
   const router = useRouter();
   const trpc = useTRPC();
   const { toast } = useToast();
-  const { user, isLoaded, isSignedIn } = useAuth();
-  
-  // Redirect if setup is incomplete
-  useSetupRedirect();
-  
-  // Show full-page loading state while checking authentication
-  if (!isLoaded) {
-    return <OnboardingLoading />;
-  }
-  
-  // If auth check is complete but user is not signed in, show loading
-  // (useSetupRedirect will handle the redirect)
-  if (!isSignedIn || !user) {
-    return <OnboardingLoading />;
-  }
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch current preferences

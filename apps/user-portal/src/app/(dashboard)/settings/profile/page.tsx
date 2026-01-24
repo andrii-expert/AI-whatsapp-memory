@@ -6,7 +6,6 @@ import { useTRPC } from "@/trpc/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useSetupRedirect } from "@/hooks/use-setup-redirect";
-import { OnboardingLoading } from "@/components/onboarding-loading";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
 import { Label } from "@imaginecalendar/ui/label";
@@ -41,24 +40,12 @@ const profileSchema = z.object({
 });
 
 export default function ProfilePage() {
+  // Redirect if setup is incomplete
+  useSetupRedirect();
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { user: clerkUser, isLoaded, isSignedIn } = useAuth();
-  
-  // Redirect if setup is incomplete
-  useSetupRedirect();
-  
-  // Show full-page loading state while checking authentication
-  if (!isLoaded) {
-    return <OnboardingLoading />;
-  }
-  
-  // If auth check is complete but user is not signed in, show loading
-  // (useSetupRedirect will handle the redirect)
-  if (!isSignedIn || !clerkUser) {
-    return <OnboardingLoading />;
-  }
+  const { user: clerkUser } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [birthdayPopoverOpen, setBirthdayPopoverOpen] = useState(false);

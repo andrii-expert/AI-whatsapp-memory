@@ -37,9 +37,6 @@ import type { DisplayPlan, PlanRecordLike } from "@/utils/plans";
 import { Switch } from "@imaginecalendar/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@imaginecalendar/ui/radio-group";
 import { cn } from "@imaginecalendar/ui/cn";
-import { useAuth } from "@/hooks/use-auth";
-import { useSetupRedirect } from "@/hooks/use-setup-redirect";
-import { OnboardingLoading } from "@/components/onboarding-loading";
 import {
   Select,
   SelectContent,
@@ -162,22 +159,6 @@ export default function BillingPage() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, isLoaded, isSignedIn } = useAuth();
-  
-  // Redirect if setup is incomplete
-  useSetupRedirect();
-  
-  // Show full-page loading state while checking authentication
-  if (!isLoaded) {
-    return <OnboardingLoading />;
-  }
-  
-  // If auth check is complete but user is not signed in, show loading
-  // (useSetupRedirect will handle the redirect)
-  if (!isSignedIn || !user) {
-    return <OnboardingLoading />;
-  }
-  
   const [isAnnual, setIsAnnual] = useState(false);
   
   const handleSelectPlan = (planId: string) => {

@@ -62,29 +62,11 @@ import { ShareDetailsModal } from "@/components/share-details-modal";
 import { format } from "date-fns";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
-import { useAuth } from "@/hooks/use-auth";
-import { useSetupRedirect } from "@/hooks/use-setup-redirect";
-import { OnboardingLoading } from "@/components/onboarding-loading";
 
 export default function FriendsPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { user, isLoaded, isSignedIn } = useAuth();
-  
-  // Redirect if setup is incomplete
-  useSetupRedirect();
-  
-  // Show full-page loading state while checking authentication
-  if (!isLoaded) {
-    return <OnboardingLoading />;
-  }
-  
-  // If auth check is complete but user is not signed in, show loading
-  // (useSetupRedirect will handle the redirect)
-  if (!isSignedIn || !user) {
-    return <OnboardingLoading />;
-  }
 
   // State
   const [sortBy, setSortBy] = useState<"date" | "alphabetical" | undefined>(undefined);

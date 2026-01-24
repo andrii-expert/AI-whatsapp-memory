@@ -6,7 +6,6 @@ import { useTRPC } from "@/trpc/client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useSetupRedirect } from "@/hooks/use-setup-redirect";
-import { OnboardingLoading } from "@/components/onboarding-loading";
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent } from "@imaginecalendar/ui/card";
 import { Badge } from "@imaginecalendar/ui/badge";
@@ -788,22 +787,11 @@ function EventCard({
 export default function CalendarsPage() {
   const trpc = useTRPC();
   const { toast } = useToast();
-  const { user, isLoaded, isSignedIn } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   
   // Redirect if setup is incomplete
   useSetupRedirect();
-  
-  // Show full-page loading state while checking authentication
-  if (!isLoaded) {
-    return <OnboardingLoading />;
-  }
-  
-  // If auth check is complete but user is not signed in, show loading
-  // (useSetupRedirect will handle the redirect)
-  if (!isSignedIn || !user) {
-    return <OnboardingLoading />;
-  }
   const searchParams = useSearchParams();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());

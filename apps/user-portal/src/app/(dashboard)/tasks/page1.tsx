@@ -44,30 +44,12 @@ import {
 } from "@imaginecalendar/ui/dropdown-menu";
 import { ShareButton } from "@/components/share-button";
 import { ShareDetailsModal } from "@/components/share-details-modal";
-import { useAuth } from "@/hooks/use-auth";
-import { useSetupRedirect } from "@/hooks/use-setup-redirect";
-import { OnboardingLoading } from "@/components/onboarding-loading";
 
 export default function TasksPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const { user, isLoaded, isSignedIn } = useAuth();
-  
-  // Redirect if setup is incomplete
-  useSetupRedirect();
-  
-  // Show full-page loading state while checking authentication
-  if (!isLoaded) {
-    return <OnboardingLoading />;
-  }
-  
-  // If auth check is complete but user is not signed in, show loading
-  // (useSetupRedirect will handle the redirect)
-  if (!isSignedIn || !user) {
-    return <OnboardingLoading />;
-  }
 
   // State
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
