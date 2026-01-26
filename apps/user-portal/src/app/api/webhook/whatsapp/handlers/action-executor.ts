@@ -4901,7 +4901,37 @@ export class ActionExecutor {
           }
           
           return { reminder, nextTime: nextTime || new Date(0) };
-        }).sort((a, b) => a.nextTime.getTime() - b.nextTime.getTime());
+        })
+        // CRITICAL: Filter out reminders that have already passed
+        // For one-time reminders, if nextTime is in the past, exclude them
+        // For recurring reminders, only exclude if nextTime is null (no future occurrence)
+        .filter(({ reminder, nextTime }) => {
+          if (!nextTime || nextTime.getTime() === 0) {
+            // No next time calculated - exclude for one-time reminders
+            // For recurring reminders, we might still want to show them if they're active
+            // But if we can't calculate a next time, it's safer to exclude them
+            return false;
+          }
+          
+          // Check if nextTime is in the past (with 1 minute tolerance to account for timing)
+          const currentTimeMs = userLocalTimeDate.getTime();
+          const nextTimeMs = nextTime.getTime();
+          const oneMinuteMs = 60 * 1000;
+          
+          // If nextTime is more than 1 minute in the past, exclude it
+          if (nextTimeMs < currentTimeMs - oneMinuteMs) {
+            // For one-time reminders, definitely exclude if passed
+            if (reminder.frequency === 'once') {
+              return false;
+            }
+            // For recurring reminders, if the calculated nextTime is in the past,
+            // it means there's no future occurrence, so exclude it
+            return false;
+          }
+          
+          return true;
+        })
+        .sort((a, b) => a.nextTime.getTime() - b.nextTime.getTime());
       } else {
         // If no timezone, just use reminders as-is without sorting by time
         remindersWithNextTime = filteredReminders.map(reminder => ({ reminder, nextTime: new Date(0) }));
@@ -5644,7 +5674,19 @@ export class ActionExecutor {
             minutes = parseInt(getPart('minute'), 10);
           }
           
-          return this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+          const targetDateTime = this.createDateInUserTimezone(targetYear, targetMonth, targetDay, hours, minutes, userTimezone);
+          
+          // For one-time reminders, if the target date/time has passed, return null
+          const currentTimeMs = userLocalTime.date.getTime();
+          const targetTimeMs = targetDateTime.getTime();
+          const oneMinuteMs = 60 * 1000;
+          
+          if (targetTimeMs < currentTimeMs - oneMinuteMs) {
+            // Target date/time has passed (more than 1 minute ago), return null
+            return null;
+          }
+          
+          return targetDateTime;
         } else if (reminder.daysFromNow !== undefined) {
           // Calculate target date from daysFromNow using reminder's creation date
           const reminderCreatedAt = (reminder as any).createdAt ? new Date((reminder as any).createdAt) : userLocalTime.date;
