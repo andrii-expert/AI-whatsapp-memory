@@ -564,8 +564,14 @@ function getFrequencyDescription(reminder: Reminder): string {
         return "Weekly (no days selected)";
       }
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      // Sort days starting with Monday (1) first, then Sunday (0) last
       const selectedDays = reminder.daysOfWeek
-        .sort((a, b) => a - b)
+        .sort((a, b) => {
+          // Monday (1) through Saturday (6) come first, Sunday (0) comes last
+          if (a === 0) return 1; // Sunday goes to end
+          if (b === 0) return -1; // Sunday goes to end
+          return a - b; // Normal sort for other days
+        })
         .map(day => dayNames[day])
         .join(", ");
       return `Every ${selectedDays} at ${reminder.time || "00:00"}`;
@@ -2401,13 +2407,13 @@ export default function RemindersPage() {
                   </Label>
                   <div className="grid grid-cols-7 gap-2">
                     {[
-                      { value: 0, label: "Sun" },
                       { value: 1, label: "Mon" },
                       { value: 2, label: "Tue" },
                       { value: 3, label: "Wed" },
                       { value: 4, label: "Thu" },
                       { value: 5, label: "Fri" },
                       { value: 6, label: "Sat" },
+                      { value: 0, label: "Sun" },
                     ].map((day) => {
                       const daysOfWeek = form.daysOfWeek || [];
                       const isSelected = daysOfWeek.includes(day.value);
@@ -2417,16 +2423,22 @@ export default function RemindersPage() {
                           type="button"
                           onClick={() => {
                             const currentDays = form.daysOfWeek || [];
+                            // Sort function: Monday (1) through Saturday (6) come first, Sunday (0) comes last
+                            const sortDays = (a: number, b: number) => {
+                              if (a === 0) return 1; // Sunday goes to end
+                              if (b === 0) return -1; // Sunday goes to end
+                              return a - b; // Normal sort for other days
+                            };
                             if (isSelected) {
                               const newDays = currentDays.filter((d) => d !== day.value);
                               setForm({
                                 ...form,
-                                daysOfWeek: newDays.length > 0 ? newDays : [day.value], // Prevent removing all days
+                                daysOfWeek: newDays.length > 0 ? newDays.sort(sortDays) : [day.value], // Prevent removing all days
                               });
                             } else {
                               setForm({
                                 ...form,
-                                daysOfWeek: [...currentDays, day.value].sort((a, b) => a - b),
+                                daysOfWeek: [...currentDays, day.value].sort(sortDays),
                               });
                             }
                           }}
