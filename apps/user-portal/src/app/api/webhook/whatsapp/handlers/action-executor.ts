@@ -7642,9 +7642,27 @@ export class ActionExecutor {
         // OR if changes doesn't contain any date/time keywords, treat it as a title change
         
         if (changes.includes('title') || changes.includes('rename')) {
-          const titleMatch = parsed.newName.match(/(?:to|rename)\s+(.+?)(?:\s|$)/i);
+          // Match patterns like "title to Pick up the son" or "rename to New title"
+          // Use greedy match to capture everything after "title to" or "to" until end of string
+          let titleMatch = parsed.newName.match(/title\s+to\s+(.+)$/i);
+          if (!titleMatch) {
+            titleMatch = parsed.newName.match(/rename\s+to\s+(.+)$/i);
+          }
+          if (!titleMatch) {
+            // Fallback: match "to [title]" pattern (everything after "to")
+            titleMatch = parsed.newName.match(/to\s+(.+)$/i);
+          }
           if (titleMatch && titleMatch[1]) {
             updateInput.title = titleMatch[1].trim();
+            logger.info(
+              {
+                userId: this.userId,
+                reminderId: reminder.id,
+                parsedNewName: parsed.newName,
+                extractedTitle: updateInput.title,
+              },
+              'Extracted title from "title to" or "rename to" pattern'
+            );
           }
         } else if (isTitleOnlyChange) {
           // If no date/time keywords are present and no schedule change, treat the entire changes string as a new title
