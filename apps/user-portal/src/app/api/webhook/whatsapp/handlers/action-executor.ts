@@ -4433,16 +4433,24 @@ export class ActionExecutor {
 
         if (specificDate) {
           // Specific date requested (e.g., "27th January")
-          const targetDate = new Date(specificDate.year, specificDate.month, specificDate.day);
+          // Create date in user's timezone to ensure correct date matching
+          const targetDateStr = `${specificDate.year}-${String(specificDate.month + 1).padStart(2, '0')}-${String(specificDate.day).padStart(2, '0')}T00:00:00`;
+          const tempDate = new Date(targetDateStr);
+          const targetDateInTz = new Date(tempDate.toLocaleString("en-US", { timeZone: userTimezone }));
+          
           dateFilterRange = {
-            start: startOfDay(targetDate),
-            end: endOfDay(targetDate),
+            start: startOfDay(targetDateInTz),
+            end: endOfDay(targetDateInTz),
           };
+          
+          // Mark this as a specific date filter for proper filtering logic
+          (dateFilterRange as any).isSpecificDate = true;
           
           logger.info({
             userId: this.userId,
             specificDate,
-            targetDate: targetDate.toISOString(),
+            targetDateStr,
+            targetDateInTz: targetDateInTz.toISOString(),
             dateRange: {
               start: dateFilterRange.start.toISOString(),
               end: dateFilterRange.end.toISOString(),
@@ -4550,12 +4558,13 @@ export class ActionExecutor {
         
         if (!dateFilterRange) {
           // Check for week/month filters if no day-of-week match found
+          // IMPORTANT: Don't override if we already have a specific date filter
           if (timeFilter.includes('this week') || (timeFilter.includes('week') && !timeFilter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i))) {
             dateFilterRange = {
               start: startOfWeek(userNow, { weekStartsOn: 0 }), // Sunday
               end: endOfWeek(userNow, { weekStartsOn: 0 }),
             };
-          } else if (monthIndexFromFilter !== -1) {
+          } else if (monthIndexFromFilter !== -1 && !specificDate) {
           // Specific month requested (e.g., "april", "may", "october")
           const currentYear = userNow.getFullYear();
           const currentMonth = userNow.getMonth(); // 0-based
@@ -4614,11 +4623,14 @@ export class ActionExecutor {
           // Special case: "today", specific dates, and day-of-week dates should use exact scheduled date logic
           // to avoid edge cases with yearly/birthday reminders and timezones.
           const isDayOfWeekFilter = (dateFilterRange as any).isDayOfWeek === true;
-          if (timeFilter === 'today' || specificDate !== null || isDayOfWeekFilter) {
-            // For specific dates, use the target date; for "today", use current date; for day-of-week, use the calculated date
+          const isSpecificDateFilter = (dateFilterRange as any).isSpecificDate === true;
+          if (timeFilter === 'today' || specificDate !== null || isSpecificDateFilter || isDayOfWeekFilter) {
+            // For specific dates, use the target date from dateFilterRange (which is timezone-aware);
+            // for "today", use current date; for day-of-week, use the calculated date
             let targetDate: Date;
-            if (specificDate) {
-              targetDate = new Date(specificDate.year, specificDate.month, specificDate.day);
+            if (isSpecificDateFilter || specificDate) {
+              // Use the start of the date range (which is already timezone-aware and set to the correct date)
+              targetDate = new Date(dateFilterRange.start);
             } else if (isDayOfWeekFilter) {
               // Use the start of the date range (which is the target day)
               targetDate = new Date(dateFilterRange.start);
@@ -4627,14 +4639,16 @@ export class ActionExecutor {
               targetDate = new Date(userTimeString);
             }
             
+            // Convert targetDate to user's timezone for accurate date component extraction
+            const targetDateInTz = new Date(targetDate.toLocaleString("en-US", { timeZone: userTimezone }));
             const userLocalTime = {
-              year: targetDate.getFullYear(),
-              month: targetDate.getMonth(),
-              day: targetDate.getDate(),
+              year: targetDateInTz.getFullYear(),
+              month: targetDateInTz.getMonth(),
+              day: targetDateInTz.getDate(),
               hours: 0, // Not used for date matching
               minutes: 0,
               seconds: 0,
-              date: targetDate,
+              date: targetDateInTz,
             };
 
             filteredReminders = filteredReminders.filter(reminder => {
