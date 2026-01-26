@@ -4611,16 +4611,20 @@ export class ActionExecutor {
         }, 'Filtering reminders by time');
 
         if (dateFilterRange) {
-          // Special case: "today", specific dates, and day-of-week dates should use exact scheduled date logic
+          // Special case: "today", "tomorrow", specific dates, and day-of-week dates should use exact scheduled date logic
           // to avoid edge cases with yearly/birthday reminders and timezones.
           const isDayOfWeekFilter = (dateFilterRange as any).isDayOfWeek === true;
-          if (timeFilter === 'today' || specificDate !== null || isDayOfWeekFilter) {
-            // For specific dates, use the target date; for "today", use current date; for day-of-week, use the calculated date
+          const isTomorrowFilter = timeFilter === 'tomorrow' || timeFilter.includes('tomorrow');
+          if (timeFilter === 'today' || isTomorrowFilter || specificDate !== null || isDayOfWeekFilter) {
+            // For specific dates, use the target date; for "today", use current date; for "tomorrow", use tomorrow's date; for day-of-week, use the calculated date
             let targetDate: Date;
             if (specificDate) {
               targetDate = new Date(specificDate.year, specificDate.month, specificDate.day);
             } else if (isDayOfWeekFilter) {
               // Use the start of the date range (which is the target day)
+              targetDate = new Date(dateFilterRange.start);
+            } else if (isTomorrowFilter) {
+              // Use tomorrow's date (start of the date range for tomorrow)
               targetDate = new Date(dateFilterRange.start);
             } else {
               const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
@@ -4641,14 +4645,24 @@ export class ActionExecutor {
               const isScheduledForDate = this.isReminderScheduledForDate(reminder, userLocalTime, userTimezone);
 
               if (!isScheduledForDate) {
+                const reasonText = specificDate 
+                  ? 'Reminder not scheduled for specific date' 
+                  : isTomorrowFilter 
+                    ? 'Reminder not scheduled for tomorrow'
+                    : 'Reminder not scheduled for today';
+                const filterType = specificDate 
+                  ? 'specific date' 
+                  : isTomorrowFilter 
+                    ? 'tomorrow'
+                    : 'today';
                 logger.debug({
                   reminderId: reminder.id,
                   reminderTitle: reminder.title,
                   frequency: reminder.frequency,
                   active: reminder.active,
                   targetDate: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
-                  reason: specificDate ? 'Reminder not scheduled for specific date' : 'Reminder not scheduled for today',
-                }, `Reminder filtered out by exact date check (${specificDate ? 'specific date' : 'today'})`);
+                  reason: reasonText,
+                }, `Reminder filtered out by exact date check (${filterType})`);
               }
 
               return isScheduledForDate;
