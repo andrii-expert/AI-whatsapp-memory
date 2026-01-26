@@ -5907,14 +5907,35 @@ export class ActionExecutor {
     const result: Partial<CreateReminderInput> = {};
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-    // Check for "every [day]" pattern first (e.g., "every tuesday", "every monday")
-    const everyDayMatch = scheduleLower.match(/every\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i);
+    // Check for "every [day]" pattern first (e.g., "every tuesday", "every monday", "every thursday and friday")
+    // Match patterns like: "every thursday", "every thursday and friday", "every thursday, friday", "every thursday and friday and saturday"
+    const everyDayPattern = /every\s+((?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)(?:\s*(?:,|and)\s*(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday))*)/i;
+    const everyDayMatch = scheduleLower.match(everyDayPattern);
     if (everyDayMatch && everyDayMatch[1]) {
       result.frequency = 'weekly';
-      const dayIndex = dayNames.indexOf(everyDayMatch[1].toLowerCase());
-      if (dayIndex !== -1) {
-        result.daysOfWeek = [dayIndex];
+      
+      // Extract all days from the match (handles "thursday and friday", "thursday, friday", etc.)
+      const daysString = everyDayMatch[1].toLowerCase();
+      const daysArray: number[] = [];
+      
+      // Split by comma or "and" and extract day names
+      const dayMatches = daysString.match(/(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)/gi);
+      if (dayMatches) {
+        for (const dayMatch of dayMatches) {
+          const dayIndex = dayNames.indexOf(dayMatch.toLowerCase());
+          if (dayIndex !== -1 && !daysArray.includes(dayIndex)) {
+            daysArray.push(dayIndex);
+          }
+        }
       }
+      
+      if (daysArray.length > 0) {
+        result.daysOfWeek = daysArray.sort((a, b) => a - b); // Sort days (Sunday=0, Monday=1, etc.)
+      } else {
+        // Fallback: if no days found, default to Monday
+        result.daysOfWeek = [1];
+      }
+      
       // Extract time if present
       const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
       if (timeMatch && timeMatch[1]) {
@@ -5939,13 +5960,22 @@ export class ActionExecutor {
       }
     } else if (scheduleLower.includes('every week') || scheduleLower.includes('weekly')) {
       result.frequency = 'weekly';
-      // Extract day of week
-      const dayMatch = scheduleLower.match(/(?:on\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/i);
-      if (dayMatch && dayMatch[1]) {
-        const dayIndex = dayNames.indexOf(dayMatch[1].toLowerCase());
-        if (dayIndex !== -1) {
-          result.daysOfWeek = [dayIndex];
+      // Extract day(s) of week - handle multiple days (e.g., "on monday and tuesday", "monday, tuesday")
+      const daysArray: number[] = [];
+      
+      // Match all day names in the string
+      const allDayMatches = scheduleLower.match(/(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)/gi);
+      if (allDayMatches) {
+        for (const dayMatch of allDayMatches) {
+          const dayIndex = dayNames.indexOf(dayMatch.toLowerCase());
+          if (dayIndex !== -1 && !daysArray.includes(dayIndex)) {
+            daysArray.push(dayIndex);
+          }
         }
+      }
+      
+      if (daysArray.length > 0) {
+        result.daysOfWeek = daysArray.sort((a, b) => a - b); // Sort days (Sunday=0, Monday=1, etc.)
       } else {
         // Default to Monday if no day specified
         result.daysOfWeek = [1];
