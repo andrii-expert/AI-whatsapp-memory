@@ -7219,10 +7219,20 @@ export class ActionExecutor {
         // Parse changes
         const changes = parsed.newName.toLowerCase();
 
+        // Check if this is a title-only change (no date/time/schedule changes)
+        // This check must be done early to prevent processing time/date changes when only title is being updated
+        const hasDateKeywords = /(?:date|time|schedule|at|on|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)|every|daily|weekly|monthly|yearly|hourly|minutely)/i.test(changes);
+        const hasTimeKeywords = /(?:at|@|\d{1,2}:\d{2}|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening|night|noon|midday|midnight)/i.test(changes);
+        
         // 1) Check for explicit schedule changes (e.g., "schedule: every Friday", "schedule to every Monday at 8am")
         const scheduleChangeMatch =
           parsed.newName.match(/\bschedule\s*:\s*([^-\n]+)(?:\s*-\s*status:.*)?$/i) ||
           parsed.newName.match(/\bschedule\s+to\s+(.+?)(?:\s*-\s*status:.*)?$/i);
+        
+        // Check if this is a title-only change (no date/time/schedule changes)
+        // This check must be done early to prevent processing time/date changes when only title is being updated
+        const isTitleOnlyChange = !scheduleChangeMatch && !hasDateKeywords && !hasTimeKeywords && 
+          !changes.includes('time') && !changes.includes('date') && !changes.includes('schedule');
 
         if (scheduleChangeMatch && scheduleChangeMatch[1]) {
           const rawSchedule = scheduleChangeMatch[1].trim();
@@ -7286,6 +7296,8 @@ export class ActionExecutor {
           }
         }
 
+        // Skip time/date processing if this is a title-only change
+        if (!isTitleOnlyChange) {
         // 2) Check for relative time patterns (e.g., "in 5 hours", "5 hours from now", "in 10 minutes", "schedule to in 5 hours")
         // Match patterns like: "in 5 hours", "5 hours from now", "schedule to in 5 hours", "change to in 2 hours"
         // First try to match patterns that already start with "in"
@@ -7593,13 +7605,31 @@ export class ActionExecutor {
             }
           }
         }
+        } // End of !isTitleOnlyChange block - skip time/date processing for title-only changes
         
         // Check for title changes
+        // If changes contains "title" or "rename", extract the new title
+        // OR if changes doesn't contain any date/time keywords, treat it as a title change
+        
         if (changes.includes('title') || changes.includes('rename')) {
           const titleMatch = parsed.newName.match(/(?:to|rename)\s+(.+?)(?:\s|$)/i);
           if (titleMatch && titleMatch[1]) {
             updateInput.title = titleMatch[1].trim();
           }
+        } else if (isTitleOnlyChange) {
+          // If no date/time keywords are present and no schedule change, treat the entire changes string as a new title
+          // This handles cases like "change 6 to pick up the son" where the AI outputs "to: Pick up the son"
+          updateInput.title = parsed.newName.trim();
+          logger.info(
+            {
+              userId: this.userId,
+              reminderId: reminder.id,
+              newTitle: updateInput.title,
+              changes,
+              isTitleOnlyChange,
+            },
+            'Detected title-only change (no date/time keywords)'
+          );
         }
       }
 
