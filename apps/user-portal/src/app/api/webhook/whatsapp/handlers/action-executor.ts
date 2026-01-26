@@ -7251,7 +7251,9 @@ export class ActionExecutor {
 
         // Check if this is a title-only change (no date/time/schedule changes)
         // This check must be done early to prevent processing time/date changes when only title is being updated
-        const hasDateKeywords = /(?:date|time|schedule|at|on|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)|every|daily|weekly|monthly|yearly|hourly|minutely)/i.test(changes);
+        // IMPORTANT: Exclude "title" and "rename" from date keyword matching to avoid false positives
+        // Use word boundaries to match "time" as a whole word, not inside "title"
+        const hasDateKeywords = /\b(?:date|schedule|on|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)|every|daily|weekly|monthly|yearly|hourly|minutely)\b/i.test(changes) && !changes.includes('title') && !changes.includes('rename');
         const hasTimeKeywords = /(?:at|@|\d{1,2}:\d{2}|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening|night|noon|midday|midnight)/i.test(changes);
         
         // 1) Check for explicit schedule changes (e.g., "schedule: every Friday", "schedule to every Monday at 8am")
@@ -7641,6 +7643,8 @@ export class ActionExecutor {
         // If changes contains "title" or "rename", extract the new title
         // OR if changes doesn't contain any date/time keywords, treat it as a title change
         
+        // CRITICAL: Check for title changes FIRST, before any other processing
+        // This ensures title extraction always works when "title" or "rename" keywords are present
         if (changes.includes('title') || changes.includes('rename')) {
           // Match patterns like "title to Pick up the son" or "rename to New title"
           // Use greedy match to capture everything after "title to" or "to" until end of string
@@ -7650,18 +7654,50 @@ export class ActionExecutor {
           }
           if (!titleMatch) {
             // Fallback: match "to [title]" pattern (everything after "to")
+            // But only if "title" or "rename" keyword is present to avoid false matches
             titleMatch = parsed.newName.match(/to\s+(.+)$/i);
           }
           if (titleMatch && titleMatch[1]) {
-            updateInput.title = titleMatch[1].trim();
+            const extractedTitle = titleMatch[1].trim();
+            updateInput.title = extractedTitle;
             logger.info(
               {
                 userId: this.userId,
                 reminderId: reminder.id,
                 parsedNewName: parsed.newName,
-                extractedTitle: updateInput.title,
+                extractedTitle: extractedTitle,
+                extractedTitleLength: extractedTitle.length,
+                titleMatchIndex: titleMatch.index,
+                titleMatchFull: titleMatch[0],
+                titleMatchGroup1: titleMatch[1],
               },
               'Extracted title from "title to" or "rename to" pattern'
+            );
+            
+            // CRITICAL: Ensure the title is actually set and not empty
+            if (!updateInput.title || updateInput.title.length === 0) {
+              logger.error(
+                {
+                  userId: this.userId,
+                  reminderId: reminder.id,
+                  parsedNewName: parsed.newName,
+                  extractedTitle: extractedTitle,
+                  titleMatch: titleMatch,
+                },
+                'ERROR: Extracted title is empty after trim - this should not happen'
+              );
+            }
+          } else {
+            // If regex didn't match, log for debugging
+            logger.warn(
+              {
+                userId: this.userId,
+                reminderId: reminder.id,
+                parsedNewName: parsed.newName,
+                changes,
+                parsedNewNameLength: parsed.newName?.length,
+              },
+              'Title keyword found but regex did not match - this should not happen'
             );
           }
         } else if (isTitleOnlyChange) {
@@ -7681,7 +7717,34 @@ export class ActionExecutor {
         }
       }
 
+      // CRITICAL: Log the updateInput before database update to debug title truncation
+      if (updateInput.title) {
+        logger.info(
+          {
+            userId: this.userId,
+            reminderId: reminder.id,
+            updateInputTitle: updateInput.title,
+            updateInputTitleLength: updateInput.title.length,
+            updateInputKeys: Object.keys(updateInput),
+          },
+          'About to update reminder with title'
+        );
+      }
+
       const updated = await updateReminder(this.db, reminder.id, this.userId, updateInput);
+      
+      // CRITICAL: Log the updated reminder after database update to verify title was saved correctly
+      if (updated && updated.title) {
+        logger.info(
+          {
+            userId: this.userId,
+            reminderId: updated.id,
+            updatedTitle: updated.title,
+            updatedTitleLength: updated.title.length,
+          },
+          'Reminder updated - verifying title was saved correctly'
+        );
+      }
 
       logger.info(
         {
