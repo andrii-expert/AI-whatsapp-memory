@@ -4687,10 +4687,27 @@ export class ActionExecutor {
                   targetDate: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
                   reason: specificDate ? 'Reminder not scheduled for specific date' : 'Reminder not scheduled for today',
                 }, `Reminder filtered out by exact date check (${specificDate ? 'specific date' : 'today'})`);
+              } else {
+                logger.debug({
+                  reminderId: reminder.id,
+                  reminderTitle: reminder.title,
+                  frequency: reminder.frequency,
+                  targetDate: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+                }, `Reminder passed exact date check (${specificDate ? 'specific date' : 'today'})`);
               }
 
               return isScheduledForDate;
             });
+            
+            logger.info({
+              userId: this.userId,
+              timeFilter,
+              specificDate,
+              hasSpecificDate,
+              targetDate: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+              filteredCount: filteredReminders.length,
+              filteredReminderTitles: filteredReminders.map(r => r.title),
+            }, 'Filtered reminders by specific date');
           } else {
             // For other ranges (tomorrow, this week, this month, next week),
             // use the same range-based logic as the reminders page.
@@ -4887,10 +4904,30 @@ export class ActionExecutor {
           parsed.listFilter && 
           /^(january|february|march|april|may|june|july|august|september|october|november|december)/i.test(parsed.listFilter);
         
+        // Check if we're filtering by a specific date (e.g., "27th January")
+        const isSpecificDateFilter = dateFilterRange && (dateFilterRange as any).isSpecificDate === true;
+        
         remindersWithNextTime = filteredReminders.map(reminder => {
           let nextTime: Date | null = null;
           
-          if (isSpecificMonthFilter && dateFilterRange) {
+          if (isSpecificDateFilter && dateFilterRange) {
+            // For specific date filters, calculate the occurrence ON that exact date
+            // Use the target date from dateFilterRange as the base
+            const targetDate = new Date(dateFilterRange.start);
+            const targetDateInTz = new Date(targetDate.toLocaleString("en-US", { timeZone: userTimezone }));
+            const targetLocalTime = {
+              year: targetDateInTz.getFullYear(),
+              month: targetDateInTz.getMonth(),
+              day: targetDateInTz.getDate(),
+              hours: 0,
+              minutes: 0,
+              seconds: 0,
+              date: targetDateInTz,
+            };
+            
+            // Calculate next time using the target date as the base
+            nextTime = this.calculateNextReminderTime(reminder, targetLocalTime, userTimezone);
+          } else if (isSpecificMonthFilter && dateFilterRange) {
             // For specific month filters, calculate the occurrence WITHIN that month
             nextTime = this.calculateReminderTimeInRange(reminder, dateFilterRange.start, dateFilterRange.end, userTimezone);
           }
