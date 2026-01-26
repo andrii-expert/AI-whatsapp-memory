@@ -7544,12 +7544,158 @@ export class ActionExecutor {
     }
   }
 
+  /**
+   * Check if a reminder is passed/expired (its date/time has already occurred)
+   * For one-time reminders: check if the target date has passed
+   * For recurring reminders: they are never "passed" since they repeat
+   */
+  private isReminderPassed(reminder: any, userTimezone?: string): boolean {
+    try {
+      if (!userTimezone) {
+        return false; // Can't determine without timezone
+      }
+
+      // Only one-time reminders can be "passed"
+      if (reminder.frequency !== 'once') {
+        return false; // Recurring reminders are never "passed" since they repeat
+      }
+
+      const now = new Date();
+      const nowInTz = new Date(now.toLocaleString("en-US", { timeZone: userTimezone }));
+      const userLocalTime = {
+        year: nowInTz.getFullYear(),
+        month: nowInTz.getMonth(),
+        day: nowInTz.getDate(),
+        hours: nowInTz.getHours(),
+        minutes: nowInTz.getMinutes(),
+        seconds: nowInTz.getSeconds(),
+        date: nowInTz,
+      };
+
+      // For one-time reminders, check if targetDate has passed
+      if (reminder.targetDate) {
+        const targetDate = new Date(reminder.targetDate);
+        const targetInTz = new Date(targetDate.toLocaleString("en-US", { timeZone: userTimezone }));
+        // Check if the date has passed (with time consideration)
+        return targetInTz < userLocalTime.date;
+      }
+
+      // If no targetDate but has daysFromNow, calculate if it has passed
+      if (reminder.daysFromNow !== undefined && reminder.daysFromNow !== null) {
+        const createdAt = (reminder as any).createdAt ? new Date((reminder as any).createdAt) : userLocalTime.date;
+        const createdInTz = new Date(createdAt.toLocaleString("en-US", { timeZone: userTimezone }));
+        const targetDate = new Date(createdInTz);
+        targetDate.setDate(targetDate.getDate() + reminder.daysFromNow);
+        
+        // If time is specified, add it to the target date
+        if (reminder.time) {
+          const [hours, minutes] = reminder.time.split(':').map(Number);
+          targetDate.setHours(hours, minutes, 0, 0);
+        }
+        
+        return targetDate < userLocalTime.date;
+      }
+
+      return false;
+    } catch (error) {
+      logger.error({ error, reminderId: reminder.id }, 'Error checking if reminder is passed');
+      return false;
+    }
+  }
+
+  /**
+   * Check if a reminder is old (created more than 30 days ago)
+   */
+  private isReminderOld(reminder: any): boolean {
+    try {
+      const createdAt = (reminder as any).createdAt ? new Date((reminder as any).createdAt) : null;
+      if (!createdAt) {
+        return false;
+      }
+      const now = new Date();
+      const daysDiff = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+      return daysDiff > 30;
+    } catch (error) {
+      logger.error({ error, reminderId: reminder.id }, 'Error checking if reminder is old');
+      return false;
+    }
+  }
+
   private async deleteReminder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
     try {
       if (!parsed.taskName) {
         return {
           success: false,
           message: "I need to know which reminder you want to delete. Please provide the reminder title.",
+        };
+      }
+
+      const taskNameLower = parsed.taskName.toLowerCase().trim();
+
+      // Handle bulk deletion by status (with or without "all")
+      const isBulkDelete = (
+        taskNameLower.includes('passed') ||
+        taskNameLower.includes('expired') ||
+        taskNameLower.includes('old') ||
+        taskNameLower.includes('paused')
+      ) && (
+        taskNameLower.includes('all') ||
+        taskNameLower === 'passed' ||
+        taskNameLower === 'expired' ||
+        taskNameLower === 'old' ||
+        taskNameLower === 'paused' ||
+        taskNameLower === 'passed reminders' ||
+        taskNameLower === 'expired reminders' ||
+        taskNameLower === 'old reminders' ||
+        taskNameLower === 'paused reminders'
+      );
+
+      if (isBulkDelete) {
+        const allReminders = await getRemindersByUserId(this.db, this.userId);
+        
+        if (allReminders.length === 0) {
+          return {
+            success: false,
+            message: "You don't have any reminders to delete.",
+          };
+        }
+
+        // Get user timezone for passed/expired checks
+        const user = await getUserById(this.db, this.userId);
+        const userTimezone = user?.timezone || 'UTC';
+
+        let remindersToDelete: any[] = [];
+        let filterType = '';
+
+        if (taskNameLower.includes('paused')) {
+          remindersToDelete = allReminders.filter(r => !r.active);
+          filterType = 'paused';
+        } else if (taskNameLower.includes('passed') || taskNameLower.includes('expired')) {
+          remindersToDelete = allReminders.filter(r => this.isReminderPassed(r, userTimezone));
+          filterType = taskNameLower.includes('expired') ? 'expired' : 'passed';
+        } else if (taskNameLower.includes('old')) {
+          remindersToDelete = allReminders.filter(r => this.isReminderOld(r));
+          filterType = 'old';
+        }
+
+        if (remindersToDelete.length === 0) {
+          return {
+            success: false,
+            message: `You don't have any ${filterType} reminders to delete.`,
+          };
+        }
+
+        // Delete filtered reminders
+        for (const reminder of remindersToDelete) {
+          await deleteReminder(this.db, reminder.id, this.userId);
+        }
+
+        logger.info({ userId: this.userId, count: remindersToDelete.length, filterType }, `Bulk deleted ${filterType} reminders`);
+
+        const filterLabel = filterType === 'paused' ? 'Paused' : filterType === 'expired' ? 'Expired' : filterType === 'passed' ? 'Passed' : 'Old';
+        return {
+          success: true,
+          message: `⛔ *All ${filterLabel} Reminders Deleted:*\nDeleted ${remindersToDelete.length} reminder${remindersToDelete.length === 1 ? '' : 's'}.`,
         };
       }
 
@@ -7581,7 +7727,7 @@ export class ActionExecutor {
       }
 
       // Handle "delete all" case
-      if (parsed.taskName.toLowerCase() === 'all') {
+      if (taskNameLower === 'all') {
         const allReminders = await getRemindersByUserId(this.db, this.userId);
         
         if (allReminders.length === 0) {
