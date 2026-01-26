@@ -1081,8 +1081,8 @@ export default function RemindersPage() {
       };
     } else if (dateFilter === "thisWeek") {
       dateFilterRange = {
-        start: startOfWeek(now, { weekStartsOn: 0 }), // Sunday
-        end: endOfWeek(now, { weekStartsOn: 0 }),
+        start: startOfWeek(now, { weekStartsOn: 1 }), // Monday
+        end: endOfWeek(now, { weekStartsOn: 1 }),
       };
     } else if (dateFilter === "thisMonth") {
       dateFilterRange = {
@@ -1593,6 +1593,7 @@ export default function RemindersPage() {
                       mode="range"
                       defaultMonth={customDateRange?.from}
                       selected={customDateRange}
+                      weekStartsOn={1}
                       onSelect={(range: DateRange | undefined) => {
                         if (range?.from && range?.to) {
                           setCustomDateRange(range);
@@ -1993,6 +1994,7 @@ export default function RemindersPage() {
                       mode="range"
                       defaultMonth={customDateRange?.from}
                       selected={customDateRange}
+                      weekStartsOn={1}
                       onSelect={(range: DateRange | undefined) => {
                         if (range?.from && range?.to) {
                           setCustomDateRange(range);
