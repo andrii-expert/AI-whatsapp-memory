@@ -588,12 +588,18 @@ export class ActionExecutor {
           }
         }
         
-        // Check for time-based filter FIRST (today, tomorrow, this week, next week, this month, next month)
-        // This must be done before status check to prioritize time filters
+        // Check for status filter
+        if (filterParts.includes('active')) {
+          status = 'active';
+        } else if (filterParts.includes('paused') || filterParts.includes('inactive')) {
+          status = 'paused';
+        } else if (filterParts.includes('all')) {
+          status = 'all';
+        }
+        
+        // Check for time-based filter (today, tomorrow, this week, next week, this month, next month)
         // Check longer phrases first to avoid partial matches
         const timeFilters = ['next month', 'this month', 'this week', 'next week', 'tomorrow', 'today'];
-        
-        // First, try to match time filters in the filter text
         for (const timeFilter of timeFilters) {
           if (filterText.includes(timeFilter)) {
             listFilter = timeFilter;
@@ -601,38 +607,12 @@ export class ActionExecutor {
           }
         }
         
-        // Also check for variations like "all reminders today" or "all tomorrow" -> extract time filter
+        // Also check for variations like "all reminders today" -> extract "today"
         if (!listFilter) {
           const todayMatch = filterText.match(/\b(today|tomorrow|this\s+week|this\s+month|next\s+week|next\s+month)\b/i);
           if (todayMatch && todayMatch[1]) {
             listFilter = todayMatch[1].toLowerCase();
           }
-        }
-        
-        // Handle cases where AI outputs "all tomorrow" or "all today" - extract just the time filter
-        if (listFilter && filterText.includes('all') && (filterText.includes('tomorrow') || filterText.includes('today') || filterText.includes('week') || filterText.includes('month'))) {
-          // listFilter is already set correctly, but ensure "all" doesn't override it
-          // This is already handled by checking time filters first
-        }
-        
-        // Check for status filter (only if no time filter was found, or if explicitly specified)
-        // "all" should not override time filters like "tomorrow"
-        if (!listFilter) {
-          if (filterParts.includes('active')) {
-            status = 'active';
-          } else if (filterParts.includes('paused') || filterParts.includes('inactive')) {
-            status = 'paused';
-          } else if (filterParts.includes('all')) {
-            status = 'all';
-          }
-        } else {
-          // If we have a time filter, only set status if it's explicitly mentioned (not "all" which is ambiguous)
-          if (filterParts.includes('active')) {
-            status = 'active';
-          } else if (filterParts.includes('paused') || filterParts.includes('inactive')) {
-            status = 'paused';
-          }
-          // Don't set status to 'all' when we have a time filter - "all" in "all tomorrow reminders" means "all of tomorrow's reminders"
         }
 
         // If still no time filter, check for explicit month names (e.g., "march", "april")
@@ -4631,20 +4611,16 @@ export class ActionExecutor {
         }, 'Filtering reminders by time');
 
         if (dateFilterRange) {
-          // Special case: "today", "tomorrow", specific dates, and day-of-week dates should use exact scheduled date logic
+          // Special case: "today", specific dates, and day-of-week dates should use exact scheduled date logic
           // to avoid edge cases with yearly/birthday reminders and timezones.
           const isDayOfWeekFilter = (dateFilterRange as any).isDayOfWeek === true;
-          const isTomorrowFilter = timeFilter === 'tomorrow' || timeFilter.includes('tomorrow');
-          if (timeFilter === 'today' || isTomorrowFilter || specificDate !== null || isDayOfWeekFilter) {
-            // For specific dates, use the target date; for "today", use current date; for "tomorrow", use tomorrow's date; for day-of-week, use the calculated date
+          if (timeFilter === 'today' || specificDate !== null || isDayOfWeekFilter) {
+            // For specific dates, use the target date; for "today", use current date; for day-of-week, use the calculated date
             let targetDate: Date;
             if (specificDate) {
               targetDate = new Date(specificDate.year, specificDate.month, specificDate.day);
             } else if (isDayOfWeekFilter) {
               // Use the start of the date range (which is the target day)
-              targetDate = new Date(dateFilterRange.start);
-            } else if (isTomorrowFilter) {
-              // Use tomorrow's date (start of the date range for tomorrow)
               targetDate = new Date(dateFilterRange.start);
             } else {
               const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
@@ -4665,24 +4641,14 @@ export class ActionExecutor {
               const isScheduledForDate = this.isReminderScheduledForDate(reminder, userLocalTime, userTimezone);
 
               if (!isScheduledForDate) {
-                const reasonText = specificDate 
-                  ? 'Reminder not scheduled for specific date' 
-                  : isTomorrowFilter 
-                    ? 'Reminder not scheduled for tomorrow'
-                    : 'Reminder not scheduled for today';
-                const filterType = specificDate 
-                  ? 'specific date' 
-                  : isTomorrowFilter 
-                    ? 'tomorrow'
-                    : 'today';
                 logger.debug({
                   reminderId: reminder.id,
                   reminderTitle: reminder.title,
                   frequency: reminder.frequency,
                   active: reminder.active,
                   targetDate: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
-                  reason: reasonText,
-                }, `Reminder filtered out by exact date check (${filterType})`);
+                  reason: specificDate ? 'Reminder not scheduled for specific date' : 'Reminder not scheduled for today',
+                }, `Reminder filtered out by exact date check (${specificDate ? 'specific date' : 'today'})`);
               }
 
               return isScheduledForDate;
@@ -5050,112 +5016,26 @@ export class ActionExecutor {
   /**
    * Check if a reminder's next occurrence is on a specific date
    * This uses the actual next occurrence time, not just pattern matching
-   * 
-   * @param reminder The reminder to check
-   * @param targetLocalTime The target date to check against (year, month, day)
-   * @param userTimezone The user's timezone
    */
   private isReminderScheduledForDate(
     reminder: any,
-    targetLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date },
+    userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date },
     userTimezone: string
   ): boolean {
     try {
-      // Skip inactive reminders
-      if (!reminder.active) {
-        return false;
-      }
-
-      // For one-time reminders, check directly if they're scheduled for the target date
+      // For one-time reminders, check directly if they're scheduled for today
       if (reminder.frequency === 'once') {
-        let targetYear: number;
-        let targetMonth: number; // 0-11
-        let targetDay: number;
-        
-        if (reminder.targetDate) {
-          // Get target date components in user's timezone
-          const targetDateFormatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: userTimezone,
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-          });
-          
-          const targetParts = targetDateFormatter.formatToParts(new Date(reminder.targetDate));
-          const getPart = (type: string) => targetParts.find(p => p.type === type)?.value || '0';
-          
-          targetYear = parseInt(getPart('year'), 10);
-          targetMonth = parseInt(getPart('month'), 10) - 1; // Convert to 0-11
-          targetDay = parseInt(getPart('day'), 10);
-        } else if (reminder.daysFromNow !== undefined) {
-          // Calculate target date from daysFromNow using reminder's creation date
-          const reminderCreatedAt = (reminder as any).createdAt ? new Date((reminder as any).createdAt) : targetLocalTime.date;
-          
-          // Get creation date components in user's timezone
-          const createdFormatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: userTimezone,
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-            hour12: false,
-          });
-          
-          const createdParts = createdFormatter.formatToParts(reminderCreatedAt);
-          const getCreatedPart = (type: string) => createdParts.find(p => p.type === type)?.value || '0';
-          
-          const createdYear = parseInt(getCreatedPart('year'), 10);
-          const createdMonth = parseInt(getCreatedPart('month'), 10) - 1; // Convert to 0-11
-          const createdDay = parseInt(getCreatedPart('day'), 10);
-          
-          // Calculate target date by adding daysFromNow to creation date
-          const targetDateObj = new Date(Date.UTC(createdYear, createdMonth, createdDay + reminder.daysFromNow));
-          targetYear = targetDateObj.getUTCFullYear();
-          targetMonth = targetDateObj.getUTCMonth();
-          targetDay = targetDateObj.getUTCDate();
-        } else if (reminder.dayOfMonth && reminder.month) {
-          // Specific date (month + dayOfMonth) - check if it matches the target year
-          targetYear = targetLocalTime.year;
-          targetMonth = reminder.month - 1; // Convert 1-12 to 0-11
-          targetDay = reminder.dayOfMonth;
-          
-          // Check if this year's date has already passed
-          const thisYearDate = this.createDateInUserTimezone(targetYear, targetMonth, targetDay, 9, 0, userTimezone);
-          if (thisYearDate < targetLocalTime.date) {
-            targetYear += 1;
-          }
-        } else {
-          return false;
-        }
-        
-        // Check if the target date matches the reminder's scheduled date
-        const dateMatches = targetYear === targetLocalTime.year &&
-                            targetMonth === targetLocalTime.month &&
-                            targetDay === targetLocalTime.day;
-        
-        return dateMatches;
+        return this.isOnceReminderScheduledForToday(reminder, userLocalTime, userTimezone);
       }
 
-      // For recurring reminders, calculate the next occurrence from TODAY (not from target date)
-      // We need to get today's date to calculate the next occurrence correctly
-      const now = new Date();
-      const todayInTz = new Date(now.toLocaleString("en-US", { timeZone: userTimezone }));
-      const todayLocalTime = {
-        year: todayInTz.getFullYear(),
-        month: todayInTz.getMonth(),
-        day: todayInTz.getDate(),
-        hours: todayInTz.getHours(),
-        minutes: todayInTz.getMinutes(),
-        seconds: todayInTz.getSeconds(),
-        date: todayInTz,
-      };
-
-      // Calculate next occurrence from today
-      const nextTime = this.calculateNextReminderTime(reminder, todayLocalTime, userTimezone);
+      // For recurring reminders, calculate the actual next occurrence time
+      const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
       if (!nextTime) {
         return false;
       }
 
       // Convert next occurrence to user's timezone for comparison
+      // Use Intl.DateTimeFormat to get date components in user's timezone
       const nextTimeFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: userTimezone,
         year: 'numeric',
@@ -5168,10 +5048,10 @@ export class ActionExecutor {
       const nextMonth = parseInt(nextTimeParts.find(p => p.type === 'month')?.value || '0', 10) - 1; // Month is 0-indexed
       const nextDay = parseInt(nextTimeParts.find(p => p.type === 'day')?.value || '0', 10);
 
-      // Check if the next occurrence matches the target date - strict date comparison
-      const matchesTargetDate = nextYear === targetLocalTime.year &&
-                                nextMonth === targetLocalTime.month &&
-                                nextDay === targetLocalTime.day;
+      // Check if the next occurrence is today - strict date comparison
+      const isToday = nextYear === userLocalTime.year &&
+                      nextMonth === userLocalTime.month &&
+                      nextDay === userLocalTime.day;
 
       // Log detailed comparison for debugging
       logger.debug({
@@ -5181,14 +5061,14 @@ export class ActionExecutor {
         nextYear,
         nextMonth: nextMonth + 1,
         nextDay,
-        targetYear: targetLocalTime.year,
-        targetMonth: targetLocalTime.month + 1,
-        targetDay: targetLocalTime.day,
-        matchesTargetDate,
+        userYear: userLocalTime.year,
+        userMonth: userLocalTime.month + 1,
+        userDay: userLocalTime.day,
+        isToday,
         nextTimeISO: nextTime.toISOString(),
       }, 'Date comparison for reminder');
 
-      return matchesTargetDate;
+      return isToday;
     } catch (error) {
       logger.error({ error, reminderId: reminder.id }, 'Error checking if reminder is scheduled for date');
       return false;

@@ -567,11 +567,11 @@ export async function handleTextMessage(
   // OPTIMIZATION: Non-blocking logging and typing indicator (fire-and-forget)
   // Don't await these operations to improve response time
   logIncomingWhatsAppMessage(db, {
-    whatsappNumberId: whatsappNumber.id,
-    userId: whatsappNumber.userId,
-    messageId: message.id,
-    messageType: 'text',
-    messageContent: messageText, // Store message content for history
+      whatsappNumberId: whatsappNumber.id,
+      userId: whatsappNumber.userId,
+      messageId: message.id,
+      messageType: 'text',
+      messageContent: messageText, // Store message content for history
   }).catch((error) => {
     logger.error(
       {
@@ -641,34 +641,34 @@ async function analyzeAndRespond(
     if (!messageHistory) {
       if (historyResult.status === 'fulfilled' && historyResult.value) {
         messageHistory = historyResult.value
-          .filter(msg => msg.content && msg.content.trim().length > 0)
-          .slice(0, 10) // Ensure we only use last 10
-          .map(msg => ({
-            direction: msg.direction,
-            content: msg.content,
-          }));
+      .filter(msg => msg.content && msg.content.trim().length > 0)
+      .slice(0, 10) // Ensure we only use last 10
+      .map(msg => ({
+        direction: msg.direction,
+        content: msg.content,
+      }));
         cache.set(cache.messageHistory, userId, messageHistory);
       } else {
         logger.warn({ error: historyResult.status === 'rejected' ? historyResult.reason : 'No history', userId }, 'Failed to retrieve message history, continuing without history');
         messageHistory = [];
       }
-    }
+  }
 
-    // Get user's calendar timezone for accurate date/time context (used for AI analysis and list operations)
+  // Get user's calendar timezone for accurate date/time context (used for AI analysis and list operations)
     if (!userTimezone) {
       userTimezone = 'Africa/Johannesburg'; // Default fallback
       if (calendarResult.status === 'fulfilled' && calendarResult.value) {
-        try {
+  try {
           calendarConnection = calendarResult.value;
           cache.set(cache.calendarConnections, userId, calendarConnection);
           
-          const calendarService = new CalendarService(db);
-          // Access the private getUserTimezone method using bracket notation
-          // This method will fetch timezone from calendar, fallback to user preferences, then default
-          userTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+      const calendarService = new CalendarService(db);
+      // Access the private getUserTimezone method using bracket notation
+      // This method will fetch timezone from calendar, fallback to user preferences, then default
+      userTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
           cache.set(cache.userTimezones, userId, userTimezone);
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to get user timezone, using default');
+  } catch (error) {
+    logger.warn({ error, userId }, 'Failed to get user timezone, using default');
         }
       } else {
         logger.warn({ error: calendarResult.status === 'rejected' ? calendarResult.reason : 'No calendar', userId }, 'Failed to get calendar connection, using default timezone');
@@ -799,30 +799,30 @@ async function processAIResponse(
         
         // Only fetch if we don't have cached data
         if (eventViewMessageHistory.length === 0) {
-          try {
-            const history = await getRecentMessageHistory(db, userId, 10);
+        try {
+          const history = await getRecentMessageHistory(db, userId, 10);
             eventViewMessageHistory = history
-              .filter(msg => msg.content && msg.content.trim().length > 0)
-              .slice(0, 10)
-              .map(msg => ({
-                direction: msg.direction,
-                content: msg.content,
-              }));
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
+            .filter(msg => msg.content && msg.content.trim().length > 0)
+            .slice(0, 10)
+            .map(msg => ({
+              direction: msg.direction,
+              content: msg.content,
+            }));
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to retrieve message history for event view analysis');
           }
         }
-        
+
         // Only fetch timezone if not already cached
         if (!userTimezone || userTimezone === 'Africa/Johannesburg') {
-          try {
-            const calendarConnection = await getPrimaryCalendar(db, userId);
-            if (calendarConnection) {
-              const calendarService = new CalendarService(db);
-              eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
-            }
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+        try {
+          const calendarConnection = await getPrimaryCalendar(db, userId);
+          if (calendarConnection) {
+            const calendarService = new CalendarService(db);
+            eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
           }
         }
 
@@ -1295,48 +1295,48 @@ async function processAIResponse(
         // Skip the view conversion logic - isListEventsWithName stays false, so we continue to list operation
       } else {
         // Only check for view if user said "event" (singular), not "events" (plural)
-        // Check if user wants to view a specific event (not list all events)
-        // CRITICAL: If user says a number, ALWAYS treat as view operation (even if AI generated timeframe)
-        // Only convert if:
-        // 1. User says a number (always view) OR
-        // 2. It's NOT a timeframe keyword AND user explicitly says "show me event [name]" or "show me [name] event"
-        // Check for timeframe keywords as whole words (not substrings)
-        const hasTimeframeInUserText = timeframeKeywords.some(keyword => {
-          const lowerKeyword = keyword.toLowerCase();
-          // Check for whole word matches using word boundaries
-          const regex = new RegExp(`\\b${lowerKeyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
-          return regex.test(userTextLower);
-        });
-        
-        const userWantsToView = isNumberBasedViewRequest || (!isTimeframe && (
+      // Check if user wants to view a specific event (not list all events)
+      // CRITICAL: If user says a number, ALWAYS treat as view operation (even if AI generated timeframe)
+      // Only convert if:
+      // 1. User says a number (always view) OR
+      // 2. It's NOT a timeframe keyword AND user explicitly says "show me event [name]" or "show me [name] event"
+      // Check for timeframe keywords as whole words (not substrings)
+      const hasTimeframeInUserText = timeframeKeywords.some(keyword => {
+        const lowerKeyword = keyword.toLowerCase();
+        // Check for whole word matches using word boundaries
+        const regex = new RegExp(`\\b${lowerKeyword.replace(/\s+/g, '\\s+')}\\b`, 'i');
+        return regex.test(userTextLower);
+      });
+      
+      const userWantsToView = isNumberBasedViewRequest || (!isTimeframe && (
           // "show me event [name]" or "show me event- [name]" - explicit event keyword with name (SINGULAR)
           userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event(?!s)\s*[-]?\s*["']?([^"']+)/i) ||
           // "show me [name] event" - name followed by event keyword (SINGULAR)
           userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?["']?([^"']+)\s+event(?!s)["']?/i) ||
-          // "send info on [name]" - send info pattern with name
-          userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+["']?([^"']+)/i) ||
-          // "show me [specific event name]" - but NOT if user text contains timeframe keywords
+        // "send info on [name]" - send info pattern with name
+        userTextLower.match(/(?:send|give|provide)\s+(?:me\s+)?(?:info|information|details?)\s+(?:on|about|for)\s+["']?([^"']+)/i) ||
+        // "show me [specific event name]" - but NOT if user text contains timeframe keywords
           (hasEventSingular && !hasTimeframeInUserText && userTextLower.match(/(?:show|view|get|see|send)\s+(?:me\s+)?(?:the\s+)?event(?!s)\s*[-]?\s*["']?([^"']+)/i))
-        ));
-        
-        // Also check if user text clearly indicates viewing a specific event, even if AI generated wrong action
-        // This handles cases where AI generates "List events: today" but user said "show me event [name]"
-        let eventNameFromUserText: string | null = null;
+      ));
+      
+      // Also check if user text clearly indicates viewing a specific event, even if AI generated wrong action
+      // This handles cases where AI generates "List events: today" but user said "show me event [name]"
+      let eventNameFromUserText: string | null = null;
         if (originalUserText && hasEventSingular && !hasTimeframeInUserText) {
-          // Try to extract event name from "show me event [name]" or "show me event- [name]"
+        // Try to extract event name from "show me event [name]" or "show me event- [name]"
           const eventNameMatch1 = originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?(?:the\s+)?event(?!s)\s*[-]?\s*["']?([^"']+)/i);
-          if (eventNameMatch1 && eventNameMatch1[1]) {
-            eventNameFromUserText = eventNameMatch1[1].trim();
-          } else {
-            // Try "show me [name] event"
+        if (eventNameMatch1 && eventNameMatch1[1]) {
+          eventNameFromUserText = eventNameMatch1[1].trim();
+        } else {
+          // Try "show me [name] event"
             const eventNameMatch2 = originalUserText.match(/(?:show|view|get|see)\s+(?:me\s+)?["']?([^"']+)\s+event(?!s)["']?/i);
-            if (eventNameMatch2 && eventNameMatch2[1]) {
-              eventNameFromUserText = eventNameMatch2[1].trim();
-            }
+          if (eventNameMatch2 && eventNameMatch2[1]) {
+            eventNameFromUserText = eventNameMatch2[1].trim();
           }
         }
-        
-        // CRITICAL: If user said a number, ALWAYS treat as view operation (even if AI generated timeframe)
+      }
+      
+      // CRITICAL: If user said a number, ALWAYS treat as view operation (even if AI generated timeframe)
         isListEventsWithName = isNumberBasedViewRequest || (hasEventNameInList && userWantsToView && !isTimeframe) || (eventNameFromUserText !== null);
       }
       
@@ -1362,18 +1362,18 @@ async function processAIResponse(
             // OPTIMIZATION: Use cached timezone or fetch once
             let eventTimezone = userTimezone || cache.get(cache.userTimezones, userId, cache.ttl.timezone) || 'Africa/Johannesburg';
             if (!userTimezone || eventTimezone === 'Africa/Johannesburg') {
-              try {
+            try {
                 const calendarConnection = cache.get(cache.calendarConnections, userId, cache.ttl.calendar) || await getPrimaryCalendar(db, userId);
-                if (calendarConnection) {
+              if (calendarConnection) {
                   if (!cache.get(cache.calendarConnections, userId, cache.ttl.calendar)) {
                     cache.set(cache.calendarConnections, userId, calendarConnection);
                   }
-                  const calendarService = new CalendarService(db);
-                  eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+                const calendarService = new CalendarService(db);
+                eventTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
                   cache.set(cache.userTimezones, userId, eventTimezone);
-                }
-              } catch (error) {
-                logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
+              }
+            } catch (error) {
+              logger.warn({ error, userId }, 'Failed to get timezone for event operation, using default');
               }
             }
             
@@ -2320,15 +2320,15 @@ async function processAIResponse(
             // Process message history
             if (messageHistory.length === 0 && historyResult.status === 'fulfilled' && historyResult.value) {
               messageHistory = historyResult.value
-                .filter(msg => msg.content && msg.content.trim().length > 0)
-                .slice(0, 10)
-                .map(msg => ({
-                  direction: msg.direction,
-                  content: msg.content,
-                }));
+              .filter(msg => msg.content && msg.content.trim().length > 0)
+              .slice(0, 10)
+              .map(msg => ({
+                direction: msg.direction,
+                content: msg.content,
+              }));
               cache.set(cache.messageHistory, userId, messageHistory);
-            }
-            
+          }
+
             // Process calendar connection and timezone
             if (!calendarConnection && calendarResult.status === 'fulfilled' && calendarResult.value) {
               calendarConnection = calendarResult.value;
@@ -2337,11 +2337,11 @@ async function processAIResponse(
             
             if ((!eventViewTimezone || eventViewTimezone === 'Africa/Johannesburg') && calendarConnection) {
               try {
-                const calendarService = new CalendarService(db);
-                eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
+              const calendarService = new CalendarService(db);
+              eventViewTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
                 cache.set(cache.userTimezones, userId, eventViewTimezone);
-              } catch (error) {
-                logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
+          } catch (error) {
+            logger.warn({ error, userId }, 'Failed to get timezone for event view analysis, using default');
               }
             }
           }
@@ -3003,7 +3003,7 @@ async function processAIResponse(
       if (!calendarConnection) {
         try {
           calendarConnection = await getPrimaryCalendar(db, userId);
-          if (calendarConnection) {
+        if (calendarConnection) {
             cache.set(cache.calendarConnections, userId, calendarConnection);
           }
         } catch (error) {
@@ -3016,8 +3016,8 @@ async function processAIResponse(
           const calendarService = new CalendarService(db);
           calendarTimezone = await (calendarService as any).getUserTimezone(userId, calendarConnection);
           cache.set(cache.userTimezones, userId, calendarTimezone);
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to get calendar timezone for reminder operations, using default');
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to get calendar timezone for reminder operations, using default');
         }
       }
       
@@ -5639,22 +5639,22 @@ function parseEventTemplateToIntent(
         
         // Only parse date/time if explicit keywords are present
         if (hasExplicitDateKeyword || hasExplicitTimeKeyword) {
-          // Handle "reschedule to {date} at {time}" pattern
-          // Support both 24-hour (17:00) and 12-hour (5pm) formats
-          // Pattern: "reschedule to 2025-12-03 at 17:00" or "reschedule to 2025-12-03 at 5pm"
-          // First, try to match the full pattern with date and time separated by "at"
-          const rescheduleWithTimeMatch = changes.match(/reschedule\s+(?:to|for)\s+(.+?)\s+at\s+([\d:]+(?:\s*(?:am|pm))?)/i);
-          if (rescheduleWithTimeMatch && rescheduleWithTimeMatch[1] && rescheduleWithTimeMatch[2]) {
-            intent.startDate = parseRelativeDate(rescheduleWithTimeMatch[1].trim());
-            intent.startTime = parseTime(rescheduleWithTimeMatch[2].trim());
-          } else {
-            // Try to extract new date/time from changes using other patterns
+        // Handle "reschedule to {date} at {time}" pattern
+        // Support both 24-hour (17:00) and 12-hour (5pm) formats
+        // Pattern: "reschedule to 2025-12-03 at 17:00" or "reschedule to 2025-12-03 at 5pm"
+        // First, try to match the full pattern with date and time separated by "at"
+        const rescheduleWithTimeMatch = changes.match(/reschedule\s+(?:to|for)\s+(.+?)\s+at\s+([\d:]+(?:\s*(?:am|pm))?)/i);
+        if (rescheduleWithTimeMatch && rescheduleWithTimeMatch[1] && rescheduleWithTimeMatch[2]) {
+          intent.startDate = parseRelativeDate(rescheduleWithTimeMatch[1].trim());
+          intent.startTime = parseTime(rescheduleWithTimeMatch[2].trim());
+        } else {
+          // Try to extract new date/time from changes using other patterns
             // Only match explicit date patterns, not generic "on" or "for" that might match location strings
-            const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) 
-              || changes.match(/reschedule\s+to\s+(.+?)(?:\s+at|\s|$)/i)
+          const dateMatch = changes.match(/date\s+to\s+(.+?)(?:\s|$)/i) 
+            || changes.match(/reschedule\s+to\s+(.+?)(?:\s+at|\s|$)/i)
               || changes.match(/move\s+to\s+(.+?)(?:\s+at|\s|$)/i)
               || changes.match(/(?:on|for)\s+(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2})(?:\s+at|\s|$)/i);
-            if (dateMatch && dateMatch[1]) {
+          if (dateMatch && dateMatch[1]) {
             const datePart = dateMatch[1].trim();
             // Check if date part contains time (e.g., "2025-12-03 17:00" or "2025-12-03 at 17:00")
             const dateTimeMatch = datePart.match(/^(.+?)(?:\s+at\s+|\s+)([\d:]+(?:\s*(?:am|pm))?)$/i);
@@ -5685,30 +5685,30 @@ function parseEventTemplateToIntent(
               );
             } else {
               // Try "time to {time} {date}" pattern (e.g., "time to 12:00 tomorrow", "time to 12:00 on tomorrow")
-              // This pattern matches: "time to" followed by time, then optional "on", then date keyword
-              const timeWithDateMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2}|.+?)(?:\s|$)/i);
-              if (timeWithDateMatch && timeWithDateMatch[1] && timeWithDateMatch[2]) {
-                intent.startTime = parseTime(timeWithDateMatch[1].trim());
-                // Only set date if it wasn't already set
-                if (!intent.startDate) {
-                  intent.startDate = parseRelativeDate(timeWithDateMatch[2].trim());
-                }
-                logger.info(
-                  {
-                    changes,
-                    extractedTime: timeWithDateMatch[1],
-                    extractedDate: timeWithDateMatch[2],
-                    parsedStartDate: intent.startDate,
-                    parsedStartTime: intent.startTime,
-                  },
-                  '✅ Extracted time and date from "time to {time} {date}" pattern'
-                );
-              } else {
-                // Try simple "time to {time}" pattern (e.g., "time to 12:00")
-                const timeMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i) 
-                  || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
-                if (timeMatch && timeMatch[1]) {
-                  intent.startTime = parseTime(timeMatch[1].trim());
+            // This pattern matches: "time to" followed by time, then optional "on", then date keyword
+            const timeWithDateMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)\s+(?:on\s+)?(today|tomorrow|next\s+\w+|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2}|.+?)(?:\s|$)/i);
+            if (timeWithDateMatch && timeWithDateMatch[1] && timeWithDateMatch[2]) {
+              intent.startTime = parseTime(timeWithDateMatch[1].trim());
+              // Only set date if it wasn't already set
+              if (!intent.startDate) {
+                intent.startDate = parseRelativeDate(timeWithDateMatch[2].trim());
+              }
+              logger.info(
+                {
+                  changes,
+                  extractedTime: timeWithDateMatch[1],
+                  extractedDate: timeWithDateMatch[2],
+                  parsedStartDate: intent.startDate,
+                  parsedStartTime: intent.startTime,
+                },
+                '✅ Extracted time and date from "time to {time} {date}" pattern'
+              );
+            } else {
+              // Try simple "time to {time}" pattern (e.g., "time to 12:00")
+              const timeMatch = changes.match(/time\s+to\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i) 
+                || changes.match(/at\s+([\d:]+(?:\s*(?:am|pm))?)(?:\s|$)/i);
+              if (timeMatch && timeMatch[1]) {
+                intent.startTime = parseTime(timeMatch[1].trim());
                 }
               }
             }
