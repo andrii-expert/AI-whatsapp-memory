@@ -4556,7 +4556,9 @@ export class ActionExecutor {
           }
         }
         
-        if (!dateFilterRange) {
+        // CRITICAL: Only create month/week ranges if we don't already have a dateFilterRange
+        // This prevents month extraction from overriding specific date filters
+        if (!dateFilterRange && !specificDate) {
           // Check for week/month filters if no day-of-week match found
           // IMPORTANT: Don't override if we already have a specific date filter
           if (timeFilter.includes('this week') || (timeFilter.includes('week') && !timeFilter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i))) {
@@ -4566,6 +4568,7 @@ export class ActionExecutor {
             };
           } else if (monthIndexFromFilter !== -1 && !specificDate) {
           // Specific month requested (e.g., "april", "may", "october")
+          // IMPORTANT: Only do this if we don't have a specific date (e.g., "27th January" should not trigger this)
           const currentYear = userNow.getFullYear();
           const currentMonth = userNow.getMonth(); // 0-based
           const targetMonth = monthIndexFromFilter; // 0-based
@@ -4586,6 +4589,7 @@ export class ActionExecutor {
             startISO: start.toISOString(),
             endISO: end.toISOString(),
             userTimezone,
+            specificDate,
           }, 'Created date range for specific month filter');
         } else if (timeFilter.includes('this month')) {
           dateFilterRange = {
@@ -4624,11 +4628,31 @@ export class ActionExecutor {
           // to avoid edge cases with yearly/birthday reminders and timezones.
           const isDayOfWeekFilter = (dateFilterRange as any).isDayOfWeek === true;
           const isSpecificDateFilter = (dateFilterRange as any).isSpecificDate === true;
-          if (timeFilter === 'today' || specificDate !== null || isSpecificDateFilter || isDayOfWeekFilter) {
+          
+          // CRITICAL: Check if we have a specific date - this must be checked first
+          // If specificDate is set OR isSpecificDateFilter is true, we MUST use exact date matching
+          const hasSpecificDate = specificDate !== null || isSpecificDateFilter;
+          
+          // Log for debugging
+          logger.info({
+            userId: this.userId,
+            timeFilter,
+            specificDate,
+            hasSpecificDate,
+            isSpecificDateFilter,
+            isDayOfWeekFilter,
+            dateFilterRangeStart: dateFilterRange.start.toISOString(),
+            dateFilterRangeEnd: dateFilterRange.end.toISOString(),
+            willUseExactDateMatch: timeFilter === 'today' || hasSpecificDate || isDayOfWeekFilter,
+          }, 'Checking filter type for reminder filtering');
+          
+          // CRITICAL: Use exact date matching for specific dates, today, and day-of-week filters
+          // This ensures we only show reminders that can occur on that exact date
+          if (timeFilter === 'today' || hasSpecificDate || isDayOfWeekFilter) {
             // For specific dates, use the target date from dateFilterRange (which is timezone-aware);
             // for "today", use current date; for day-of-week, use the calculated date
             let targetDate: Date;
-            if (isSpecificDateFilter || specificDate) {
+            if (hasSpecificDate) {
               // Use the start of the date range (which is already timezone-aware and set to the correct date)
               targetDate = new Date(dateFilterRange.start);
             } else if (isDayOfWeekFilter) {
@@ -4887,15 +4911,62 @@ export class ActionExecutor {
       let filterTitle = 'Reminders';
       if (parsed.listFilter) {
         const filter = parsed.listFilter.toLowerCase();
-        if (filter === 'today') filterTitle = "Today's Reminders";
-        else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
-        else if (filter.includes('next week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "Next Week's Reminders";
-        else if (filter.includes('this week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "This Week's Reminders";
-        else if (filter.includes('week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "This Week's Reminders";
-        else if (filter.includes('next month')) filterTitle = "Next Month's Reminders";
-        else if (filter.includes('this month')) filterTitle = "This Month's Reminders";
-        else if (filter.includes('month')) filterTitle = "This Month's Reminders";
-        else {
+        
+        // FIRST: Check for specific date patterns (must be checked before month-only patterns)
+        const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+        const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const capitalizedMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        
+        let specificDateFound = false;
+        for (let i = 0; i < monthNames.length; i++) {
+          const monthName = monthNames[i];
+          const monthAb = monthAbbr[i];
+          
+          // Pattern 1: "[day] [month]" (e.g., "27th January", "27 January")
+          const match1 = filter.match(new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthName}`, 'i')) ||
+                        filter.match(new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthAb}`, 'i'));
+          
+          // Pattern 2: "[month] [day]" (e.g., "January 27th", "Jan 27")
+          const match2 = filter.match(new RegExp(`${monthName}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i')) ||
+                        filter.match(new RegExp(`${monthAb}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i'));
+          
+          const match = match1 || match2;
+          
+          if (match) {
+            const dayNum = parseInt(match[1] || '0', 10);
+            if (dayNum >= 1 && dayNum <= 31) {
+              // Format: "27th January" or "January 27th"
+              const daySuffix = dayNum === 1 ? 'st' : dayNum === 2 ? 'nd' : dayNum === 3 ? 'rd' : 'th';
+              if (match1) {
+                filterTitle = `Reminders for ${dayNum}${daySuffix} ${capitalizedMonths[i]}`;
+              } else {
+                filterTitle = `Reminders for ${capitalizedMonths[i]} ${dayNum}${daySuffix}`;
+              }
+              specificDateFound = true;
+              break;
+            }
+          }
+        }
+        
+        if (specificDateFound) {
+          // Already set the title above, skip other checks
+        } else if (filter === 'today') {
+          filterTitle = "Today's Reminders";
+        } else if (filter === 'tomorrow') {
+          filterTitle = "Tomorrow's Reminders";
+        } else if (filter.includes('next week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) {
+          filterTitle = "Next Week's Reminders";
+        } else if (filter.includes('this week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) {
+          filterTitle = "This Week's Reminders";
+        } else if (filter.includes('week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) {
+          filterTitle = "This Week's Reminders";
+        } else if (filter.includes('next month')) {
+          filterTitle = "Next Month's Reminders";
+        } else if (filter.includes('this month')) {
+          filterTitle = "This Month's Reminders";
+        } else if (filter.includes('month')) {
+          filterTitle = "This Month's Reminders";
+        } else {
           // Check for day-of-week filters (e.g., "this Thursday", "Thursday")
           const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
           const capitalizedDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -4918,46 +4989,11 @@ export class ActionExecutor {
           }
           
           if (!dayOfWeekFound) {
-          // Check if it's a specific date (e.g., "27th January")
-          const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
-          const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-          const capitalizedMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-          
-          let specificDateFound = false;
-          for (let i = 0; i < monthNames.length; i++) {
-            const monthName = monthNames[i];
-            const monthAb = monthAbbr[i];
-            
-            // Pattern 1: "[day] [month]" (e.g., "27th January", "27 January")
-            const match1 = filter.match(new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthName}`, 'i')) ||
-                          filter.match(new RegExp(`(\\d{1,2})(?:st|nd|rd|th)?\\s+${monthAb}`, 'i'));
-            
-            // Pattern 2: "[month] [day]" (e.g., "January 27th", "Jan 27")
-            const match2 = filter.match(new RegExp(`${monthName}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i')) ||
-                          filter.match(new RegExp(`${monthAb}\\s+(\\d{1,2})(?:st|nd|rd|th)?`, 'i'));
-            
-            const match = match1 || match2;
-            
-            if (match) {
-              const dayNum = parseInt(match[1] || '0', 10);
-              if (dayNum >= 1 && dayNum <= 31) {
-                // Format: "27th January" or "January 27th"
-                const daySuffix = dayNum === 1 ? 'st' : dayNum === 2 ? 'nd' : dayNum === 3 ? 'rd' : 'th';
-                if (match1) {
-                  filterTitle = `Reminders for ${dayNum}${daySuffix} ${capitalizedMonths[i]}`;
-                } else {
-                  filterTitle = `Reminders for ${capitalizedMonths[i]} ${dayNum}${daySuffix}`;
-                }
-                specificDateFound = true;
-                break;
-              }
-            }
-          }
-          
-          if (!specificDateFound) {
             // Check if it's just a month name and capitalize it
+            // IMPORTANT: Only match month at the start of the string to avoid matching "27th january"
             const monthIndex = monthNames.findIndex(m => {
               // Extract just the month part if there's additional text
+              // Must be at the start of the string to avoid matching dates like "27th january"
               const monthMatch = filter.match(new RegExp(`^(${m})(?:\\s|\\s*-|$)`, 'i'));
               return monthMatch !== null;
             });
@@ -4968,7 +5004,6 @@ export class ActionExecutor {
               const capitalized = parsed.listFilter.charAt(0).toUpperCase() + parsed.listFilter.slice(1).toLowerCase();
               filterTitle = `Reminders for ${capitalized}`;
             }
-          }
           }
         }
       }
