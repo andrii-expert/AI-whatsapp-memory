@@ -2981,7 +2981,7 @@ export default function CalendarsPage() {
               <div className="bg-white rounded-lg overflow-hidden">
                 {/* Weekday Headers */}
                 <div className="grid grid-cols-7 border-b border-gray-200">
-                  {["SAN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
+                  {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
                     (day) => (
                       <div
                         key={day}
