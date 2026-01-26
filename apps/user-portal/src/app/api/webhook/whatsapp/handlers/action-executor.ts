@@ -588,18 +588,12 @@ export class ActionExecutor {
           }
         }
         
-        // Check for status filter
-        if (filterParts.includes('active')) {
-          status = 'active';
-        } else if (filterParts.includes('paused') || filterParts.includes('inactive')) {
-          status = 'paused';
-        } else if (filterParts.includes('all')) {
-          status = 'all';
-        }
-        
-        // Check for time-based filter (today, tomorrow, this week, next week, this month, next month)
+        // Check for time-based filter FIRST (today, tomorrow, this week, next week, this month, next month)
+        // This must be done before status check to prioritize time filters
         // Check longer phrases first to avoid partial matches
         const timeFilters = ['next month', 'this month', 'this week', 'next week', 'tomorrow', 'today'];
+        
+        // First, try to match time filters in the filter text
         for (const timeFilter of timeFilters) {
           if (filterText.includes(timeFilter)) {
             listFilter = timeFilter;
@@ -607,12 +601,38 @@ export class ActionExecutor {
           }
         }
         
-        // Also check for variations like "all reminders today" -> extract "today"
+        // Also check for variations like "all reminders today" or "all tomorrow" -> extract time filter
         if (!listFilter) {
           const todayMatch = filterText.match(/\b(today|tomorrow|this\s+week|this\s+month|next\s+week|next\s+month)\b/i);
           if (todayMatch && todayMatch[1]) {
             listFilter = todayMatch[1].toLowerCase();
           }
+        }
+        
+        // Handle cases where AI outputs "all tomorrow" or "all today" - extract just the time filter
+        if (listFilter && filterText.includes('all') && (filterText.includes('tomorrow') || filterText.includes('today') || filterText.includes('week') || filterText.includes('month'))) {
+          // listFilter is already set correctly, but ensure "all" doesn't override it
+          // This is already handled by checking time filters first
+        }
+        
+        // Check for status filter (only if no time filter was found, or if explicitly specified)
+        // "all" should not override time filters like "tomorrow"
+        if (!listFilter) {
+          if (filterParts.includes('active')) {
+            status = 'active';
+          } else if (filterParts.includes('paused') || filterParts.includes('inactive')) {
+            status = 'paused';
+          } else if (filterParts.includes('all')) {
+            status = 'all';
+          }
+        } else {
+          // If we have a time filter, only set status if it's explicitly mentioned (not "all" which is ambiguous)
+          if (filterParts.includes('active')) {
+            status = 'active';
+          } else if (filterParts.includes('paused') || filterParts.includes('inactive')) {
+            status = 'paused';
+          }
+          // Don't set status to 'all' when we have a time filter - "all" in "all tomorrow reminders" means "all of tomorrow's reminders"
         }
 
         // If still no time filter, check for explicit month names (e.g., "march", "april")
