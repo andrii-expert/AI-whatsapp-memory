@@ -4460,12 +4460,102 @@ export class ActionExecutor {
             start: startOfDay(tomorrow),
             end: endOfDay(tomorrow),
           };
-        } else if (timeFilter.includes('this week') || timeFilter.includes('week')) {
-          dateFilterRange = {
-            start: startOfWeek(userNow, { weekStartsOn: 0 }), // Sunday
-            end: endOfWeek(userNow, { weekStartsOn: 0 }),
-          };
-        } else if (monthIndexFromFilter !== -1) {
+        } else {
+          // Check for day-of-week filters (e.g., "this Thursday", "Thursday", "this Monday")
+          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+          let targetDayIndex: number | null = null;
+          let isThisWeek = false;
+          
+          // Check for "this [day]" pattern (e.g., "this thursday", "this monday")
+          for (let i = 0; i < dayNames.length; i++) {
+            const dayName = dayNames[i];
+            const thisDayPattern = new RegExp(`this\\s+${dayName}`, 'i');
+            if (thisDayPattern.test(timeFilter)) {
+              targetDayIndex = i;
+              isThisWeek = true;
+              break;
+            }
+          }
+          
+          // If not found, check for just day name (e.g., "thursday", "monday")
+          if (targetDayIndex === null) {
+            for (let i = 0; i < dayNames.length; i++) {
+              const dayName = dayNames[i];
+              // Match day name as whole word, not part of another word
+              const dayPattern = new RegExp(`\\b${dayName}\\b`, 'i');
+              if (dayPattern.test(timeFilter) && !timeFilter.includes('week') && !timeFilter.includes('month')) {
+                targetDayIndex = i;
+                break;
+              }
+            }
+          }
+          
+          if (targetDayIndex !== null) {
+            // Calculate the target date for the specified day
+            const currentDayOfWeek = userNow.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+            let daysToAdd: number;
+            
+            if (isThisWeek) {
+              // "this [day]" means the next occurrence of that day in the current week
+              // If today is that day, use today; otherwise find the next occurrence this week
+              if (currentDayOfWeek === targetDayIndex) {
+                daysToAdd = 0; // Today is the target day
+              } else if (currentDayOfWeek < targetDayIndex) {
+                daysToAdd = targetDayIndex - currentDayOfWeek; // This week
+              } else {
+                // Day has passed this week, use next week
+                daysToAdd = 7 - (currentDayOfWeek - targetDayIndex);
+              }
+            } else {
+              // Just "[day]" means the next occurrence of that day
+              if (currentDayOfWeek === targetDayIndex) {
+                daysToAdd = 0; // Today is the target day
+              } else if (currentDayOfWeek < targetDayIndex) {
+                daysToAdd = targetDayIndex - currentDayOfWeek; // This week
+              } else {
+                // Day has passed, use next week
+                daysToAdd = 7 - (currentDayOfWeek - targetDayIndex);
+              }
+            }
+            
+            const targetDate = addDays(userNow, daysToAdd);
+            dateFilterRange = {
+              start: startOfDay(targetDate),
+              end: endOfDay(targetDate),
+            };
+            
+            // Store the day-of-week info for later use in filtering and title formatting
+            (dateFilterRange as any).isDayOfWeek = true;
+            (dateFilterRange as any).targetDayName = dayNames[targetDayIndex];
+            (dateFilterRange as any).isThisWeek = isThisWeek;
+            
+            logger.info({
+              userId: this.userId,
+              timeFilter,
+              targetDayIndex,
+              targetDayName: dayNames[targetDayIndex],
+              currentDayOfWeek,
+              currentDayName: dayNames[currentDayOfWeek],
+              daysToAdd,
+              isThisWeek,
+              targetDate: targetDate.toISOString(),
+              dateRange: {
+                start: dateFilterRange.start.toISOString(),
+                end: dateFilterRange.end.toISOString(),
+              },
+              userTimezone,
+            }, 'Created date range for day-of-week filter');
+          }
+        }
+        
+        if (!dateFilterRange) {
+          // Check for week/month filters if no day-of-week match found
+          if (timeFilter.includes('this week') || (timeFilter.includes('week') && !timeFilter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i))) {
+            dateFilterRange = {
+              start: startOfWeek(userNow, { weekStartsOn: 0 }), // Sunday
+              end: endOfWeek(userNow, { weekStartsOn: 0 }),
+            };
+          } else if (monthIndexFromFilter !== -1) {
           // Specific month requested (e.g., "april", "may", "october")
           const currentYear = userNow.getFullYear();
           const currentMonth = userNow.getMonth(); // 0-based
@@ -4521,13 +4611,17 @@ export class ActionExecutor {
         }, 'Filtering reminders by time');
 
         if (dateFilterRange) {
-          // Special case: "today" and specific dates should use exact scheduled date logic
+          // Special case: "today", specific dates, and day-of-week dates should use exact scheduled date logic
           // to avoid edge cases with yearly/birthday reminders and timezones.
-          if (timeFilter === 'today' || specificDate !== null) {
-            // For specific dates, use the target date; for "today", use current date
+          const isDayOfWeekFilter = (dateFilterRange as any).isDayOfWeek === true;
+          if (timeFilter === 'today' || specificDate !== null || isDayOfWeekFilter) {
+            // For specific dates, use the target date; for "today", use current date; for day-of-week, use the calculated date
             let targetDate: Date;
             if (specificDate) {
               targetDate = new Date(specificDate.year, specificDate.month, specificDate.day);
+            } else if (isDayOfWeekFilter) {
+              // Use the start of the date range (which is the target day)
+              targetDate = new Date(dateFilterRange.start);
             } else {
               const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
               targetDate = new Date(userTimeString);
@@ -4644,9 +4738,31 @@ export class ActionExecutor {
           const filter = parsed.listFilter.toLowerCase();
           if (filter === 'today') filterTitle = "Today's Reminders";
           else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
-          else if (filter.includes('week')) filterTitle = "This Week's Reminders";
+          else if (filter.includes('week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "This Week's Reminders";
           else if (filter.includes('month')) filterTitle = "This Month's Reminders";
           else {
+            // Check for day-of-week filters (e.g., "this Thursday", "Thursday")
+            const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+            const capitalizedDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            let dayOfWeekFound = false;
+            
+            for (let i = 0; i < dayNames.length; i++) {
+              const dayName = dayNames[i];
+              // Check for "this [day]" pattern
+              if (filter.match(new RegExp(`this\\s+${dayName}`, 'i'))) {
+                filterTitle = `Reminders for this ${capitalizedDays[i]}`;
+                dayOfWeekFound = true;
+                break;
+              }
+              // Check for just day name
+              if (filter.match(new RegExp(`\\b${dayName}\\b`, 'i')) && !filter.includes('week') && !filter.includes('month')) {
+                filterTitle = `Reminders for ${capitalizedDays[i]}`;
+                dayOfWeekFound = true;
+                break;
+              }
+            }
+            
+            if (!dayOfWeekFound) {
             // Check if it's a specific date (e.g., "27th January")
             const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
             const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -4753,9 +4869,31 @@ export class ActionExecutor {
         const filter = parsed.listFilter.toLowerCase();
         if (filter === 'today') filterTitle = "Today's Reminders";
         else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
-        else if (filter.includes('week')) filterTitle = "This Week's Reminders";
+        else if (filter.includes('week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "This Week's Reminders";
         else if (filter.includes('month')) filterTitle = "This Month's Reminders";
         else {
+          // Check for day-of-week filters (e.g., "this Thursday", "Thursday")
+          const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+          const capitalizedDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          let dayOfWeekFound = false;
+          
+          for (let i = 0; i < dayNames.length; i++) {
+            const dayName = dayNames[i];
+            // Check for "this [day]" pattern
+            if (filter.match(new RegExp(`this\\s+${dayName}`, 'i'))) {
+              filterTitle = `Reminders for this ${capitalizedDays[i]}`;
+              dayOfWeekFound = true;
+              break;
+            }
+            // Check for just day name
+            if (filter.match(new RegExp(`\\b${dayName}\\b`, 'i')) && !filter.includes('week') && !filter.includes('month')) {
+              filterTitle = `Reminders for ${capitalizedDays[i]}`;
+              dayOfWeekFound = true;
+              break;
+            }
+          }
+          
+          if (!dayOfWeekFound) {
           // Check if it's a specific date (e.g., "27th January")
           const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
           const monthAbbr = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -4806,6 +4944,7 @@ export class ActionExecutor {
               const capitalized = parsed.listFilter.charAt(0).toUpperCase() + parsed.listFilter.slice(1).toLowerCase();
               filterTitle = `Reminders for ${capitalized}`;
             }
+          }
           }
         }
       }
