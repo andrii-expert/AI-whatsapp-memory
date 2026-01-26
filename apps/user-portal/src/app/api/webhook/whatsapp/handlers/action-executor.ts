@@ -4940,8 +4940,8 @@ export class ActionExecutor {
           return { reminder, nextTime: nextTime || new Date(0) };
         })
         // CRITICAL: Filter out reminders that have already passed
-        // For one-time reminders, if nextTime is in the past, exclude them
-        // For recurring reminders, only exclude if nextTime is null (no future occurrence)
+        // For specific date filters, we've already filtered by exact date matching, so we should show all that match
+        // For other filters, exclude reminders where nextTime is in the past
         .filter(({ reminder, nextTime }) => {
           if (!nextTime || nextTime.getTime() === 0) {
             // No next time calculated - exclude for one-time reminders
@@ -4950,7 +4950,42 @@ export class ActionExecutor {
             return false;
           }
           
-          // Check if nextTime is in the past (with 1 minute tolerance to account for timing)
+          // For specific date filters, we've already filtered by exact date matching at line 4678-4699
+          // So we should show all reminders that passed that filter, regardless of whether nextTime is in the past
+          // (The nextTime calculation for specific dates uses the target date as base, so it should match the target date)
+          if (isSpecificDateFilter) {
+            // For specific date filters, verify that nextTime is on the target date
+            const targetDate = new Date(dateFilterRange!.start);
+            const targetDateInTz = new Date(targetDate.toLocaleString("en-US", { timeZone: userTimezone }));
+            const nextTimeInTz = new Date(nextTime.toLocaleString("en-US", { timeZone: userTimezone }));
+            
+            // Check if nextTime is on the same date as the target date
+            const targetYear = targetDateInTz.getFullYear();
+            const targetMonth = targetDateInTz.getMonth();
+            const targetDay = targetDateInTz.getDate();
+            
+            const nextYear = nextTimeInTz.getFullYear();
+            const nextMonth = nextTimeInTz.getMonth();
+            const nextDay = nextTimeInTz.getDate();
+            
+            const isOnTargetDate = targetYear === nextYear && targetMonth === nextMonth && targetDay === nextDay;
+            
+            if (!isOnTargetDate) {
+              logger.debug({
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                targetDate: `${targetYear}-${targetMonth + 1}-${targetDay}`,
+                nextTimeDate: `${nextYear}-${nextMonth + 1}-${nextDay}`,
+              }, 'Reminder nextTime does not match target date for specific date filter');
+              return false;
+            }
+            
+            // For specific date filters, show all reminders that match the date (even if time has passed)
+            return true;
+          }
+          
+          // For non-specific date filters, check if nextTime is in the past (with 1 minute tolerance)
           const currentTimeMs = userLocalTimeDate.getTime();
           const nextTimeMs = nextTime.getTime();
           const oneMinuteMs = 60 * 1000;
@@ -5150,12 +5185,25 @@ export class ActionExecutor {
     try {
       // Skip inactive reminders
       if (!reminder.active) {
+        logger.debug({
+          reminderId: reminder.id,
+          reminderTitle: reminder.title,
+          reason: 'reminder is inactive',
+        }, 'Reminder filtered out - inactive');
         return false;
       }
 
       // For one-time reminders, check directly if they're scheduled for the target date
       if (reminder.frequency === 'once') {
-        return this.isOnceReminderScheduledForDate(reminder, userLocalTime, userTimezone);
+        const matches = this.isOnceReminderScheduledForDate(reminder, userLocalTime, userTimezone);
+        logger.debug({
+          reminderId: reminder.id,
+          reminderTitle: reminder.title,
+          frequency: 'once',
+          targetDate: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+          matches,
+        }, 'One-time reminder date check');
+        return matches;
       }
 
       // For recurring reminders, check if they can occur on the target date
@@ -5168,34 +5216,65 @@ export class ActionExecutor {
           // Daily reminders occur every day, so they will occur on the target date
           return true;
 
+        case 'hourly':
+        case 'minutely':
+          // These occur very frequently, so they will occur on the target date
+          return true;
+
         case 'weekly':
           // Check if the target date's day of week matches any of the reminder's days
           if (reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
             const targetDate = new Date(targetYear, targetMonth, targetDay);
             const targetDayOfWeek = targetDate.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
-            return reminder.daysOfWeek.includes(targetDayOfWeek);
+            const matches = reminder.daysOfWeek.includes(targetDayOfWeek);
+            logger.debug({
+              reminderId: reminder.id,
+              reminderTitle: reminder.title,
+              targetDayOfWeek,
+              reminderDaysOfWeek: reminder.daysOfWeek,
+              matches,
+            }, 'Weekly reminder day-of-week check');
+            return matches;
           }
           return false;
 
         case 'monthly':
-          // Check if the target day matches the reminder's dayOfMonth
+          // For monthly reminders: check if the target day matches the reminder's dayOfMonth
+          // Monthly reminders occur on the same day of every month, so we only check the day
           if (reminder.dayOfMonth) {
-            return targetDay === reminder.dayOfMonth;
+            const matches = targetDay === reminder.dayOfMonth;
+            logger.debug({
+              reminderId: reminder.id,
+              reminderTitle: reminder.title,
+              targetDay,
+              reminderDayOfMonth: reminder.dayOfMonth,
+              matches,
+            }, 'Monthly reminder day check');
+            return matches;
           }
           return false;
 
         case 'yearly':
-          // Check if the target month and day match the reminder's month and dayOfMonth
+          // For yearly reminders: check if the target month and day match the reminder's month and dayOfMonth
           if (reminder.month && reminder.dayOfMonth) {
             // reminder.month is 1-based (1-12), targetMonth is 0-based (0-11)
-            return (reminder.month - 1) === targetMonth && reminder.dayOfMonth === targetDay;
+            const monthMatches = (reminder.month - 1) === targetMonth;
+            const dayMatches = reminder.dayOfMonth === targetDay;
+            const matches = monthMatches && dayMatches;
+            logger.debug({
+              reminderId: reminder.id,
+              reminderTitle: reminder.title,
+              targetMonth: targetMonth + 1,
+              targetDay,
+              reminderMonth: reminder.month,
+              reminderDayOfMonth: reminder.dayOfMonth,
+              monthMatches,
+              dayMatches,
+              matches,
+            }, 'Yearly reminder month and day check');
+            return matches;
           }
           return false;
-
-        case 'hourly':
-        case 'minutely':
-          // These occur very frequently, so they will occur on the target date
-          return true;
 
         default:
           // For unknown frequencies, fall back to calculating next occurrence
