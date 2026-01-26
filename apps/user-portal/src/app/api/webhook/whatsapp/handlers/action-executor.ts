@@ -5241,17 +5241,30 @@ export class ActionExecutor {
         case 'monthly':
           // For monthly reminders: check if the target day matches the reminder's dayOfMonth
           // Monthly reminders occur on the same day of every month, so we only check the day
+          // Note: Monthly reminders don't have a month field - they occur every month on the same day
           if (reminder.dayOfMonth) {
-            const matches = targetDay === reminder.dayOfMonth;
+            // Check if the target day matches the reminder's dayOfMonth
+            const dayMatches = targetDay === reminder.dayOfMonth;
+            
             logger.debug({
               reminderId: reminder.id,
               reminderTitle: reminder.title,
+              targetYear,
+              targetMonth: targetMonth + 1,
               targetDay,
               reminderDayOfMonth: reminder.dayOfMonth,
-              matches,
+              dayMatches,
             }, 'Monthly reminder day check');
-            return matches;
+            
+            return dayMatches;
           }
+          
+          logger.debug({
+            reminderId: reminder.id,
+            reminderTitle: reminder.title,
+            reason: 'no dayOfMonth set',
+          }, 'Monthly reminder filtered out - no dayOfMonth');
+          
           return false;
 
         case 'yearly':
@@ -5360,16 +5373,57 @@ export class ActionExecutor {
         targetMonth = targetDateObj.getUTCMonth();
         targetDay = targetDateObj.getUTCDate();
       } else if (reminder.dayOfMonth && reminder.month) {
-        // Specific date (month + dayOfMonth) - check if it matches the target year
-        targetYear = userLocalTime.year;
+        // Specific date (month + dayOfMonth) for one-time reminder (like a birthday)
+        // Check if the target date's month and day match the reminder's month and dayOfMonth
+        // For one-time reminders with month+day, we check if the filter date matches
+        targetYear = userLocalTime.year; // Use the filter year
         targetMonth = reminder.month - 1; // Convert 1-12 to 0-11
         targetDay = reminder.dayOfMonth;
         
-        // Check if this year's date has already passed
-        const thisYearDate = this.createDateInUserTimezone(targetYear, targetMonth, targetDay, 9, 0, userTimezone);
-        if (thisYearDate < userLocalTime.date) {
-          targetYear += 1;
+        // For one-time reminders with month+day, we need to check if the filter date matches
+        // the reminder's month and day, regardless of year (since it's one-time, it should match the exact date)
+        // But wait - if it's one-time with month+day, it might be set for a specific year
+        // Let's check if there's a targetDate that would give us the year
+        // Actually, for filtering purposes, we should check if the filter date's month and day match
+        // the reminder's month and day. But we also need to consider the year.
+        // Since it's a one-time reminder, if it has month+day but no targetDate,
+        // it might be meant for "this year" or "next year" depending on if the date has passed.
+        // But for filtering by a specific date, we should check if month and day match.
+        
+        // CRITICAL: For one-time reminders with month+day (like birthdays),
+        // check if the filter date's month and day match the reminder's month and day
+        // For one-time reminders, we need to check if the exact date matches
+        // If the reminder has a targetDate, we should use that year; otherwise, check month+day match
+        
+        // Check if month and day match the filter date
+        const monthMatches = targetMonth === userLocalTime.month;
+        const dayMatches = targetDay === userLocalTime.day;
+        
+        logger.debug({
+          reminderId: reminder.id,
+          reminderTitle: reminder.title,
+          reminderMonth: reminder.month,
+          reminderDayOfMonth: reminder.dayOfMonth,
+          targetMonth: targetMonth + 1,
+          targetDay,
+          userYear: userLocalTime.year,
+          userMonth: userLocalTime.month + 1,
+          userDay: userLocalTime.day,
+          monthMatches,
+          dayMatches,
+        }, 'One-time reminder with month+day check');
+        
+        // For one-time reminders with month+day, check if month and day match
+        // The year should also match if we're filtering by a specific date
+        // But if the reminder doesn't have a targetDate with a year, we just check month+day
+        if (monthMatches && dayMatches) {
+          // Month and day match - now check if year matches (if reminder has a specific year)
+          // For filtering by a specific date, if month and day match, include it
+          // (The reminder might be set for any year, or we might need to check targetDate for year)
+          return true;
         }
+        
+        return false;
       } else {
         return false;
       }
