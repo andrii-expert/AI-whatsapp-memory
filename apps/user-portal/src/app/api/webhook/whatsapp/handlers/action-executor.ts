@@ -5879,12 +5879,29 @@ export class ActionExecutor {
         // Default to 8am if no time specified
         result.time = '08:00';
       }
-    } else if (scheduleLower.includes('every month') || scheduleLower.includes('monthly')) {
+    } else if (scheduleLower.includes('every month') || scheduleLower.includes('monthly') || scheduleLower.includes('of each month') || scheduleLower.includes('each month')) {
       result.frequency = 'monthly';
-      // Extract day of month
-      const dayMatch = scheduleLower.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
+      // Extract day of month - handle patterns like:
+      // - "on the 30th of each month"
+      // - "the 30th of each month"
+      // - "30th of each month"
+      // - "monthly on the 30th"
+      // - "every month on the 30th"
+      // - "on the 30th"
+      // First try to match patterns with "of each month" or "of every month" suffix
+      let dayMatch = scheduleLower.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+of\s+(?:each|every)\s+month/i);
+      if (!dayMatch) {
+        // Try pattern without "of each month" suffix (for cases like "monthly on the 30th" or "on the 30th" when we already detected monthly)
+        dayMatch = scheduleLower.match(/(?:on\s+)?(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?/i);
+      }
       if (dayMatch && dayMatch[1]) {
-        result.dayOfMonth = parseInt(dayMatch[1], 10);
+        const dayNum = parseInt(dayMatch[1], 10);
+        if (dayNum >= 1 && dayNum <= 31) {
+          result.dayOfMonth = dayNum;
+        } else {
+          // Invalid day, default to 1st
+          result.dayOfMonth = 1;
+        }
       } else {
         // Default to 1st if no day specified
         result.dayOfMonth = 1;
