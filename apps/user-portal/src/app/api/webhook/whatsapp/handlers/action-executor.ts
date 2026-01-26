@@ -4714,6 +4714,7 @@ export class ActionExecutor {
           // Unknown filter - log warning
           logger.warn({ timeFilter, userId: this.userId }, 'Unknown time filter, showing all reminders');
         }
+        }
       } else if (parsed.listFilter) {
         // listFilter is set but no timezone - log warning
         logger.warn({
@@ -4814,6 +4815,7 @@ export class ActionExecutor {
                 filterTitle = `Reminders for ${capitalized}`;
               }
             }
+          }
           }
         }
         return {
