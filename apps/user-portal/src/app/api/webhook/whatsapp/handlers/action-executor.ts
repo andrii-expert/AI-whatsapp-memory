@@ -7085,7 +7085,21 @@ export class ActionExecutor {
         'monthly': 'Monthly',
         'yearly': 'Yearly',
       };
-      const frequencyText = frequencyLabels[reminder.frequency] || reminder.frequency;
+      let frequencyText = frequencyLabels[reminder.frequency] || reminder.frequency;
+      
+      // For weekly reminders, append days of the week if specified
+      if (reminder.frequency === 'weekly' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
+        const dayAbbreviations = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        // Sort days to display them in order (Monday first, then Tuesday, etc., with Sunday last)
+        const sortedDays = [...reminder.daysOfWeek].sort((a, b) => {
+          // Sort: Monday (1) through Saturday (6) first, then Sunday (0) last
+          if (a === 0) return 1; // Sunday goes to end
+          if (b === 0) return -1;
+          return a - b;
+        });
+        const dayNames = sortedDays.map(day => dayAbbreviations[day]).join(', ');
+        frequencyText = `Weekly(${dayNames})`;
+      }
       
       // Get category (default to "General" if not set)
       const categoryText = reminder.category || 'General';
@@ -7937,7 +7951,31 @@ export class ActionExecutor {
       // Frequency / schedule info
       let frequencyLine = '';
       if (updated.frequency) {
-        const freqLabel = updated.frequency.charAt(0).toUpperCase() + updated.frequency.slice(1);
+        const frequencyLabels: Record<string, string> = {
+          'daily': 'Daily',
+          'hourly': 'Hourly',
+          'minutely': 'Every N minutes',
+          'once': 'Once',
+          'weekly': 'Weekly',
+          'monthly': 'Monthly',
+          'yearly': 'Yearly',
+        };
+        let freqLabel = frequencyLabels[updated.frequency] || (updated.frequency.charAt(0).toUpperCase() + updated.frequency.slice(1));
+        
+        // For weekly reminders, append days of the week if specified
+        if (updated.frequency === 'weekly' && updated.daysOfWeek && updated.daysOfWeek.length > 0) {
+          const dayAbbreviations = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          // Sort days to display them in order (Monday first, then Tuesday, etc., with Sunday last)
+          const sortedDays = [...updated.daysOfWeek].sort((a, b) => {
+            // Sort: Monday (1) through Saturday (6) first, then Sunday (0) last
+            if (a === 0) return 1; // Sunday goes to end
+            if (b === 0) return -1;
+            return a - b;
+          });
+          const dayNames = sortedDays.map(day => dayAbbreviations[day]).join(', ');
+          freqLabel = `Weekly(${dayNames})`;
+        }
+        
         frequencyLine = `\nFrequency: ${freqLabel}`;
       }
 
