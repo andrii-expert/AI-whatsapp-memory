@@ -5030,26 +5030,112 @@ export class ActionExecutor {
   /**
    * Check if a reminder's next occurrence is on a specific date
    * This uses the actual next occurrence time, not just pattern matching
+   * 
+   * @param reminder The reminder to check
+   * @param targetLocalTime The target date to check against (year, month, day)
+   * @param userTimezone The user's timezone
    */
   private isReminderScheduledForDate(
     reminder: any,
-    userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date },
+    targetLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date },
     userTimezone: string
   ): boolean {
     try {
-      // For one-time reminders, check directly if they're scheduled for today
-      if (reminder.frequency === 'once') {
-        return this.isOnceReminderScheduledForToday(reminder, userLocalTime, userTimezone);
+      // Skip inactive reminders
+      if (!reminder.active) {
+        return false;
       }
 
-      // For recurring reminders, calculate the actual next occurrence time
-      const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+      // For one-time reminders, check directly if they're scheduled for the target date
+      if (reminder.frequency === 'once') {
+        let targetYear: number;
+        let targetMonth: number; // 0-11
+        let targetDay: number;
+        
+        if (reminder.targetDate) {
+          // Get target date components in user's timezone
+          const targetDateFormatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: userTimezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+          });
+          
+          const targetParts = targetDateFormatter.formatToParts(new Date(reminder.targetDate));
+          const getPart = (type: string) => targetParts.find(p => p.type === type)?.value || '0';
+          
+          targetYear = parseInt(getPart('year'), 10);
+          targetMonth = parseInt(getPart('month'), 10) - 1; // Convert to 0-11
+          targetDay = parseInt(getPart('day'), 10);
+        } else if (reminder.daysFromNow !== undefined) {
+          // Calculate target date from daysFromNow using reminder's creation date
+          const reminderCreatedAt = (reminder as any).createdAt ? new Date((reminder as any).createdAt) : targetLocalTime.date;
+          
+          // Get creation date components in user's timezone
+          const createdFormatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: userTimezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour12: false,
+          });
+          
+          const createdParts = createdFormatter.formatToParts(reminderCreatedAt);
+          const getCreatedPart = (type: string) => createdParts.find(p => p.type === type)?.value || '0';
+          
+          const createdYear = parseInt(getCreatedPart('year'), 10);
+          const createdMonth = parseInt(getCreatedPart('month'), 10) - 1; // Convert to 0-11
+          const createdDay = parseInt(getCreatedPart('day'), 10);
+          
+          // Calculate target date by adding daysFromNow to creation date
+          const targetDateObj = new Date(Date.UTC(createdYear, createdMonth, createdDay + reminder.daysFromNow));
+          targetYear = targetDateObj.getUTCFullYear();
+          targetMonth = targetDateObj.getUTCMonth();
+          targetDay = targetDateObj.getUTCDate();
+        } else if (reminder.dayOfMonth && reminder.month) {
+          // Specific date (month + dayOfMonth) - check if it matches the target year
+          targetYear = targetLocalTime.year;
+          targetMonth = reminder.month - 1; // Convert 1-12 to 0-11
+          targetDay = reminder.dayOfMonth;
+          
+          // Check if this year's date has already passed
+          const thisYearDate = this.createDateInUserTimezone(targetYear, targetMonth, targetDay, 9, 0, userTimezone);
+          if (thisYearDate < targetLocalTime.date) {
+            targetYear += 1;
+          }
+        } else {
+          return false;
+        }
+        
+        // Check if the target date matches the reminder's scheduled date
+        const dateMatches = targetYear === targetLocalTime.year &&
+                            targetMonth === targetLocalTime.month &&
+                            targetDay === targetLocalTime.day;
+        
+        return dateMatches;
+      }
+
+      // For recurring reminders, calculate the next occurrence from TODAY (not from target date)
+      // We need to get today's date to calculate the next occurrence correctly
+      const now = new Date();
+      const todayInTz = new Date(now.toLocaleString("en-US", { timeZone: userTimezone }));
+      const todayLocalTime = {
+        year: todayInTz.getFullYear(),
+        month: todayInTz.getMonth(),
+        day: todayInTz.getDate(),
+        hours: todayInTz.getHours(),
+        minutes: todayInTz.getMinutes(),
+        seconds: todayInTz.getSeconds(),
+        date: todayInTz,
+      };
+
+      // Calculate next occurrence from today
+      const nextTime = this.calculateNextReminderTime(reminder, todayLocalTime, userTimezone);
       if (!nextTime) {
         return false;
       }
 
       // Convert next occurrence to user's timezone for comparison
-      // Use Intl.DateTimeFormat to get date components in user's timezone
       const nextTimeFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: userTimezone,
         year: 'numeric',
@@ -5062,10 +5148,10 @@ export class ActionExecutor {
       const nextMonth = parseInt(nextTimeParts.find(p => p.type === 'month')?.value || '0', 10) - 1; // Month is 0-indexed
       const nextDay = parseInt(nextTimeParts.find(p => p.type === 'day')?.value || '0', 10);
 
-      // Check if the next occurrence is today - strict date comparison
-      const isToday = nextYear === userLocalTime.year &&
-                      nextMonth === userLocalTime.month &&
-                      nextDay === userLocalTime.day;
+      // Check if the next occurrence matches the target date - strict date comparison
+      const matchesTargetDate = nextYear === targetLocalTime.year &&
+                                nextMonth === targetLocalTime.month &&
+                                nextDay === targetLocalTime.day;
 
       // Log detailed comparison for debugging
       logger.debug({
@@ -5075,14 +5161,14 @@ export class ActionExecutor {
         nextYear,
         nextMonth: nextMonth + 1,
         nextDay,
-        userYear: userLocalTime.year,
-        userMonth: userLocalTime.month + 1,
-        userDay: userLocalTime.day,
-        isToday,
+        targetYear: targetLocalTime.year,
+        targetMonth: targetLocalTime.month + 1,
+        targetDay: targetLocalTime.day,
+        matchesTargetDate,
         nextTimeISO: nextTime.toISOString(),
       }, 'Date comparison for reminder');
 
-      return isToday;
+      return matchesTargetDate;
     } catch (error) {
       logger.error({ error, reminderId: reminder.id }, 'Error checking if reminder is scheduled for date');
       return false;
