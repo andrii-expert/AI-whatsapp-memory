@@ -4739,7 +4739,11 @@ export class ActionExecutor {
           const filter = parsed.listFilter.toLowerCase();
           if (filter === 'today') filterTitle = "Today's Reminders";
           else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
+          else if (filter.includes('next week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "Next Week's Reminders";
+          else if (filter.includes('this week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "This Week's Reminders";
           else if (filter.includes('week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "This Week's Reminders";
+          else if (filter.includes('next month')) filterTitle = "Next Month's Reminders";
+          else if (filter.includes('this month')) filterTitle = "This Month's Reminders";
           else if (filter.includes('month')) filterTitle = "This Month's Reminders";
           else {
             // Check for day-of-week filters (e.g., "this Thursday", "Thursday")
@@ -4871,7 +4875,11 @@ export class ActionExecutor {
         const filter = parsed.listFilter.toLowerCase();
         if (filter === 'today') filterTitle = "Today's Reminders";
         else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
+        else if (filter.includes('next week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "Next Week's Reminders";
+        else if (filter.includes('this week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "This Week's Reminders";
         else if (filter.includes('week') && !filter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)) filterTitle = "This Week's Reminders";
+        else if (filter.includes('next month')) filterTitle = "Next Month's Reminders";
+        else if (filter.includes('this month')) filterTitle = "This Month's Reminders";
         else if (filter.includes('month')) filterTitle = "This Month's Reminders";
         else {
           // Check for day-of-week filters (e.g., "this Thursday", "Thursday")
