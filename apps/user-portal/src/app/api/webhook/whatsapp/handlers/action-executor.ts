@@ -6410,14 +6410,18 @@ export class ActionExecutor {
         } else {
           // No timezone: use daysFromNow
           const now = new Date();
-          const currentDow = now.getDay();
+          const currentDow = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
           
           let daysToAdd: number;
           
           if (targetDow !== null) {
-            // "next week [day]" calculation (same as above)
-            const daysUntilNextSunday = currentDow === 0 ? 7 : (7 - currentDow);
-            daysToAdd = daysUntilNextSunday + targetDow;
+            // "next week [day]" calculation (week starts on Monday, same as timezone case above):
+            // Step 1: Find days until next Monday
+            const daysUntilNextMonday = currentDow === 1 ? 7 : ((8 - currentDow) % 7) || 7;
+            // Step 2: From next Monday, find the target day
+            // Offset from Monday: Monday=0, Tuesday=1, ..., Sunday=6
+            const offsetFromMonday = targetDow === 0 ? 6 : targetDow - 1;
+            daysToAdd = daysUntilNextMonday + offsetFromMonday;
           } else {
             daysToAdd = 7;
           }
