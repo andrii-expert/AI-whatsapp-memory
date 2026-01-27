@@ -273,6 +273,9 @@ export const userPreferences = pgTable("user_preferences", {
   // Reminder default delay minutes (e.g., 5, 10, 15 minutes)
   defaultDelayMinutes: integer("default_delay_minutes"),
   
+  // Default "later" time in minutes for WhatsApp prompts (e.g., 60 for 1 hour)
+  defaultLaterMinutes: integer("default_later_minutes"),
+  
   // Locale settings
   dateFormat: dateFormatEnum("date_format").default("DD/MM/YYYY").notNull(),
   timeFormat: timeFormatEnum("time_format").default("24h").notNull(),

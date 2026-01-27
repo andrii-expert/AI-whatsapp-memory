@@ -6036,7 +6036,7 @@ export class ActionExecutor {
    * - "later" → once (no specific time)
    * - "on the 1st" → once, dayOfMonth: 1
    */
-  private parseReminderSchedule(schedule: string, timezone?: string): Partial<CreateReminderInput> {
+  private async parseReminderSchedule(schedule: string, timezone?: string): Promise<Partial<CreateReminderInput>> {
     const scheduleLower = schedule.toLowerCase().trim();
     const result: Partial<CreateReminderInput> = {};
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -6351,8 +6351,70 @@ export class ActionExecutor {
           }
         }
       } else if (scheduleLower.includes('later')) {
-        // "later" means once, no specific time/date
+        // "later" means once, add defaultLaterMinutes from preferences
         result.frequency = 'once';
+        
+        // Get defaultLaterMinutes from user preferences (default: 60 minutes / 1 hour)
+        let laterMinutes = 60; // Default to 1 hour
+        try {
+          const preferences = await getUserPreferences(this.db, this.userId);
+          if (preferences?.defaultLaterMinutes !== null && preferences?.defaultLaterMinutes !== undefined) {
+            laterMinutes = preferences.defaultLaterMinutes;
+            logger.info(
+              {
+                userId: this.userId,
+                defaultLaterMinutes: laterMinutes,
+              },
+              'Using default later minutes from preferences'
+            );
+          }
+        } catch (error) {
+          logger.warn({ error, userId: this.userId }, 'Failed to get user preferences for default later minutes, using default 60 minutes');
+        }
+        
+        // Calculate target date by adding laterMinutes to current time
+        const now = timezone 
+          ? new Date(new Date().toLocaleString('en-US', { timeZone: timezone }))
+          : new Date();
+        const laterDate = new Date(now.getTime() + laterMinutes * 60 * 1000);
+        
+        // Set targetDate and time
+        if (timezone) {
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+          });
+          const parts = formatter.formatToParts(laterDate);
+          const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+          
+          const year = parseInt(getPart('year'), 10);
+          const month = parseInt(getPart('month'), 10) - 1; // 0-indexed
+          const day = parseInt(getPart('day'), 10);
+          const hours = parseInt(getPart('hour'), 10);
+          const minutes = parseInt(getPart('minute'), 10);
+          
+          result.targetDate = this.createDateInUserTimezone(year, month, day, hours, minutes, timezone);
+          result.time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        } else {
+          result.targetDate = laterDate;
+          result.time = `${String(laterDate.getHours()).padStart(2, '0')}:${String(laterDate.getMinutes()).padStart(2, '0')}`;
+        }
+        
+        logger.info(
+          {
+            userId: this.userId,
+            laterMinutes,
+            now: now.toISOString(),
+            laterDate: result.targetDate?.toISOString(),
+            time: result.time,
+            timezone,
+          },
+          'Processed "later" with default later minutes'
+        );
       } else if (scheduleLower.includes('next week')) {
         // Handle "next week" optionally with a weekday (e.g., "next week Thursday", "Tuesday next week")
         // CRITICAL: "next week [day]" means the [day] of next week (starting from next Sunday)
@@ -6717,7 +6779,7 @@ export class ActionExecutor {
         'Parsing reminder schedule'
       );
 
-      const scheduleData = this.parseReminderSchedule(scheduleStr, timezone);
+      const scheduleData = await this.parseReminderSchedule(scheduleStr, timezone);
       
       // Use category from AI analysis (parsed from AI response)
       // If not provided by AI, default to "General"
@@ -7537,7 +7599,7 @@ export class ActionExecutor {
         }
         else if (scheduleChangeMatch && scheduleChangeMatch[1]) {
           const rawSchedule = scheduleChangeMatch[1].trim();
-          const scheduleData = this.parseReminderSchedule(rawSchedule, timezone);
+          const scheduleData = await this.parseReminderSchedule(rawSchedule, timezone);
 
           const hasExplicitTimeInSchedule = /(?:\d{1,2}:\d{2}|\d{1,2}\s*(am|pm)|morning|afternoon|evening|night|noon|midday|midnight)/i.test(
             rawSchedule
@@ -7620,7 +7682,7 @@ export class ActionExecutor {
         if (relativeTimeMatch && relativeTimeStr) {
           
           // Handle relative time update - parse the extracted relative time string
-          const scheduleData = this.parseReminderSchedule(relativeTimeStr, timezone);
+          const scheduleData = await this.parseReminderSchedule(relativeTimeStr, timezone);
           
           logger.info(
             {
@@ -7769,7 +7831,7 @@ export class ActionExecutor {
             }
           }
           
-          const scheduleData = this.parseReminderSchedule(scheduleToParse, timezone);
+          const scheduleData = await this.parseReminderSchedule(scheduleToParse, timezone);
           if (scheduleData.daysFromNow !== undefined) {
             updateInput.daysFromNow = scheduleData.daysFromNow;
             // Clear targetDate when using daysFromNow

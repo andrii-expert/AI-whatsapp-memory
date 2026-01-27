@@ -14,6 +14,7 @@ export const updatePreferencesSchema = z.object({
     whatsappCalendarIds: z.array(z.string()).optional(),
     defaultReminderTime: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).nullable().optional(),
     defaultDelayMinutes: z.number().min(1).max(1440).nullable().optional(),
+    defaultLaterMinutes: z.number().min(1).max(1440).nullable().optional(),
   }).optional(),
 
   calendar: z.object({
