@@ -1830,8 +1830,13 @@ export default function RemindersPage() {
               <div className="relative flex items-start gap-2">
                 <div className="flex-1 flex flex-col gap-3">
                   <div className="flex items-center justify-between w-full gap-2">
-                    <div className="text-[20px] font-medium leading-none tracking-[-0.96px] text-black">
-                      Reminders Today: {remindersToday}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[20px] font-medium leading-none tracking-[-0.96px] text-black">
+                        Reminders Today:
+                      </span>
+                      <span className="text-2xl font-semibold leading-none text-black px-3 py-1 rounded-full flex items-center justify-center" style={{ background: "#F2FBFF" }}>
+                        {remindersToday}
+                      </span>
                     </div>
                     <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#F2FBFF" }}>
                       <BellRing size={16} style={{ color: "#48BBED" }} />
@@ -1884,8 +1889,13 @@ export default function RemindersPage() {
               <div className="relative flex items-start gap-2">
                 <div className="flex-1 flex flex-col gap-3">
                   <div className="flex items-center justify-between w-full gap-2">
-                    <div className="text-[20px] font-medium leading-none tracking-[-0.96px] text-black">
-                      Reminders Tomorrow: {remindersTomorrow}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[20px] font-medium leading-none tracking-[-0.96px] text-black">
+                        Reminders Tomorrow:
+                      </span>
+                      <span className="text-2xl font-semibold leading-none text-black px-3 py-1 rounded-full flex items-center justify-center" style={{ background: "#FFFCF2" }}>
+                        {remindersTomorrow}
+                      </span>
                     </div>
                     <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#FFFCF2" }}>
                       <CalendarIcon size={16} style={{ color: "#E1B739" }} />
