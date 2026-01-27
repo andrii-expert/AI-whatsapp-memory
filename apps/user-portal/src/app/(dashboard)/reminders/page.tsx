@@ -1037,11 +1037,22 @@ export default function RemindersPage() {
     });
   }, [reminders, userTimezone]);
 
-  // Count reminders for today and tomorrow
-  const remindersToday = useMemo(() => {
+  // Count reminders for today and tomorrow by type
+  const remindersTodayByType = useMemo(() => {
     const today = new Date();
-    return reminders.filter((r) => {
-      if (!r.active) return false;
+    const counts: Record<ReminderFrequency, number> = {
+      none: 0,
+      daily: 0,
+      hourly: 0,
+      minutely: 0,
+      once: 0,
+      weekly: 0,
+      monthly: 0,
+      yearly: 0,
+    };
+    
+    reminders.forEach((r) => {
+      if (!r.active) return;
       
       // Prepare reminder object for canReminderOccurOnDate function
       const reminderForCheck: Reminder = {
@@ -1063,14 +1074,29 @@ export default function RemindersPage() {
         updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
       };
       
-      return canReminderOccurOnDate(reminderForCheck, today, userTimezone);
-    }).length;
+      if (canReminderOccurOnDate(reminderForCheck, today, userTimezone)) {
+        counts[r.frequency] = (counts[r.frequency] || 0) + 1;
+      }
+    });
+    
+    return counts;
   }, [reminders, userTimezone]);
 
-  const remindersTomorrow = useMemo(() => {
+  const remindersTomorrowByType = useMemo(() => {
     const tomorrow = addDays(new Date(), 1);
-    return reminders.filter((r) => {
-      if (!r.active) return false;
+    const counts: Record<ReminderFrequency, number> = {
+      none: 0,
+      daily: 0,
+      hourly: 0,
+      minutely: 0,
+      once: 0,
+      weekly: 0,
+      monthly: 0,
+      yearly: 0,
+    };
+    
+    reminders.forEach((r) => {
+      if (!r.active) return;
       
       // Prepare reminder object for canReminderOccurOnDate function
       const reminderForCheck: Reminder = {
@@ -1092,9 +1118,22 @@ export default function RemindersPage() {
         updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
       };
       
-      return canReminderOccurOnDate(reminderForCheck, tomorrow, userTimezone);
-    }).length;
+      if (canReminderOccurOnDate(reminderForCheck, tomorrow, userTimezone)) {
+        counts[r.frequency] = (counts[r.frequency] || 0) + 1;
+      }
+    });
+    
+    return counts;
   }, [reminders, userTimezone]);
+
+  // Calculate total counts
+  const remindersToday = useMemo(() => {
+    return Object.values(remindersTodayByType).reduce((sum, count) => sum + count, 0);
+  }, [remindersTodayByType]);
+
+  const remindersTomorrow = useMemo(() => {
+    return Object.values(remindersTomorrowByType).reduce((sum, count) => sum + count, 0);
+  }, [remindersTomorrowByType]);
 
   // Count active and paused reminders
   const activeCount = useMemo(() => reminders.filter((r) => r.active).length, [reminders]);
@@ -1779,39 +1818,110 @@ export default function RemindersPage() {
 
         {/* Summary Cards */}
         <div className="px-4 pb-4">
-          <div className="flex gap-2">
-            <div className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#ECF7FC" }}>
+          <div className="flex flex-col gap-3">
+            {/* Today Card */}
+            <div className="relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#ECF7FC" }}>
               <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#C5EEFF", filter: 'blur(50px)' }} />
               <div className="relative flex items-start gap-2">
-                <div className="flex-1 flex flex-col gap-2">
+                <div className="flex-1 flex flex-col gap-3">
                   <div className="flex items-center justify-between w-full gap-2">
-                    <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
-                      {remindersToday}
+                    <div className="text-[24px] font-medium leading-none tracking-[-0.96px] text-black">
+                      Reminders Today: {remindersToday}
                     </div>
                     <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#F2FBFF" }}>
                       <BellRing size={16} style={{ color: "#48BBED" }} />
                     </div>
                   </div>
-                  <div className="text-[12px] font-normal tracking-[-0.48px] text-[#4C4C4C]">
-                    Reminders Today
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {remindersTodayByType.daily > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-blue-50 text-blue-700">
+                        Daily: {remindersTodayByType.daily}
+                      </span>
+                    )}
+                    {remindersTodayByType.weekly > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-green-50 text-green-700">
+                        Weekly: {remindersTodayByType.weekly}
+                      </span>
+                    )}
+                    {remindersTodayByType.monthly > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-purple-50 text-purple-700">
+                        Monthly: {remindersTodayByType.monthly}
+                      </span>
+                    )}
+                    {remindersTodayByType.yearly > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-pink-50 text-pink-700">
+                        Yearly: {remindersTodayByType.yearly}
+                      </span>
+                    )}
+                    {remindersTodayByType.once > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-gray-50 text-gray-700">
+                        Once: {remindersTodayByType.once}
+                      </span>
+                    )}
+                    {remindersTodayByType.hourly > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-orange-50 text-orange-700">
+                        Hourly: {remindersTodayByType.hourly}
+                      </span>
+                    )}
+                    {remindersTodayByType.minutely > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-yellow-50 text-yellow-700">
+                        Minutely: {remindersTodayByType.minutely}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
-            <div className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#FCF8EC" }}>
+            
+            {/* Tomorrow Card */}
+            <div className="relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#FCF8EC" }}>
               <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#FFF0C5", filter: 'blur(50px)' }} />
               <div className="relative flex items-start gap-2">
-                <div className="flex-1 flex flex-col gap-2">
+                <div className="flex-1 flex flex-col gap-3">
                   <div className="flex items-center justify-between w-full gap-2">
-                    <div className="text-[32px] font-medium leading-none tracking-[-1.28px] text-black">
-                      {remindersTomorrow}
+                    <div className="text-[24px] font-medium leading-none tracking-[-0.96px] text-black">
+                      Reminders Tomorrow: {remindersTomorrow}
                     </div>
                     <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#FFFCF2" }}>
                       <CalendarIcon size={16} style={{ color: "#E1B739" }} />
                     </div>
                   </div>
-                  <div className="text-[12px] font-normal tracking-[-0.48px] text-[#4C4C4C]">
-                    Reminders Tomorrow
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {remindersTomorrowByType.daily > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-blue-50 text-blue-700">
+                        Daily: {remindersTomorrowByType.daily}
+                      </span>
+                    )}
+                    {remindersTomorrowByType.weekly > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-green-50 text-green-700">
+                        Weekly: {remindersTomorrowByType.weekly}
+                      </span>
+                    )}
+                    {remindersTomorrowByType.monthly > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-purple-50 text-purple-700">
+                        Monthly: {remindersTomorrowByType.monthly}
+                      </span>
+                    )}
+                    {remindersTomorrowByType.yearly > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-pink-50 text-pink-700">
+                        Yearly: {remindersTomorrowByType.yearly}
+                      </span>
+                    )}
+                    {remindersTomorrowByType.once > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-gray-50 text-gray-700">
+                        Once: {remindersTomorrowByType.once}
+                      </span>
+                    )}
+                    {remindersTomorrowByType.hourly > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-orange-50 text-orange-700">
+                        Hourly: {remindersTomorrowByType.hourly}
+                      </span>
+                    )}
+                    {remindersTomorrowByType.minutely > 0 && (
+                      <span className="px-2 py-1 rounded-md bg-yellow-50 text-yellow-700">
+                        Minutely: {remindersTomorrowByType.minutely}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
