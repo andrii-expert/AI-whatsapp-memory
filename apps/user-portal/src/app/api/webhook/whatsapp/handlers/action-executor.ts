@@ -4564,8 +4564,8 @@ export class ActionExecutor {
           // IMPORTANT: Don't override if we already have a specific date filter
           if (timeFilter.includes('this week') || (timeFilter.includes('week') && !timeFilter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i))) {
           dateFilterRange = {
-            start: startOfWeek(userNow, { weekStartsOn: 0 }), // Sunday
-            end: endOfWeek(userNow, { weekStartsOn: 0 }),
+            start: startOfWeek(userNow, { weekStartsOn: 1 }), // Monday
+            end: endOfWeek(userNow, { weekStartsOn: 1 }),
           };
           } else if (monthIndexFromFilter !== -1 && !specificDate) {
           // Specific month requested (e.g., "april", "may", "october")
