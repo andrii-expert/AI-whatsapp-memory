@@ -4550,7 +4550,7 @@ export class ActionExecutor {
       // Note: userTimezone is now guaranteed to be defined (set above)
       let dateFilterRange: { start: Date; end: Date } | null = null;
       
-      if (parsed.listFilter) {
+      if (parsed.listFilter && parsed.listFilter.toLowerCase().trim() !== 'all') {
         const timeFilter = parsed.listFilter.toLowerCase().trim();
         
         // Get current date/time in user's timezone
@@ -4815,6 +4815,8 @@ export class ActionExecutor {
           
           // CRITICAL: Use exact date matching for specific dates, today, and day-of-week filters
           // This ensures we only show reminders that can occur on that exact date
+          let userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date } | null = null;
+          
           if (timeFilter === 'today' || hasSpecificDate || isDayOfWeekFilter) {
             // For specific dates, we'll filter later using calculateReminderTimeOnDate
             // For "today" and day-of-week, use the existing isReminderScheduledForDate filter
@@ -4831,7 +4833,7 @@ export class ActionExecutor {
               // Convert targetDate to user's timezone for accurate date component extraction
               const targetDateInTz = this.convertDateToUserTimezone(targetDate, userTimezone);
               const dateComponents = this.getDateComponentsInTimezone(targetDate, userTimezone);
-              const userLocalTime = {
+              userLocalTime = {
                 year: dateComponents.year,
                 month: dateComponents.month,
                 day: dateComponents.day,
@@ -4842,7 +4844,7 @@ export class ActionExecutor {
               };
 
               filteredReminders = filteredReminders.filter(reminder => {
-                const isScheduledForDate = this.isReminderScheduledForDate(reminder, userLocalTime, userTimezone);
+                const isScheduledForDate = this.isReminderScheduledForDate(reminder, userLocalTime!, userTimezone);
 
                 if (!isScheduledForDate) {
                   logger.debug({
@@ -4850,7 +4852,7 @@ export class ActionExecutor {
                     reminderTitle: reminder.title,
                     frequency: reminder.frequency,
                     active: reminder.active,
-                    targetDate: `${userLocalTime.year}-${userLocalTime.month + 1}-${userLocalTime.day}`,
+                    targetDate: `${userLocalTime!.year}-${userLocalTime!.month + 1}-${userLocalTime!.day}`,
                     reason: 'Reminder not scheduled for target date',
                   }, 'Reminder filtered out by exact date check');
                 }
@@ -4870,7 +4872,7 @@ export class ActionExecutor {
                 note: 'Specific date filter - will filter in nextTime calculation step',
                 reminderCount: filteredReminders.length,
               }, 'Skipping initial filter for specific date - will use calculateReminderTimeOnDate');
-            } else {
+            } else if (userLocalTime) {
               logger.info({
                 userId: this.userId,
                 timeFilter,
@@ -4961,6 +4963,7 @@ export class ActionExecutor {
       if (filteredReminders.length === 0) {
         // Format filter name for title - use the same logic as below
         let filterTitle = 'Reminders';
+        let specificDateFound = false; // Declare variable
         if (parsed.listFilter) {
           const filter = parsed.listFilter.toLowerCase();
           if (filter === 'today') filterTitle = "Today's Reminders";
@@ -5200,6 +5203,7 @@ export class ActionExecutor {
 
       // Format filter name for title
       let filterTitle = 'Reminders';
+      let specificDateFound = false; // Declare variable
       if (parsed.listFilter) {
         const filter = parsed.listFilter.toLowerCase();
         
@@ -5291,10 +5295,14 @@ export class ActionExecutor {
       // Message header is bold - only header and list numbers are bold
       let message = `🔔 *${filterTitle}*\n`;
       
+      // Check if we're filtering by a specific date (e.g., "27th January")
+      // This MUST be checked FIRST to ensure specific dates take precedence over month-only filters
+      const isSpecificDateFilterForDisplay = dateFilterRange && (dateFilterRange as any).isSpecificDate === true;
+      
       remindersWithNextTime.slice(0, 20).forEach(({ reminder, nextTime }, index) => {
         // CRITICAL: For specific date filters, double-check that nextTime is on the target date
         // This is a final safety check before display
-        if (isSpecificDateFilter && dateFilterRange && nextTime && nextTime.getTime() > 0) {
+        if (isSpecificDateFilterForDisplay && dateFilterRange && nextTime && nextTime.getTime() > 0) {
           const targetDate = new Date(dateFilterRange.start);
           if (!this.isSameCalendarDay(nextTime, targetDate, userTimezone!)) {
             const targetComponents = this.getDateComponentsInTimezone(targetDate, userTimezone!);
