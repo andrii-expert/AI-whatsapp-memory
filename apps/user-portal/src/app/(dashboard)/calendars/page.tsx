@@ -873,17 +873,24 @@ export default function CalendarsPage() {
   });
 
   // Query for fetching individual event data with conference information
+  // Fetch individual event details when modal is open
+  // Ensure we have a valid calendarId before making the query
+  const eventCalendarId = eventDetailsModal.event?.calendarId || 
+    (eventDetailsModal.event?.id ? 
+      allEvents.find((e: any) => e.id === eventDetailsModal.event?.id)?.calendarId : 
+      null);
+  
   const individualEventQuery = useQuery(
     trpc.calendar.getEvent.queryOptions(
-      eventDetailsModal.event?.calendarId && eventDetailsModal.event?.id ? {
-        calendarId: eventDetailsModal.event.calendarId,
+      eventCalendarId && eventDetailsModal.event?.id ? {
+        calendarId: eventCalendarId,
         eventId: eventDetailsModal.event.id,
       } : {
         calendarId: '',
         eventId: '',
       },
       {
-        enabled: eventDetailsModal.open && !!eventDetailsModal.event?.calendarId && !!eventDetailsModal.event?.id,
+        enabled: eventDetailsModal.open && !!eventCalendarId && !!eventDetailsModal.event?.id,
         staleTime: 0, // Always fetch fresh data
         refetchOnWindowFocus: false,
       }
@@ -2387,10 +2394,39 @@ export default function CalendarsPage() {
       setEditEventTime("");
     }
 
-    // Ensure event has calendarId
+    // Ensure event has calendarId - find it from the calendars list if missing
+    let calendarId = event.calendarId;
+    
+    // If calendarId is missing, try to find it from allEvents
+    if (!calendarId && event.id) {
+      const eventFromAllEvents = allEvents.find((e: any) => e.id === event.id);
+      if (eventFromAllEvents?.calendarId) {
+        calendarId = eventFromAllEvents.calendarId;
+      }
+    }
+    
+    // If still missing, try to find from active calendars
+    if (!calendarId) {
+      // Find the calendar that contains this event by checking active calendars
+      const eventCalendar = activeCalendars.find((cal: any) => {
+        // Check if this calendar has events and this event is in it
+        const calendarIndex = activeCalendars.indexOf(cal);
+        const calendarEvents = eventQueries[calendarIndex]?.data || [];
+        return calendarEvents.some((e: any) => e.id === event.id);
+      });
+      
+      if (eventCalendar) {
+        calendarId = eventCalendar.id;
+      } else if (activeCalendars.length > 0) {
+        calendarId = activeCalendars[0]?.id;
+      } else if (selectedCalendarIds.length > 0) {
+        calendarId = selectedCalendarIds[0];
+      }
+    }
+
     const eventWithCalendarId = {
       ...event,
-      calendarId: event.calendarId || selectedCalendarIds[0],
+      calendarId: calendarId || null,
     };
 
     setEventDetailsModal({
@@ -3207,16 +3243,41 @@ export default function CalendarsPage() {
                               }, 100);
                             }}
                             onDelete={() => {
-                              // Ensure we have the correct calendarId (database connection ID)
-                              const calendarId = event.calendarId;
+                              // Get calendarId from event (database connection ID)
+                              let calendarId = event.calendarId;
+                              
+                              // If calendarId is missing, try to find it from allEvents
+                              if (!calendarId && event.id) {
+                                const eventFromAllEvents = allEvents.find((e: any) => e.id === event.id);
+                                if (eventFromAllEvents?.calendarId) {
+                                  calendarId = eventFromAllEvents.calendarId;
+                                }
+                              }
+                              
+                              // If still missing, try to find from calendars list
+                              if (!calendarId) {
+                                // Find the calendar that contains this event by checking active calendars
+                                const eventCalendar = activeCalendars.find((cal: any) => {
+                                  // Check if this calendar has events and this event is in it
+                                  const calendarIndex = activeCalendars.indexOf(cal);
+                                  const calendarEvents = eventQueries[calendarIndex]?.data || [];
+                                  return calendarEvents.some((e: any) => e.id === event.id);
+                                });
+                                
+                                if (eventCalendar) {
+                                  calendarId = eventCalendar.id;
+                                }
+                              }
+                              
                               if (!calendarId) {
                                 toast({
                                   title: "Error",
-                                  description: "Could not find calendar for this event",
+                                  description: "Could not find calendar for this event. Please try refreshing the page.",
                                   variant: "error",
                                 });
                                 return;
                               }
+                              
                               setDeleteEventDialog({
                                 open: true,
                                 calendarId: calendarId,
@@ -3323,6 +3384,7 @@ export default function CalendarsPage() {
                         const timeRange = isAllDay ? "All day" : `${startTime} -${endTime}`;
                         
                         return {
+                          ...event, // Preserve all original event properties including calendarId
                           id: event.id,
                           title: event.title || "Untitled Event",
                           start: startDate,
@@ -3338,6 +3400,8 @@ export default function CalendarsPage() {
                           eventColor: event.eventColor || "blue",
                           conferenceUrl: event.conferenceUrl,
                           attendees: event.attendees || [],
+                          // Ensure calendarId is preserved from the original event
+                          calendarId: event.calendarId,
                         };
                       })
                       .sort((a: any, b: any) => a.startDate.getTime() - b.startDate.getTime())
@@ -3365,24 +3429,55 @@ export default function CalendarsPage() {
                               }, 100);
                             }}
                             onDelete={() => {
-                              // Find the calendar that contains this event
-                              const eventCalendar = calendars.find((cal: any) => 
-                                cal.id === event.calendarId || cal.calendarId === event.calendarId
-                              );
-                              if (eventCalendar) {
-                                setDeleteEventDialog({
-                                  open: true,
-                                  calendarId: eventCalendar.id,
-                                  eventId: event.id,
-                                  eventTitle: event.title,
+                              // Get calendarId from event (database connection ID)
+                              let calendarId = event.calendarId || eventDetailsModal.event?.calendarId;
+                              
+                              // If calendarId is missing, try to find it from allEvents
+                              if (!calendarId && event.id) {
+                                const eventFromAllEvents = allEvents.find((e: any) => e.id === event.id);
+                                if (eventFromAllEvents?.calendarId) {
+                                  calendarId = eventFromAllEvents.calendarId;
+                                }
+                              }
+                              
+                              // If still missing, try to find from calendars list
+                              if (!calendarId) {
+                                // Find the calendar that contains this event by checking active calendars
+                                const eventCalendar = activeCalendars.find((cal: any) => {
+                                  // Check if this calendar has events and this event is in it
+                                  const calendarIndex = activeCalendars.indexOf(cal);
+                                  const calendarEvents = eventQueries[calendarIndex]?.data || [];
+                                  return calendarEvents.some((e: any) => e.id === event.id);
                                 });
-                              } else {
+                                
+                                if (eventCalendar) {
+                                  calendarId = eventCalendar.id;
+                                } else {
+                                  // Fallback: find by matching calendar connection ID
+                                  const matchingCalendar = calendars.find((cal: any) => 
+                                    cal.id === event.calendarId
+                                  );
+                                  if (matchingCalendar) {
+                                    calendarId = matchingCalendar.id;
+                                  }
+                                }
+                              }
+                              
+                              if (!calendarId) {
                                 toast({
                                   title: "Error",
-                                  description: "Could not find calendar for this event",
+                                  description: "Could not find calendar for this event. Please try refreshing the page.",
                                   variant: "error",
                                 });
+                                return;
                               }
+                              
+                              setDeleteEventDialog({
+                                open: true,
+                                calendarId: calendarId,
+                                eventId: event.id,
+                                eventTitle: event.title,
+                              });
                             }}
                           />
                       );
