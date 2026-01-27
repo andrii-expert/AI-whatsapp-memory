@@ -4728,10 +4728,18 @@ export class ActionExecutor {
         if (!dateFilterRange && !specificDate) {
           // Check for week/month filters if no day-of-week match found
           // IMPORTANT: Don't override if we already have a specific date filter
-          if (timeFilter.includes('this week') || (timeFilter.includes('week') && !timeFilter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i))) {
+          // CRITICAL: Only match "this week", not "next week" (which is handled separately below)
+          if (timeFilter.includes('this week')) {
           dateFilterRange = {
             start: startOfWeek(userNow, { weekStartsOn: 1 }), // Monday
             end: endOfWeek(userNow, { weekStartsOn: 1 }),
+          };
+          } else if (timeFilter.includes('next week')) {
+          // Handle "next week" - calculate the week starting 7 days from the start of this week
+          const nextWeekStart = addDays(startOfWeek(userNow, { weekStartsOn: 1 }), 7);
+          dateFilterRange = {
+            start: startOfDay(nextWeekStart),
+            end: endOfDay(endOfWeek(nextWeekStart, { weekStartsOn: 1 })),
           };
           } else if (monthIndexFromFilter !== -1 && !specificDate) {
           // Specific month requested (e.g., "april", "may", "october")
@@ -4768,12 +4776,6 @@ export class ActionExecutor {
           dateFilterRange = {
             start: startOfMonth(nextMonthDate),
             end: endOfMonth(nextMonthDate),
-          };
-        } else if (timeFilter.includes('next week')) {
-          const nextWeekStart = addDays(startOfWeek(userNow, { weekStartsOn: 1 }), 7);
-          dateFilterRange = {
-            start: startOfDay(nextWeekStart),
-            end: endOfDay(endOfWeek(nextWeekStart, { weekStartsOn: 1 })),
           };
         }
 
