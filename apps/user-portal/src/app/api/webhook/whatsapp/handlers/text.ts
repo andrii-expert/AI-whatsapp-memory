@@ -6123,7 +6123,11 @@ function parseRelativeDate(dateStr: string): string {
       // Calculate days until next Monday (week starts on Monday)
       // If today is Monday (1), next Monday is in 7 days
       // Otherwise: (8 - currentDow) % 7 gives days until next Monday, or 7 if that equals 0
-      const daysUntilNextMonday = currentDayOfWeek === 1 ? 7 : ((8 - currentDayOfWeek) % 7) || 7;
+      let daysUntilNextMonday = currentDayOfWeek === 1 ? 7 : ((8 - currentDayOfWeek) % 7) || 7;
+      
+      if (currentDayOfWeek === 0 && targetDayIndex === 0) {
+        daysUntilNextMonday += 7; // Add 7 more days to get to the week after next Monday
+      }
       
       // From next Monday, find the target day
       // Monday=1, Tuesday=2, ..., Sunday=0

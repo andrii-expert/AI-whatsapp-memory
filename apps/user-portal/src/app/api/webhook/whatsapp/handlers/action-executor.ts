@@ -6382,7 +6382,12 @@ export class ActionExecutor {
             // Step 1: Find days until next Monday
             // If today is Monday (1), next Monday is in 7 days
             // Otherwise: (8 - currentDow) % 7 gives days until next Monday, or 7 if that equals 0
-            const daysUntilNextMonday = currentDow === 1 ? 7 : ((8 - currentDow) % 7) || 7;
+            let daysUntilNextMonday = currentDow === 1 ? 7 : ((8 - currentDow) % 7) || 7;
+            
+            if (currentDow === 0 && targetDow === 0) {
+              daysUntilNextMonday += 7; // Add 7 more days to get to the week after next Monday
+            }
+            
             // Step 2: From next Monday, find the target day
             // Monday=1, Tuesday=2, ..., Sunday=0
             // Offset from Monday: Monday=0, Tuesday=1, ..., Sunday=6
@@ -6418,7 +6423,15 @@ export class ActionExecutor {
           if (targetDow !== null) {
             // "next week [day]" calculation (week starts on Monday, same as timezone case above):
             // Step 1: Find days until next Monday
-            const daysUntilNextMonday = currentDow === 1 ? 7 : ((8 - currentDow) % 7) || 7;
+            let daysUntilNextMonday = currentDow === 1 ? 7 : ((8 - currentDow) % 7) || 7;
+            
+            // CRITICAL FIX: If today is Sunday (0) and we want "next week Sunday" (0),
+            // the "next Monday" is actually tomorrow (same week), so we need to add 7 more days
+            // to get to the week AFTER the upcoming Monday
+            if (currentDow === 0 && targetDow === 0) {
+              daysUntilNextMonday += 7; // Add 7 more days to get to the week after next Monday
+            }
+            
             // Step 2: From next Monday, find the target day
             // Offset from Monday: Monday=0, Tuesday=1, ..., Sunday=6
             const offsetFromMonday = targetDow === 0 ? 6 : targetDow - 1;

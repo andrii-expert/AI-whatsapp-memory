@@ -45,11 +45,16 @@ export function buildMergedWhatsappPrompt(
   // Calculate days until next Monday (week starts on Monday)
   // If today is Monday (1), next Monday is in 7 days
   // Otherwise: (8 - currentDayNumTz) % 7 gives days until next Monday
-  const daysUntilNextMonday = currentDayNumTz === 1 ? 7 : ((8 - currentDayNumTz) % 7) || 7;
+  let daysUntilNextMonday = currentDayNumTz === 1 ? 7 : ((8 - currentDayNumTz) % 7) || 7;
+  
+  if (currentDayNumTz === 0) {
+    daysUntilNextMonday += 7; // Add 7 more days to get to the week after next Monday
+  }
   
   // Calculate next week's dates
   const nextWeekDates: Record<string, string> = {};
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  // Day names ordered to match loop: i=0=Monday, i=1=Tuesday, ..., i=6=Sunday
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   
   // Helper function for ordinal suffix
   const ordinalSuffix = (day: number): string => {
