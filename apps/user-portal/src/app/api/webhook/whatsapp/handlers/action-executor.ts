@@ -5078,6 +5078,13 @@ export class ActionExecutor {
           parsed.listFilter && 
           /^(january|february|march|april|may|june|july|august|september|october|november|december)/i.test(parsed.listFilter);
         
+        // Check if we're filtering by a week range (this week, next week)
+        const isWeekRangeFilter = !isSpecificDateFilter && !isSpecificMonthFilter && dateFilterRange &&
+          parsed.listFilter && (
+            parsed.listFilter.toLowerCase().includes('this week') ||
+            parsed.listFilter.toLowerCase().includes('next week')
+          );
+        
         remindersWithNextTime = filteredReminders.map(reminder => {
           let nextTime: Date | null = null;
           
@@ -5117,11 +5124,15 @@ export class ActionExecutor {
           } else if (isSpecificMonthFilter && dateFilterRange) {
             // For specific month filters, calculate the occurrence WITHIN that month
             nextTime = this.calculateReminderTimeInRange(reminder, dateFilterRange.start, dateFilterRange.end, userTimezone);
+          } else if (isWeekRangeFilter && dateFilterRange) {
+            // For week range filters (this week, next week), calculate the occurrence WITHIN that week
+            nextTime = this.calculateReminderTimeInRange(reminder, dateFilterRange.start, dateFilterRange.end, userTimezone);
           }
           
-          // CRITICAL: For specific date filters, NEVER use fallback - if calculateReminderTimeOnDate
-          // returns null, it means the reminder doesn't occur on that date, so we must exclude it
-          if (!nextTime && !isSpecificDateFilter) {
+          // CRITICAL: For specific date filters and week range filters, NEVER use fallback
+          // If calculateReminderTimeOnDate or calculateReminderTimeInRange returns null,
+          // it means the reminder doesn't occur in that range, so we must exclude it
+          if (!nextTime && !isSpecificDateFilter && !isWeekRangeFilter) {
             nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
           }
           
@@ -5175,6 +5186,40 @@ export class ActionExecutor {
             }
             
             // For specific date filters, show all reminders that match the date (even if time has passed)
+            return true;
+          }
+          
+          // For week range filters, verify that nextTime is within the week range
+          if (isWeekRangeFilter && dateFilterRange) {
+            if (!nextTime || nextTime.getTime() === ActionExecutor.INVALID_DATE_TIME) {
+              logger.debug({
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                reason: 'No nextTime calculated for week range filter',
+              }, 'Reminder filtered out - no nextTime for week range');
+              return false;
+            }
+            
+            // Verify that nextTime is within the week range
+            const rangeStart = dateFilterRange.start.getTime();
+            const rangeEnd = dateFilterRange.end.getTime();
+            const nextTimeMs = nextTime.getTime();
+            
+            if (nextTimeMs < rangeStart || nextTimeMs > rangeEnd) {
+              logger.debug({
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                rangeStart: dateFilterRange.start.toISOString(),
+                rangeEnd: dateFilterRange.end.toISOString(),
+                nextTime: nextTime.toISOString(),
+                reason: 'nextTime is outside week range',
+              }, 'Reminder filtered out - nextTime outside week range');
+              return false;
+            }
+            
+            // For week range filters, show all reminders that occur within the week
             return true;
           }
           
@@ -5818,6 +5863,48 @@ export class ActionExecutor {
             const targetInTz = new Date(targetStr);
             if (targetInTz >= startInTz && targetInTz <= endInTz) {
               return targetInTz;
+            }
+          }
+          // Handle daysFromNow for once reminders
+          if (reminder.daysFromNow !== null && reminder.daysFromNow !== undefined) {
+            const now = new Date();
+            const nowStr = now.toLocaleString("en-US", { timeZone: timezone });
+            const nowInTz = new Date(nowStr);
+            const targetDate = new Date(nowInTz);
+            targetDate.setDate(targetDate.getDate() + reminder.daysFromNow);
+            targetDate.setHours(hours, minutes, 0, 0);
+            
+            if (targetDate >= startInTz && targetDate <= endInTz) {
+              return targetDate;
+            }
+          }
+          // Handle month+day for once reminders (like birthdays)
+          if (reminder.dayOfMonth && reminder.month) {
+            const reminderMonth = reminder.month; // 1-based
+            const reminderDay = reminder.dayOfMonth;
+            
+            // Check if the reminder month/day falls within the range
+            // We need to check all years in the range
+            for (let year = startYear; year <= endYear; year++) {
+              // Check if reminder month is within range
+              if (year === startYear && reminderMonth < startMonth) continue;
+              if (year === endYear && reminderMonth > endMonth) continue;
+              
+              // Check if reminder day is within range for the start/end months
+              if (year === startYear && reminderMonth === startMonth && reminderDay < startDay) continue;
+              if (year === endYear && reminderMonth === endMonth && reminderDay > endDay) continue;
+              
+              // Create the date
+              const lastDayOfMonth = new Date(year, reminderMonth, 0).getDate();
+              const targetDay = Math.min(reminderDay, lastDayOfMonth);
+              const dateStr = `${year}-${String(reminderMonth).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+              const tempDate = new Date(dateStr);
+              const targetStr = tempDate.toLocaleString("en-US", { timeZone: timezone });
+              const targetInTz = new Date(targetStr);
+              
+              if (targetInTz >= startInTz && targetInTz <= endInTz) {
+                return targetInTz;
+              }
             }
           }
           return null;
