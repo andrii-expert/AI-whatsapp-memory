@@ -36,14 +36,16 @@ export function buildMergedWhatsappPrompt(
   const timezone = options?.timezone ?? DEFAULT_TIMEZONE;
   const currentLabel = formatDateToLocalLabel(currentDate, timezone);
   
-  // Calculate next week dates (Sunday through Saturday) in user's timezone
+  // Calculate next week dates (Monday through Sunday) in user's timezone
   // Get current day of week in user's timezone by creating a date string and parsing it
   const currentDateStr = currentDate.toLocaleDateString('en-US', { timeZone: timezone });
   const currentDateInTz = new Date(currentDateStr + ' ' + currentDate.toLocaleTimeString('en-US', { timeZone: timezone }));
-  const currentDayNumTz = currentDateInTz.getDay(); // 0 = Sunday, 6 = Saturday
+  const currentDayNumTz = currentDateInTz.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   
-  // Calculate days until next Sunday
-  const daysUntilNextSunday = currentDayNumTz === 0 ? 7 : (7 - currentDayNumTz);
+  // Calculate days until next Monday (week starts on Monday)
+  // If today is Monday (1), next Monday is in 7 days
+  // Otherwise: (8 - currentDayNumTz) % 7 gives days until next Monday
+  const daysUntilNextMonday = currentDayNumTz === 1 ? 7 : ((8 - currentDayNumTz) % 7) || 7;
   
   // Calculate next week's dates
   const nextWeekDates: Record<string, string> = {};
@@ -61,9 +63,10 @@ export function buildMergedWhatsappPrompt(
   };
   
   for (let i = 0; i < 7; i++) {
-    // Calculate target date: current date + days until next Sunday + day offset
+    // Calculate target date: current date + days until next Monday + day offset
+    // Day offset: 0=Monday, 1=Tuesday, ..., 6=Sunday
     const targetDate = new Date(currentDate);
-    targetDate.setDate(currentDate.getDate() + daysUntilNextSunday + i);
+    targetDate.setDate(currentDate.getDate() + daysUntilNextMonday + i);
     
     // Format date in user's timezone
     const day = parseInt(targetDate.toLocaleDateString('en-US', { day: 'numeric', timeZone: timezone }));
@@ -210,15 +213,15 @@ export function buildMergedWhatsappPrompt(
     "  Step 1: Identify today's day of week",
     "    → Saturday = 6 (Sunday=0, Monday=1, Tuesday=2, Wednesday=3, Thursday=4, Friday=5, Saturday=6)",
     "",
-    "  Step 2: Calculate days until next Sunday",
-    "    → Formula: If today is Sunday (0), next Sunday is in 7 days",
-    "    → Formula: If today is NOT Sunday, next Sunday is in (7 - currentDay) days",
-    "    → Saturday (6): next Sunday = 7 - 6 = 1 day (tomorrow = 25 January)",
+    "  Step 2: Calculate days until next Monday (week starts on Monday)",
+    "    → Formula: If today is Monday (1), next Monday is in 7 days",
+    "    → Formula: If today is NOT Monday, next Monday is in ((8 - currentDay) % 7) days, or 7 if that equals 0",
+    "    → Saturday (6): next Monday = (8 - 6) % 7 = 2 days (Monday = 26 January)",
     "",
     "  Step 3: Calculate the target day in next week",
     "    → Tuesday = 2 (Sunday=0, Monday=1, Tuesday=2)",
-    "    → From next Sunday (25 January), add 2 days for Tuesday",
-    "    → 25 January + 2 days = 27 January",
+    "    → From next Monday (26 January), add 1 day for Tuesday",
+    "    → 26 January + 1 day = 27 January",
     "",
     "  Step 4: Final answer",
     "    → Next week Tuesday = 27 January 2026",
@@ -226,7 +229,7 @@ export function buildMergedWhatsappPrompt(
     "⚠️ COMMON MISTAKES TO AVOID:",
     "  ❌ WRONG: Adding 7 days to today (24 + 7 = 31 January) - This is INCORRECT!",
     "  ❌ WRONG: Finding next Tuesday from today (24 + 5 = 29 January) - This is also INCORRECT!",
-    "  ✅ CORRECT: Find next Sunday (25 Jan), then add target day number (2) = 27 January",
+    "  ✅ CORRECT: Find next Monday (26 Jan), then add target day offset (Tuesday = +1 day) = 27 January",
     "",
     "",
     "",
@@ -236,22 +239,23 @@ export function buildMergedWhatsappPrompt(
     "   • \"today\" → Use the exact date from current date context (same day, month, year)",
     "   • \"tomorrow\" → Add 1 day to the current date",
     "   • \"next week [day name]\" (e.g., \"next week Tuesday\", \"next week Monday\") → Find the [day] of NEXT WEEK",
-    "     - ⚠️ CRITICAL CALCULATION: Next week starts on the NEXT Sunday (if today is Sunday, next week starts next Sunday)",
-    "     - Step 1: Find days until next Sunday",
-    "       • If today is Sunday (0): next Sunday is in 7 days",
-    "       • If today is Monday (1): next Sunday is in 6 days",
-    "       • If today is Tuesday (2): next Sunday is in 5 days",
-    "       • If today is Wednesday (3): next Sunday is in 4 days",
-    "       • If today is Thursday (4): next Sunday is in 3 days",
-    "       • If today is Friday (5): next Sunday is in 2 days",
-    "       • If today is Saturday (6): next Sunday is in 1 day (tomorrow)",
-    "     - Step 2: From that next Sunday, find the target [day] in that week",
-    "       • Sunday = 0, Monday = 1, Tuesday = 2, Wednesday = 3, Thursday = 4, Friday = 5, Saturday = 6",
-    "       • Days to add = days until next Sunday + target day number",
+    "     - ⚠️ CRITICAL CALCULATION: Next week starts on the NEXT Monday (if today is Monday, next week starts next Monday)",
+    "     - Step 1: Find days until next Monday",
+    "       • If today is Monday (1): next Monday is in 7 days",
+    "       • If today is Tuesday (2): next Monday is in 6 days",
+    "       • If today is Wednesday (3): next Monday is in 5 days",
+    "       • If today is Thursday (4): next Monday is in 4 days",
+    "       • If today is Friday (5): next Monday is in 3 days",
+    "       • If today is Saturday (6): next Monday is in 2 days",
+    "       • If today is Sunday (0): next Monday is in 1 day (tomorrow)",
+    "     - Step 2: From that next Monday, find the target [day] in that week",
+    "       • Monday = 1, Tuesday = 2, Wednesday = 3, Thursday = 4, Friday = 5, Saturday = 6, Sunday = 0",
+    "       • Days to add = days until next Monday + (target day number - 1)",
+    "       • For Monday: add 0 days, Tuesday: add 1 day, Wednesday: add 2 days, etc.",
     "     - Examples:",
-    "       • Today is Saturday, 24 January → Next Sunday is 25 January (1 day) → Next week Tuesday = 25 + 2 = 27 January",
-    "       • Today is Wednesday, 22 January → Next Sunday is 26 January (4 days) → Next week Tuesday = 26 + 2 = 28 January",
-    "       • Today is Monday, 20 January → Next Sunday is 26 January (6 days) → Next week Tuesday = 26 + 2 = 28 January",
+    "       • Today is Saturday, 24 January → Next Monday is 26 January (2 days) → Next week Tuesday = 26 + 1 = 27 January",
+    "       • Today is Wednesday, 22 January → Next Monday is 27 January (5 days) → Next week Tuesday = 27 + 1 = 28 January",
+    "       • Today is Monday, 20 January → Next Monday is 27 January (7 days) → Next week Tuesday = 27 + 1 = 28 January",
     "   • \"next [day name]\" (e.g., \"next Monday\", \"next Friday\") → Find the NEXT occurrence of that day AFTER today",
     "     - If today is Monday and user says \"next Monday\", that means the Monday in 7 days (not today)",
     "     - If today is Wednesday and user says \"next Monday\", that means the Monday in 5 days",
@@ -290,12 +294,12 @@ export function buildMergedWhatsappPrompt(
     "4. DAY OF WEEK CALCULATIONS:",
     "   • Use the current weekday from the date context to calculate relative days",
     "   • Day names: Sunday=0, Monday=1, Tuesday=2, Wednesday=3, Thursday=4, Friday=5, Saturday=6",
-    "   • To find \"next week [day]\":",
-    "     - Step 1: Find next Sunday (if today is Sunday, next Sunday is in 7 days; otherwise calculate days until next Sunday)",
-    "     - Step 2: From that next Sunday, find the [day] in that week (Sunday + targetDay)",
+    "   • To find \"next week [day]\" (week starts on Monday):",
+    "     - Step 1: Find next Monday (if today is Monday, next Monday is in 7 days; otherwise calculate days until next Monday)",
+    "     - Step 2: From that next Monday, find the [day] in that week (Monday + (targetDay - 1))",
     "     - Example: Today is Saturday (6), next week Tuesday (2):",
-    "       → Days until next Sunday: (0 - 6 + 7) % 7 = 1 day → Next Sunday is tomorrow",
-    "       → Next week Tuesday = Next Sunday + 2 days = 3 days from today",
+    "       → Days until next Monday: (8 - 6) % 7 = 2 days → Next Monday is in 2 days",
+    "       → Next week Tuesday = Next Monday + 1 day = 3 days from today",
     "   • To find \"next [day]\" (without \"week\"):",
     "     - Calculate days until that day: (targetDay - currentDay + 7) % 7",
     "     - If result is 0, it means today (use 7 for \"next\" occurrence)",
@@ -305,14 +309,14 @@ export function buildMergedWhatsappPrompt(
     `   Assuming current date/time: ${currentLabel}`,
     "   • \"tomorrow\" → Calculate: current date + 1 day",
     "   • \"next week Tuesday\" → Find Tuesday of next week",
-    "     - Step 1: Find next Sunday",
-    "       • If today is Saturday (6): next Sunday is tomorrow (1 day) = 25 Jan",
-    "       • If today is Wednesday (3): next Sunday is in 4 days = 26 Jan",
-    "     - Step 2: From next Sunday, add 2 days for Tuesday (Sunday=0, Monday=1, Tuesday=2)",
-    "       • If today is Saturday, 24 Jan: Next Sunday (25 Jan) + 2 = 27 Jan",
-    "       • If today is Wednesday, 22 Jan: Next Sunday (26 Jan) + 2 = 28 Jan",
+    "     - Step 1: Find next Monday (week starts on Monday)",
+    "       • If today is Saturday (6): next Monday is in 2 days = 26 Jan",
+    "       • If today is Wednesday (3): next Monday is in 5 days = 27 Jan",
+    "     - Step 2: From next Monday, add 1 day for Tuesday (Monday=1, Tuesday=2, so offset is 1)",
+    "       • If today is Saturday, 24 Jan: Next Monday (26 Jan) + 1 = 27 Jan",
+    "       • If today is Wednesday, 22 Jan: Next Monday (27 Jan) + 1 = 28 Jan",
     "     - ⚠️ NEVER calculate as: current day + 7 + days to Tuesday (this is WRONG!)",
-    "     - ⚠️ ALWAYS calculate as: days to next Sunday + target day number",
+    "     - ⚠️ ALWAYS calculate as: days to next Monday + (target day number - 1)",
     "   • \"next Monday\" → Find Monday that comes after today (not necessarily next week's Monday)",
     "   • \"Friday\" → Find the next Friday from today",
     "   • \"in 3 hours\" → Current time + 3 hours",
@@ -507,19 +511,19 @@ export function buildMergedWhatsappPrompt(
     `      → Use Title: Normal and provide the current date/time from the context above`,
     `    • If user asks about a future date (e.g., \"what is next week Tuesday\", \"when is next Monday\"),`,
     `      → Use Title: Normal and calculate the date based on current date using the calculation rules above`,
-    `      → ⚠️ CRITICAL: For \"next week [day]\", you MUST calculate correctly:`,
-    `        1. Find days until next Sunday (if today is Saturday, next Sunday is tomorrow = 1 day)`,
-    `        2. Add the target day number (Sunday=0, Monday=1, Tuesday=2, etc.)`,
+    `      → ⚠️ CRITICAL: For \"next week [day]\", you MUST calculate correctly (week starts on Monday):`,
+    `        1. Find days until next Monday (if today is Sunday, next Monday is tomorrow = 1 day; if today is Saturday, next Monday is in 2 days)`,
+    `        2. Add the target day offset (Monday=0, Tuesday=1, Wednesday=2, etc., which is targetDay - 1)`,
     `        3. Add this total to today's date`,
-    `      → Example: Today is Saturday, 24 January → Next Sunday is 25 January (1 day) → Next week Tuesday = 25 + 2 = 27 January`,
+    `      → Example: Today is Saturday, 24 January → Next Monday is 26 January (2 days) → Next week Tuesday = 26 + 1 = 27 January`,
     `    • Examples:`,
     `      - \"what is today\" → Title: Normal\nToday is ${currentLabel}`,
     `      - \"what day is it\" → Title: Normal\nToday is ${currentLabel}`,
     `      - \"what's the date\" → Title: Normal\nThe current date is ${currentLabel}`,
     `      - \"what time is it\" → Title: Normal\nThe current time is ${currentLabel}`,
-    `      - \"what is next week Tuesday\" → Title: Normal\nNext week Tuesday will be on [calculate correctly: next Sunday + 2 days]`,
-    `        • If today is Saturday, 24 Jan: Next Sunday (25 Jan) + 2 = 27 January 2026`,
-    `        • If today is Wednesday, 22 Jan: Next Sunday (26 Jan) + 2 = 28 January 2026`,
+    `      - \"what is next week Tuesday\" → Title: Normal\nNext week Tuesday will be on [calculate correctly: next Monday + 1 day]`,
+    `        • If today is Saturday, 24 Jan: Next Monday (26 Jan) + 1 = 27 January 2026`,
+    `        • If today is Wednesday, 22 Jan: Next Monday (27 Jan) + 1 = 28 January 2026`,
     `      - \"when is next Monday\" → Title: Normal\nNext Monday will be on [calculate: next Monday from today]`,
     "  Output: Title: Normal\n{natural conversational response}",
     "  Examples:",

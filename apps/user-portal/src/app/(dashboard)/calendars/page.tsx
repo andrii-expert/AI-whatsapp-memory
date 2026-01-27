@@ -2624,7 +2624,7 @@ export default function CalendarsPage() {
   };
 
   const getEventsForWeek = (weekStart: Date) => {
-    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
     return processedEvents.filter(event => {
       const eventStart = event.start;
       const eventEnd = event.end;
@@ -2638,16 +2638,21 @@ export default function CalendarsPage() {
   const monthEnd = endOfMonth(currentMonth);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Get first day of week for the month
-  const firstDayOfWeek = monthStart.getDay();
+  // Get first day of week for the month (week starts on Monday)
+  // getDay() returns 0=Sunday, 1=Monday, ..., 6=Saturday
+  // For Monday-start week: Sunday(0) needs 6 days before, Monday(1) needs 0, Tuesday(2) needs 1, etc.
+  const firstDayOfWeekRaw = monthStart.getDay();
+  const firstDayOfWeek = firstDayOfWeekRaw === 0 ? 6 : firstDayOfWeekRaw - 1; // Convert to Monday=0, Sunday=6
   const daysBeforeMonth = Array.from({ length: firstDayOfWeek }, (_, i) => {
     const date = new Date(monthStart);
     date.setDate(date.getDate() - firstDayOfWeek + i);
     return date;
   });
 
-  // Get days after month to fill the grid
-  const lastDayOfWeek = monthEnd.getDay();
+  // Get days after month to fill the grid (week ends on Sunday)
+  // For Monday-start week: if month ends on Sunday(0), we need 6 more days; if Saturday(6), we need 0
+  const lastDayOfWeekRaw = monthEnd.getDay();
+  const lastDayOfWeek = lastDayOfWeekRaw === 0 ? 6 : lastDayOfWeekRaw - 1; // Convert to Monday=0, Sunday=6
   const daysAfterMonth = Array.from({ length: 6 - lastDayOfWeek }, (_, i) => {
     const date = new Date(monthEnd);
     date.setDate(date.getDate() + i + 1);

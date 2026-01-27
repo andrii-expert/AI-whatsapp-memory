@@ -7,6 +7,7 @@ import { createCalendarProvider } from '@imaginecalendar/calendar-integrations/f
 import type { Contact, CalendarProvider } from '@imaginecalendar/calendar-integrations/types';
 import type { ICalendarService, CalendarIntent } from '@imaginecalendar/ai-services';
 import { logger } from '@imaginecalendar/logger';
+import { startOfWeek, endOfWeek } from 'date-fns';
 
 export interface CalendarEvent {
   id: string;
@@ -1913,13 +1914,9 @@ export class CalendarService implements ICalendarService {
             timeMax.setHours(23, 59, 59, 999);
             break;
           case 'this_week':
-            // Start from today (the day requested) + 6 more days = 7 days total (one full week)
-            timeMin = new Date(now);
-            timeMin.setHours(0, 0, 0, 0);
-            // End is 6 days after today (7 days total including today)
-            timeMax = new Date(now);
-            timeMax.setDate(now.getDate() + 6);
-            timeMax.setHours(23, 59, 59, 999);
+            // Week starts on Monday and ends on Sunday
+            timeMin = startOfWeek(now, { weekStartsOn: 1 }); // Monday
+            timeMax = endOfWeek(now, { weekStartsOn: 1 }); // Sunday
             break;
           case 'this_month':
             // Start of current month
