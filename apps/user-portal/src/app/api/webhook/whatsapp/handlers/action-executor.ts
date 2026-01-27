@@ -4604,10 +4604,10 @@ export class ActionExecutor {
             end: endOfMonth(nextMonthDate),
           };
         } else if (timeFilter.includes('next week')) {
-          const nextWeekStart = addDays(startOfWeek(userNow, { weekStartsOn: 0 }), 7);
+          const nextWeekStart = addDays(startOfWeek(userNow, { weekStartsOn: 1 }), 7);
           dateFilterRange = {
             start: startOfDay(nextWeekStart),
-            end: endOfDay(endOfWeek(nextWeekStart, { weekStartsOn: 0 })),
+            end: endOfDay(endOfWeek(nextWeekStart, { weekStartsOn: 1 })),
           };
         }
 
@@ -6355,8 +6355,8 @@ export class ActionExecutor {
         result.frequency = 'once';
       } else if (scheduleLower.includes('next week')) {
         // Handle "next week" optionally with a weekday (e.g., "next week Thursday", "Tuesday next week")
-        // CRITICAL: "next week [day]" means the [day] of next week (starting from next Sunday)
-        // Calculation: Find next Sunday, then find [day] in that week
+        // CRITICAL: "next week [day]" means the [day] of next week (week starts on Monday, ends on Sunday)
+        // Calculation: Find next Monday, then find [day] in that week
         
         // Check for weekday - can be before or after "next week" (e.g., "Tuesday next week" or "next week Tuesday")
         const weekdayMatch = scheduleLower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
@@ -6373,16 +6373,21 @@ export class ActionExecutor {
         if (timezone) {
           const currentTime = this.getCurrentTimeInTimezone(timezone);
           const currentDate = new Date(currentTime.year, currentTime.month, currentTime.day);
-          const currentDow = currentDate.getDay(); // 0 = Sunday, 6 = Saturday
+          const currentDow = currentDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
           
           let daysToAdd: number;
 
           if (targetDow !== null) {
-            // "next week [day]" calculation:
-            // Step 1: Find days until next Sunday (0 = Sunday, so if today is Sunday, next Sunday is in 7 days)
-            const daysUntilNextSunday = currentDow === 0 ? 7 : (7 - currentDow);
-            // Step 2: From next Sunday, find the target day (Sunday = 0, so targetDow is the offset)
-            daysToAdd = daysUntilNextSunday + targetDow;
+            // "next week [day]" calculation (week starts on Monday):
+            // Step 1: Find days until next Monday
+            // If today is Monday (1), next Monday is in 7 days
+            // Otherwise: (8 - currentDow) % 7 gives days until next Monday, or 7 if that equals 0
+            const daysUntilNextMonday = currentDow === 1 ? 7 : ((8 - currentDow) % 7) || 7;
+            // Step 2: From next Monday, find the target day
+            // Monday=1, Tuesday=2, ..., Sunday=0
+            // Offset from Monday: Monday=0, Tuesday=1, ..., Sunday=6
+            const offsetFromMonday = targetDow === 0 ? 6 : targetDow - 1;
+            daysToAdd = daysUntilNextMonday + offsetFromMonday;
           } else {
             // Just "next week" without a specific day - use 7 days (next week same day)
             daysToAdd = 7;
