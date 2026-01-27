@@ -2986,7 +2986,7 @@ export default function CalendarsPage() {
               <div className="bg-white rounded-lg overflow-hidden">
                 {/* Weekday Headers */}
                 <div className="grid grid-cols-7 border-b border-gray-200">
-                  {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map(
+                  {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map(
                     (day) => (
                       <div
                         key={day}
@@ -3562,6 +3562,7 @@ export default function CalendarsPage() {
                         }
                       }}
                       initialFocus
+                      weekStartsOn={1}
                     />
                   </PopoverContent>
                 </Popover>
