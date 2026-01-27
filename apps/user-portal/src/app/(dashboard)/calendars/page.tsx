@@ -849,6 +849,17 @@ export default function CalendarsPage() {
     calendarName: null,
     calendarIdsToDisconnect: undefined,
   });
+  const [deleteEventDialog, setDeleteEventDialog] = useState<{
+    open: boolean;
+    calendarId: string | null;
+    eventId: string | null;
+    eventTitle: string | null;
+  }>({
+    open: false,
+    calendarId: null,
+    eventId: null,
+    eventTitle: null,
+  });
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
   const [eventDetailsModal, setEventDetailsModal] = useState<{
     open: boolean;
@@ -2408,6 +2419,19 @@ export default function CalendarsPage() {
       { calendarId, eventId },
       {
         onSuccess: () => {
+          // Close the delete dialog
+          setDeleteEventDialog({
+            open: false,
+            calendarId: null,
+            eventId: null,
+            eventTitle: null,
+          });
+          // Close event details modal if open
+          setEventDetailsModal({
+            open: false,
+            event: null,
+            isEditing: false,
+          });
           // Refetch events for all calendars
           eventQueries.forEach((query) => query.refetch());
           toast({
@@ -2425,6 +2449,12 @@ export default function CalendarsPage() {
         },
       }
     );
+  };
+
+  const confirmDeleteEvent = () => {
+    if (deleteEventDialog.calendarId && deleteEventDialog.eventId) {
+      handleDeleteEvent(deleteEventDialog.calendarId, deleteEventDialog.eventId);
+    }
   };
 
   const handleEditEvent = () => {
@@ -3191,9 +3221,12 @@ export default function CalendarsPage() {
                               }, 100);
                             }}
                             onDelete={() => {
-                              if (confirm(`Are you sure you want to delete "${event.title}"?`)) {
-                                handleDeleteEvent(event.calendarId, event.id);
-                              }
+                              setDeleteEventDialog({
+                                open: true,
+                                calendarId: event.calendarId,
+                                eventId: event.id,
+                                eventTitle: event.title,
+                              });
                             }}
                           />
                         );
@@ -3336,23 +3369,23 @@ export default function CalendarsPage() {
                               }, 100);
                             }}
                             onDelete={() => {
-                              if (confirm("Are you sure you want to delete this event?")) {
-                                // Find the calendar that contains this event
-                                const eventCalendar = calendars.find((cal: any) => 
-                                  cal.id === event.calendarId || cal.calendarId === event.calendarId
-                                );
-                                if (eventCalendar) {
-                                  deleteEventMutation.mutate({
-                                    calendarId: eventCalendar.id,
-                                    eventId: event.id,
-                                  });
-                                } else {
-                                  toast({
-                                    title: "Error",
-                                    description: "Could not find calendar for this event",
-                                    variant: "error",
-                                  });
-                                }
+                              // Find the calendar that contains this event
+                              const eventCalendar = calendars.find((cal: any) => 
+                                cal.id === event.calendarId || cal.calendarId === event.calendarId
+                              );
+                              if (eventCalendar) {
+                                setDeleteEventDialog({
+                                  open: true,
+                                  calendarId: eventCalendar.id,
+                                  eventId: event.id,
+                                  eventTitle: event.title,
+                                });
+                              } else {
+                                toast({
+                                  title: "Error",
+                                  description: "Could not find calendar for this event",
+                                  variant: "error",
+                                });
                               }
                             }}
                           />
@@ -4132,6 +4165,64 @@ export default function CalendarsPage() {
                 </>
               ) : (
                 "Disconnect"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Event Confirmation Dialog */}
+      <AlertDialog
+        open={deleteEventDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteEventDialog({
+              open: false,
+              calendarId: null,
+              eventId: null,
+              eventTitle: null,
+            });
+          }
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-[425px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-lg">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              Delete Event
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base pt-2">
+              Are you sure you want to delete{" "}
+              <strong className="font-semibold text-gray-900">
+                {deleteEventDialog.eventTitle || "this event"}
+              </strong>
+              ? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel 
+              disabled={deleteEventMutation.isPending}
+              className="sm:mr-2"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteEvent}
+              disabled={deleteEventMutation.isPending}
+              className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleteEventMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Event
+                </>
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
