@@ -20,6 +20,7 @@ import {
   deleteReminder,
   toggleReminderActive,
   getReminderById,
+  getUserPreferences,
   type CreateReminderInput,
   type UpdateReminderInput,
   type ReminderFrequency,
@@ -2080,11 +2081,11 @@ export class ActionExecutor {
         // Share with all resolved users
         const sharePromises = sharedWithUserIds.map(userId =>
           createFileShare(this.db, {
-            resourceType: 'file_folder',
-            resourceId: fileFolderId,
-            ownerId: this.userId,
+          resourceType: 'file_folder',
+          resourceId: fileFolderId,
+          ownerId: this.userId,
             sharedWithUserId: userId,
-            permission: sharePermission,
+          permission: sharePermission,
           })
         );
         await Promise.all(sharePromises);
@@ -2145,11 +2146,11 @@ export class ActionExecutor {
         // Share with all resolved users
         const sharePromises = sharedWithUserIds.map(userId =>
           createFileShare(this.db, {
-            resourceType: 'file_folder',
-            resourceId: fileFolderId,
-            ownerId: this.userId,
+          resourceType: 'file_folder',
+          resourceId: fileFolderId,
+          ownerId: this.userId,
             sharedWithUserId: userId,
-            permission: sharePermission,
+          permission: sharePermission,
           })
         );
         await Promise.all(sharePromises);
@@ -2215,11 +2216,11 @@ export class ActionExecutor {
       // Share with all resolved users
       const sharePromises = sharedWithUserIds.map(userId =>
         createTaskShare(this.db, {
-          resourceType: 'task_folder',
-          resourceId: folderId,
-          ownerId: this.userId,
+        resourceType: 'task_folder',
+        resourceId: folderId,
+        ownerId: this.userId,
           sharedWithUserId: userId,
-          permission: sharePermission,
+        permission: sharePermission,
         })
       );
       await Promise.all(sharePromises);
@@ -2361,11 +2362,11 @@ export class ActionExecutor {
       // Share with all resolved users
       const sharePromises = sharedWithUserIds.map(userId =>
         createTaskShare(this.db, {
-          resourceType: 'shopping_list_folder',
-          resourceId: folderId,
-          ownerId: this.userId,
+        resourceType: 'shopping_list_folder',
+        resourceId: folderId,
+        ownerId: this.userId,
           sharedWithUserId: userId,
-          permission: sharePermission,
+        permission: sharePermission,
         })
       );
       await Promise.all(sharePromises);
@@ -2523,11 +2524,11 @@ export class ActionExecutor {
       // Share with all resolved users
       const sharePromises = sharedWithUserIds.map(userId =>
         createTaskShare(this.db, {
-          resourceType: 'task',
-          resourceId: task.id,
-          ownerId: this.userId,
+        resourceType: 'task',
+        resourceId: task.id,
+        ownerId: this.userId,
           sharedWithUserId: userId,
-          permission: sharePermission,
+        permission: sharePermission,
         })
       );
       await Promise.all(sharePromises);
@@ -3599,11 +3600,11 @@ export class ActionExecutor {
       // Share with all resolved users
       const sharePromises = sharedWithUserIds.map(userId =>
         createFileShare(this.db, {
-          resourceType: 'file',
-          resourceId: file.id,
-          ownerId: this.userId,
+        resourceType: 'file',
+        resourceId: file.id,
+        ownerId: this.userId,
           sharedWithUserId: userId,
-          permission: sharePermission,
+        permission: sharePermission,
         })
       );
       await Promise.all(sharePromises);
@@ -4134,25 +4135,25 @@ export class ActionExecutor {
     timezone?: string
   ): boolean {
     try {
-      // Get date components for start and end dates in user's timezone
-      let startInTz: Date;
-      let endInTz: Date;
-      if (timezone) {
-        const startStr = startDate.toLocaleString("en-US", { timeZone: timezone });
-        const endStr = endDate.toLocaleString("en-US", { timeZone: timezone });
-        startInTz = new Date(startStr);
-        endInTz = new Date(endStr);
-      } else {
-        startInTz = new Date(startDate);
-        endInTz = new Date(endDate);
-      }
+    // Get date components for start and end dates in user's timezone
+    let startInTz: Date;
+    let endInTz: Date;
+    if (timezone) {
+      const startStr = startDate.toLocaleString("en-US", { timeZone: timezone });
+      const endStr = endDate.toLocaleString("en-US", { timeZone: timezone });
+      startInTz = new Date(startStr);
+      endInTz = new Date(endStr);
+    } else {
+      startInTz = new Date(startDate);
+      endInTz = new Date(endDate);
+    }
     
-      const startYear = startInTz.getFullYear();
-      const startMonth = startInTz.getMonth() + 1;
-      const startDay = startInTz.getDate();
-      const endYear = endInTz.getFullYear();
-      const endMonth = endInTz.getMonth() + 1;
-      const endDay = endInTz.getDate();
+    const startYear = startInTz.getFullYear();
+    const startMonth = startInTz.getMonth() + 1;
+    const startDay = startInTz.getDate();
+    const endYear = endInTz.getFullYear();
+    const endMonth = endInTz.getMonth() + 1;
+    const endDay = endInTz.getDate();
     
     switch (reminder.frequency) {
       case "daily":
@@ -4239,9 +4240,9 @@ export class ActionExecutor {
           
           for (let month = monthStart; month <= monthEnd; month++) {
             // Check if the reminder day in this month falls within the range
-            const lastDayOfMonth = new Date(year, month, 0).getDate();
-            const targetDay = Math.min(reminderDay, lastDayOfMonth);
-            
+          const lastDayOfMonth = new Date(year, month, 0).getDate();
+          const targetDay = Math.min(reminderDay, lastDayOfMonth);
+          
             // Create target date and convert to user's timezone for comparison
             const targetDateLocal = new Date(year, month - 1, targetDay);
             targetDateLocal.setHours(0, 0, 0, 0);
@@ -4258,8 +4259,8 @@ export class ActionExecutor {
             
             // Check if this month's target day is within the range
             if (targetDateInTz >= startInTz && targetDateInTz <= endInTz) {
-              return true;
-            }
+            return true;
+          }
           }
         }
         return false;
@@ -4302,7 +4303,7 @@ export class ActionExecutor {
     }
     } catch (error) {
       logger.error({ error, reminderId: reminder.id, userId: this.userId }, 'Error in canReminderOccurInRange');
-      return false;
+        return false;
     }
   }
 
@@ -4562,10 +4563,10 @@ export class ActionExecutor {
           // Check for week/month filters if no day-of-week match found
           // IMPORTANT: Don't override if we already have a specific date filter
           if (timeFilter.includes('this week') || (timeFilter.includes('week') && !timeFilter.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i))) {
-            dateFilterRange = {
-              start: startOfWeek(userNow, { weekStartsOn: 1 }), // Monday
-              end: endOfWeek(userNow, { weekStartsOn: 1 }),
-            };
+          dateFilterRange = {
+            start: startOfWeek(userNow, { weekStartsOn: 0 }), // Sunday
+            end: endOfWeek(userNow, { weekStartsOn: 0 }),
+          };
           } else if (monthIndexFromFilter !== -1 && !specificDate) {
           // Specific month requested (e.g., "april", "may", "october")
           // IMPORTANT: Only do this if we don't have a specific date (e.g., "27th January" should not trigger this)
@@ -4659,7 +4660,7 @@ export class ActionExecutor {
               // Use the start of the date range (which is the target day)
               targetDate = new Date(dateFilterRange.start);
             } else {
-              const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
+            const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
               targetDate = new Date(userTimeString);
             }
             
@@ -5291,23 +5292,23 @@ export class ActionExecutor {
 
         default:
           // For unknown frequencies, fall back to calculating next occurrence
-          const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
-          if (!nextTime) {
-            return false;
-          }
+      const nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+      if (!nextTime) {
+        return false;
+      }
 
-          // Convert next occurrence to user's timezone for comparison
-          const nextTimeFormatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: userTimezone,
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-          });
-          
-          const nextTimeParts = nextTimeFormatter.formatToParts(nextTime);
-          const nextYear = parseInt(nextTimeParts.find(p => p.type === 'year')?.value || '0', 10);
+      // Convert next occurrence to user's timezone for comparison
+      const nextTimeFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: userTimezone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      });
+      
+      const nextTimeParts = nextTimeFormatter.formatToParts(nextTime);
+      const nextYear = parseInt(nextTimeParts.find(p => p.type === 'year')?.value || '0', 10);
           const nextMonth = parseInt(nextTimeParts.find(p => p.type === 'month')?.value || '0', 10) - 1;
-          const nextDay = parseInt(nextTimeParts.find(p => p.type === 'day')?.value || '0', 10);
+      const nextDay = parseInt(nextTimeParts.find(p => p.type === 'day')?.value || '0', 10);
 
           return nextYear === targetYear &&
                  nextMonth === targetMonth &&
@@ -5432,7 +5433,7 @@ export class ActionExecutor {
       const dateMatches = targetYear === userLocalTime.year &&
                           targetMonth === userLocalTime.month &&
                           targetDay === userLocalTime.day;
-      
+
       // Log detailed comparison for debugging
       logger.debug({
         reminderId: reminder.id,
@@ -5448,7 +5449,7 @@ export class ActionExecutor {
         targetDate: reminder.targetDate ? new Date(reminder.targetDate).toISOString() : null,
         daysFromNow: reminder.daysFromNow,
       }, 'One-time reminder date comparison');
-      
+
       return dateMatches;
     } catch (error) {
       logger.error({ error, reminderId: reminder.id }, 'Error checking if one-time reminder is scheduled for date');
@@ -6316,9 +6317,9 @@ export class ActionExecutor {
           let targetTime: string | undefined;
           
           // Check for explicit time FIRST (e.g., "tonight at 9pm", "today at 2pm")
-          const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-          if (timeMatch && timeMatch[1]) {
-            targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+            const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+            if (timeMatch && timeMatch[1]) {
+              targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
           } else if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
             // Only use default "18:00" if no explicit time was found
             targetTime = '18:00';
@@ -6341,9 +6342,9 @@ export class ActionExecutor {
         } else {
           result.daysFromNow = 0;
           // Check for explicit time FIRST (e.g., "tonight at 9pm", "today at 2pm")
-          const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-          if (timeMatch && timeMatch[1]) {
-            result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+            const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+            if (timeMatch && timeMatch[1]) {
+              result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
           } else if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
             // Only use default "18:00" if no explicit time was found
             result.time = '18:00';
@@ -6375,7 +6376,7 @@ export class ActionExecutor {
           const currentDow = currentDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
           
           let daysToAdd: number;
-          
+
           if (targetDow !== null) {
             // "next week [day]" calculation (week starts on Monday):
             // Step 1: Find days until next Monday
@@ -6410,7 +6411,7 @@ export class ActionExecutor {
         } else {
           // No timezone: use daysFromNow
           const now = new Date();
-          const currentDow = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+          const currentDow = now.getDay();
           
           let daysToAdd: number;
           
@@ -7326,26 +7327,26 @@ export class ActionExecutor {
       // Find reminder by title if not found by number
       if (!reminder) {
         const reminders = await getRemindersByUserId(this.db, this.userId);
-        const rawName = parsed.taskName!.trim().toLowerCase();
+          const rawName = parsed.taskName!.trim().toLowerCase();
         
         // ⚠️ CRITICAL: Check if this is a generic reminder name (e.g., "Reminder", "Reminder-1", "Reminder-2")
         // If so, prioritize the MOST RECENTLY CREATED reminder
-        const isGenericName =
-          rawName === 'reminder' ||
-          rawName === 'a reminder' ||
-          rawName === 'this reminder' ||
-          rawName === 'that reminder' ||
+          const isGenericName =
+            rawName === 'reminder' ||
+            rawName === 'a reminder' ||
+            rawName === 'this reminder' ||
+            rawName === 'that reminder' ||
           rawName === 'it' ||
           /^reminder-\d+$/i.test(rawName) || // Matches "Reminder-1", "Reminder-2", etc.
           /^reminder\s*\d*$/i.test(rawName); // Matches "Reminder", "Reminder 1", etc.
 
-        if (isGenericName && reminders.length > 0) {
+          if (isGenericName && reminders.length > 0) {
           // Sort by creation date (newest first) and use the most recent one
-          reminder = [...reminders].sort((a, b) => {
-            const aCreated = new Date(a.createdAt as any).getTime();
-            const bCreated = new Date(b.createdAt as any).getTime();
-            return bCreated - aCreated; // newest first
-          })[0];
+            reminder = [...reminders].sort((a, b) => {
+              const aCreated = new Date(a.createdAt as any).getTime();
+              const bCreated = new Date(b.createdAt as any).getTime();
+              return bCreated - aCreated; // newest first
+            })[0];
           
           logger.info(
             {
@@ -7411,18 +7412,139 @@ export class ActionExecutor {
         // Use word boundaries to match "time" as a whole word, not inside "title"
         const hasDateKeywords = /\b(?:date|schedule|on|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2}(?:st|nd|rd|th)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)|every|daily|weekly|monthly|yearly|hourly|minutely)\b/i.test(changes) && !changes.includes('title') && !changes.includes('rename');
         const hasTimeKeywords = /(?:at|@|\d{1,2}:\d{2}|\d{1,2}\s*(?:am|pm)|morning|afternoon|evening|night|noon|midday|midnight)/i.test(changes);
-        
+
         // 1) Check for explicit schedule changes (e.g., "schedule: every Friday", "schedule to every Monday at 8am")
         const scheduleChangeMatch =
           parsed.newName.match(/\bschedule\s*:\s*([^-\n]+)(?:\s*-\s*status:.*)?$/i) ||
           parsed.newName.match(/\bschedule\s+to\s+(.+?)(?:\s*-\s*status:.*)?$/i);
-        
+
         // Check if this is a title-only change (no date/time/schedule changes)
         // This check must be done early to prevent processing time/date changes when only title is being updated
         const isTitleOnlyChange = !scheduleChangeMatch && !hasDateKeywords && !hasTimeKeywords && 
-          !changes.includes('time') && !changes.includes('date') && !changes.includes('schedule');
+          !changes.includes('time') && !changes.includes('date') && !changes.includes('schedule') &&
+          !changes.includes('delay');
 
-        if (scheduleChangeMatch && scheduleChangeMatch[1]) {
+        // Check for delay command (e.g., "delay the reminder", "delay by 10 minutes")
+        const delayMatch = changes.match(/delay(?:\s+the\s+reminder)?(?:\s+by)?\s*(\d+)?\s*(?:minutes?|mins?)?/i);
+        if (delayMatch && !isTitleOnlyChange) {
+          let delayMinutes: number | null = null;
+          
+          // If specific minutes are mentioned, use those
+          if (delayMatch[1]) {
+            delayMinutes = parseInt(delayMatch[1], 10);
+          } else {
+            // Otherwise, get default delay minutes from preferences
+            try {
+              const preferences = await getUserPreferences(this.db, this.userId);
+              if (preferences?.defaultDelayMinutes) {
+                delayMinutes = preferences.defaultDelayMinutes;
+                logger.info(
+                  {
+                    userId: this.userId,
+                    reminderId: reminder.id,
+                    defaultDelayMinutes: delayMinutes,
+                  },
+                  'Using default delay minutes from preferences'
+                );
+              }
+            } catch (error) {
+              logger.warn({ error, userId: this.userId }, 'Failed to get user preferences for default delay minutes');
+            }
+          }
+          
+          if (delayMinutes && delayMinutes > 0) {
+            // Calculate new time by adding delay minutes to current reminder time
+            let currentTime: string | null = reminder.time || null;
+            let currentDate: Date | null = reminder.targetDate ? new Date(reminder.targetDate) : null;
+            
+            // If no time is set, use current time in user's timezone
+            if (!currentTime) {
+              if (timezone) {
+                const currentTimeComponents = this.getCurrentTimeInTimezone(timezone);
+                currentTime = `${String(currentTimeComponents.hour).padStart(2, '0')}:${String(currentTimeComponents.minute).padStart(2, '0')}`;
+                const now = new Date();
+                const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
+                currentDate = new Date(userNowString);
+              } else {
+                const now = new Date();
+                currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                currentDate = now;
+              }
+            }
+            
+            // If no date is set, use current date
+            if (!currentDate) {
+              if (timezone) {
+                const now = new Date();
+                const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
+                currentDate = new Date(userNowString);
+              } else {
+                currentDate = new Date();
+              }
+            }
+            
+            // Parse current time and add delay minutes
+            const [hours, minutes] = currentTime.split(':').map(Number);
+            const currentDateTime = new Date(currentDate);
+            currentDateTime.setHours(hours, minutes, 0, 0);
+            
+            // Add delay minutes
+            const delayedDateTime = new Date(currentDateTime.getTime() + delayMinutes * 60 * 1000);
+            
+            // Extract new time
+            const newHours = delayedDateTime.getHours();
+            const newMinutes = delayedDateTime.getMinutes();
+            const newTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+            
+            // Update reminder with new time
+            updateInput.time = newTime;
+            
+            // Update targetDate if it exists, otherwise set it
+            if (timezone) {
+              const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: timezone,
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+              });
+              const parts = formatter.formatToParts(delayedDateTime);
+              const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+              
+              const year = parseInt(getPart('year'), 10);
+              const month = parseInt(getPart('month'), 10) - 1; // 0-indexed
+              const day = parseInt(getPart('day'), 10);
+              
+              updateInput.targetDate = this.createDateInUserTimezone(year, month, day, newHours, newMinutes, timezone);
+            } else {
+              updateInput.targetDate = delayedDateTime;
+            }
+            
+            // Clear daysFromNow since we're using targetDate
+            updateInput.daysFromNow = null;
+            // Ensure frequency is "once" for delayed reminders
+            updateInput.frequency = 'once';
+            
+            logger.info(
+              {
+                userId: this.userId,
+                reminderId: reminder.id,
+                originalTime: currentTime,
+                delayMinutes,
+                newTime,
+                originalDate: reminder.targetDate,
+                newDate: updateInput.targetDate,
+                timezone,
+              },
+              'Reminder delayed'
+            );
+          } else {
+            return {
+              success: false,
+              message: "I couldn't determine how long to delay the reminder. Please specify the delay time (e.g., 'delay by 10 minutes') or set a default delay in your preferences.",
+            };
+          }
+        }
+        else if (scheduleChangeMatch && scheduleChangeMatch[1]) {
           const rawSchedule = scheduleChangeMatch[1].trim();
           const scheduleData = this.parseReminderSchedule(rawSchedule, timezone);
 
@@ -7670,9 +7792,9 @@ export class ActionExecutor {
               updateInput.targetDate = scheduleData.targetDate;
               updateInput.time = scheduleData.time;
             } else if (!hasExplicitTimeInChange && reminder.time) {
-              // If user didn't specify a new time (e.g. "date to tomorrow"), keep existing reminder.time
-              // and ensure targetDate is constructed in the user's timezone so that the stored
-              // targetDate and time fields represent the same local time for the user.
+            // If user didn't specify a new time (e.g. "date to tomorrow"), keep existing reminder.time
+            // and ensure targetDate is constructed in the user's timezone so that the stored
+            // targetDate and time fields represent the same local time for the user.
               const [hRaw, mRaw] = reminder.time.split(':').map((v) => parseInt(v, 10));
               const hours = isNaN(hRaw) ? 0 : hRaw;
               const minutes = isNaN(mRaw) ? 0 : mRaw;
@@ -8386,9 +8508,9 @@ export class ActionExecutor {
       } else {
         // Try to find by exact or partial title match
         const matchingReminders = reminders.filter(r => 
-          r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
-          parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
-        );
+        r.title.toLowerCase().includes(parsed.taskName!.toLowerCase()) ||
+        parsed.taskName!.toLowerCase().includes(r.title.toLowerCase())
+      );
         
         if (matchingReminders.length === 0) {
           reminder = null;
@@ -8647,10 +8769,10 @@ export class ActionExecutor {
               const year = targetDate.getFullYear();
               const month = String(targetDate.getMonth() + 1).padStart(2, '0');
               const day = String(targetDate.getDate()).padStart(2, '0');
-              parsedDate = `${year}-${month}-${day}`;
+                parsedDate = `${year}-${month}-${day}`;
+              }
             }
           }
-        }
       }
       
       // Check if timeframe is just a month name (without day number)
@@ -11232,10 +11354,10 @@ export class ActionExecutor {
         }
         
         // If not a tag, try searching by name/partial match
-        // This handles cases where user provided a name instead of email/phone
-        // This now includes searching by friend name
-        const users = await searchUsersForSharing(this.db, trimmedRecipient, this.userId);
-        if (users.length > 0) {
+    // This handles cases where user provided a name instead of email/phone
+    // This now includes searching by friend name
+      const users = await searchUsersForSharing(this.db, trimmedRecipient, this.userId);
+      if (users.length > 0) {
           return [users[0].id];
         }
       } catch (error) {
