@@ -1039,22 +1039,62 @@ export default function RemindersPage() {
 
   // Count reminders for today and tomorrow
   const remindersToday = useMemo(() => {
-    const today = startOfDay(new Date());
-    const tomorrow = endOfDay(new Date());
-    return remindersWithNext.filter((r) => {
-      if (!r.nextAt || !r.active) return false;
-      return r.nextAt >= today && r.nextAt <= tomorrow;
+    const today = new Date();
+    return reminders.filter((r) => {
+      if (!r.active) return false;
+      
+      // Prepare reminder object for canReminderOccurOnDate function
+      const reminderForCheck: Reminder = {
+        id: r.id,
+        userId: (r as any).userId,
+        title: r.title,
+        frequency: r.frequency,
+        category: (r.category as ReminderCategory) ?? "General",
+        time: r.time ?? null,
+        minuteOfHour: r.minuteOfHour ?? null,
+        intervalMinutes: r.intervalMinutes ?? null,
+        daysFromNow: r.daysFromNow ?? null,
+        targetDate: r.targetDate ? (r.targetDate instanceof Date ? r.targetDate : new Date(r.targetDate)) : null,
+        dayOfMonth: r.dayOfMonth ?? null,
+        month: r.month ?? null,
+        daysOfWeek: r.daysOfWeek ?? null,
+        active: r.active,
+        createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
+        updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
+      };
+      
+      return canReminderOccurOnDate(reminderForCheck, today, userTimezone);
     }).length;
-  }, [remindersWithNext]);
+  }, [reminders, userTimezone]);
 
   const remindersTomorrow = useMemo(() => {
-    const tomorrowStart = startOfDay(addDays(new Date(), 1));
-    const tomorrowEnd = endOfDay(addDays(new Date(), 1));
-    return remindersWithNext.filter((r) => {
-      if (!r.nextAt || !r.active) return false;
-      return r.nextAt >= tomorrowStart && r.nextAt <= tomorrowEnd;
+    const tomorrow = addDays(new Date(), 1);
+    return reminders.filter((r) => {
+      if (!r.active) return false;
+      
+      // Prepare reminder object for canReminderOccurOnDate function
+      const reminderForCheck: Reminder = {
+        id: r.id,
+        userId: (r as any).userId,
+        title: r.title,
+        frequency: r.frequency,
+        category: (r.category as ReminderCategory) ?? "General",
+        time: r.time ?? null,
+        minuteOfHour: r.minuteOfHour ?? null,
+        intervalMinutes: r.intervalMinutes ?? null,
+        daysFromNow: r.daysFromNow ?? null,
+        targetDate: r.targetDate ? (r.targetDate instanceof Date ? r.targetDate : new Date(r.targetDate)) : null,
+        dayOfMonth: r.dayOfMonth ?? null,
+        month: r.month ?? null,
+        daysOfWeek: r.daysOfWeek ?? null,
+        active: r.active,
+        createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt),
+        updatedAt: r.updatedAt instanceof Date ? r.updatedAt : new Date(r.updatedAt),
+      };
+      
+      return canReminderOccurOnDate(reminderForCheck, tomorrow, userTimezone);
     }).length;
-  }, [remindersWithNext]);
+  }, [reminders, userTimezone]);
 
   // Count active and paused reminders
   const activeCount = useMemo(() => reminders.filter((r) => r.active).length, [reminders]);
