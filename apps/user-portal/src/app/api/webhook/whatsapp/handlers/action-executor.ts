@@ -4558,7 +4558,6 @@ export class ActionExecutor {
         }, 'Calculated user time for date filtering');
         
         // FIRST: Check for specific date with day and month (e.g., "27th January", "27 January", "January 27th")
-        const now = new Date();
         const currentYear = now.getFullYear();
         const specificDate = this.parseSpecificDateComponents(timeFilter, currentYear);
         
@@ -4574,7 +4573,7 @@ export class ActionExecutor {
         // Only do this if we didn't find a specific date
         let extractedMonth: string | null = null;
         if (!specificDate) {
-          for (const month of monthNames) {
+          for (const month of ActionExecutor.MONTH_NAMES) {
             // Match month at the start of the string, optionally followed by space, dash, or end of string
             const monthMatch = timeFilter.match(new RegExp(`^(${month})(?:\\s|\\s*-|$)`, 'i'));
             if (monthMatch) {
@@ -7130,7 +7129,7 @@ export class ActionExecutor {
         // Try to extract date from schedule string (e.g., "on the 4th October", "4th October", "October 4th", "on the 15th of October", "23rd of December")
         
         // Build regex pattern with both full and abbreviated month names (capturing group)
-        const monthPattern = `(${monthNames.join('|')}|${monthAbbrs.join('|')})`;
+        const monthPattern = `(${ActionExecutor.MONTH_NAMES.join('|')}|${ActionExecutor.MONTH_ABBREVIATIONS.join('|')})`;
         
         // Try pattern 1: "15th October" or "on the 15th October" or "on the 15th of October" or "23rd of December" or "on 19th October"
         let dateMatch = scheduleStr.match(new RegExp(`(?:on\\s+)?(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+of\\s+)?\\s+${monthPattern}`, 'i'));
