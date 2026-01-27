@@ -1731,15 +1731,6 @@ export default function RemindersPage() {
                     );
                   })}
                 </div>
-                <Button
-                  onClick={openNewForm}
-                  variant="outline"
-                  size="sm"
-                  className="hidden lg:flex items-center gap-1.5"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add New
-                </Button>
               </div>
             </div>
             
@@ -1815,7 +1806,7 @@ export default function RemindersPage() {
       </AlertDialog>
 
         {/* Summary Cards */}
-        <div className="px-4 pb-4">
+        <div className="p-4">
           <div className="flex flex-col md:flex-row gap-3 w-full">
             {/* Today Card */}
             <div className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#ECF7FC" }}>
@@ -1938,7 +1929,7 @@ export default function RemindersPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setStatusTab("all")}
@@ -1985,6 +1976,15 @@ export default function RemindersPage() {
               </span>
             </button>
           </div>
+          <Button
+                  onClick={openNewForm}
+                  variant="outline"
+                  size="sm"
+                  className="hidden lg:flex items-center gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add New
+                </Button>
         </div>
 
         {/* Reminders List */}
