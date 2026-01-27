@@ -675,10 +675,15 @@ function canReminderOccurOnDate(
       // Check if the month and day match
       const reminderMonth = reminder.month ?? 1;
       const reminderDayOfMonth = reminder.dayOfMonth ?? 1;
+      // First check if the month matches
+      if (month !== reminderMonth) {
+        return false;
+      }
       // Handle edge case where day doesn't exist in month (e.g., Feb 31)
-      const lastDay = new Date(year, month, 0).getDate();
+      // Use reminderMonth (not checkDate's month) to get the correct last day
+      const lastDay = new Date(year, reminderMonth, 0).getDate();
       const targetDayOfMonth = Math.min(reminderDayOfMonth, lastDay);
-      return month === reminderMonth && day === targetDayOfMonth;
+      return day === targetDayOfMonth;
       
     default:
       return false;
