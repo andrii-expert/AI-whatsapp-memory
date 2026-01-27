@@ -4956,13 +4956,15 @@ export class ActionExecutor {
           date: userLocalTimeDate,
         };
         
-        // Check if we're filtering by a specific month
-        const isSpecificMonthFilter = dateFilterRange && 
+        // Check if we're filtering by a specific date (e.g., "27th January")
+        // This MUST be checked FIRST to ensure specific dates take precedence over month-only filters
+        const isSpecificDateFilter = dateFilterRange && (dateFilterRange as any).isSpecificDate === true;
+        
+        // Check if we're filtering by a specific month (ONLY if not a specific date filter)
+        // This regex matches month names at the start of the string, so "3 Feb" won't match
+        const isSpecificMonthFilter = !isSpecificDateFilter && dateFilterRange && 
           parsed.listFilter && 
           /^(january|february|march|april|may|june|july|august|september|october|november|december)/i.test(parsed.listFilter);
-        
-        // Check if we're filtering by a specific date (e.g., "27th January")
-        const isSpecificDateFilter = dateFilterRange && (dateFilterRange as any).isSpecificDate === true;
         
         remindersWithNextTime = filteredReminders.map(reminder => {
           let nextTime: Date | null = null;
@@ -4973,6 +4975,24 @@ export class ActionExecutor {
             // to ensure we get the time on the target date, not the next occurrence
             const targetDate = new Date(dateFilterRange.start);
             nextTime = this.calculateReminderTimeOnDate(reminder, targetDate, userTimezone);
+            
+            // CRITICAL: Verify that nextTime is actually on the target date
+            if (nextTime) {
+              const isOnTargetDate = this.isSameCalendarDay(nextTime, targetDate, userTimezone);
+              if (!isOnTargetDate) {
+                const targetComponents = this.getDateComponentsInTimezone(targetDate, userTimezone);
+                const nextComponents = this.getDateComponentsInTimezone(nextTime, userTimezone);
+                logger.warn({
+                  reminderId: reminder.id,
+                  reminderTitle: reminder.title,
+                  frequency: reminder.frequency,
+                  targetDate: `${targetComponents.year}-${targetComponents.month + 1}-${targetComponents.day}`,
+                  nextTimeDate: `${nextComponents.year}-${nextComponents.month + 1}-${nextComponents.day}`,
+                  reason: 'calculateReminderTimeOnDate returned time on wrong date',
+                }, 'Reminder time not on target date - setting to null');
+                nextTime = null;
+              }
+            }
             
             if (!nextTime) {
               logger.debug({
@@ -4987,9 +5007,26 @@ export class ActionExecutor {
             nextTime = this.calculateReminderTimeInRange(reminder, dateFilterRange.start, dateFilterRange.end, userTimezone);
           }
           
-          // Fallback to next occurrence from today if not found in range (but NOT for specific date filters)
+          // CRITICAL: For specific date filters, NEVER use fallback - if calculateReminderTimeOnDate
+          // returns null, it means the reminder doesn't occur on that date, so we must exclude it
           if (!nextTime && !isSpecificDateFilter) {
             nextTime = this.calculateNextReminderTime(reminder, userLocalTime, userTimezone);
+          }
+          
+          // For specific date filters, ensure nextTime is null if it doesn't match the target date
+          if (isSpecificDateFilter && dateFilterRange && nextTime) {
+            const targetDate = new Date(dateFilterRange.start);
+            if (!this.isSameCalendarDay(nextTime, targetDate, userTimezone)) {
+              logger.warn({
+                reminderId: reminder.id,
+                reminderTitle: reminder.title,
+                frequency: reminder.frequency,
+                targetDate: this.getDateComponentsInTimezone(targetDate, userTimezone),
+                nextTimeDate: this.getDateComponentsInTimezone(nextTime, userTimezone),
+                reason: 'nextTime does not match target date - setting to null',
+              }, 'Reminder time validation failed for specific date filter');
+              nextTime = null;
+            }
           }
           
           const INVALID_DATE = new Date(0);
