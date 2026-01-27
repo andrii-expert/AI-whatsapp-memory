@@ -54,16 +54,21 @@ export async function updateReminderSettings(
   settings: {
     reminderMinutes: number;
     reminderNotifications: boolean;
+    defaultReminderTime?: string | null;
+    defaultDelayMinutes?: number | null;
   }
 ) {
   return withMutationLogging(
     'updateReminderSettings',
-    { userId, reminderMinutes: settings.reminderMinutes },
+    { userId, reminderMinutes: settings.reminderMinutes, defaultReminderTime: settings.defaultReminderTime, defaultDelayMinutes: settings.defaultDelayMinutes },
     async () => {
       const [updated] = await db
         .update(userPreferences)
         .set({
-          ...settings,
+          reminderMinutes: settings.reminderMinutes,
+          reminderNotifications: settings.reminderNotifications,
+          defaultReminderTime: settings.defaultReminderTime !== undefined ? settings.defaultReminderTime : undefined,
+          defaultDelayMinutes: settings.defaultDelayMinutes !== undefined ? settings.defaultDelayMinutes : undefined,
           updatedAt: new Date(),
         })
         .where(eq(userPreferences.userId, userId))

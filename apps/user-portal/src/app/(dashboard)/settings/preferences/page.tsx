@@ -19,6 +19,8 @@ const preferencesSchema = z.object({
   marketingEmails: z.boolean(),
   calendarNotifications: z.boolean(),
   calendarNotificationMinutes: z.number().min(1).max(1440),
+  defaultReminderTime: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).nullable().optional(),
+  defaultDelayMinutes: z.number().min(1).max(1440).nullable().optional(),
 });
 
 export default function PreferencesPage() {
@@ -38,6 +40,8 @@ export default function PreferencesPage() {
       marketingEmails: false,
       calendarNotifications: true,
       calendarNotificationMinutes: 10,
+      defaultReminderTime: null,
+      defaultDelayMinutes: null,
     },
   });
 
@@ -60,6 +64,8 @@ export default function PreferencesPage() {
         marketingEmails: preferences.marketingEmails,
         calendarNotifications: preferences.calendarNotifications,
         calendarNotificationMinutes: preferences.calendarNotificationMinutes,
+        defaultReminderTime: preferences.defaultReminderTime || null,
+        defaultDelayMinutes: preferences.defaultDelayMinutes || null,
       });
     }
   }, [preferences, reset]);
@@ -97,6 +103,10 @@ export default function PreferencesPage() {
       },
       calendar: {
         calendarNotificationMinutes: values.calendarNotificationMinutes,
+      },
+      reminders: {
+        defaultReminderTime: values.defaultReminderTime || null,
+        defaultDelayMinutes: values.defaultDelayMinutes || null,
       },
     });
   }
@@ -201,6 +211,77 @@ export default function PreferencesPage() {
                   </p>
                 </div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Default Reminder Time */}
+        <Card className="rounded-xl">
+          <CardHeader>
+            <CardTitle>Default Reminder Time</CardTitle>
+            <CardDescription>
+              Set a default time for reminders when no time is specified (e.g., "8am" or "08:00")
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="default-reminder-time">
+                Default time (24-hour format)
+              </Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  id="default-reminder-time"
+                  type="time"
+                  {...register("defaultReminderTime")}
+                  className={errors.defaultReminderTime ? "border-red-500 w-32" : "w-32"}
+                />
+                <span className="text-sm text-muted-foreground">
+                  Leave empty to disable default time
+                </span>
+              </div>
+              {errors.defaultReminderTime && (
+                <p className="text-sm text-red-500">{errors.defaultReminderTime.message || "Invalid time format"}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                When creating a reminder without specifying a time, this default time will be used. Format: HH:MM (24-hour)
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Default Delay Minutes */}
+        <Card className="rounded-xl">
+          <CardHeader>
+            <CardTitle>Default Delay Minutes</CardTitle>
+            <CardDescription>
+              Set the default delay time when you say "delay the reminder" without specifying minutes (e.g., 5, 10, or 15 minutes)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="default-delay-minutes">
+                Default delay (minutes)
+              </Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  id="default-delay-minutes"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  {...register("defaultDelayMinutes", { valueAsNumber: true })}
+                  className={errors.defaultDelayMinutes ? "border-red-500 w-32" : "w-32"}
+                  placeholder="e.g., 5"
+                />
+                <span className="text-sm text-muted-foreground">
+                  minutes
+                </span>
+              </div>
+              {errors.defaultDelayMinutes && (
+                <p className="text-sm text-red-500">{errors.defaultDelayMinutes.message || "Invalid value"}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                When you say "delay the reminder" without specifying how many minutes, the reminder will be delayed by this default amount. Leave empty to disable default delay.
+              </p>
             </div>
           </CardContent>
         </Card>

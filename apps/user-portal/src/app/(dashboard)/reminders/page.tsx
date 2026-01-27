@@ -1464,12 +1464,29 @@ export default function RemindersPage() {
     
     if (diffMs < 0) return null;
     
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const totalHours = Math.floor(totalMinutes / 60);
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    const minutes = totalMinutes % 60;
     
+    // If over 24 hours, show days and hours
+    if (days > 0) {
+      if (hours === 0) {
+        return `${days} day${days !== 1 ? "s" : ""}`;
+      }
+      return `${days} day${days !== 1 ? "s" : ""} and ${hours} hour${hours !== 1 ? "s" : ""}`;
+    }
+    
+    // If under 24 hours but has hours, show hours and minutes
     if (hours > 0) {
+      if (minutes === 0) {
+        return `${hours} hour${hours !== 1 ? "s" : ""}`;
+      }
       return `${hours} hour${hours !== 1 ? "s" : ""} ${minutes} min${minutes !== 1 ? "s" : ""}`;
     }
+    
+    // Only minutes
     return `${minutes} min${minutes !== 1 ? "s" : ""}`;
   };
 
