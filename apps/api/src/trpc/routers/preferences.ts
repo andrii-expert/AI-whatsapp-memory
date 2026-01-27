@@ -44,6 +44,12 @@ export const preferencesRouter = createTRPCRouter({
             updateReminderSettings(db, session.user.id, {
               reminderMinutes: input.reminders.reminderMinutes ?? current.reminderMinutes,
               reminderNotifications: current.reminderNotifications, // Keep existing value
+              defaultReminderTime: input.reminders.defaultReminderTime !== undefined 
+                ? input.reminders.defaultReminderTime 
+                : current.defaultReminderTime,
+              defaultDelayMinutes: input.reminders.defaultDelayMinutes !== undefined 
+                ? input.reminders.defaultDelayMinutes 
+                : current.defaultDelayMinutes,
             })
           );
           

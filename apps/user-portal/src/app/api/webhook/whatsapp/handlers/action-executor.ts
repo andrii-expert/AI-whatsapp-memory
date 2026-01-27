@@ -20,6 +20,7 @@ import {
   deleteReminder,
   toggleReminderActive,
   getReminderById,
+  getUserPreferences,
   type CreateReminderInput,
   type UpdateReminderInput,
   type ReminderFrequency,
@@ -7411,9 +7412,130 @@ export class ActionExecutor {
         // Check if this is a title-only change (no date/time/schedule changes)
         // This check must be done early to prevent processing time/date changes when only title is being updated
         const isTitleOnlyChange = !scheduleChangeMatch && !hasDateKeywords && !hasTimeKeywords && 
-          !changes.includes('time') && !changes.includes('date') && !changes.includes('schedule');
+          !changes.includes('time') && !changes.includes('date') && !changes.includes('schedule') &&
+          !changes.includes('delay');
 
-        if (scheduleChangeMatch && scheduleChangeMatch[1]) {
+        // Check for delay command (e.g., "delay the reminder", "delay by 10 minutes")
+        const delayMatch = changes.match(/delay(?:\s+the\s+reminder)?(?:\s+by)?\s*(\d+)?\s*(?:minutes?|mins?)?/i);
+        if (delayMatch && !isTitleOnlyChange) {
+          let delayMinutes: number | null = null;
+          
+          // If specific minutes are mentioned, use those
+          if (delayMatch[1]) {
+            delayMinutes = parseInt(delayMatch[1], 10);
+          } else {
+            // Otherwise, get default delay minutes from preferences
+            try {
+              const preferences = await getUserPreferences(this.db, this.userId);
+              if (preferences?.defaultDelayMinutes) {
+                delayMinutes = preferences.defaultDelayMinutes;
+                logger.info(
+                  {
+                    userId: this.userId,
+                    reminderId: reminder.id,
+                    defaultDelayMinutes: delayMinutes,
+                  },
+                  'Using default delay minutes from preferences'
+                );
+              }
+            } catch (error) {
+              logger.warn({ error, userId: this.userId }, 'Failed to get user preferences for default delay minutes');
+            }
+          }
+          
+          if (delayMinutes && delayMinutes > 0) {
+            // Calculate new time by adding delay minutes to current reminder time
+            let currentTime: string | null = reminder.time || null;
+            let currentDate: Date | null = reminder.targetDate ? new Date(reminder.targetDate) : null;
+            
+            // If no time is set, use current time in user's timezone
+            if (!currentTime) {
+              if (timezone) {
+                const currentTimeComponents = this.getCurrentTimeInTimezone(timezone);
+                currentTime = `${String(currentTimeComponents.hour).padStart(2, '0')}:${String(currentTimeComponents.minute).padStart(2, '0')}`;
+                const now = new Date();
+                const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
+                currentDate = new Date(userNowString);
+              } else {
+                const now = new Date();
+                currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                currentDate = now;
+              }
+            }
+            
+            // If no date is set, use current date
+            if (!currentDate) {
+              if (timezone) {
+                const now = new Date();
+                const userNowString = now.toLocaleString("en-US", { timeZone: timezone });
+                currentDate = new Date(userNowString);
+              } else {
+                currentDate = new Date();
+              }
+            }
+            
+            // Parse current time and add delay minutes
+            const [hours, minutes] = currentTime.split(':').map(Number);
+            const currentDateTime = new Date(currentDate);
+            currentDateTime.setHours(hours, minutes, 0, 0);
+            
+            // Add delay minutes
+            const delayedDateTime = new Date(currentDateTime.getTime() + delayMinutes * 60 * 1000);
+            
+            // Extract new time
+            const newHours = delayedDateTime.getHours();
+            const newMinutes = delayedDateTime.getMinutes();
+            const newTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+            
+            // Update reminder with new time
+            updateInput.time = newTime;
+            
+            // Update targetDate if it exists, otherwise set it
+            if (timezone) {
+              const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: timezone,
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+              });
+              const parts = formatter.formatToParts(delayedDateTime);
+              const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+              
+              const year = parseInt(getPart('year'), 10);
+              const month = parseInt(getPart('month'), 10) - 1; // 0-indexed
+              const day = parseInt(getPart('day'), 10);
+              
+              updateInput.targetDate = this.createDateInUserTimezone(year, month, day, newHours, newMinutes, timezone);
+            } else {
+              updateInput.targetDate = delayedDateTime;
+            }
+            
+            // Clear daysFromNow since we're using targetDate
+            updateInput.daysFromNow = null;
+            // Ensure frequency is "once" for delayed reminders
+            updateInput.frequency = 'once';
+            
+            logger.info(
+              {
+                userId: this.userId,
+                reminderId: reminder.id,
+                originalTime: currentTime,
+                delayMinutes,
+                newTime,
+                originalDate: reminder.targetDate,
+                newDate: updateInput.targetDate,
+                timezone,
+              },
+              'Reminder delayed'
+            );
+          } else {
+            return {
+              success: false,
+              message: "I couldn't determine how long to delay the reminder. Please specify the delay time (e.g., 'delay by 10 minutes') or set a default delay in your preferences.",
+            };
+          }
+        }
+        else if (scheduleChangeMatch && scheduleChangeMatch[1]) {
           const rawSchedule = scheduleChangeMatch[1].trim();
           const scheduleData = this.parseReminderSchedule(rawSchedule, timezone);
 

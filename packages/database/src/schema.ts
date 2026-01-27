@@ -267,6 +267,12 @@ export const userPreferences = pgTable("user_preferences", {
   defaultCalendarId: text("default_calendar_id"),
   whatsappCalendarIds: jsonb("whatsapp_calendar_ids"),
   
+  // Reminder default time (HH:MM format, e.g., "08:00" for 8am)
+  defaultReminderTime: text("default_reminder_time"),
+  
+  // Reminder default delay minutes (e.g., 5, 10, 15 minutes)
+  defaultDelayMinutes: integer("default_delay_minutes"),
+  
   // Locale settings
   dateFormat: dateFormatEnum("date_format").default("DD/MM/YYYY").notNull(),
   timeFormat: timeFormatEnum("time_format").default("24h").notNull(),
