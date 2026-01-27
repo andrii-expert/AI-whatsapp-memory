@@ -4503,6 +4503,16 @@ export class ActionExecutor {
 
   private async listReminders(parsed: ParsedAction, userTimezone?: string): Promise<{ success: boolean; message: string }> {
     try {
+      // Ensure userTimezone is available - fetch from database if not provided
+      if (!userTimezone) {
+        const user = await getUserById(this.db, this.userId);
+        userTimezone = (user as any)?.timezone;
+        if (!userTimezone) {
+          // Default to UTC if no timezone is set
+          userTimezone = 'UTC';
+        }
+      }
+      
       const reminders = await getRemindersByUserId(this.db, this.userId);
 
       // Filter by status if specified
@@ -4537,9 +4547,10 @@ export class ActionExecutor {
       // Filter by time if specified (today, tomorrow, this week, this month)
       // Calculate date ranges based on user's timezone (not server timezone)
       // Declare dateFilterRange outside the if block so it's accessible later
+      // Note: userTimezone is now guaranteed to be defined (set above)
       let dateFilterRange: { start: Date; end: Date } | null = null;
       
-      if (parsed.listFilter && userTimezone) {
+      if (parsed.listFilter) {
         const timeFilter = parsed.listFilter.toLowerCase().trim();
         
         // Get current date/time in user's timezone
@@ -5165,14 +5176,11 @@ export class ActionExecutor {
           }
           
           // For non-specific date filters, check if nextTime is in the past (with tolerance)
-          const MILLISECONDS_PER_MINUTE = 60 * 1000;
-          const PAST_TIME_TOLERANCE_MS = 1 * MILLISECONDS_PER_MINUTE;
-          
           const currentTimeMs = userLocalTimeDate.getTime();
           const nextTimeMs = nextTime.getTime();
           
           // If nextTime is more than the tolerance period in the past, exclude it
-          if (nextTimeMs < currentTimeMs - PAST_TIME_TOLERANCE_MS) {
+          if (nextTimeMs < currentTimeMs - ActionExecutor.PAST_TIME_TOLERANCE_MS) {
             // For one-time reminders, definitely exclude if passed
             if (reminder.frequency === 'once') {
               return false;
