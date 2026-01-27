@@ -4810,22 +4810,26 @@ export class ActionExecutor {
             isDayOfWeekFilter,
             dateFilterRangeStart: dateFilterRange.start.toISOString(),
             dateFilterRangeEnd: dateFilterRange.end.toISOString(),
-            willUseExactDateMatch: timeFilter === 'today' || hasSpecificDate || isDayOfWeekFilter,
+            willUseExactDateMatch: timeFilter === 'today' || timeFilter === 'tomorrow' || hasSpecificDate || isDayOfWeekFilter,
           }, 'Checking filter type for reminder filtering');
           
-          // CRITICAL: Use exact date matching for specific dates, today, and day-of-week filters
+          // CRITICAL: Use exact date matching for specific dates, today, tomorrow, and day-of-week filters
           // This ensures we only show reminders that can occur on that exact date
           let userLocalTime: { year: number; month: number; day: number; hours: number; minutes: number; seconds: number; date: Date } | null = null;
           
-          if (timeFilter === 'today' || hasSpecificDate || isDayOfWeekFilter) {
+          if (timeFilter === 'today' || timeFilter === 'tomorrow' || hasSpecificDate || isDayOfWeekFilter) {
             // For specific dates, we'll filter later using calculateReminderTimeOnDate
-            // For "today" and day-of-week, use the existing isReminderScheduledForDate filter
+            // For "today", "tomorrow", and day-of-week, use the existing isReminderScheduledForDate filter
             if (!hasSpecificDate) {
-              // For "today" and day-of-week filters, use the existing filter logic
+              // For "today", "tomorrow", and day-of-week filters, use the existing filter logic
               let targetDate: Date;
               if (isDayOfWeekFilter) {
                 targetDate = new Date(dateFilterRange.start);
+              } else if (timeFilter === 'tomorrow') {
+                // For "tomorrow", use the dateFilterRange.start which is already calculated as tomorrow
+                targetDate = new Date(dateFilterRange.start);
               } else {
+                // For "today"
                 const userTimeString = now.toLocaleString("en-US", { timeZone: userTimezone });
                 targetDate = new Date(userTimeString);
               }
@@ -5060,9 +5064,13 @@ export class ActionExecutor {
           date: userLocalTimeDate,
         };
         
-        // Check if we're filtering by a specific date (e.g., "27th January")
+        // Check if we're filtering by a specific date (e.g., "27th January", "today", "tomorrow")
         // This MUST be checked FIRST to ensure specific dates take precedence over month-only filters
-        const isSpecificDateFilter = dateFilterRange && (dateFilterRange as any).isSpecificDate === true;
+        const isSpecificDateFilter = dateFilterRange && (
+          (dateFilterRange as any).isSpecificDate === true ||
+          parsed.listFilter?.toLowerCase() === 'today' ||
+          parsed.listFilter?.toLowerCase() === 'tomorrow'
+        );
         
         // Check if we're filtering by a specific month (ONLY if not a specific date filter)
         // This regex matches month names at the start of the string, so "3 Feb" won't match
