@@ -1,4 +1,9 @@
-CREATE TYPE "public"."task_status" AS ENUM('open', 'completed', 'archived');--> statement-breakpoint
+-- Create task_status type if it doesn't exist
+DO $$ BEGIN
+  CREATE TYPE "public"."task_status" AS ENUM('open', 'completed', 'archived');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;--> statement-breakpoint
 CREATE TABLE "task_folders" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
