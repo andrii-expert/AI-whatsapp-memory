@@ -1611,24 +1611,6 @@ export default function RemindersPage() {
           </div>
         </div>
 
-        {/* Heading */}
-        <div className="px-4 pt-6 pb-4">
-          <div className="flex items-start justify-between">
-            <div className="flex flex-col">
-              <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Reminders</h1>
-              <p className="text-sm text-[#6C7275] mt-1">Create and manage once off or re-occurring reminders from here or WhatsApp</p>
-            </div>
-            <Button
-              onClick={openNewForm}
-              variant="outline"
-              size="sm"
-              className="hidden lg:flex items-center gap-1.5"
-            >
-              <Plus className="h-4 w-4" />
-              Add New
-            </Button>
-          </div>
-        </div>
       <AlertDialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
         <AlertDialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
@@ -1725,28 +1707,39 @@ export default function RemindersPage() {
                 <BellRing size={16} />
                 Status Filter
               </Label>
-              <div className="flex flex-wrap items-center gap-2">
-                {(["all", "active", "inactive"] as StatusFilterType[]).map((filter) => {
-                  const isActive = statusFilter === filter;
-                  const labels: Record<StatusFilterType, string> = {
-                    all: "All",
-                    active: "Active",
-                    inactive: "Paused",
-                  };
-                  
-                  return (
-                    <Button
-                      key={filter}
-                      type="button"
-                      variant={isActive ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setStatusFilter(filter)}
-                      className="h-9"
-                    >
-                      {labels[filter]}
-                    </Button>
-                  );
-                })}
+              <div className="flex items-center gap-2 w-full justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  {(["all", "active", "inactive"] as StatusFilterType[]).map((filter) => {
+                    const isActive = statusFilter === filter;
+                    const labels: Record<StatusFilterType, string> = {
+                      all: "All",
+                      active: "Active",
+                      inactive: "Paused",
+                    };
+                    
+                    return (
+                      <Button
+                        key={filter}
+                        type="button"
+                        variant={isActive ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setStatusFilter(filter)}
+                        className="h-9"
+                      >
+                        {labels[filter]}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  onClick={openNewForm}
+                  variant="outline"
+                  size="sm"
+                  className="hidden lg:flex items-center gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add New
+                </Button>
               </div>
             </div>
             
@@ -1823,9 +1816,9 @@ export default function RemindersPage() {
 
         {/* Summary Cards */}
         <div className="px-4 pb-4">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col md:flex-row gap-3 w-full">
             {/* Today Card */}
-            <div className="relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#ECF7FC" }}>
+            <div className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#ECF7FC" }}>
               <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#C5EEFF", filter: 'blur(50px)' }} />
               <div className="relative flex items-start gap-2">
                 <div className="flex-1 flex flex-col gap-3">
@@ -1884,7 +1877,7 @@ export default function RemindersPage() {
             </div>
             
             {/* Tomorrow Card */}
-            <div className="relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#FCF8EC" }}>
+            <div className="flex-1 relative p-4 rounded-xl border bg-white shadow-[0_2px_16px_0_rgba(0,0,0,0.02)] overflow-hidden" style={{ borderColor: "#FCF8EC" }}>
               <div className="absolute top-0 left-0 w-[55px] h-[55px] rounded-full" style={{ background: "#FFF0C5", filter: 'blur(50px)' }} />
               <div className="relative flex items-start gap-2">
                 <div className="flex-1 flex flex-col gap-3">
