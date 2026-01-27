@@ -789,6 +789,7 @@ export default function CalendarsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   
   // Redirect if setup is incomplete
   useSetupRedirect();
@@ -2002,37 +2003,49 @@ export default function CalendarsPage() {
     })
   );
 
-  // Delete event mutation - using utils pattern
-  const deleteEventMutation = useMutation({
-    mutationFn: async (input: { calendarId: string; eventId: string }) => {
-      // Use trpc utils to call the mutation
-      const result = await (trpc as any).calendar.deleteEvent.mutate(input);
-      return result;
-    },
-    onSuccess: (data: any) => {
-      toast({
-        title: "Event deleted",
-        description: data?.message || "Event has been deleted successfully.",
-        variant: "success",
-      });
-      // Close modal if open
-      setEventDetailsModal({
-        open: false,
-        event: null,
-        isEditing: false,
-      });
-      // Refresh events
-      eventQueries.forEach((query) => query.refetch());
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Event deletion failed",
-        description: error.message || "Failed to delete event. Please try again.",
-        variant: "error",
-        duration: 3500,
-      });
-    },
-  });
+  // Delete event mutation
+  const deleteEventMutation = useMutation(
+    trpc.calendar.deleteEvent.mutationOptions({
+      onSuccess: (data) => {
+        // Close the delete dialog
+        setDeleteEventDialog({
+          open: false,
+          calendarId: null,
+          eventId: null,
+          eventTitle: null,
+        });
+        // Close event details modal if open
+        setEventDetailsModal({
+          open: false,
+          event: null,
+          isEditing: false,
+        });
+        // Invalidate and refetch events for all calendars
+        eventQueries.forEach((query) => {
+          query.refetch();
+        });
+        // Also invalidate calendar events queries to ensure everything is fresh
+        activeCalendars.forEach((cal: any) => {
+          queryClient.invalidateQueries({
+            queryKey: [['calendar', 'getEvents'], { calendarId: cal.id }],
+          });
+        });
+        toast({
+          title: "Event deleted",
+          description: data?.message || "Event has been deleted successfully.",
+          variant: "success",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Event deletion failed",
+          description: error.message || "Failed to delete event. Please try again.",
+          variant: "error",
+          duration: 3500,
+        });
+      },
+    })
+  );
 
   const handleConnectCalendar = async (provider: "google" | "microsoft") => {
     if (!user) {
@@ -2415,46 +2428,19 @@ export default function CalendarsPage() {
   };
 
   const handleDeleteEvent = (calendarId: string, eventId: string) => {
-    deleteEventMutation.mutate(
-      { calendarId, eventId },
-      {
-        onSuccess: () => {
-          // Close the delete dialog
-          setDeleteEventDialog({
-            open: false,
-            calendarId: null,
-            eventId: null,
-            eventTitle: null,
-          });
-          // Close event details modal if open
-          setEventDetailsModal({
-            open: false,
-            event: null,
-            isEditing: false,
-          });
-          // Refetch events for all calendars
-          eventQueries.forEach((query) => query.refetch());
-          toast({
-            title: "Event deleted",
-            description: "Event has been deleted successfully.",
-            variant: "success",
-          });
-        },
-        onError: (error: any) => {
-          toast({
-            title: "Failed to delete event",
-            description: error?.message || "An error occurred while deleting the event.",
-            variant: "error",
-          });
-        },
-      }
-    );
+    deleteEventMutation.mutate({ calendarId, eventId });
   };
 
   const confirmDeleteEvent = () => {
-    if (deleteEventDialog.calendarId && deleteEventDialog.eventId) {
-      handleDeleteEvent(deleteEventDialog.calendarId, deleteEventDialog.eventId);
+    if (!deleteEventDialog.calendarId || !deleteEventDialog.eventId) {
+      toast({
+        title: "Error",
+        description: "Missing calendar or event information. Please try again.",
+        variant: "error",
+      });
+      return;
     }
+    handleDeleteEvent(deleteEventDialog.calendarId, deleteEventDialog.eventId);
   };
 
   const handleEditEvent = () => {
@@ -3221,9 +3207,19 @@ export default function CalendarsPage() {
                               }, 100);
                             }}
                             onDelete={() => {
+                              // Ensure we have the correct calendarId (database connection ID)
+                              const calendarId = event.calendarId;
+                              if (!calendarId) {
+                                toast({
+                                  title: "Error",
+                                  description: "Could not find calendar for this event",
+                                  variant: "error",
+                                });
+                                return;
+                              }
                               setDeleteEventDialog({
                                 open: true,
-                                calendarId: event.calendarId,
+                                calendarId: calendarId,
                                 eventId: event.id,
                                 eventTitle: event.title,
                               });
