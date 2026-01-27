@@ -12,6 +12,7 @@ export async function createUserPreferences(db: Database, userId: string) {
         .insert(userPreferences)
         .values({
           userId,
+          defaultLaterMinutes: 60, // Default to 1 hour
         })
         .returning();
         
@@ -56,11 +57,12 @@ export async function updateReminderSettings(
     reminderNotifications: boolean;
     defaultReminderTime?: string | null;
     defaultDelayMinutes?: number | null;
+    defaultLaterMinutes?: number | null;
   }
 ) {
   return withMutationLogging(
     'updateReminderSettings',
-    { userId, reminderMinutes: settings.reminderMinutes, defaultReminderTime: settings.defaultReminderTime, defaultDelayMinutes: settings.defaultDelayMinutes },
+    { userId, reminderMinutes: settings.reminderMinutes, defaultReminderTime: settings.defaultReminderTime, defaultDelayMinutes: settings.defaultDelayMinutes, defaultLaterMinutes: settings.defaultLaterMinutes },
     async () => {
       const [updated] = await db
         .update(userPreferences)
@@ -69,6 +71,7 @@ export async function updateReminderSettings(
           reminderNotifications: settings.reminderNotifications,
           defaultReminderTime: settings.defaultReminderTime !== undefined ? settings.defaultReminderTime : undefined,
           defaultDelayMinutes: settings.defaultDelayMinutes !== undefined ? settings.defaultDelayMinutes : undefined,
+          defaultLaterMinutes: settings.defaultLaterMinutes !== undefined ? settings.defaultLaterMinutes : undefined,
           updatedAt: new Date(),
         })
         .where(eq(userPreferences.userId, userId))
@@ -208,6 +211,9 @@ export async function resetPreferencesToDefault(db: Database, userId: string) {
           reminderMinutes: 10,
           calendarNotificationMinutes: 10,
           defaultCalendarId: null,
+          defaultReminderTime: null,
+          defaultDelayMinutes: null,
+          defaultLaterMinutes: 60, // Default to 1 hour
           dateFormat: "DD/MM/YYYY",
           timeFormat: "24h",
           updatedAt: new Date(),

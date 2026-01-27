@@ -21,6 +21,7 @@ const preferencesSchema = z.object({
   calendarNotificationMinutes: z.number().min(1).max(1440),
   defaultReminderTime: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/).nullable().optional(),
   defaultDelayMinutes: z.number().min(1).max(1440).nullable().optional(),
+  defaultLaterMinutes: z.number().min(1).max(1440).nullable().optional(),
 });
 
 export default function PreferencesPage() {
@@ -42,6 +43,7 @@ export default function PreferencesPage() {
       calendarNotificationMinutes: 10,
       defaultReminderTime: null,
       defaultDelayMinutes: null,
+      defaultLaterMinutes: null,
     },
   });
 
@@ -66,6 +68,7 @@ export default function PreferencesPage() {
         calendarNotificationMinutes: preferences.calendarNotificationMinutes,
         defaultReminderTime: preferences.defaultReminderTime || null,
         defaultDelayMinutes: preferences.defaultDelayMinutes || null,
+        defaultLaterMinutes: preferences.defaultLaterMinutes || null,
       });
     }
   }, [preferences, reset]);
@@ -107,6 +110,7 @@ export default function PreferencesPage() {
       reminders: {
         defaultReminderTime: values.defaultReminderTime || null,
         defaultDelayMinutes: values.defaultDelayMinutes || null,
+        defaultLaterMinutes: values.defaultLaterMinutes || null,
       },
     });
   }
@@ -281,6 +285,43 @@ export default function PreferencesPage() {
               )}
               <p className="text-xs text-muted-foreground">
                 When you say "delay the reminder" without specifying how many minutes, the reminder will be delayed by this default amount. Leave empty to disable default delay.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Default "Later" Minutes */}
+        <Card className="rounded-xl">
+          <CardHeader>
+            <CardTitle>Default "Later" Time</CardTitle>
+            <CardDescription>
+              Set the default time when you say "later" in WhatsApp without specifying minutes (default: 1 hour / 60 minutes)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="default-later-minutes">
+                Default "later" time (minutes)
+              </Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  id="default-later-minutes"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  {...register("defaultLaterMinutes", { valueAsNumber: true })}
+                  className={errors.defaultLaterMinutes ? "border-red-500 w-32" : "w-32"}
+                  placeholder="e.g., 60"
+                />
+                <span className="text-sm text-muted-foreground">
+                  minutes (default: 60 = 1 hour)
+                </span>
+              </div>
+              {errors.defaultLaterMinutes && (
+                <p className="text-sm text-red-500">{errors.defaultLaterMinutes.message || "Invalid value"}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                When you say "later" in WhatsApp without specifying how many minutes, the system will use this default time. Leave empty to use the default of 1 hour (60 minutes).
               </p>
             </div>
           </CardContent>

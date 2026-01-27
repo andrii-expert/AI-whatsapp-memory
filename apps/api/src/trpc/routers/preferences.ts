@@ -50,6 +50,9 @@ export const preferencesRouter = createTRPCRouter({
               defaultDelayMinutes: input.reminders.defaultDelayMinutes !== undefined 
                 ? input.reminders.defaultDelayMinutes 
                 : current.defaultDelayMinutes,
+              defaultLaterMinutes: input.reminders.defaultLaterMinutes !== undefined 
+                ? input.reminders.defaultLaterMinutes 
+                : current.defaultLaterMinutes,
             })
           );
           
