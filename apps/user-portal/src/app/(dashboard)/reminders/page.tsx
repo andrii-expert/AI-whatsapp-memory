@@ -1830,7 +1830,7 @@ export default function RemindersPage() {
               <div className="relative flex items-start gap-2">
                 <div className="flex-1 flex flex-col gap-3">
                   <div className="flex items-center justify-between w-full gap-2">
-                    <div className="text-[24px] font-medium leading-none tracking-[-0.96px] text-black">
+                    <div className="text-[20px] font-medium leading-none tracking-[-0.96px] text-black">
                       Reminders Today: {remindersToday}
                     </div>
                     <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#F2FBFF" }}>
@@ -1884,7 +1884,7 @@ export default function RemindersPage() {
               <div className="relative flex items-start gap-2">
                 <div className="flex-1 flex flex-col gap-3">
                   <div className="flex items-center justify-between w-full gap-2">
-                    <div className="text-[24px] font-medium leading-none tracking-[-0.96px] text-black">
+                    <div className="text-[20px] font-medium leading-none tracking-[-0.96px] text-black">
                       Reminders Tomorrow: {remindersTomorrow}
                     </div>
                     <div className="w-8 h-8 flex items-center justify-center rounded-[19px]" style={{ background: "#FFFCF2" }}>
