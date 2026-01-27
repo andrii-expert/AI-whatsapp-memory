@@ -6111,7 +6111,38 @@ function parseRelativeDate(dateStr: string): string {
     return `${year}-${month}-${day}`;
   }
   
+  // Handle "next week [day]" FIRST (e.g., "next week Sunday", "next week Monday")
+  // This must come before "next [day]" to avoid incorrect matching
+  const nextWeekDayMatch = lower.match(/next\s+week\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/);
+  if (nextWeekDayMatch && nextWeekDayMatch[1]) {
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const targetDayIndex = dayNames.indexOf(nextWeekDayMatch[1]); // 0=Sunday, 1=Monday, ..., 6=Saturday
+    const currentDayOfWeek = now.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+    
+    if (targetDayIndex !== -1) {
+      // Calculate days until next Monday (week starts on Monday)
+      // If today is Monday (1), next Monday is in 7 days
+      // Otherwise: (8 - currentDow) % 7 gives days until next Monday, or 7 if that equals 0
+      const daysUntilNextMonday = currentDayOfWeek === 1 ? 7 : ((8 - currentDayOfWeek) % 7) || 7;
+      
+      // From next Monday, find the target day
+      // Monday=1, Tuesday=2, ..., Sunday=0
+      // Offset from Monday: Monday=0, Tuesday=1, ..., Sunday=6
+      const offsetFromMonday = targetDayIndex === 0 ? 6 : targetDayIndex - 1;
+      
+      const daysToAdd = daysUntilNextMonday + offsetFromMonday;
+      const targetDate = new Date(now);
+      targetDate.setDate(now.getDate() + daysToAdd);
+      
+      const year = targetDate.getFullYear();
+      const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+      const day = String(targetDate.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+  
   // Handle "next [day]" (e.g., "next Monday", "next Friday")
+  // This is for finding the next occurrence of that day (not necessarily next week)
   const nextMatch = lower.match(/next\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/);
   if (nextMatch && nextMatch[1]) {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
