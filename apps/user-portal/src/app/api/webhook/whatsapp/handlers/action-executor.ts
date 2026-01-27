@@ -6315,13 +6315,13 @@ export class ActionExecutor {
           const currentTime = this.getCurrentTimeInTimezone(timezone);
           let targetTime: string | undefined;
           
-          if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
+          // Check for explicit time FIRST (e.g., "tonight at 9pm", "today at 2pm")
+          const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+          if (timeMatch && timeMatch[1]) {
+            targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
+          } else if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
+            // Only use default "18:00" if no explicit time was found
             targetTime = '18:00';
-          } else {
-            const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-            if (timeMatch && timeMatch[1]) {
-              targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
-            }
           }
           
           if (targetTime) {
@@ -6340,13 +6340,13 @@ export class ActionExecutor {
           }
         } else {
           result.daysFromNow = 0;
-          if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
+          // Check for explicit time FIRST (e.g., "tonight at 9pm", "today at 2pm")
+          const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+          if (timeMatch && timeMatch[1]) {
+            result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+          } else if (scheduleLower.includes('tonight') || scheduleLower.includes('night')) {
+            // Only use default "18:00" if no explicit time was found
             result.time = '18:00';
-          } else {
-            const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
-            if (timeMatch && timeMatch[1]) {
-              result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
-            }
           }
         }
       } else if (scheduleLower.includes('later')) {
