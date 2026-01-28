@@ -492,6 +492,12 @@ function WhatsAppLinkingForm() {
       return;
     }
 
+    // Ensure we have an offset for the selected timezone.
+    // On slower networks, the user can click "Next" before `getTimezoneDetails` resolves.
+    if (!utcOffset) {
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -502,8 +508,13 @@ function WhatsAppLinkingForm() {
         setupStep: 2, // Move to next step: Calendar setup
       });
 
-      // Redirect to calendar connection page
-      router.push("/onboarding/calendar");
+      // Redirect to calendar connection page.
+      // `window.location.href` is more reliable on some mobile browsers than `router.push`.
+      try {
+        window.location.href = "/onboarding/calendar";
+      } catch {
+        router.push("/onboarding/calendar");
+      }
     } catch (error) {
       console.error("Failed to save settings:", error);
     } finally {
@@ -782,9 +793,9 @@ function WhatsAppLinkingForm() {
                     e.currentTarget.style.backgroundColor = '#06DB6D';
                   }}
                   onClick={handleNext}
-                  disabled={!timezone || isSubmitting}
+                  disabled={!timezone || !utcOffset || isSubmitting}
                 >
-                  {isSubmitting ? "Saving..." : "Next Step"}
+                  {isSubmitting ? "Saving..." : !utcOffset ? "Loading timezone..." : "Next Step"}
                 </Button>
               </div>
             )}
