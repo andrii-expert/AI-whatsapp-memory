@@ -182,7 +182,16 @@ export async function GET(request: NextRequest) {
         ? `${adminUrl}${redirectCookie}`
         : `${adminUrl}/dashboard`;
 
+    logger.info(
+      { userId, email, finalRedirect, redirectCookie },
+      "Google OAuth callback - redirecting admin user",
+    );
+
     const response = NextResponse.redirect(finalRedirect);
+
+    // Set auth cookie with proper domain for subdomain sharing
+    const cookieDomain =
+      process.env.NODE_ENV === "production" ? ".crackon.ai" : undefined;
 
     response.cookies.set("auth-token", token, {
       httpOnly: true,
@@ -190,12 +199,17 @@ export async function GET(request: NextRequest) {
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: "/",
-      domain:
-        process.env.NODE_ENV === "production" ? ".crackon.ai" : undefined,
+      domain: cookieDomain,
     });
 
+    // Clear OAuth state cookies
     response.cookies.delete("google_oauth_state");
     response.cookies.delete("google_oauth_redirect");
+
+    logger.info(
+      { userId, email, cookieDomain, finalRedirect },
+      "Auth cookie set, redirecting to dashboard",
+    );
 
     return response;
   } catch (error: any) {

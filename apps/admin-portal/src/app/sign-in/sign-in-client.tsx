@@ -92,8 +92,8 @@ export default function SignInClient() {
       }
 
       // Sign in successful, redirect to dashboard
-      router.push(redirect);
-      router.refresh();
+      // Use window.location to ensure cookie is sent with the request
+      window.location.href = redirect;
     } catch (err) {
       console.error("Sign in error:", err);
       setError("An error occurred. Please try again.");
