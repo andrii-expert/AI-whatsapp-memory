@@ -5,8 +5,11 @@ import { randomBytes } from "crypto";
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const GOOGLE_CLIENT_ID = "557470476714-su2iqb4cnmoq2d64trf3d19ddhkqh50m.apps.googleusercontent.com";
-const GOOGLE_CLIENT_SECRET = "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";
+const GOOGLE_CLIENT_ID =
+  process.env.GOOGLE_CLIENT_ID ||
+  "557470476714-su2iqb4cnmoq2d64trf3d19ddhkqh50m.apps.googleusercontent.com";
+const GOOGLE_CLIENT_SECRET =
+  process.env.GOOGLE_CLIENT_SECRET || "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";
 
 // Generate OAuth authorization URL for Google sign-in
 export async function GET(request: NextRequest) {
@@ -15,8 +18,12 @@ export async function GET(request: NextRequest) {
     const { google } = await import("googleapis");
     
     const url = new URL(request.url);
-    const redirectUri = url.searchParams.get("redirect_uri") || 
-      `${process.env.NEXT_PUBLIC_ADMIN_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001"}/api/auth/google/callback`;
+    // Prefer explicit admin URL if configured, otherwise use the incoming request origin.
+    // This avoids accidental redirects to the dashboard (NEXT_PUBLIC_APP_URL) which breaks OAuth redirect URIs.
+    const adminOrigin = process.env.NEXT_PUBLIC_ADMIN_URL || request.nextUrl.origin;
+    const redirectUri =
+      url.searchParams.get("redirect_uri") ||
+      `${adminOrigin}/api/auth/google/callback`;
 
     // Generate state for CSRF protection
     const state = randomBytes(32).toString("hex");

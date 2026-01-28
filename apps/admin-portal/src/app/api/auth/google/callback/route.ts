@@ -9,8 +9,11 @@ import { randomUUID } from "crypto";
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const GOOGLE_CLIENT_ID = "557470476714-su2iqb4cnmoq2d64trf3d19ddhkqh50m.apps.googleusercontent.com";
-const GOOGLE_CLIENT_SECRET = "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";
+const GOOGLE_CLIENT_ID =
+  process.env.GOOGLE_CLIENT_ID ||
+  "557470476714-su2iqb4cnmoq2d64trf3d19ddhkqh50m.apps.googleusercontent.com";
+const GOOGLE_CLIENT_SECRET =
+  process.env.GOOGLE_CLIENT_SECRET || "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";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +25,8 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get("state");
     const error = searchParams.get("error");
 
-    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+    // Use explicit admin URL if configured; otherwise infer from the callback request origin.
+    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || request.nextUrl.origin;
 
     // Check for OAuth errors
     if (error) {
@@ -152,7 +156,7 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error: any) {
     logger.error({ error }, "Google OAuth callback error");
-    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || request.nextUrl.origin;
     return NextResponse.redirect(
       `${adminUrl}/sign-in?error=${encodeURIComponent(error.message || "oauth_error")}`
     );
