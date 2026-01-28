@@ -55,11 +55,21 @@ export function TRPCReactProvider(
         httpBatchLink({
           url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002'}/trpc`,
           transformer: superjson,
+          fetch(url, options) {
+            // Ensure cookies are sent with cross-origin requests
+            return fetch(url, {
+              ...options,
+              credentials: 'include', // Send cookies automatically (including httpOnly cookies)
+              mode: 'cors', // Explicitly set CORS mode
+            });
+          },
           async headers() {
+            // Try to get token from cookie (may not work if httpOnly, but try anyway)
+            // The server will also check cookies directly via credentials: 'include'
             const token = getAuthTokenFromCookie();
 
             return {
-              Authorization: token ? `Bearer ${token}` : "",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
             };
           },
         }),
