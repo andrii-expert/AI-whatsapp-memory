@@ -145,7 +145,7 @@ function getFileIcon(fileType: string) {
   }
 }
 
-export default function DocumentPage() {
+export default function FilesPage() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -181,7 +181,7 @@ export default function DocumentPage() {
   const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleteFolderDialogOpen, setIsDeleteFolderDialogOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [viewAllDocuments, setViewAllDocuments] = useState(true);
+  const [viewAllFiles, setViewAllFiles] = useState(true);
   const [viewAllShared, setViewAllShared] = useState(false);
 
   // Share states
@@ -323,7 +323,7 @@ export default function DocumentPage() {
         setFolderToDelete(null);
         if (selectedFolderId === folderToDelete?.id) {
           setSelectedFolderId(null);
-          setViewAllDocuments(true);
+          setViewAllFiles(true);
         }
       },
       onError: (error) => {
@@ -447,20 +447,20 @@ export default function DocumentPage() {
   const handleFolderSelect = (folderId: string | null) => {
     setSelectedFolderId(folderId);
     setUploadFolderId(folderId);
-    setViewAllDocuments(false);
+    setViewAllFiles(false);
     setIsMobileSidebarOpen(false);
   };
 
-  const handleViewAllDocuments = () => {
+  const handleViewAllFiles = () => {
     setSelectedFolderId(null);
-    setViewAllDocuments(true);
+    setViewAllFiles(true);
     setViewAllShared(false);
     setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllShared = () => {
     setSelectedFolderId(null);
-    setViewAllDocuments(false);
+    setViewAllFiles(false);
     setViewAllShared(true);
     setIsMobileSidebarOpen(false);
   };
@@ -637,8 +637,8 @@ export default function DocumentPage() {
     if (viewAllShared) {
       return file.isSharedWithMe || false;
     }
-    if (viewAllDocuments) {
-      return !file.isSharedWithMe; // Only show owned files in "All Documents"
+    if (viewAllFiles) {
+      return !file.isSharedWithMe; // Only show owned files in "All Files"
     }
     if (!selectedFolderId) return !file.folderId && !file.isSharedWithMe; // Uncategorized owned files
     
@@ -828,7 +828,7 @@ export default function DocumentPage() {
             Dashboard
           </Link>
           <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">Documents</span>
+          <span className="font-medium">Files</span>
         </div>
 
         <Button
@@ -900,18 +900,18 @@ export default function DocumentPage() {
 
           {/* Folders List */}
           <div className="space-y-1">
-            {/* All Documents Button - Always show */}
+            {/* All Files Button - Always show */}
             <button
-              onClick={handleViewAllDocuments}
+              onClick={handleViewAllFiles}
               className={cn(
                 "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                viewAllDocuments
+                viewAllFiles
                   ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
                   : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
               )}
             >
               <Folder className="h-4 w-4 flex-shrink-0" />
-              <span className="flex-1 text-left">All Documents</span>
+              <span className="flex-1 text-left">All Files</span>
               <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                 {allFilesCount}
               </span>
@@ -941,7 +941,7 @@ export default function DocumentPage() {
                       key={folder.id}
                       className={cn(
                         "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
-                        selectedFolderId === folder.id && !viewAllDocuments && !viewAllShared
+                        selectedFolderId === folder.id && !viewAllFiles && !viewAllShared
                           ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
                           : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
                       )}
@@ -1096,18 +1096,18 @@ export default function DocumentPage() {
 
             {/* Folders List */}
             <div className="space-y-1">
-              {/* All Documents Button - Always show */}
+              {/* All Files Button - Always show */}
               <button
-                onClick={handleViewAllDocuments}
+                onClick={handleViewAllFiles}
                 className={cn(
                   "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                  viewAllDocuments
+                  viewAllFiles
                     ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
                     : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
                 )}
               >
                 <Folder className="h-4 w-4 flex-shrink-0" />
-                <span className="flex-1 text-left">All Documents</span>
+                <span className="flex-1 text-left">All Files</span>
                 <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
                   {allFilesCount}
                 </span>
@@ -1137,7 +1137,7 @@ export default function DocumentPage() {
                         key={folder.id}
                         className={cn(
                           "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
-                          selectedFolderId === folder.id && !viewAllDocuments && !viewAllShared
+                          selectedFolderId === folder.id && !viewAllFiles && !viewAllShared
                             ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
                             : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
                         )}
@@ -1301,7 +1301,7 @@ export default function DocumentPage() {
                         className={cn(
                           "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
                           selectedFolderId === folder.id &&
-                            !viewAllDocuments &&
+                            !viewAllFiles &&
                             !viewAllShared
                             ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300"
                             : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
@@ -1351,10 +1351,10 @@ export default function DocumentPage() {
           <div>
             {/* Desktop - Folder breadcrumb and Upload button */}
             <div className="flex items-center justify-between mb-4 gap-4">
-              {viewAllDocuments ? (
+              {viewAllFiles ? (
                 <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
                   <Folder className="h-6 w-6 flex-shrink-0 text-blue-600" />
-                  <span className="font-bold text-gray-900">All Documents</span>
+                  <span className="font-bold text-gray-900">All Files</span>
                 </div>
               ) : viewAllShared ? (
                 <div className="flex items-center gap-2 text-md text-gray-600 flex-1 min-w-0">
