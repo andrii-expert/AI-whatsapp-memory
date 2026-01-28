@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 import { verifyToken } from "./auth-helpers";
 import { logger } from "@imaginecalendar/logger";
+import { clerkClient } from "@clerk/backend";
 
 export type Session = {
   user: {
@@ -51,15 +52,43 @@ export async function verifyAccessToken(c: Context): Promise<Session | null> {
     return null;
   }
 
+  // First, try to verify as our own JWT token
   const payload = verifyToken(token);
-  if (!payload) {
-    return null;
+  if (payload) {
+    return {
+      user: {
+        id: payload.userId,
+        email: payload.email,
+      }
+    };
   }
 
-  return {
-    user: {
-      id: payload.userId,
-      email: payload.email,
+  // If not our JWT, try to verify as Clerk token
+  // Only attempt Clerk verification if CLERK_SECRET_KEY is set
+  if (process.env.CLERK_SECRET_KEY) {
+    try {
+      const clerk = clerkClient();
+      const sessionToken = await clerk.verifyToken(token);
+      
+      if (sessionToken && sessionToken.sub) {
+        // Get user info from Clerk
+        const clerkUser = await clerk.users.getUser(sessionToken.sub);
+        
+        if (clerkUser) {
+          return {
+            user: {
+              id: clerkUser.id, // Clerk user ID is used as the database user ID
+              email: clerkUser.emailAddresses[0]?.emailAddress || null,
+            }
+          };
+        }
+      }
+    } catch (error) {
+      // Not a valid Clerk token, or Clerk verification failed
+      // This is expected for non-Clerk tokens, so we don't log as error
+      logger.debug({ error: error instanceof Error ? error.message : String(error) }, "Clerk token verification failed (expected for non-Clerk tokens)");
     }
-  };
+  }
+
+  return null;
 }

@@ -9,8 +9,8 @@ import { randomUUID } from "crypto";
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const GOOGLE_CLIENT_ID = "360121159847-q96hapdstepeqdb87jt70vvn95jtc48u.apps.googleusercontent.com";
-const GOOGLE_CLIENT_SECRET = "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";
+const GOOGLE_CLIENT_ID = "557470476714-su2iqb4cnmoq2d64trf3d19ddhkqh50m.apps.googleusercontent.com";
+const GOOGLE_CLIENT_SECRET = "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";
 
 export async function GET(request: NextRequest) {
   try {
