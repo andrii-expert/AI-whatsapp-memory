@@ -18,12 +18,11 @@ export async function GET(request: NextRequest) {
     const { google } = await import("googleapis");
     
     const url = new URL(request.url);
-    // Prefer explicit admin URL if configured, otherwise use the incoming request origin.
-    // This avoids accidental redirects to the dashboard (NEXT_PUBLIC_APP_URL) which breaks OAuth redirect URIs.
-    const adminOrigin = process.env.NEXT_PUBLIC_ADMIN_URL || request.nextUrl.origin;
+    // Use explicit admin URL if configured, otherwise fallback to production URL
+    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.crackon.ai";
     const redirectUri =
       url.searchParams.get("redirect_uri") ||
-      `${adminOrigin}/api/auth/google/callback`;
+      `${adminUrl}/api/auth/google/callback`;
 
     // Generate state for CSRF protection
     const state = randomBytes(32).toString("hex");
@@ -58,9 +57,14 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error: any) {
-    console.error("Failed to generate Google OAuth URL:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error("Failed to generate Google OAuth URL:", {
+      error: errorMessage,
+      stack: errorStack,
+      adminUrl: process.env.NEXT_PUBLIC_ADMIN_URL,
+    });
     
     return NextResponse.json(
       { 

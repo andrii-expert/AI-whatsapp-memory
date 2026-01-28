@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get("state");
     const error = searchParams.get("error");
 
-    // Use explicit admin URL if configured; otherwise infer from the callback request origin.
-    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || request.nextUrl.origin;
+    // Use explicit admin URL if configured, otherwise fallback to production URL
+    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.crackon.ai";
 
     // Check for OAuth errors
     if (error) {
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error: any) {
     logger.error({ error }, "Google OAuth callback error");
-    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || request.nextUrl.origin;
+    const adminUrl = process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.crackon.ai";
     return NextResponse.redirect(
       `${adminUrl}/sign-in?error=${encodeURIComponent(error.message || "oauth_error")}`
     );

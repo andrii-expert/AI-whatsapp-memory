@@ -15,6 +15,33 @@ const config = {
     ignoreBuildErrors: true,
   },
   devIndicators: false,
+  // Externalize googleapis to prevent bundling issues
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals || [];
+      if (typeof config.externals === 'function') {
+        const originalExternals = config.externals;
+        config.externals = [
+          ...(Array.isArray(originalExternals) ? originalExternals : []),
+          ({ request }, callback) => {
+            // Externalize googleapis to prevent bundling during build
+            if (request === 'googleapis' || request?.startsWith('googleapis/')) {
+              return callback(null, `commonjs ${request}`);
+            }
+            if (typeof originalExternals === 'function') {
+              return originalExternals({ request }, callback);
+            }
+            callback();
+          },
+        ];
+      } else if (Array.isArray(config.externals)) {
+        config.externals.push({
+          googleapis: 'commonjs googleapis',
+        });
+      }
+    }
+    return config;
+  },
   async headers() {
     return [
       {
