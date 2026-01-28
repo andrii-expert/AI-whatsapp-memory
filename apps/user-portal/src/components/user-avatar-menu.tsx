@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, User, CreditCard, FileText, Settings, ChevronDown, MessageCircle, BookOpen } from "lucide-react";
+import { LogOut, User, CreditCard, FileText, Settings, ChevronDown, MessageCircle, BookOpen, Users } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -87,6 +87,18 @@ export function UserAvatarMenu() {
 
         {/* Menu Items */}
         <div className="space-y-0.5">
+          <DropdownMenuItem asChild>
+            <Link 
+              href="/friends" 
+              className="flex items-center gap-3 px-3 py-1.5 rounded-md cursor-pointer transition-colors hover:bg-accent"
+            >
+              <div className="flex items-center justify-center w-8 h-8 rounded-md">
+                <Users className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-medium">Friends</span>
+            </Link>
+          </DropdownMenuItem>
+          
           <DropdownMenuItem asChild>
             <Link 
               href="/settings/profile" 
