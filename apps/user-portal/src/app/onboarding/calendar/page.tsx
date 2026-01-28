@@ -149,8 +149,8 @@ function CalendarConnectionForm() {
         } catch (error) {
           // Fallback to router.push if window.location fails
           console.error("Failed to redirect with window.location, using router:", error);
-          router.push("/onboarding/billing");
-          router.refresh();
+        router.push("/onboarding/billing");
+        router.refresh();
         }
       },
       onError: (error) => {
