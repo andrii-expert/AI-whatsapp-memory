@@ -10,7 +10,8 @@
   },
   "exports": {
     "./trpc/routers/_app": "./src/trpc/routers/_app.ts",
-    "./utils/email": "./src/utils/email.ts"
+    "./utils/email": "./src/utils/email.ts",
+    "./utils/auth-helpers": "./src/utils/auth-helpers.ts"
   },
   "dependencies": {
     "@bull-board/api": "^6.13.0",

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@api/utils/auth-helpers";
+import { verifyToken } from "@imaginecalendar/api/utils/auth-helpers";
 import { connectDb } from "@imaginecalendar/database/client";
 import { getUserById } from "@imaginecalendar/database/queries";
 
