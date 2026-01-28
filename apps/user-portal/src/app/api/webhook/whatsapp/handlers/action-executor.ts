@@ -6510,6 +6510,24 @@ export class ActionExecutor {
     const scheduleLower = schedule.toLowerCase().trim();
     const result: Partial<CreateReminderInput> = {};
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    
+    // Get default reminder time from user preferences
+    let defaultTime = '09:00'; // Fallback default
+    try {
+      const preferences = await getUserPreferences(this.db, this.userId);
+      if (preferences?.defaultReminderTime) {
+        defaultTime = preferences.defaultReminderTime;
+        logger.info(
+          {
+            userId: this.userId,
+            defaultReminderTime: defaultTime,
+          },
+          'Using default reminder time from preferences'
+        );
+      }
+    } catch (error) {
+      logger.warn({ error, userId: this.userId }, 'Failed to get user preferences for default reminder time, using default 09:00');
+    }
 
     // Check for "every [day]" pattern first (e.g., "every tuesday", "every monday", "every thursday and friday")
     // Match patterns like: "every thursday", "every thursday and friday", "every thursday, friday", "every thursday and friday and saturday"
@@ -6545,8 +6563,8 @@ export class ActionExecutor {
       if (timeMatch && timeMatch[1]) {
         result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
       } else {
-        // Default to 9am if no time specified
-        result.time = '09:00';
+        // Use default reminder time from preferences if no time specified
+        result.time = defaultTime;
       }
       return result;
     }
@@ -6559,8 +6577,8 @@ export class ActionExecutor {
       if (timeMatch && timeMatch[1]) {
         result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
       } else {
-        // Default to 9am if no time specified
-        result.time = '09:00';
+        // Use default reminder time from preferences if no time specified
+        result.time = defaultTime;
       }
     } else if (scheduleLower.includes('every week') || scheduleLower.includes('weekly')) {
       result.frequency = 'weekly';
@@ -6589,8 +6607,8 @@ export class ActionExecutor {
       if (timeMatch && timeMatch[1]) {
         result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
       } else {
-        // Default to 8am if no time specified
-        result.time = '08:00';
+        // Use default reminder time from preferences if no time specified
+        result.time = defaultTime;
       }
     } else if (scheduleLower.includes('every month') || scheduleLower.includes('monthly') || scheduleLower.includes('of each month') || scheduleLower.includes('each month')) {
       result.frequency = 'monthly';
@@ -6624,8 +6642,8 @@ export class ActionExecutor {
       if (timeMatch && timeMatch[1]) {
         result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
       } else {
-        // Default to 9am if no time specified
-        result.time = '09:00';
+        // Use default reminder time from preferences if no time specified
+        result.time = defaultTime;
       }
     } else if (scheduleLower.includes('every hour') || scheduleLower.includes('hourly')) {
       result.frequency = 'hourly';
@@ -6733,7 +6751,7 @@ export class ActionExecutor {
         if (timezone) {
           // Calculate tomorrow in user's timezone
           const currentTime = this.getCurrentTimeInTimezone(timezone);
-          let targetTime = '09:00'; // Default time
+          let targetTime = defaultTime; // Use default reminder time from preferences
           
           // Extract time based on time of day or explicit time
           if (scheduleLower.includes('morning')) {
@@ -6775,8 +6793,8 @@ export class ActionExecutor {
             if (timeMatch && timeMatch[1]) {
               result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
             } else {
-              // Default to 9am for tomorrow if no time specified
-              result.time = '09:00';
+              // Use default reminder time from preferences for tomorrow if no time specified
+              result.time = defaultTime;
             }
           }
         }
@@ -6900,7 +6918,7 @@ export class ActionExecutor {
         if (timeMatch && timeMatch[1]) {
           targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
         }
-        const targetTimeForDate = targetTime || '09:00'; // fallback only for constructing a Date
+        const targetTimeForDate = targetTime || defaultTime; // fallback only for constructing a Date
 
         if (timezone) {
           const currentTime = this.getCurrentTimeInTimezone(timezone);
@@ -6988,7 +7006,7 @@ export class ActionExecutor {
         if (timeMatch && timeMatch[1]) {
           targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
         }
-        const targetTimeForDate = targetTime || '09:00'; // fallback only for constructing a Date
+        const targetTimeForDate = targetTime || defaultTime; // fallback only for constructing a Date
 
         if (timezone) {
           const currentTime = this.getCurrentTimeInTimezone(timezone);
@@ -7041,8 +7059,8 @@ export class ActionExecutor {
 
               const targetDate = new Date(currentTime.year, currentTime.month, currentTime.day + diff);
 
-              // Preserve existing time if present in schedule string; otherwise default to 09:00
-              let targetTime = '09:00';
+              // Preserve existing time if present in schedule string; otherwise use default reminder time from preferences
+              let targetTime = defaultTime;
               const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
               if (timeMatch && timeMatch[1]) {
                 targetTime = this.parseTimeTo24Hour(timeMatch[1].trim());
@@ -7136,8 +7154,8 @@ export class ActionExecutor {
                 targetYear = currentYear + 1;
               }
               
-              // Use existing time if specified, otherwise default to 09:00
-              let targetTime = result.time || '09:00';
+              // Use existing time if specified, otherwise use default reminder time from preferences
+              let targetTime = result.time || defaultTime;
               const [hours, minutes] = targetTime.split(':').map(Number);
               
               result.targetDate = this.createDateInUserTimezone(
@@ -7162,7 +7180,7 @@ export class ActionExecutor {
               
               const targetDate = new Date(finalYear, monthIndex, dayNum);
               result.targetDate = targetDate;
-              result.time = result.time || '09:00';
+              result.time = result.time || defaultTime;
             }
           }
         } else {
@@ -7268,6 +7286,17 @@ export class ActionExecutor {
         },
         'Parsing reminder schedule'
       );
+
+      // Get default reminder time from preferences for use in createReminder (e.g., for birthdays)
+      let defaultTime = '09:00'; // Fallback default
+      try {
+        const preferences = await getUserPreferences(this.db, this.userId);
+        if (preferences?.defaultReminderTime) {
+          defaultTime = preferences.defaultReminderTime;
+        }
+      } catch (error) {
+        logger.warn({ error, userId: this.userId }, 'Failed to get user preferences for default reminder time in createReminder');
+      }
 
       const scheduleData = await this.parseReminderSchedule(scheduleStr, timezone);
       
@@ -7423,9 +7452,9 @@ export class ActionExecutor {
           scheduleData.dayOfMonth = tomorrow.getDate();
         }
 
-        // Default time to 9am for birthdays if not specified
+        // Use default reminder time from preferences for birthdays if not specified
         if (!scheduleData.time) {
-          scheduleData.time = '09:00';
+          scheduleData.time = defaultTime;
         }
 
         // For birthdays we store month/day + time; targetDate is optional and can remain unset.
