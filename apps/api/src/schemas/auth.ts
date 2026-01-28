@@ -9,7 +9,7 @@ export const ensureUserExistsSchema = z.object({
   name: z.string().optional(),
 });
 
-// User sync schema (from Clerk webhook or manual sync)
+// User sync schema (from external source or manual sync)
 export const syncUserSchema = z.object({
   id: z.string(),
   email: z.string().email(),

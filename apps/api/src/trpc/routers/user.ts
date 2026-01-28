@@ -96,13 +96,8 @@ export const userRouter = createTRPCRouter({
     }),
 
   delete: protectedProcedure.mutation(async ({ ctx: { db, session } }) => {
-    // Delete user from database and Clerk
-    const [data] = await Promise.all([
-      deleteUser(db, session.user.id),
-      // TODO: Add Clerk user deletion here
-      // clerkClient.users.deleteUser(session.user.id),
-    ]);
-
+    // Delete user from database
+    const data = await deleteUser(db, session.user.id);
     return data;
   }),
 

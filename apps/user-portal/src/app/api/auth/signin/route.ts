@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if user has a password (migrated from Clerk)
+    // Check if user has a password
     if (!user.passwordHash) {
       return NextResponse.json(
         { error: "Please reset your password to continue" },

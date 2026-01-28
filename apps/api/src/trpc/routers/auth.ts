@@ -95,7 +95,7 @@ export const authRouter = createTRPCRouter({
     };
   }),
 
-  // Check if user needs onboarding (from database, not Clerk)
+    // Check if user needs onboarding (from database)
   checkOnboarding: protectedProcedure.query(async ({ ctx: { db, c, session } }) => {
     const checkStartTime = Date.now();
     logger.info({ 
@@ -137,28 +137,6 @@ export const authRouter = createTRPCRouter({
         queryDuration: Date.now() - checkStartTime,
         checkTime: new Date().toISOString(),
       }, "[ONBOARDING_CHECK] Onboarding status determined");
-      
-      // Also update Clerk metadata in background if needed (fire and forget)
-      if (isOnboarded) {
-        const clerkClient = c.get('clerk');
-        if (clerkClient) {
-          // Update Clerk metadata asynchronously if not already set
-          clerkClient.users.getUser(session.user.id).then(clerkUser => {
-            if (clerkUser.publicMetadata?.onboardingComplete !== true) {
-              clerkClient.users.updateUser(session.user.id, {
-                publicMetadata: {
-                  ...clerkUser.publicMetadata,
-                  onboardingComplete: true,
-                },
-              }).catch(err => {
-                logger.warn({ error: err, userId: session.user.id }, "Failed to sync Clerk metadata");
-              });
-            }
-          }).catch(() => {
-            // Ignore errors - Clerk is not critical for onboarding check
-          });
-        }
-      }
       
       return { 
         needsOnboarding: !isOnboarded, 
@@ -355,27 +333,6 @@ export const authRouter = createTRPCRouter({
         logger.info({ userId: session.user.id }, "Default 'General' note folder created");
       }
 
-      // Update Clerk metadata
-      const clerkClient = c.get('clerk');
-      
-      if (clerkClient) {
-        try {
-          await clerkClient.users.updateUser(session.user.id, {
-            publicMetadata: {
-              onboardingComplete: true,
-              onboardedAt: new Date().toISOString(),
-              plan: planRecord.id,
-            },
-          });
-          logger.info({ userId: session.user.id }, "Clerk metadata updated successfully");
-        } catch (error) {
-          logger.error({ error, userId: session.user.id }, "Failed to update Clerk metadata");
-          // Don't fail the onboarding if metadata update fails
-          // The user is already created in our database
-        }
-      } else {
-        logger.warn({ userId: session.user.id }, "Clerk client not available, skipping metadata update");
-      }
 
       const finalUser = await getUserById(db, session.user.id);
       
@@ -517,7 +474,7 @@ export const authRouter = createTRPCRouter({
       });
     }),
 
-  // Sync user from Clerk webhook (optional)
+  // Sync user from external source (optional)
   syncUser: publicProcedure
     .input(syncUserSchema)
     .mutation(async ({ ctx: { db }, input }) => {

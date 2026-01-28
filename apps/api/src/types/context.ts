@@ -5,6 +5,5 @@ export type Context = {
   Variables: {
     db: Database;
     session: Session;
-    // clerk and clerkAuth are automatically added by @hono/clerk-auth module declaration
   };
 };
