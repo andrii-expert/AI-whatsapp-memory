@@ -8,8 +8,20 @@ const publicRoutes = [
   "/unauthorized",
 ];
 
+// Define public API routes that don't require authentication
+const publicApiRoutes = [
+  "/api/auth/google",
+  "/api/auth/google/callback",
+  "/api/auth/signin",
+  "/api/auth/signout",
+];
+
 function isPublicRoute(pathname: string): boolean {
   return publicRoutes.some(route => pathname === route || pathname.startsWith(route + "/"));
+}
+
+function isPublicApiRoute(pathname: string): boolean {
+  return publicApiRoutes.some(route => pathname === route || pathname.startsWith(route + "/"));
 }
 
 export async function middleware(req: NextRequest) {
@@ -17,6 +29,11 @@ export async function middleware(req: NextRequest) {
 
   // Allow public routes
   if (isPublicRoute(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Allow public API routes (auth endpoints)
+  if (isPublicApiRoute(pathname)) {
     return NextResponse.next();
   }
 

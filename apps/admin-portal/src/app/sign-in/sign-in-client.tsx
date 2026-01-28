@@ -38,10 +38,23 @@ export default function SignInClient() {
 
     try {
       const response = await fetch("/api/auth/google");
+      
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Non-JSON response from /api/auth/google:", text.substring(0, 200));
+        throw new Error("Server returned an invalid response. Please try again.");
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to initiate Google sign-in");
+      }
+
+      if (!data.authUrl) {
+        throw new Error("Invalid response from server");
       }
 
       // Redirect to Google OAuth
