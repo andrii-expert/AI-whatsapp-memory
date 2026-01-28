@@ -45,55 +45,29 @@ import { CheckIcon, ChevronDownIcon, CheckCircle2 } from "lucide-react";
 import QRCode from "qrcode";
 import { useToast } from "@imaginecalendar/ui/use-toast";
 
-// Component to handle phone saving and verification polling (background only, no UI)
+// Component to handle verification polling (background only, no UI)
+// Does NOT save phone number - that's only done when user clicks the button
 function PhoneVerificationFlow({
   phoneNumber,
-  userPhone,
   onVerified,
-  savePhoneMutation,
 }: {
   phoneNumber: string;
-  userPhone?: string | null;
   onVerified: () => void;
-  savePhoneMutation: any;
 }) {
   const normalizedPhone = normalizePhoneNumber(phoneNumber);
-  const [phoneSaved, setPhoneSaved] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [hasNotifiedVerified, setHasNotifiedVerified] = useState(false);
   const trpc = useTRPC();
   
   // Poll for verification status every 1 second
-  const { data: whatsappNumbers = [], refetch } = useQuery({
+  const { data: whatsappNumbers = [] } = useQuery({
     ...trpc.whatsapp.getMyNumbers.queryOptions(),
     refetchInterval: 1000, // Poll every 1 second
   });
 
-  // Check if phone needs to be saved
-  useEffect(() => {
-    if (normalizedPhone && normalizedPhone !== userPhone && !phoneSaved && !isSaving) {
-      setIsSaving(true);
-      savePhoneMutation.mutate(
-        { phone: normalizedPhone },
-        {
-          onSuccess: () => {
-            setPhoneSaved(true);
-            setIsSaving(false);
-          },
-          onError: (_error: unknown) => {
-            // Error is already handled by mutation's onError handler which shows toast
-            setIsSaving(false);
-          },
-        }
-      );
-    } else if (normalizedPhone === userPhone) {
-      setPhoneSaved(true);
-    }
-  }, [normalizedPhone, userPhone, phoneSaved, isSaving, savePhoneMutation]);
-
+  // Check if phone is verified and notify parent
   useEffect(() => {
     const verifiedNumber = whatsappNumbers.find((num: any) => 
-      num.phoneNumber === normalizedPhone && num.isVerified
+      normalizePhoneNumber(num.phoneNumber) === normalizedPhone && num.isVerified
     );
     // Call onVerified only once, when we first detect verification for this specific number
     if (verifiedNumber && !hasNotifiedVerified) {
@@ -101,24 +75,6 @@ function PhoneVerificationFlow({
       onVerified();
     }
   }, [whatsappNumbers, normalizedPhone, onVerified, hasNotifiedVerified]);
-
-  // Poll every 1 second if not verified (query already polls, but we also refetch on demand)
-  useEffect(() => {
-    if (!phoneSaved) return;
-    
-    const verifiedNumber = whatsappNumbers.find((num: any) => 
-      num.phoneNumber === normalizedPhone && num.isVerified
-    );
-    
-    // If not verified, ensure we're polling (query already handles this, but we can trigger refetch)
-    if (!verifiedNumber) {
-      const interval = setInterval(() => {
-        refetch();
-      }, 1000); // Poll every 1 second
-
-      return () => clearInterval(interval);
-    }
-  }, [phoneSaved, whatsappNumbers, normalizedPhone, refetch]);
 
   // Return null - this component only handles background polling
   return null;
@@ -366,7 +322,7 @@ function WhatsAppLinkingForm() {
 
   const { toast } = useToast();
 
-  // Save phone number mutation
+  // Save phone number mutation - shows error toast (only called when user clicks button)
   const savePhoneMutation = useMutation(
     trpc.user.update.mutationOptions({
       onSuccess: () => {
@@ -767,7 +723,6 @@ function WhatsAppLinkingForm() {
             {phoneNumber && !isVerified && (
               <PhoneVerificationFlow
                 phoneNumber={phoneNumber}
-                userPhone={user?.phone}
                 onVerified={() => {
                   setIsVerified(true);
                   setShowVerification(false);
@@ -777,7 +732,6 @@ function WhatsAppLinkingForm() {
                   setHasInitiatedVerification(false);
                   refetchNumbers();
                 }}
-                savePhoneMutation={savePhoneMutation}
               />
             )}
 
