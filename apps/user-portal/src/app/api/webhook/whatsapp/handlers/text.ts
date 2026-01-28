@@ -95,6 +95,7 @@ function isValidTemplateResponse(text: string): boolean {
     /^Create a shopping list category:/i,
     /^Create a reminder:/i,
     /^Update a reminder:/i,
+    /^Update all reminders:/i,
     /^Move a reminder:/i,
     /^Delete a reminder:/i,
     /^Delete all reminders$/i,
@@ -2975,7 +2976,7 @@ async function processAIResponse(
     } else if (titleType === 'reminder') {
       // Handle reminder operations
       const isCreate = /^Create a reminder:/i.test(actionTemplate);
-      const isUpdate = /^Update a reminder:/i.test(actionTemplate);
+      const isUpdate = /^Update a reminder:/i.test(actionTemplate) || /^Update all reminders:/i.test(actionTemplate);
       const isMove = /^Move a reminder:/i.test(actionTemplate);
       const isDelete = /^Delete a reminder:/i.test(actionTemplate) || /^Delete all reminders$/i.test(actionTemplate);
       const isPause = /^Pause a reminder:/i.test(actionTemplate);
@@ -3084,7 +3085,7 @@ async function processAIResponse(
         const allActionsAreDeleteReminder = actionLines.every(l => /^Delete a reminder:/i.test(l) || /^Delete all reminders$/i.test(l));
 
         for (const line of actionLines) {
-          const parsed = parseReminderTemplateToAction(line, /^Create a reminder:/i.test(line), /^Update a reminder:/i.test(line) || /^Move a reminder:/i.test(line), /^Delete a reminder:/i.test(line) || /^Delete all reminders$/i.test(line), /^Pause a reminder:/i.test(line), /^Resume a reminder:/i.test(line));
+          const parsed = parseReminderTemplateToAction(line, /^Create a reminder:/i.test(line), /^Update a reminder:/i.test(line) || /^Update all reminders:/i.test(line) || /^Move a reminder:/i.test(line), /^Delete a reminder:/i.test(line) || /^Delete all reminders$/i.test(line), /^Pause a reminder:/i.test(line), /^Resume a reminder:/i.test(line));
           const result = await executor.executeAction(parsed, calendarTimezone);
           if (result.success) {
             successCount++;
@@ -5936,15 +5937,25 @@ function parseReminderTemplateToAction(
     }
   } else if (isUpdate) {
     action = 'edit';
-    // Parse: "Update a reminder: {title} - to: {changes}" or "Move a reminder: {title} - to: {changes}"
-    const updateMatch = template.match(/^(?:Update|Move) a reminder:\s*(.+?)(?:\s*-\s*to:\s*(.+?))?$/i);
-    if (updateMatch && updateMatch[1]) {
-      reminderTitle = updateMatch[1].trim();
+    // Check for "Update all reminders:" first
+    const allRemindersMatch = template.match(/^Update all reminders:\s*(.+?)(?:\s*-\s*to:\s*(.+?))?$/i);
+    if (allRemindersMatch) {
+      // Bulk update: "Update all reminders: {filter} - to: {changes}"
+      reminderTitle = `all reminders${allRemindersMatch[1] ? ` ${allRemindersMatch[1].trim()}` : ''}`;
+      if (allRemindersMatch[2]) {
+        reminderChanges = allRemindersMatch[2].trim();
+      }
     } else {
-      missingFields.push('reminder title');
-    }
-    if (updateMatch && updateMatch[2]) {
-      reminderChanges = updateMatch[2].trim();
+      // Parse: "Update a reminder: {title} - to: {changes}" or "Move a reminder: {title} - to: {changes}"
+      const updateMatch = template.match(/^(?:Update|Move) a reminder:\s*(.+?)(?:\s*-\s*to:\s*(.+?))?$/i);
+      if (updateMatch && updateMatch[1]) {
+        reminderTitle = updateMatch[1].trim();
+      } else {
+        missingFields.push('reminder title');
+      }
+      if (updateMatch && updateMatch[2]) {
+        reminderChanges = updateMatch[2].trim();
+      }
     }
   } else if (isDelete) {
     action = 'delete';

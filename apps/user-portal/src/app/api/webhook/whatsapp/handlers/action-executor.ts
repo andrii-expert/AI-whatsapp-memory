@@ -7834,6 +7834,218 @@ export class ActionExecutor {
         };
       }
 
+      const taskNameLower = parsed.taskName.toLowerCase().trim();
+
+      // Handle bulk update: "all reminders" or "all reminders today", etc.
+      const isBulkUpdate = taskNameLower.startsWith('all reminders');
+      
+      if (isBulkUpdate) {
+        // Extract filter from taskName (e.g., "all reminders today" -> "today")
+        const filterMatch = taskNameLower.match(/^all reminders(?:\s+(.+))?$/);
+        const filterText = filterMatch && filterMatch[1] ? filterMatch[1].trim() : 'all';
+        
+        // Get all reminders
+        const allReminders = await getRemindersByUserId(this.db, this.userId);
+        
+        if (allReminders.length === 0) {
+          return {
+            success: false,
+            message: "You don't have any reminders to update.",
+          };
+        }
+
+        // Get user timezone
+        const user = await getUserById(this.db, this.userId);
+        const userTimezone = timezone || user?.timezone || 'UTC';
+        const now = new Date();
+        const userNowString = now.toLocaleString("en-US", { timeZone: userTimezone });
+        const userNow = new Date(userNowString);
+
+        // Filter reminders based on filter text
+        let remindersToUpdate: any[] = [];
+        let filterType = '';
+
+        if (filterText === 'all' || filterText === '') {
+          remindersToUpdate = allReminders;
+          filterType = 'all';
+        } else if (filterText === 'today' || filterText.includes('today')) {
+          // Filter reminders scheduled for today
+          const userLocalTime = {
+            year: userNow.getFullYear(),
+            month: userNow.getMonth(),
+            day: userNow.getDate(),
+            hours: userNow.getHours(),
+            minutes: userNow.getMinutes(),
+            seconds: userNow.getSeconds(),
+            date: userNow
+          };
+          
+          remindersToUpdate = allReminders.filter(r => {
+            // Use the existing method to check if reminder is scheduled for today
+            return this.isReminderScheduledForDate(r, userLocalTime, userTimezone);
+          });
+          filterType = 'today';
+        } else if (filterText === 'tomorrow' || filterText.includes('tomorrow')) {
+          const tomorrow = addDays(userNow, 1);
+          const tomorrowStart = startOfDay(tomorrow);
+          const tomorrowEnd = endOfDay(tomorrow);
+          
+          remindersToUpdate = allReminders.filter(r => {
+            if (r.targetDate) {
+              const targetDate = new Date(r.targetDate);
+              return targetDate >= tomorrowStart && targetDate <= tomorrowEnd;
+            }
+            return this.isReminderScheduledForDate(r, {
+              year: tomorrow.getFullYear(),
+              month: tomorrow.getMonth(),
+              day: tomorrow.getDate(),
+              hours: tomorrow.getHours(),
+              minutes: tomorrow.getMinutes(),
+              seconds: tomorrow.getSeconds(),
+              date: tomorrow
+            }, userTimezone);
+          });
+          filterType = 'tomorrow';
+        } else {
+          // Unknown filter - return error
+          return {
+            success: false,
+            message: `I don't understand the filter "${filterText}". Supported filters: all, today, tomorrow.`,
+          };
+        }
+
+        if (remindersToUpdate.length === 0) {
+          return {
+            success: false,
+            message: `You don't have any reminders ${filterType === 'all' ? '' : `for ${filterType}`} to update.`,
+          };
+        }
+
+        // Check if this is a delay operation
+        if (!parsed.newName) {
+          return {
+            success: false,
+            message: "I need to know what changes to make. Please specify the update (e.g., 'delay by 10 minutes').",
+          };
+        }
+
+        const changes = parsed.newName.toLowerCase();
+        const delayMatch = changes.match(/delay(?:\s+the\s+reminder)?(?:\s+by)?\s*(\d+)?\s*(?:minutes?|mins?)?/i);
+        
+        if (!delayMatch) {
+          return {
+            success: false,
+            message: "Bulk updates currently only support delay operations. Please use 'delay by X minutes'.",
+          };
+        }
+
+        // Extract delay minutes
+        let delayMinutes: number | null = null;
+        if (delayMatch[1]) {
+          delayMinutes = parseInt(delayMatch[1], 10);
+        } else {
+          // Get default delay minutes from preferences
+          try {
+            const preferences = await getUserPreferences(this.db, this.userId);
+            if (preferences?.defaultDelayMinutes) {
+              delayMinutes = preferences.defaultDelayMinutes;
+            }
+          } catch (error) {
+            logger.warn({ error, userId: this.userId }, 'Failed to get user preferences for default delay minutes');
+          }
+        }
+
+        if (!delayMinutes || delayMinutes <= 0) {
+          return {
+            success: false,
+            message: "I couldn't determine how long to delay the reminders. Please specify the delay time (e.g., 'delay by 10 minutes') or set a default delay in your preferences.",
+          };
+        }
+
+        // Apply delay to all matching reminders
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const reminder of remindersToUpdate) {
+          try {
+            const updateInput: UpdateReminderInput = {};
+            
+            // Calculate new time by adding delay minutes to current reminder time
+            let currentTime: string | null = reminder.time || null;
+            let currentDate: Date | null = reminder.targetDate ? new Date(reminder.targetDate) : null;
+            
+            // If no time is set, use current time in user's timezone
+            if (!currentTime) {
+              const currentTimeComponents = this.getCurrentTimeInTimezone(userTimezone);
+              currentTime = `${String(currentTimeComponents.hour).padStart(2, '0')}:${String(currentTimeComponents.minute).padStart(2, '0')}`;
+              currentDate = userNow;
+            }
+            
+            // If no date is set, use current date
+            if (!currentDate) {
+              currentDate = userNow;
+            }
+            
+            // Parse current time and add delay minutes
+            const [hours, minutes] = currentTime.split(':').map(Number);
+            const currentDateTime = new Date(currentDate);
+            currentDateTime.setHours(hours, minutes, 0, 0);
+            
+            // Add delay minutes
+            const delayedDateTime = new Date(currentDateTime.getTime() + delayMinutes * 60 * 1000);
+            
+            // Extract new time
+            const newHours = delayedDateTime.getHours();
+            const newMinutes = delayedDateTime.getMinutes();
+            const newTime = `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+            
+            // Update reminder with new time
+            updateInput.time = newTime;
+            
+            // Update targetDate
+            const formatter = new Intl.DateTimeFormat('en-US', {
+              timeZone: userTimezone,
+              year: 'numeric',
+              month: 'numeric',
+              day: 'numeric',
+            });
+            const parts = formatter.formatToParts(delayedDateTime);
+            const getPart = (type: string) => parts.find(p => p.type === type)?.value || '0';
+            
+            const year = parseInt(getPart('year'), 10);
+            const month = parseInt(getPart('month'), 10) - 1; // 0-indexed
+            const day = parseInt(getPart('day'), 10);
+            
+            updateInput.targetDate = this.createDateInUserTimezone(year, month, day, newHours, newMinutes, userTimezone);
+            
+            // Clear daysFromNow since we're using targetDate
+            updateInput.daysFromNow = null;
+            // Ensure frequency is "once" for delayed reminders
+            updateInput.frequency = 'once';
+            
+            await updateReminder(this.db, reminder.id, this.userId, updateInput);
+            successCount++;
+          } catch (error) {
+            logger.error({ error, userId: this.userId, reminderId: reminder.id }, 'Failed to update reminder in bulk operation');
+            failCount++;
+          }
+        }
+
+        logger.info({ userId: this.userId, count: successCount, filterType, delayMinutes }, `Bulk updated ${filterType} reminders`);
+
+        const filterLabel = filterType === 'all' ? 'All' : filterType === 'today' ? "Today's" : "Tomorrow's";
+        if (failCount > 0) {
+          return {
+            success: true,
+            message: `⏰ *${filterLabel} Reminders Delayed:*\nDelayed ${successCount} reminder${successCount === 1 ? '' : 's'} by ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'}.\n${failCount} reminder${failCount === 1 ? '' : 's'} failed to update.`,
+          };
+        }
+        return {
+          success: true,
+          message: `⏰ *${filterLabel} Reminders Delayed:*\nDelayed ${successCount} reminder${successCount === 1 ? '' : 's'} by ${delayMinutes} minute${delayMinutes === 1 ? '' : 's'}.`,
+        };
+      }
+
       // Support number-based updates using last reminders list context
       const numberTokens = parsed.taskName
         .split(/[\s,]+|and/i)
