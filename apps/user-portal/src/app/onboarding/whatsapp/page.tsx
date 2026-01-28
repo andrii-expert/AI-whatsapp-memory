@@ -43,6 +43,7 @@ import {
 } from "@imaginecalendar/ui/command";
 import { CheckIcon, ChevronDownIcon, CheckCircle2 } from "lucide-react";
 import QRCode from "qrcode";
+import { useToast } from "@imaginecalendar/ui/use-toast";
 
 // Component to handle phone saving and verification polling (background only, no UI)
 function PhoneVerificationFlow({
@@ -79,7 +80,8 @@ function PhoneVerificationFlow({
             setPhoneSaved(true);
             setIsSaving(false);
           },
-          onError: () => {
+          onError: (_error: unknown) => {
+            // Error is already handled by mutation's onError handler which shows toast
             setIsSaving(false);
           },
         }
@@ -277,6 +279,22 @@ function WhatsAppLinkingForm() {
     }
   }, [whatsappNumbers, user?.phone, isLoadingNumbers, phoneNumber, isVerified]);
 
+  // Initialize timezone and country from user data if available
+  // Use polledUser for full user data (includes timezone/utcOffset)
+  useEffect(() => {
+    const currentUser = polledUser || user;
+    if (currentUser && !timezone) {
+      const userWithTimezone = currentUser as any;
+      if (userWithTimezone.timezone) {
+        setTimezone(userWithTimezone.timezone);
+        // Also set UTC offset from user data if available
+        if (userWithTimezone.utcOffset) {
+          setUtcOffset(userWithTimezone.utcOffset);
+        }
+      }
+    }
+  }, [polledUser, timezone]);
+
   // Initialize country from existing timezone or default to South Africa
   useEffect(() => {
     if (timezone && !selectedCountry) {
@@ -312,8 +330,8 @@ function WhatsAppLinkingForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry]);
 
-  // Fetch UTC offset when timezone changes
-  const { data: timezoneData } = useQuery(
+  // Fetch UTC offset when timezone changes (with fallback to local calculation)
+  const { data: timezoneData, isLoading: isLoadingTimezone, error: timezoneError } = useQuery(
     timezone 
       ? trpc.user.getTimezoneDetails.queryOptions({ timezone })
       : {
@@ -322,11 +340,31 @@ function WhatsAppLinkingForm() {
         }
   );
 
+  // Set UTC offset when timezone changes - use local fallback if API fails
   useEffect(() => {
-    if (timezoneData?.utcOffset) {
-      setUtcOffset(timezoneData.utcOffset);
+    if (timezone) {
+      // First, try to get UTC offset from local utility (immediate, no API call)
+      const localUtcOffset = getTimezoneUtcOffset(timezone);
+      if (localUtcOffset) {
+        setUtcOffset(localUtcOffset);
+      }
+      
+      // Then, try to update from API if available (more accurate, accounts for DST)
+      if (timezoneData?.utcOffset) {
+        setUtcOffset(timezoneData.utcOffset);
+      }
+      
+      // If API query failed and we don't have a local fallback, log error
+      if (timezoneError && !localUtcOffset) {
+        console.warn("Failed to get UTC offset from API and no local fallback available:", timezoneError);
+      }
+    } else {
+      // Clear UTC offset if timezone is cleared
+      setUtcOffset("");
     }
-  }, [timezoneData]);
+  }, [timezone, timezoneData, timezoneError]);
+
+  const { toast } = useToast();
 
   // Save phone number mutation
   const savePhoneMutation = useMutation(
@@ -335,8 +373,14 @@ function WhatsAppLinkingForm() {
         // Phone saved, verification section will handle the rest
       },
       onError: (error) => {
-        // Error handling without toast
         console.error("Failed to save phone number:", error);
+        // Extract error message from TRPC error
+        const errorMessage = error?.message || "Failed to save phone number. Please try again.";
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       },
     })
   );
@@ -504,6 +548,7 @@ function WhatsAppLinkingForm() {
         console.log("Phone number saved successfully");
       } catch (error: any) {
         console.error("Error saving phone number:", error);
+        // Error is already handled by mutation's onError handler which shows toast
         setIsSavingPhone(false);
         return;
       }
@@ -823,8 +868,14 @@ function WhatsAppLinkingForm() {
                     // Only set timezone if value is not empty
                     if (value && value.trim() !== "") {
                       setTimezone(value);
+                      // Immediately set UTC offset from local utility (no API wait)
+                      const localUtcOffset = getTimezoneUtcOffset(value);
+                      if (localUtcOffset) {
+                        setUtcOffset(localUtcOffset);
+                      }
                     } else {
                       setTimezone("");
+                      setUtcOffset("");
                     }
                   }}
                   disabled={!selectedCountry || availableTimezones.length === 0}
@@ -885,7 +936,13 @@ function WhatsAppLinkingForm() {
                   onClick={handleNext}
                   disabled={!timezone || !utcOffset || isSubmitting}
                 >
-                  {isSubmitting ? "Saving..." : !utcOffset ? "Loading timezone..." : "Next Step"}
+                  {isSubmitting 
+                    ? "Saving..." 
+                    : !timezone 
+                      ? "Please select a timezone" 
+                      : !utcOffset && isLoadingTimezone
+                        ? "Loading timezone..." 
+                        : "Next Step"}
                 </Button>
               </div>
             )}

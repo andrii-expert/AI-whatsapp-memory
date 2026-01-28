@@ -1,10 +1,23 @@
+"use client";
+
 import { Button } from "@imaginecalendar/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, LogOut } from "lucide-react";
 import Link from "next/link";
-import { SignOutButton } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 
 export default function UnauthorizedPage() {
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await fetch("/api/auth/signout", {
+      method: "POST",
+      credentials: "include",
+    });
+    router.push("/sign-in");
+    router.refresh();
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <Card className="w-full max-w-md">
@@ -25,11 +38,14 @@ export default function UnauthorizedPage() {
             <Link href={process.env.NEXT_PUBLIC_USER_PORTAL_URL || "http://localhost:3000"} className="block">
               <Button className="w-full">Go to User Portal</Button>
             </Link>
-            <SignOutButton redirectUrl="/sign-in">
-              <Button variant="outline" className="w-full">
-                Sign In with Different Account
-              </Button>
-            </SignOutButton>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={handleSignOut}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign In with Different Account
+            </Button>
           </div>
         </CardContent>
       </Card>
