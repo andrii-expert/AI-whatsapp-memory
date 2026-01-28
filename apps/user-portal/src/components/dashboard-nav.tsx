@@ -40,7 +40,7 @@ const navigation = [
   { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Friends", href: "/friends", icon: Users },
   // { name: "Notes", href: "/notes", icon: StickyNote },
-  // { name: "Documents", href: "/document", icon: FolderOpen },
+  { name: "Documents", href: "/document", icon: FolderOpen },
   // { name: "Address", href: "/address", icon: BookOpen },
 ];
 
