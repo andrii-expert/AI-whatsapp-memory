@@ -15,7 +15,6 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.31.6",
     "@hookform/resolvers": "^5.2.2",
     "@imaginecalendar/api": "workspace:*",
     "@imaginecalendar/tsconfig": "workspace:*",

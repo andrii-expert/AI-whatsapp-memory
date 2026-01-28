@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { UserButton } from "@clerk/nextjs";
-import { Users, BarChart3, Home, Layers, Menu, X } from "lucide-react";
+import { Users, BarChart3, Home, Layers, Menu, X, LogOut } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@imaginecalendar/ui/cn";
 import { Button } from "@imaginecalendar/ui/button";
 import {
@@ -25,6 +24,7 @@ const navigation = [
 
 export function AdminHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -78,30 +78,28 @@ export function AdminHeader() {
             })}
           </div>
 
-          {/* Desktop User Menu */}
+          {/* Desktop Sign Out Button */}
           <div className="hidden md:flex items-center">
-            <UserButton
-              afterSignOutUrl="/sign-in"
-              appearance={{
-                elements: {
-                  avatarBox: "h-9 w-9",
-                  userButtonTrigger: "focus:shadow-none",
-                },
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await fetch("/api/auth/signout", {
+                  method: "POST",
+                  credentials: "include",
+                });
+                router.push("/sign-in");
+                router.refresh();
               }}
-            />
+              className="text-white hover:bg-white/10"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
           </div>
 
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center gap-2">
-            <UserButton
-              afterSignOutUrl="/sign-in"
-              appearance={{
-                elements: {
-                  avatarBox: "h-9 w-9",
-                  userButtonTrigger: "focus:shadow-none",
-                },
-              }}
-            />
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button
@@ -145,6 +143,22 @@ export function AdminHeader() {
                       </Link>
                     );
                   })}
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-foreground hover:bg-muted"
+                    onClick={async () => {
+                      await fetch("/api/auth/signout", {
+                        method: "POST",
+                        credentials: "include",
+                      });
+                      setMobileMenuOpen(false);
+                      router.push("/sign-in");
+                      router.refresh();
+                    }}
+                  >
+                    <LogOut className="h-5 w-5 mr-3" />
+                    Sign Out
+                  </Button>
                 </div>
               </SheetContent>
             </Sheet>

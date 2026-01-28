@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { AppRouter } from "@api/trpc/routers/_app";
-import { auth } from "@clerk/nextjs/server";
+import { getAuthToken } from "@/lib/auth";
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink, loggerLink } from "@trpc/client";
 import {
@@ -24,8 +24,7 @@ export const trpc = createTRPCOptionsProxy<AppRouter>({
         url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002'}/trpc`,
         transformer: superjson,
         async headers() {
-          const { getToken } = await auth();
-          const token = await getToken();
+          const token = await getAuthToken();
 
           return {
             Authorization: token ? `Bearer ${token}` : "",

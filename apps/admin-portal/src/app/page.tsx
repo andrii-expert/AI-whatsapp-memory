@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { getAuthUser } from "@/lib/auth";
 
 export default async function RootPage() {
-  const { userId } = await auth();
+  const authUser = await getAuthUser();
   
-  if (userId) {
-    // User is authenticated, redirect to dashboard
+  if (authUser && authUser.isAdmin) {
+    // User is authenticated and is admin, redirect to dashboard
     redirect("/dashboard");
   } else {
-    // User is not authenticated, redirect to sign-in
+    // User is not authenticated or not admin, redirect to sign-in
     redirect("/sign-in");
   }
 }

@@ -1,37 +1,47 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyToken } from "@api/utils/auth-helpers";
 
 // Define public routes that don't require authentication
-const isPublicRoute = createRouteMatcher([
+const publicRoutes = [
   "/",
-  "/sign-in(.*)",
+  "/sign-in",
   "/unauthorized",
-]);
+];
 
-// Get the correct host URL
-function getHost(req: NextRequest): string {
-  // In production, use the environment variable
-  if (process.env.NEXT_PUBLIC_ADMIN_URL) {
-    return process.env.NEXT_PUBLIC_ADMIN_URL;
-  }
-
-  // In development, use the request headers
-  const host = req.headers.get("host") || "localhost:3001";
-  const protocol = req.headers.get("x-forwarded-proto") || "http";
-  return `${protocol}://${host}`;
+function isPublicRoute(pathname: string): boolean {
+  return publicRoutes.some(route => pathname === route || pathname.startsWith(route + "/"));
 }
 
-export default clerkMiddleware(async (auth, req) => {
-  const { userId, redirectToSignIn } = await auth();
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
-  // If the user isn't signed in and the route is private, redirect to sign-in
-  if (!userId && !isPublicRoute(req)) {
-    // Build the correct return URL using the actual host
-    const host = getHost(req);
-    const returnBackUrl = `${host}${req.nextUrl.pathname}${req.nextUrl.search}`;
-    return redirectToSignIn({ returnBackUrl });
+  // Allow public routes
+  if (isPublicRoute(pathname)) {
+    return NextResponse.next();
   }
-});
+
+  // Check for auth token in cookie
+  const token = req.cookies.get("auth-token")?.value;
+
+  if (!token) {
+    // No token, redirect to sign-in
+    const signInUrl = new URL("/sign-in", req.url);
+    signInUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(signInUrl);
+  }
+
+  // Verify token
+  const payload = verifyToken(token);
+  if (!payload) {
+    // Invalid token, redirect to sign-in
+    const signInUrl = new URL("/sign-in", req.url);
+    signInUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(signInUrl);
+  }
+
+  // Token is valid, allow request to proceed
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [

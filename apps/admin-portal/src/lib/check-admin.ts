@@ -1,34 +1,33 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { getAuthUser } from "./auth";
 import { trpc, getQueryClient } from "@/trpc/server";
 
 /**
  * Server Component utility to check if user is authenticated and has admin privileges
- * Uses tRPC calls to stay consistent with app architecture
+ * Uses JWT token from cookies
  * Redirects to appropriate page if not authorized
  * @returns Admin user data if authorized
  */
 export async function requireAdmin() {
-  const { userId } = await auth();
+  const authUser = await getAuthUser();
 
-  if (!userId) {
+  if (!authUser) {
     redirect("/sign-in");
+  }
+
+  if (!authUser.isAdmin) {
+    redirect("/unauthorized");
   }
 
   const queryClient = getQueryClient();
 
   try {
-    // Get user data to check admin status
+    // Get full user data from database
     const user = await queryClient.fetchQuery(
       trpc.user.me.queryOptions()
     );
 
-    // If user doesn't exist in database (new Clerk user), redirect to unauthorized
     if (!user) {
-      redirect("/unauthorized");
-    }
-
-    if (!user?.isAdmin) {
       redirect("/unauthorized");
     }
 
@@ -47,10 +46,14 @@ export async function requireAdmin() {
  * Useful for conditional rendering or optional checks
  */
 export async function checkAdminStatus() {
-  const { userId } = await auth();
+  const authUser = await getAuthUser();
 
-  if (!userId) {
+  if (!authUser) {
     return { isAuthenticated: false, isAdmin: false, user: null };
+  }
+
+  if (!authUser.isAdmin) {
+    return { isAuthenticated: true, isAdmin: false, user: null };
   }
 
   const queryClient = getQueryClient();
