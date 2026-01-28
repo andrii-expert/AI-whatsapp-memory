@@ -4970,7 +4970,12 @@ export class ActionExecutor {
         // Format filter name for title - use the same logic as below
         let filterTitle = 'Reminders';
         let specificDateFound = false; // Declare variable
-        if (parsed.listFilter) {
+        
+        // Check if user requested "all reminders" (status is 'all' and no listFilter, or listFilter is 'all')
+        if ((parsed.status === 'all' && !parsed.listFilter) || 
+            (parsed.listFilter && parsed.listFilter.toLowerCase().trim() === 'all')) {
+          filterTitle = 'All reminders';
+        } else if (parsed.listFilter) {
           const filter = parsed.listFilter.toLowerCase();
           if (filter === 'today') filterTitle = "Today's Reminders";
           else if (filter === 'tomorrow') filterTitle = "Tomorrow's Reminders";
@@ -5259,7 +5264,12 @@ export class ActionExecutor {
       // Format filter name for title
       let filterTitle = 'Reminders';
       let specificDateFound = false; // Declare variable
-      if (parsed.listFilter) {
+      
+      // Check if user requested "all reminders" (status is 'all' and no listFilter, or listFilter is 'all')
+      if ((parsed.status === 'all' && !parsed.listFilter) || 
+          (parsed.listFilter && parsed.listFilter.toLowerCase().trim() === 'all')) {
+        filterTitle = 'All reminders';
+      } else if (parsed.listFilter) {
         const filter = parsed.listFilter.toLowerCase();
         
         // FIRST: Check for specific date patterns (must be checked before month-only patterns)
