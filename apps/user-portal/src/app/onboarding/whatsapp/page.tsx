@@ -346,16 +346,23 @@ function WhatsAppLinkingForm() {
     trpc.whatsapp.generateVerificationCode.mutationOptions({
       onSuccess: async (data) => {
         try {
+          console.log("Verification code generated:", data.code);
           setVerificationCode(data.code);
+          
+          // Generate QR code first
           await generateQRCode(data.code);
           setIsGeneratingCode(false);
           
-          // On mobile, open WhatsApp immediately after a short delay
-          // This ensures the code is set and QR is generated before opening
+          // On mobile, open WhatsApp immediately
+          // Use a small delay to ensure state is updated
           if (isMobile) {
-            setTimeout(() => {
-              openWhatsAppWithCode(data.code);
-            }, 300);
+            // Use requestAnimationFrame for better timing
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                console.log("Opening WhatsApp on mobile with code:", data.code);
+                openWhatsAppWithCode(data.code);
+              }, 200);
+            });
           } else {
             // On desktop, show QR code
             setShowQRCode(true);
@@ -415,30 +422,55 @@ function WhatsAppLinkingForm() {
 
   // Open WhatsApp with verification code
   const openWhatsAppWithCode = (code: string) => {
+    if (!code || !code.trim()) {
+      console.error("Cannot open WhatsApp: verification code is missing");
+      return;
+    }
+
+    const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
+    const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
+    const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
+    
+    console.log("Opening WhatsApp with URL:", whatsappUrl);
+    console.log("Code:", code);
+    console.log("Is Mobile:", isMobile);
+    
+    // Create a temporary anchor element and click it
+    // This is the most reliable method across all browsers and devices
+    const link = document.createElement('a');
+    link.href = whatsappUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
+    
+    // Add to DOM, click, then remove
+    document.body.appendChild(link);
+    
     try {
-      const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
-      const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
-      const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
-      
-      console.log("Opening WhatsApp with URL:", whatsappUrl);
-      
-      // Always try window.location.href first for better mobile compatibility
-      // This works reliably on all devices including iOS Safari
-      // Use setTimeout to ensure it's not blocked by popup blockers
-      setTimeout(() => {
-        window.location.href = whatsappUrl;
-      }, 100);
+      link.click();
+      console.log("WhatsApp link clicked successfully");
     } catch (error) {
-      console.error("Failed to open WhatsApp:", error);
-      // Fallback: try window.open
+      console.error("Failed to click link:", error);
+      // Fallback to window.open
       try {
-        const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
-        const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
-        const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+        const opened = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+        if (!opened) {
+          console.warn("window.open was blocked, trying window.location.href");
+          // Last resort: use window.location.href (will navigate away)
+          window.location.href = whatsappUrl;
+        }
       } catch (fallbackError) {
-        console.error("Fallback WhatsApp open also failed:", fallbackError);
+        console.error("All WhatsApp open methods failed:", fallbackError);
+        // Final fallback: try window.location.href
+        window.location.href = whatsappUrl;
       }
+    } finally {
+      // Clean up
+      setTimeout(() => {
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+      }, 100);
     }
   };
 
@@ -651,10 +683,10 @@ function WhatsAppLinkingForm() {
               <div>
                 <Button
                   type="button"
-                  onClick={(e) => {
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log("Button clicked, phoneNumber:", phoneNumber, "isMobile:", isMobile);
+                    console.log("Button clicked, phoneNumber:", phoneNumber, "isMobile:", isMobile, "verificationCode:", verificationCode);
                     handleVerifyClick();
                   }}
                   disabled={!phoneNumber || isSavingPhone || isGeneratingCode}
@@ -666,19 +698,20 @@ function WhatsAppLinkingForm() {
                       ? "Open WhatsApp" 
                       : "Verify WhatsApp"}
                 </Button>
-                {verificationCode && isMobile && (
+                {verificationCode && (
                   <div className="mt-2 text-center">
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={(e) => {
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        console.log("Opening WhatsApp again with code:", verificationCode);
                         openWhatsAppWithCode(verificationCode);
                       }}
                       className="w-full text-sm"
                     >
-                      Open WhatsApp Again
+                      {isMobile ? "Open WhatsApp Again" : "Open WhatsApp"}
                     </Button>
                   </div>
                 )}
