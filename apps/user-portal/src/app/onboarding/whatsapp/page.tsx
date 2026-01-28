@@ -345,21 +345,30 @@ function WhatsAppLinkingForm() {
   const generateCodeMutation = useMutation(
     trpc.whatsapp.generateVerificationCode.mutationOptions({
       onSuccess: async (data) => {
-        setVerificationCode(data.code);
-        await generateQRCode(data.code);
-        setIsGeneratingCode(false);
-        
-        // On mobile, open WhatsApp immediately
-        if (isMobile) {
-          openWhatsAppWithCode(data.code);
-        } else {
-          // On desktop, show QR code
-          setShowQRCode(true);
+        try {
+          setVerificationCode(data.code);
+          await generateQRCode(data.code);
+          setIsGeneratingCode(false);
+          
+          // On mobile, open WhatsApp immediately after a short delay
+          // This ensures the code is set and QR is generated before opening
+          if (isMobile) {
+            setTimeout(() => {
+              openWhatsAppWithCode(data.code);
+            }, 300);
+          } else {
+            // On desktop, show QR code
+            setShowQRCode(true);
+          }
+        } catch (error) {
+          console.error("Error in generateCodeMutation onSuccess:", error);
+          setIsGeneratingCode(false);
         }
       },
       onError: (error) => {
         console.error("Failed to generate verification code:", error);
         setIsGeneratingCode(false);
+        setHasInitiatedVerification(false);
       },
     })
   );
@@ -406,42 +415,61 @@ function WhatsAppLinkingForm() {
 
   // Open WhatsApp with verification code
   const openWhatsAppWithCode = (code: string) => {
-    const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
-    const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
-    const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
-    
-    // Use window.location.href for mobile devices (especially iOS Safari)
-    // window.open() is blocked by popup blockers when called from async callbacks
-    // window.location.href works reliably on all mobile browsers including iOS Safari
-    if (isMobile) {
-      window.location.href = whatsappUrl;
-    } else {
-      // For desktop, use window.open as fallback
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    try {
+      const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
+      const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
+      const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
+      
+      console.log("Opening WhatsApp with URL:", whatsappUrl);
+      
+      // Always try window.location.href first for better mobile compatibility
+      // This works reliably on all devices including iOS Safari
+      // Use setTimeout to ensure it's not blocked by popup blockers
+      setTimeout(() => {
+        window.location.href = whatsappUrl;
+      }, 100);
+    } catch (error) {
+      console.error("Failed to open WhatsApp:", error);
+      // Fallback: try window.open
+      try {
+        const businessWhatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_BUSINESS_NUMBER || "27716356371";
+        const message = `Hello! I'd like to connect my WhatsApp to CrackOn for voice-based calendar management. My verification code is: ${code}`;
+        const whatsappUrl = `https://wa.me/${businessWhatsappNumber}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      } catch (fallbackError) {
+        console.error("Fallback WhatsApp open also failed:", fallbackError);
+      }
     }
   };
 
   // Handle Open WhatsApp / Verify WhatsApp button click
   const handleVerifyClick = async () => {
     if (!phoneNumber || !phoneNumber.trim()) {
+      console.warn("No phone number provided");
       return;
     }
 
     const digitsOnly = phoneNumber.replace(/\D/g, '');
     if (digitsOnly.length < 7) {
+      console.warn("Phone number too short:", digitsOnly.length);
       return;
     }
 
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
     if (!normalizedPhone || normalizedPhone === '+' || normalizedPhone.length < 8) {
+      console.warn("Invalid normalized phone number:", normalizedPhone);
       return;
     }
+
+    console.log("Starting verification process for:", normalizedPhone);
 
     // Save phone number first if not already saved
     if (normalizedPhone !== user?.phone) {
       setIsSavingPhone(true);
       try {
+        console.log("Saving phone number...");
         await savePhoneMutation.mutateAsync({ phone: normalizedPhone });
+        console.log("Phone number saved successfully");
       } catch (error: any) {
         console.error("Error saving phone number:", error);
         setIsSavingPhone(false);
@@ -451,9 +479,17 @@ function WhatsAppLinkingForm() {
     }
 
     // Generate verification code
+    console.log("Generating verification code...");
     setIsGeneratingCode(true);
     setHasInitiatedVerification(true);
-    generateCodeMutation.mutate({ phoneNumber: normalizedPhone });
+    
+    try {
+      generateCodeMutation.mutate({ phoneNumber: normalizedPhone });
+    } catch (error) {
+      console.error("Error calling generateCodeMutation:", error);
+      setIsGeneratingCode(false);
+      setHasInitiatedVerification(false);
+    }
   };
 
   // Update user mutation for timezone
@@ -615,9 +651,14 @@ function WhatsAppLinkingForm() {
               <div>
                 <Button
                   type="button"
-                  onClick={handleVerifyClick}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log("Button clicked, phoneNumber:", phoneNumber, "isMobile:", isMobile);
+                    handleVerifyClick();
+                  }}
                   disabled={!phoneNumber || isSavingPhone || isGeneratingCode}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-6 text-sm sm:text-base font-medium"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 sm:py-6 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSavingPhone || isGeneratingCode 
                     ? "Processing..." 
@@ -625,6 +666,22 @@ function WhatsAppLinkingForm() {
                       ? "Open WhatsApp" 
                       : "Verify WhatsApp"}
                 </Button>
+                {verificationCode && isMobile && (
+                  <div className="mt-2 text-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openWhatsAppWithCode(verificationCode);
+                      }}
+                      className="w-full text-sm"
+                    >
+                      Open WhatsApp Again
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
