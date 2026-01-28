@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const adminUrl =
       process.env.NEXT_PUBLIC_ADMIN_URL || "https://admin.crackon.ai";
+    const redirectPath = url.searchParams.get("redirect") || "/dashboard";
     const redirectUri =
       url.searchParams.get("redirect_uri") ||
       `${adminUrl}/api/auth/google/callback`;
@@ -41,6 +42,14 @@ export async function GET(request: NextRequest) {
 
     const response = NextResponse.json({ authUrl, state });
     response.cookies.set("google_oauth_state", state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 10, // 10 minutes
+      path: "/",
+    });
+    // Remember where to send the user after successful Google sign-in
+    response.cookies.set("google_oauth_redirect", redirectPath, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
