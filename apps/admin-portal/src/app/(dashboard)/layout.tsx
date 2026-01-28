@@ -1,6 +1,8 @@
 import { requireAdmin } from "@/lib/check-admin";
 import { AdminHeader } from "@/components/admin-header";
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {

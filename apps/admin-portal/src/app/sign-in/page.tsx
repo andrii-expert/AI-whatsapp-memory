@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@imaginecalendar/ui/button";
@@ -8,7 +8,7 @@ import { Input } from "@imaginecalendar/ui/input";
 import { Label } from "@imaginecalendar/ui/label";
 import { Loader2 } from "lucide-react";
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
@@ -132,3 +132,32 @@ export default function SignInPage() {
   );
 }
 
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className="auth-page-blue-theme bg-background flex min-h-screen items-center justify-center p-4 md:p-24">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="flex justify-center mb-8">
+            <div className="flex flex-col items-center gap-3">
+              <Image
+                src="/crack-on-logo.png"
+                alt="CrackOn"
+                width={200}
+                height={50}
+                className="w-auto h-auto"
+              />
+              <span className="text-xs bg-primary text-white px-3 py-1.5 rounded-full font-medium uppercase tracking-wide">
+                Admin Portal
+              </span>
+            </div>
+          </div>
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          </div>
+        </div>
+      </div>
+    }>
+      <SignInForm />
+    </Suspense>
+  );
+}
