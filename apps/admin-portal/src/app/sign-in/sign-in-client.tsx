@@ -37,7 +37,10 @@ export default function SignInClient() {
     setError("");
 
     try {
-      const response = await fetch("/api/auth/google");
+      // Preserve the intended redirect target (e.g. /dashboard, /users, etc.)
+      const redirectTarget = redirect || "/dashboard";
+      const params = new URLSearchParams({ redirect: redirectTarget });
+      const response = await fetch(`/api/auth/google?${params.toString()}`);
       
       // Check if response is JSON
       const contentType = response.headers.get("content-type");

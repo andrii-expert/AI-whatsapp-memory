@@ -41,6 +41,8 @@ export async function GET(request: NextRequest) {
 
     // Verify state
     const storedState = request.cookies.get("google_oauth_state")?.value;
+    const redirectCookie =
+      request.cookies.get("google_oauth_redirect")?.value || "/dashboard";
     if (!state || state !== storedState) {
       logger.error({ state, storedState }, "Invalid OAuth state");
       return NextResponse.redirect(
@@ -164,6 +166,7 @@ export async function GET(request: NextRequest) {
           process.env.NODE_ENV === "production" ? ".crackon.ai" : undefined,
       });
       response.cookies.delete("google_oauth_state");
+      response.cookies.delete("google_oauth_redirect");
       return response;
     }
 
@@ -173,7 +176,13 @@ export async function GET(request: NextRequest) {
       email,
     });
 
-    const response = NextResponse.redirect(`${adminUrl}/dashboard`);
+    // Use the original redirect target if present, otherwise send to dashboard
+    const finalRedirect =
+      redirectCookie && redirectCookie.startsWith("/")
+        ? `${adminUrl}${redirectCookie}`
+        : `${adminUrl}/dashboard`;
+
+    const response = NextResponse.redirect(finalRedirect);
 
     response.cookies.set("auth-token", token, {
       httpOnly: true,
@@ -186,6 +195,7 @@ export async function GET(request: NextRequest) {
     });
 
     response.cookies.delete("google_oauth_state");
+    response.cookies.delete("google_oauth_redirect");
 
     return response;
   } catch (error: any) {
