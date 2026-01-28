@@ -6873,7 +6873,10 @@ export class ActionExecutor {
         let laterMinutes = 60; // Default to 1 hour
         try {
           const preferences = await getUserPreferences(this.db, this.userId);
-          if (preferences?.defaultLaterMinutes !== null && preferences?.defaultLaterMinutes !== undefined) {
+          if (preferences?.defaultLaterMinutes !== null && 
+              preferences?.defaultLaterMinutes !== undefined && 
+              typeof preferences.defaultLaterMinutes === 'number' &&
+              preferences.defaultLaterMinutes > 0) {
             laterMinutes = preferences.defaultLaterMinutes;
             logger.info(
               {
@@ -6881,6 +6884,15 @@ export class ActionExecutor {
                 defaultLaterMinutes: laterMinutes,
               },
               'Using default later minutes from preferences'
+            );
+          } else {
+            logger.info(
+              {
+                userId: this.userId,
+                defaultLaterMinutes: preferences?.defaultLaterMinutes,
+                usingDefault: 60,
+              },
+              'Using default 60 minutes for "later" (preference not set or invalid)'
             );
           }
         } catch (error) {
