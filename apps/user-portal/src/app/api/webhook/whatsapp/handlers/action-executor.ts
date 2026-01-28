@@ -6570,6 +6570,33 @@ export class ActionExecutor {
     }
 
     // Check for recurring patterns
+    // Check for "every morning/afternoon/evening/night" patterns first (these are daily)
+    const everyTimeOfDayPattern = /every\s+(morning|afternoon|evening|night)/i;
+    const everyTimeOfDayMatch = scheduleLower.match(everyTimeOfDayPattern);
+    if (everyTimeOfDayMatch && everyTimeOfDayMatch[1]) {
+      result.frequency = 'daily';
+      const timeOfDay = everyTimeOfDayMatch[1].toLowerCase();
+      
+      // Check if there's an explicit time mentioned (e.g., "every morning at 8am")
+      const timeMatch = scheduleLower.match(/(?:at|@)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+      if (timeMatch && timeMatch[1]) {
+        // Use the explicit time if provided
+        result.time = this.parseTimeTo24Hour(timeMatch[1].trim());
+      } else {
+        // Set time based on time of day if no explicit time
+        if (timeOfDay === 'morning') {
+          result.time = '09:00';
+        } else if (timeOfDay === 'afternoon') {
+          result.time = '14:00';
+        } else if (timeOfDay === 'evening' || timeOfDay === 'night') {
+          result.time = '18:00';
+        } else {
+          result.time = defaultTime;
+        }
+      }
+      return result;
+    }
+    
     if (scheduleLower.includes('every day') || scheduleLower.includes('daily')) {
       result.frequency = 'daily';
       // Extract time if present
