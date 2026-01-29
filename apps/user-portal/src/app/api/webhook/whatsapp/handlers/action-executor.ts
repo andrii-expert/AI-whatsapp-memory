@@ -8295,6 +8295,15 @@ export class ActionExecutor {
       const updateInput: UpdateReminderInput = {};
 
       if (parsed.newName) {
+        // "Change this to 10 min" / "change to 10 min" = reschedule to X min from now (not delay). Normalize to "change to in X minutes".
+        const changeToMinMatch = parsed.newName.match(/(?:change\s+(?:this|it)\s+to|change\s+to)\s+(\d+)\s*(?:min|mins|minute|minutes)/i);
+        if (changeToMinMatch && changeToMinMatch[1]) {
+          parsed.newName = `change to in ${changeToMinMatch[1]} minutes`;
+          logger.info(
+            { userId: this.userId, reminderId: reminder.id, original: changeToMinMatch[0], normalized: parsed.newName },
+            'Normalized "change to X min" to "change to in X minutes" (reschedule from now, not delay)'
+          );
+        }
         // Parse changes
         const changes = parsed.newName.toLowerCase();
 
