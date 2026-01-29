@@ -869,8 +869,8 @@ export default function FilesPage() {
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
 
-          {/* Main Content - Three Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
+          {/* Main Content - Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 w-full">
             {/* Mobile Folders View - Show when no folder is selected */}
             {!selectedFolderId && !viewAllFiles && !viewAllShared && (
               <div className="lg:hidden w-full">
