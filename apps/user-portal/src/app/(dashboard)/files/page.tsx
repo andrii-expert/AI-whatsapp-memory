@@ -6,6 +6,7 @@ import {
   Home,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Plus,
   Search,
   Edit2,
@@ -986,13 +987,13 @@ export default function FilesPage() {
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-gray-900">Your Files</h2>
                   <Button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={handleOpenCreateFolderModal}
                     variant="outline"
                     size="sm"
                     className="flex items-center gap-1.5"
                   >
                     <Plus className="h-4 w-4" />
-                    Upload
+                    Create Folder
                   </Button>
                 </div>
 
