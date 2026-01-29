@@ -6719,11 +6719,21 @@ export class ActionExecutor {
       // Default to once
       result.frequency = 'once';
       
-      // Check for relative time patterns (e.g., "in 5 mins", "in 10 minutes", "in 2 hours")
-      const relativeTimeMatch = scheduleLower.match(/in\s+(\d+)\s+(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)/i);
-      if (relativeTimeMatch && relativeTimeMatch[1] && relativeTimeMatch[2]) {
-        const amount = parseInt(relativeTimeMatch[1], 10);
-        const unit = relativeTimeMatch[2].toLowerCase();
+      // Check for relative time patterns (e.g., "in 5 mins", "in 10 minutes", "in 2 hours", "in one hour", "in half an hour")
+      const relativeTimeMatch = scheduleLower.match(/in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|half)\s+(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)/i);
+      const relativeHalfAnHourMatch = scheduleLower.match(/in\s+half\s+an?\s+(hour|hours|hr|hrs)/i);
+      const relativeAnHourMatch = scheduleLower.match(/in\s+an?\s+(hour|hours|hr|hrs)/i);
+      const match: RegExpMatchArray | [string, string, string] | null = relativeTimeMatch
+        ?? (relativeHalfAnHourMatch && relativeHalfAnHourMatch[1] ? ['', '30', 'min'] : null)
+        ?? (relativeAnHourMatch && relativeAnHourMatch[1] ? ['', '1', relativeAnHourMatch[1]] : null);
+      if (match && match[1] && match[2]) {
+        const amountRaw = match[1].toLowerCase();
+        const wordToNum: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, twenty: 20, thirty: 30, half: 30 };
+        const amount = /^\d+$/.test(amountRaw) ? parseInt(amountRaw, 10) : (wordToNum[amountRaw] ?? 1);
+        const unit = match[2].toLowerCase();
+        // "half an hour" → 30 minutes; "half" with "hour" → treat as 30 mins
+        const effectiveAmount = (unit.startsWith('hour') || unit.startsWith('hr')) && amountRaw === 'half' ? 30 : amount;
+        const effectiveUnit = (unit.startsWith('hour') || unit.startsWith('hr')) && amountRaw === 'half' ? 'min' : unit;
         
         if (timezone) {
           // Get current time components in user's timezone
@@ -6741,13 +6751,13 @@ export class ActionExecutor {
           let targetHour = currentHour;
           let targetMinute = currentMinute;
           
-          // Add duration based on unit
-          if (unit.startsWith('min')) {
-            targetMinute += amount;
-          } else if (unit.startsWith('hour') || unit.startsWith('hr')) {
-            targetHour += amount;
-          } else if (unit.startsWith('day')) {
-            targetDay += amount;
+          // Add duration based on unit (use effectiveAmount/effectiveUnit for "half an hour")
+          if (effectiveUnit.startsWith('min')) {
+            targetMinute += effectiveAmount;
+          } else if (effectiveUnit.startsWith('hour') || effectiveUnit.startsWith('hr')) {
+            targetHour += effectiveAmount;
+          } else if (effectiveUnit.startsWith('day')) {
+            targetDay += effectiveAmount;
           }
           
           // Handle overflow
@@ -6778,16 +6788,16 @@ export class ActionExecutor {
           // No timezone provided, use UTC as fallback
           const now = new Date();
           
-          // Calculate duration in milliseconds
+          // Calculate duration in milliseconds (use effectiveAmount/effectiveUnit)
           let durationMs: number;
-          if (unit.startsWith('min')) {
-            durationMs = amount * 60 * 1000;
-          } else if (unit.startsWith('hour') || unit.startsWith('hr')) {
-            durationMs = amount * 60 * 60 * 1000;
-          } else if (unit.startsWith('day')) {
-            durationMs = amount * 24 * 60 * 60 * 1000;
+          if (effectiveUnit.startsWith('min')) {
+            durationMs = effectiveAmount * 60 * 1000;
+          } else if (effectiveUnit.startsWith('hour') || effectiveUnit.startsWith('hr')) {
+            durationMs = effectiveAmount * 60 * 60 * 1000;
+          } else if (effectiveUnit.startsWith('day')) {
+            durationMs = effectiveAmount * 24 * 60 * 60 * 1000;
           } else {
-            durationMs = amount * 60 * 1000; // Default to minutes
+            durationMs = effectiveAmount * 60 * 1000; // Default to minutes
           }
           
           // Calculate target timestamp
@@ -6800,8 +6810,8 @@ export class ActionExecutor {
         logger.info(
           {
             scheduleStr: schedule,
-            amount,
-            unit,
+            amount: effectiveAmount,
+            unit: effectiveUnit,
             timezone,
             targetDate: result.targetDate,
             time: result.time,
