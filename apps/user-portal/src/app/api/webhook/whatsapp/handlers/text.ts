@@ -679,6 +679,19 @@ export async function handleTextMessage(
     // (user might be asking something else, or the message will be processed normally)
   }
 
+  // If user sent only "yes" or "y" with no pending context (e.g. confirming a typo), don't send to AI —
+  // it would create a reminder/event titled "Yes". Ask them to repeat their full request.
+  const messageLower = messageText.toLowerCase().trim();
+  const isBareYes = messageLower === 'yes' || messageLower === 'y';
+  if (isBareYes && !pendingEventOperations.get(userId) && !pendingRejectedReminderCreate.get(userId)) {
+    await whatsappService.sendTextMessage(
+      recipient,
+      "Please repeat your full request so I can create it correctly (e.g. \"Remind me to go swimming today at 5pm\")."
+    );
+    logOutgoingMessageNonBlocking(db, recipient, userId, "Please repeat your full request so I can create it correctly (e.g. \"Remind me to go swimming today at 5pm\").");
+    return;
+  }
+
   // OPTIMIZATION: Non-blocking logging and typing indicator (fire-and-forget)
   // Don't await these operations to improve response time
   logIncomingWhatsAppMessage(db, {
@@ -3213,6 +3226,13 @@ async function processAIResponse(
         for (const line of actionLines) {
           const isCreate = /^Create a reminder:/i.test(line);
           const parsed = parseReminderTemplateToAction(line, isCreate, /^Update a reminder:/i.test(line) || /^Update all reminders:/i.test(line) || /^Move a reminder:/i.test(line), /^Delete a reminder:/i.test(line) || /^Delete all reminders$/i.test(line), /^Pause a reminder:/i.test(line), /^Resume a reminder:/i.test(line));
+          const userSaidYes = (originalUserText?.toLowerCase().trim() === 'yes' || originalUserText?.toLowerCase().trim() === 'y');
+          const titleIsYes = parsed.taskName?.trim().toLowerCase() === 'yes' || parsed.taskName?.trim().toLowerCase() === 'y';
+          if (isCreate && userSaidYes && titleIsYes) {
+            results.push("Please repeat your full request so I can create it correctly (e.g. \"Remind me to go swimming today at 5pm\").");
+            failCount++;
+            continue;
+          }
           const result = await executor.executeAction(parsed, calendarTimezone);
           if (result.success) {
             successCount++;
