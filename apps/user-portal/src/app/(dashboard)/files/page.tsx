@@ -1649,7 +1649,7 @@ export default function FilesPage() {
                       {searchQuery ? "No files match your search." : "No files yet. Upload your first file to get started!"}
                     </div>
                   ) : viewMode === "grid" ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                       {filteredFiles.map((file: FileItem) => (
                         <div
                           key={file.id}
