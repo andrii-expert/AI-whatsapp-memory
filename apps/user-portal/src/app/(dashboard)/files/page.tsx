@@ -37,6 +37,7 @@ import {
   ArrowUp,
   ArrowDown,
   Users,
+  Share2,
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -448,21 +449,18 @@ export default function FilesPage() {
     setSelectedFolderId(folderId);
     setUploadFolderId(folderId);
     setViewAllFiles(false);
-    setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllFiles = () => {
     setSelectedFolderId(null);
     setViewAllFiles(true);
     setViewAllShared(false);
-    setIsMobileSidebarOpen(false);
   };
 
   const handleViewAllShared = () => {
     setSelectedFolderId(null);
     setViewAllFiles(false);
     setViewAllShared(true);
-    setIsMobileSidebarOpen(false);
   };
 
   // Share handlers
@@ -816,29 +814,9 @@ export default function FilesPage() {
   };
 
   return (
-    <div className="container mx-auto px-0 py-0 md:px-4 md:py-8 max-w-7xl space-y-6">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-sm justify-between">
-        <div className="flex items-center justify-center gap-2">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Home className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
-          <span className="font-medium">Files</span>
-        </div>
-
-        <Button
-          onClick={() => fileInputRef.current?.click()}
-          variant="orange-primary"
-          className="flex-shrink-0 lg:hidden"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Upload File
-        </Button>
+    <div className="min-h-screen bg-white">
+      {/* Main Container */}
+      <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
         <input
           ref={fileInputRef}
           type="file"
@@ -846,359 +824,260 @@ export default function FilesPage() {
           onChange={handleFileSelect}
           accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
         />
-      </div>
 
-      {/* Mobile Sidebar Overlay */}
-      {isMobileSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden mt-0"
-          style={{ margin: 0 }}
-          onClick={() => setIsMobileSidebarOpen(false)}
-        />
-      )}
+          {/* Main Content - Three Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
+            {/* Mobile Folders View - Show when no folder is selected */}
+            {!selectedFolderId && !viewAllFiles && !viewAllShared && (
+              <div className="lg:hidden w-full">
+                {/* Your Files Header */}
+                <div className="shadow-[0_-4px_33px_0_rgba(0,0,0,0.05)]">
+                  <div className="px-4 pt-6 pb-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Files</h2>
+                      <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-1.5"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Upload
+                      </Button>
+                    </div>
+                  </div>
 
-      {/* Mobile Sidebar */}
-      <div
-        className={cn(
-          "fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out lg:hidden overflow-y-auto m-0",
-          isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-        style={{ margin: 0 }}
-      >
-        <div className="p-4">
-          {/* Close Button */}
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Folders</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsMobileSidebarOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
+                  {/* Search Bar */}
+                  <div className="px-4 pb-2">
+                    <div className="relative">
+                      <Input
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setSearchQuery(e.target.value)
+                        }
+                        className="pr-10"
+                      />
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                </div>
 
-          {/* New Folder Input */}
-          <form onSubmit={handleCreateFolder} className="flex gap-2 mb-4">
-            <Input
-              placeholder="New folder"
-              value={newFolderName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setNewFolderName(e.target.value)
-              }
-              className="flex-1"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              variant="outline"
-              disabled={createFolderMutation.isPending}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </form>
-
-          {/* Folders List */}
-          <div className="space-y-1">
-            {/* All Files Button - Always show */}
-            <button
-              onClick={handleViewAllFiles}
-              className={cn(
-                "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                viewAllFiles
-                  ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                  : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-              )}
-            >
-              <Folder className="h-4 w-4 flex-shrink-0" />
-              <span className="flex-1 text-left">All Files</span>
-              <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                {allFilesCount}
-              </span>
-            </button>
-
-            {folders.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 text-sm">
-                <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p>No folders yet.</p>
-                <p className="text-xs mt-1">
-                  Create a folder above to get started.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Divider */}
-                <div className="h-px bg-gray-200 my-2" />
-
-                {/* Individual Folders */}
-                {folders.map((folder: any) => {
-                  const isEditing = editingFolderId === folder.id;
-                  const shareCount = getShareCount("file_folder", folder.id);
-                  const isShared = shareCount > 0;
-                  
-                  return (
+                {/* Folders */}
+                <div className="px-4 pb-20 pt-2">
+                  <div className="space-y-2">
+                    {/* All Files Card */}
                     <div
-                      key={folder.id}
+                      onClick={handleViewAllFiles}
                       className={cn(
-                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
-                        selectedFolderId === folder.id && !viewAllFiles && !viewAllShared
-                          ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
+                        "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer",
+                        viewAllFiles
+                          ? "bg-blue-50 border-blue-200"
+                          : "bg-white border-gray-200 hover:bg-gray-50"
                       )}
                     >
-                      {isEditing ? (
-                        <Input
-                          value={editFolderName}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setEditFolderName(e.target.value)
-                          }
-                          onBlur={() => handleSaveFolder(folder.id)}
-                          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                            if (e.key === "Enter") handleSaveFolder(folder.id);
-                            if (e.key === "Escape") {
-                              setEditingFolderId(null);
-                              setEditFolderName("");
-                            }
-                          }}
-                          autoFocus
-                          className="flex-1 h-7 text-sm"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleFolderSelect(folder.id)}
-                            className="flex items-center gap-2 flex-1 text-left min-w-0"
-                          >
-                            <FolderClosed className="h-4 w-4 flex-shrink-0" />
-                            <span className="flex-1 truncate">{folder.name}</span>
-                          </button>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {/* Share button */}
-                            <ShareButton
-                              onClick={() => {
-                                if (isShared) {
-                                  openShareDetails("file_folder", folder.id, folder.name);
-                                } else {
-                                  openShareModal("file_folder", folder.id, folder.name);
-                                }
-                              }}
-                              isShared={isShared}
-                              shareCount={shareCount}
-                              size="sm"
-                            />
-                            {/* Dropdown menu */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-6 w-6 hover:bg-gray-200 transition-opacity"
-                                  title="Folder options"
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation();
-                                  }}
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                                <DropdownMenuItem
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation();
-                                    if (isShared) {
-                                      openShareDetails("file_folder", folder.id, folder.name);
-                                    } else {
-                                      openShareModal("file_folder", folder.id, folder.name);
-                                    }
-                                  }}
-                                  className="flex items-center gap-2 cursor-pointer"
-                                >
-                                  {isShared ? (
-                                    <>
-                                      <Users className="h-4 w-4" />
-                                      <span>Shared</span>
-                                      <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                                        {shareCount}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Users className="h-4 w-4" />
-                                      <span>Share</span>
-                                    </>
-                                  )}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation();
-                                    handleEditFolder(folder.id, folder.name);
-                                  }}
-                                  className="flex items-center gap-2 cursor-pointer"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                  <span>Edit</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation();
-                                    handleDeleteFolder(folder.id, folder.name);
-                                  }}
-                                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  <span>Delete</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                          <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                            {getFileCount(folder.id)}
+                      <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#DBEAFE" }}>
+                        <Folder className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-gray-900 truncate">All Files</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                            {allFilesCount} files
                           </span>
-                        </>
-                      )}
+                        </div>
+                      </div>
                     </div>
-                  );
-                })}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* Main Content - Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
-        {/* Desktop Left Panel - Folders */}
-        <div className="hidden lg:block space-y-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Folders</h2>
-
-            {/* New Folder Input */}
-            <form onSubmit={handleCreateFolder} className="flex gap-2 mb-4">
-              <Input
-                placeholder="New folder"
-                value={newFolderName}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setNewFolderName(e.target.value)
-                }
-                className="flex-1"
-              />
-              <Button
-                type="submit"
-                size="icon"
-                variant="outline"
-                disabled={createFolderMutation.isPending}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </form>
-
-            {/* Folders List */}
-            <div className="space-y-1">
-              {/* All Files Button - Always show */}
-              <button
-                onClick={handleViewAllFiles}
-                className={cn(
-                  "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                  viewAllFiles
-                    ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                    : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                )}
-              >
-                <Folder className="h-4 w-4 flex-shrink-0" />
-                <span className="flex-1 text-left">All Files</span>
-                <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                  {allFilesCount}
-                </span>
-              </button>
-
-              {folders.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
-                  <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p>No folders yet.</p>
-                  <p className="text-xs mt-1">
-                    Create a folder above to get started.
-                  </p>
+                    {/* Folder Cards */}
+                    {folders.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500 text-sm">
+                        <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                        <p>No folders yet.</p>
+                        <p className="text-xs mt-1">Create a folder to get started.</p>
+                      </div>
+                    ) : (
+                      folders.map((folder: any) => {
+                        const isSelected = selectedFolderId === folder.id && !viewAllFiles;
+                        const fileCount = getFileCount(folder.id);
+                        
+                        return (
+                          <div
+                            key={folder.id}
+                            onClick={() => handleFolderSelect(folder.id)}
+                            className={cn(
+                              "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
+                              isSelected
+                                ? "bg-blue-50 border-blue-200"
+                                : "bg-white border-gray-200 hover:bg-gray-50"
+                            )}
+                          >
+                            <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#DBEAFE" }}>
+                              <FolderClosed className="h-6 w-6 text-blue-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-gray-900 truncate flex items-center gap-2">
+                                {folder.name}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                {fileCount > 0 && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                    {fileCount} files
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <>
-                  {/* Divider */}
-                  <div className="h-px bg-gray-200 my-2" />
+              </div>
+            )}
 
-                  {/* Individual Folders */}
-                  {folders.map((folder: any) => {
-                    const isEditing = editingFolderId === folder.id;
-                    const shareCount = getShareCount("file_folder", folder.id);
-                    const isShared = shareCount > 0;
-                    
-                    return (
-                      <div
-                        key={folder.id}
-                        className={cn(
-                          "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
-                          selectedFolderId === folder.id && !viewAllFiles && !viewAllShared
-                            ? "bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-900 border-2 border-blue-300"
-                            : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                        )}
-                      >
-                        {isEditing ? (
-                          <Input
-                            value={editFolderName}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                              setEditFolderName(e.target.value)
-                            }
-                            onBlur={() => handleSaveFolder(folder.id)}
-                            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                              if (e.key === "Enter") handleSaveFolder(folder.id);
-                              if (e.key === "Escape") {
-                                setEditingFolderId(null);
-                                setEditFolderName("");
-                              }
-                            }}
-                            autoFocus
-                            className="flex-1 h-7 text-sm"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => handleFolderSelect(folder.id)}
-                              className="flex items-center gap-2 flex-1 text-left min-w-0"
-                            >
-                              <FolderClosed className="h-4 w-4 flex-shrink-0" />
-                              <span className="flex-1 truncate">{folder.name}</span>
-                            </button>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {/* Share button */}
-                              <ShareButton
-                                onClick={() => {
-                                  if (isShared) {
-                                    openShareDetails("file_folder", folder.id, folder.name);
-                                  } else {
-                                    openShareModal("file_folder", folder.id, folder.name);
-                                  }
+            {/* Desktop Left Panel - Folders Sidebar */}
+            <div className="hidden lg:block space-y-4">
+              <div className="space-y-4">
+                {/* Your Files Header */}
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-gray-900">Your Files</h2>
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1.5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Upload
+                  </Button>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative">
+                  <Input
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setSearchQuery(e.target.value)
+                    }
+                    className="pr-10"
+                  />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                </div>
+
+                {/* Folders */}
+                <div className="space-y-2">
+
+                  {/* All Files Card */}
+                  <div
+                    onClick={handleViewAllFiles}
+                    className={cn(
+                      "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer",
+                      viewAllFiles
+                        ? "bg-blue-50 border-blue-200"
+                        : "bg-white border-gray-200 hover:bg-gray-50"
+                    )}
+                  >
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#DBEAFE" }}>
+                      <Folder className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-gray-900 truncate">All Files</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                          {allFilesCount} files
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Folder Cards */}
+                  {folders.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 text-sm">
+                      <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                      <p>No folders yet.</p>
+                      <p className="text-xs mt-1">Create a folder to get started.</p>
+                    </div>
+                  ) : (
+                    folders.map((folder: any) => {
+                      const isSelected = selectedFolderId === folder.id && !viewAllFiles;
+                      const fileCount = getFileCount(folder.id);
+                      return (
+                        <div
+                          key={folder.id}
+                          onClick={() => handleFolderSelect(folder.id)}
+                          className={cn(
+                            "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
+                            isSelected
+                              ? "bg-blue-50 border-blue-200"
+                              : "bg-white border-gray-200 hover:bg-gray-50"
+                          )}
+                        >
+                          <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#DBEAFE" }}>
+                            <FolderClosed className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-gray-900 truncate flex items-center gap-2">
+                              {folder.name}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {fileCount > 0 && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                  {fileCount} files
+                                </span>
+                              )}
+                              {/* Show avatars for shared folders */}
+                              {(() => {
+                                const shareCount = getShareCount("file_folder", folder.id);
+                                if (shareCount > 0) {
+                                  const shares = myShares.filter(
+                                    (s: any) => s.resourceType === "file_folder" && s.resourceId === folder.id
+                                  );
+                                  return (
+                                    <div className="flex items-center gap-1 ml-auto">
+                                      {shares.slice(0, 2).map((share: any, idx: number) => {
+                                        const user = share.sharedWithUser;
+                                        if (!user) return null;
+                                        return (
+                                          <div
+                                            key={share.id}
+                                            className={cn(
+                                              "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                              "bg-gradient-to-br from-blue-500 to-blue-600"
+                                            )}
+                                            style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                            title={user.firstName || user.name || user.email || "User"}
+                                          >
+                                            {(user.firstName?.[0] || user.name?.[0] || user.email?.[0] || "U").toUpperCase()}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
                                 }}
-                                isShared={isShared}
-                                shareCount={shareCount}
-                                size="sm"
-                              />
-                              {/* Dropdown menu */}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6 hover:bg-gray-200 transition-opacity"
-                                    title="Folder options"
-                                    onClick={(e: React.MouseEvent) => {
-                                      e.stopPropagation();
-                                    }}
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                              {(() => {
+                                const shareCount = getShareCount("file_folder", folder.id);
+                                const isShared = shareCount > 0;
+                                return (
                                   <DropdownMenuItem
                                     onClick={(e: React.MouseEvent) => {
                                       e.stopPropagation();
@@ -1208,7 +1087,7 @@ export default function FilesPage() {
                                         openShareModal("file_folder", folder.id, folder.name);
                                       }
                                     }}
-                                    className="flex items-center gap-2 cursor-pointer"
+                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
                                   >
                                     {isShared ? (
                                       <>
@@ -1220,133 +1099,87 @@ export default function FilesPage() {
                                       </>
                                     ) : (
                                       <>
-                                        <Users className="h-4 w-4" />
+                                        <Share2 className="h-4 w-4" />
                                         <span>Share</span>
                                       </>
                                     )}
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={(e: React.MouseEvent) => {
-                                      e.stopPropagation();
-                                      handleEditFolder(folder.id, folder.name);
-                                    }}
-                                    className="flex items-center gap-2 cursor-pointer"
-                                  >
-                                    <Edit2 className="h-4 w-4" />
-                                    <span>Edit</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={(e: React.MouseEvent) => {
-                                      e.stopPropagation();
-                                      handleDeleteFolder(folder.id, folder.name);
-                                    }}
-                                    className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    <span>Delete</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                            <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                              {getFileCount(folder.id)}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-
-              {/* Shared Section */}
-              {(sharedFiles.length > 0 || sharedFolders.length > 0) && (
-                <>
-                  {/* Divider */}
-                  <div className="h-px bg-gray-200 my-2" />
-
-                  {/* Shared Section Header */}
-                  <div className="px-2 py-2">
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5" />
-                      Shared with me
-                    </h3>
-                  </div>
-
-                  {/* All Shared Files Button */}
-                  {totalSharedFileCount > 0 && (
-                    <button
-                      onClick={handleViewAllShared}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium",
-                        viewAllShared && !selectedFolderId
-                          ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300"
-                          : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                      )}
-                    >
-                      <Folder className="h-4 w-4 flex-shrink-0" />
-                      <span className="flex-1 text-left">All Shared</span>
-                      <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                        {totalSharedFileCount}
-                      </span>
-                    </button>
+                                );
+                              })()}
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  handleEditFolder(folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                                <span>Edit</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  handleDeleteFolder(folder.id, folder.name);
+                                }}
+                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })
                   )}
 
-                  {/* Shared Folders */}
-                  {sharedFolders.length > 0 &&
-                    sharedFolders.map((folder: any) => (
-                      <div
-                        key={folder.id}
-                        className={cn(
-                          "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-medium group",
-                          selectedFolderId === folder.id &&
-                            !viewAllFiles &&
-                            !viewAllShared
-                            ? "bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border-2 border-purple-300"
-                            : "hover:bg-gray-100 text-gray-700 border-2 border-transparent"
-                        )}
-                      >
-                        <button
-                          onClick={() => handleFolderSelect(folder.id)}
-                          className="flex items-center gap-2 flex-1 text-left min-w-0"
-                        >
-                          <FolderClosed className="h-4 w-4 flex-shrink-0" />
-                          <span className="flex-1 text-left truncate">
-                            {folder.name}
-                          </span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openShareDetails(
-                              "file_folder",
-                              folder.id,
-                              folder.name
-                            );
-                          }}
-                          className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium flex-shrink-0 hover:bg-purple-200 transition-colors"
-                          title="View who shared this folder with you"
-                        >
-                          <Users className="h-2.5 w-2.5" />
-                          <span className="hidden sm:inline">
-                            {folder.sharePermission === "view" ? "View" : "Edit"}
-                          </span>
-                        </button>
-                        {folder.files && folder.files.length > 0 && (
-                          <span className="text-xs bg-[hsl(var(--brand-orange))] text-white px-2 py-0.5 rounded-full font-semibold">
-                            {folder.files.length}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                </>
-              )}
+                  {/* Shared Section */}
+                  {(sharedFiles.length > 0 || sharedFolders.length > 0) && (
+                    <>
+                      <div className="h-px bg-gray-200 my-2" />
+                      {sharedFolders.map((folder: any) => {
+                        const isSelected = selectedFolderId === folder.id && !viewAllFiles;
+                        const fileCount = folder.files?.length || 0;
+                        
+                        return (
+                          <div
+                            key={folder.id}
+                            onClick={() => handleFolderSelect(folder.id)}
+                            className={cn(
+                              "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
+                              isSelected
+                                ? "bg-blue-50 border-blue-200"
+                                : "bg-white border-gray-200 hover:bg-gray-50"
+                            )}
+                          >
+                            <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                              <FolderClosed className="h-6 w-6 text-pink-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-gray-900 truncate flex items-center gap-2">
+                                {folder.name}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                {fileCount > 0 && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 font-medium">
+                                    {fileCount} files
+                                  </span>
+                                )}
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                  Shared
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Right Panel - Files */}
+            {/* Main Content Area - Files */}
         <div className="space-y-4">
           <div>
             {/* Desktop - Folder breadcrumb and Upload button */}
@@ -1403,17 +1236,6 @@ export default function FilesPage() {
                 onChange={handleFileSelect}
                 accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
               />
-              {/* Mobile - Folder Menu and Upload Button */}
-              <div className="lg:hidden flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsMobileSidebarOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 h-auto hover:bg-gray-50 border-2 hover:border-blue-300 transition-all"
-                >
-                  <Menu className="h-4 w-4" />
-                  <span className="font-medium">Folders</span>
-                </Button>
-              </div>
             </div>
 
             {/* Search Bar */}
@@ -2235,6 +2057,9 @@ export default function FilesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
