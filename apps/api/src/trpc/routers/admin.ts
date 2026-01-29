@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../init";
 import {
   getDashboardMetrics,
+  getDailySignups,
   getUsers,
   softDeleteUser,
   deleteUserAndAllData,
@@ -354,6 +355,27 @@ export const adminRouter = createTRPCRouter({
       });
     }
   }),
+
+  // Daily signups for chart
+  getDailySignups: adminProcedure
+    .input(
+      z.object({
+        days: z.number().min(1).max(90).default(30),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { db } = ctx;
+
+      try {
+        return await getDailySignups(db, input.days);
+      } catch (error) {
+        logger.error({ error, input }, "Failed to fetch daily signups");
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch daily signups",
+        });
+      }
+    }),
 
   // Get users with pagination and search
   getUsers: adminProcedure
