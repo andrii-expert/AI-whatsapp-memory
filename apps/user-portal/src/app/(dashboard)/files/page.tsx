@@ -855,6 +855,7 @@ export default function FilesPage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-white">
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
@@ -1684,6 +1685,8 @@ export default function FilesPage() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
       {/* Upload Modal */}
       <AlertDialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
@@ -1968,7 +1971,7 @@ export default function FilesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
 
