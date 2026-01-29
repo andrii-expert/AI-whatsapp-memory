@@ -40,6 +40,7 @@ import {
   Users,
   Share2,
   ArrowLeft,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -212,6 +213,35 @@ export default function FilesPage() {
   const { data: sharedResources, isLoading: isLoadingSharedResources } = useQuery(
     trpc.fileSharing.getSharedWithMe.queryOptions()
   );
+  // Get recipient shares from sharedResources
+  const myRecipientShares = useMemo(() => {
+    const shares: any[] = [];
+    if (sharedResources?.folders) {
+      sharedResources.folders.forEach((folder: any) => {
+        if (folder.shareInfo) {
+          shares.push({
+            id: folder.shareInfo.shareId,
+            resourceType: "file_folder",
+            resourceId: folder.id,
+            ...folder.shareInfo
+          });
+        }
+      });
+    }
+    if (sharedResources?.files) {
+      sharedResources.files.forEach((file: any) => {
+        if (file.shareInfo) {
+          shares.push({
+            id: file.shareInfo.shareId,
+            resourceType: "file",
+            resourceId: file.id,
+            ...file.shareInfo
+          });
+        }
+      });
+    }
+    return shares;
+  }, [sharedResources]);
 
   // Extract shared files and folders from sharedResources
   const sharedFiles = useMemo(() => {
@@ -341,6 +371,33 @@ export default function FilesPage() {
     })
   );
 
+  const exitSharedFolderMutation = useMutation(
+    trpc.fileSharing.deleteShare.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getSharedWithMe.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getMyShares.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.storage.folders.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.storage.list.queryKey() });
+
+        if (selectedFolderId) {
+          setSelectedFolderId(null);
+          setViewAllFiles(true);
+        }
+        toast({
+          title: "Exited folder",
+          description: "You have been removed from this shared folder",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to exit shared folder",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
   const updateFileMutation = useMutation(
     trpc.storage.update.mutationOptions({
       onSuccess: () => {
@@ -447,6 +504,25 @@ export default function FilesPage() {
   const handleDeleteFolder = (folderId: string, folderName: string) => {
     setFolderToDelete({ id: folderId, name: folderName });
     setIsDeleteFolderDialogOpen(true);
+  };
+
+  const handleExitSharedFolder = (folderId: string, folderName: string) => {
+    const userShare = myRecipientShares.find((share: any) =>
+      share.resourceType === "file_folder" &&
+      share.resourceId === folderId
+    );
+
+    if (userShare) {
+      exitSharedFolderMutation.mutate({
+        shareId: userShare.id
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "Unable to find share information for this folder. Please refresh the page and try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const confirmDeleteFolder = () => {
@@ -909,12 +985,12 @@ export default function FilesPage() {
 
                 {/* Folders */}
                 <div className="px-4 pb-20 pt-2">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
                     {/* All Files Card */}
                     <div
                       onClick={handleViewAllFiles}
                       className={cn(
-                        "flex flex-col items-center justify-center gap-2 p-3 rounded-lg border transition-colors cursor-pointer",
+                        "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer",
                         viewAllFiles
                           ? "bg-blue-50 border-blue-200"
                           : "bg-white border-gray-200 hover:bg-gray-50"
@@ -923,9 +999,9 @@ export default function FilesPage() {
                       <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#DBEAFE" }}>
                         <Folder className="h-6 w-6 text-blue-600" />
                       </div>
-                      <div className="flex-1 min-w-0 w-full text-center">
-                        <div className="font-bold text-gray-900 text-sm truncate">All Files</div>
-                        <div className="flex items-center justify-center gap-2 mt-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-gray-900 truncate">All Files</div>
+                        <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                             {allFilesCount} files
                           </span>
@@ -935,7 +1011,7 @@ export default function FilesPage() {
 
                     {/* Folder Cards */}
                     {folders.length === 0 ? (
-                      <div className="col-span-2 text-center py-8 text-gray-500 text-sm">
+                      <div className="text-center py-8 text-gray-500 text-sm">
                         <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
                         <p>No folders yet.</p>
                         <p className="text-xs mt-1">Create a folder to get started.</p>
@@ -950,7 +1026,7 @@ export default function FilesPage() {
                             key={folder.id}
                             onClick={() => handleFolderSelect(folder.id)}
                             className={cn(
-                              "flex flex-col items-center justify-center gap-2 p-3 rounded-lg border transition-colors cursor-pointer group",
+                              "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
                               isSelected
                                 ? "bg-blue-50 border-blue-200"
                                 : "bg-white border-gray-200 hover:bg-gray-50"
@@ -959,18 +1035,117 @@ export default function FilesPage() {
                             <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#DBEAFE" }}>
                               <FolderClosed className="h-6 w-6 text-blue-600" />
                             </div>
-                            <div className="flex-1 min-w-0 w-full text-center">
-                              <div className="font-bold text-gray-900 text-sm truncate">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-gray-900 truncate flex items-center gap-2">
                                 {folder.name}
                               </div>
-                              <div className="flex items-center justify-center gap-2 mt-1">
+                              <div className="flex items-center gap-2 mt-1">
                                 {fileCount > 0 && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                                     {fileCount} files
                                   </span>
                                 )}
+                                {/* Show avatars for shared folders */}
+                                {(() => {
+                                  const shareCount = getShareCount("file_folder", folder.id);
+                                  if (shareCount > 0) {
+                                    const shares = myShares.filter(
+                                      (s: any) => s.resourceType === "file_folder" && s.resourceId === folder.id
+                                    );
+                                    return (
+                                      <div className="flex items-center gap-1 ml-auto">
+                                        {shares.slice(0, 2).map((share: any, idx: number) => {
+                                          const user = share.sharedWithUser;
+                                          if (!user) return null;
+                                          return (
+                                            <div
+                                              key={share.id}
+                                              className={cn(
+                                                "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                                getAvatarColor(user.id)
+                                              )}
+                                              style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                              title={getSharedUserDisplayName(user)}
+                                            >
+                                              {getUserInitials(user)}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                             </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                {(() => {
+                                  const shareCount = getShareCount("file_folder", folder.id);
+                                  const isShared = shareCount > 0;
+                                  return (
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        if (isShared) {
+                                          openShareDetails("file_folder", folder.id, folder.name);
+                                        } else {
+                                          openShareModal("file_folder", folder.id, folder.name);
+                                        }
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      {isShared ? (
+                                        <>
+                                          <Users className="h-4 w-4" />
+                                          <span>Shared</span>
+                                          <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                            {shareCount}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Share2 className="h-4 w-4" />
+                                          <span>Share</span>
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                  );
+                                })()}
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleEditFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleDeleteFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         );
                       })
@@ -1109,7 +1284,7 @@ export default function FilesPage() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                                 onClick={(e: React.MouseEvent) => {
                                   e.stopPropagation();
                                 }}
@@ -1178,7 +1353,7 @@ export default function FilesPage() {
                   )}
 
                   {/* Shared Section */}
-                  {(sharedFiles.length > 0 || sharedFolders.length > 0) && (
+                  {sharedFolders.length > 0 && (
                     <>
                       <div className="h-px bg-gray-200 my-2" />
                       {sharedFolders.map((folder: any) => {
@@ -1196,24 +1371,97 @@ export default function FilesPage() {
                                 : "bg-white border-gray-200 hover:bg-gray-50"
                             )}
                           >
-                            <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                            <div className="w-12 h-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
                               <FolderClosed className="h-6 w-6 text-pink-600" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-bold text-gray-900 truncate flex items-center gap-2">
-                                {folder.name}
-                              </div>
+                              <div className="font-bold text-gray-900 truncate">{folder.name}</div>
                               <div className="flex items-center gap-2 mt-1">
                                 {fileCount > 0 && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 font-medium">
                                     {fileCount} files
                                   </span>
                                 )}
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                                  Shared
-                                </span>
+                                {/* Show avatars for shared folders */}
+                                {(() => {
+                                  const shares = myShares.filter(
+                                    (s: any) => s.resourceType === "file_folder" && s.resourceId === folder.id
+                                  );
+                                  if (shares.length > 0) {
+                                    return (
+                                      <div className="flex items-center gap-1 ml-auto">
+                                        {shares.slice(0, 2).map((share: any, idx: number) => {
+                                          const user = share.sharedWithUser;
+                                          if (!user) return null;
+                                          return (
+                                            <div
+                                              key={share.id}
+                                              className={cn(
+                                                "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                                getAvatarColor(user.id)
+                                              )}
+                                              style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                              title={getSharedUserDisplayName(user)}
+                                            >
+                                              {getUserInitials(user)}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                             </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    openShareDetails("file_folder", folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                >
+                                  <Users className="h-4 w-4" />
+                                  <span>Shared</span>
+                                </DropdownMenuItem>
+                                {folder.sharePermission === "edit" && (
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      handleEditFolder(folder.id, folder.name);
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                    <span>Edit</span>
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleExitSharedFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50 rounded-md px-2 py-1.5"
+                                >
+                                  <LogOut className="h-4 w-4" />
+                                  <span>Exit</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         );
                       })}
