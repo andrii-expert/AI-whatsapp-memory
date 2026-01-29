@@ -909,12 +909,12 @@ export default function FilesPage() {
 
                 {/* Folders */}
                 <div className="px-4 pb-20 pt-2">
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {/* All Files Card */}
                     <div
                       onClick={handleViewAllFiles}
                       className={cn(
-                        "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer",
+                        "flex flex-col items-center justify-center gap-2 p-3 rounded-lg border transition-colors cursor-pointer",
                         viewAllFiles
                           ? "bg-blue-50 border-blue-200"
                           : "bg-white border-gray-200 hover:bg-gray-50"
@@ -923,9 +923,9 @@ export default function FilesPage() {
                       <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#DBEAFE" }}>
                         <Folder className="h-6 w-6 text-blue-600" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-gray-900 truncate">All Files</div>
-                        <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 min-w-0 w-full text-center">
+                        <div className="font-bold text-gray-900 text-sm truncate">All Files</div>
+                        <div className="flex items-center justify-center gap-2 mt-1">
                           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                             {allFilesCount} files
                           </span>
@@ -935,7 +935,7 @@ export default function FilesPage() {
 
                     {/* Folder Cards */}
                     {folders.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500 text-sm">
+                      <div className="col-span-2 text-center py-8 text-gray-500 text-sm">
                         <FolderClosed className="h-8 w-8 mx-auto mb-2 text-gray-400" />
                         <p>No folders yet.</p>
                         <p className="text-xs mt-1">Create a folder to get started.</p>
@@ -950,7 +950,7 @@ export default function FilesPage() {
                             key={folder.id}
                             onClick={() => handleFolderSelect(folder.id)}
                             className={cn(
-                              "flex items-center gap-3 p-2 rounded-lg border transition-colors cursor-pointer group",
+                              "flex flex-col items-center justify-center gap-2 p-3 rounded-lg border transition-colors cursor-pointer group",
                               isSelected
                                 ? "bg-blue-50 border-blue-200"
                                 : "bg-white border-gray-200 hover:bg-gray-50"
@@ -959,11 +959,11 @@ export default function FilesPage() {
                             <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#DBEAFE" }}>
                               <FolderClosed className="h-6 w-6 text-blue-600" />
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-bold text-gray-900 truncate flex items-center gap-2">
+                            <div className="flex-1 min-w-0 w-full text-center">
+                              <div className="font-bold text-gray-900 text-sm truncate">
                                 {folder.name}
                               </div>
-                              <div className="flex items-center gap-2 mt-1">
+                              <div className="flex items-center justify-center gap-2 mt-1">
                                 {fileCount > 0 && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                                     {fileCount} files
