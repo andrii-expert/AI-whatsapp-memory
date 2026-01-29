@@ -18,6 +18,8 @@ export const userWhatsappCostsInputSchema = z.object({
   search: z.string().optional(),
   sortBy: z.enum(["totalCost", "messageCount", "lastMessage"]).default("totalCost"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
 });
 
 export const userWhatsappCostDetailsInputSchema = z.object({

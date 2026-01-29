@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@imaginecalendar/ui/card";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
 import {
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@imaginecalendar/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@imaginecalendar/ui/tabs";
+import { Badge } from "@imaginecalendar/ui/badge";
 import {
   Download,
   RefreshCw,
@@ -23,12 +24,16 @@ import {
   DollarSign,
   Calendar,
   Users,
+  Filter,
+  X,
+  AlertCircle,
 } from "lucide-react";
 import { useToast } from "@imaginecalendar/ui/use-toast";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { CostOverview } from "@/components/analytics/cost-overview";
 import { CostTrends } from "@/components/analytics/cost-trends";
 import { UserCostBreakdown } from "@/components/analytics/user-cost-breakdown";
+import { cn } from "@imaginecalendar/ui/cn";
 
 export default function AnalyticsPage() {
   const { toast } = useToast();
@@ -40,41 +45,115 @@ export default function AnalyticsPage() {
     from: "",
     to: "",
   });
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null);
+
+  // Validate date range
+  useEffect(() => {
+    if (dateRange.from && dateRange.to) {
+      const fromDate = new Date(dateRange.from);
+      const toDate = new Date(dateRange.to);
+      
+      if (fromDate > toDate) {
+        setDateRangeError("From date must be before To date");
+      } else {
+        setDateRangeError(null);
+      }
+    } else {
+      setDateRangeError(null);
+    }
+  }, [dateRange.from, dateRange.to]);
 
   // Prepare date range for queries
-  const queryDateRange = dateRange.from && dateRange.to
+  const queryDateRange = dateRange.from && dateRange.to && !dateRangeError
     ? {
-        from: new Date(dateRange.from).toISOString(),
-        to: new Date(dateRange.to).toISOString(),
+        from: startOfDay(new Date(dateRange.from)).toISOString(),
+        to: endOfDay(new Date(dateRange.to)).toISOString(),
       }
     : undefined;
 
-  // Fetch cost overview
-  const { data: overview, isLoading: overviewLoading, refetch: refetchOverview } = useQuery(
-    trpc.whatsappAnalytics.getCostOverview.queryOptions(queryDateRange || {})
-  );
+  // Preset date range handlers
+  const applyPresetRange = (preset: string) => {
+    const today = new Date();
+    let from: Date;
+    let to: Date = endOfDay(today);
+
+    switch (preset) {
+      case "today":
+        from = startOfDay(today);
+        break;
+      case "last7":
+        from = startOfDay(subDays(today, 7));
+        break;
+      case "last30":
+        from = startOfDay(subDays(today, 30));
+        break;
+      case "thisMonth":
+        from = startOfMonth(today);
+        break;
+      case "lastMonth":
+        from = startOfMonth(subMonths(today, 1));
+        to = endOfMonth(subMonths(today, 1));
+        break;
+      default:
+        return;
+    }
+
+    setDateRange({
+      from: format(from, "yyyy-MM-dd"),
+      to: format(to, "yyyy-MM-dd"),
+    });
+  };
+
+  // Fetch cost overview - disable if date range is invalid
+  const { data: overview, isLoading: overviewLoading, error: overviewError, refetch: refetchOverview } = useQuery({
+    ...trpc.whatsappAnalytics.getCostOverview.queryOptions(queryDateRange || {}),
+    enabled: !dateRangeError,
+  });
 
   // Fetch cost statistics for dashboard widgets
-  const { data: stats, isLoading: statsLoading } = useQuery(
-    trpc.whatsappAnalytics.getCostStats.queryOptions(queryDateRange || {})
-  );
+  const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useQuery({
+    ...trpc.whatsappAnalytics.getCostStats.queryOptions(queryDateRange || {}),
+    enabled: !dateRangeError,
+  });
 
   // Fetch cost trends
-  const { data: trends, isLoading: trendsLoading } = useQuery(
-    trpc.whatsappAnalytics.getCostTrends.queryOptions({
+  const { data: trends, isLoading: trendsLoading, error: trendsError, refetch: refetchTrends } = useQuery({
+    ...trpc.whatsappAnalytics.getCostTrends.queryOptions({
       days: parseInt(selectedPeriod),
       ...queryDateRange,
-    })
-  );
+    }),
+    enabled: !dateRangeError,
+  });
+
+  // Refetch all queries
+  const handleRefreshAll = () => {
+    refetchOverview();
+    refetchStats();
+    refetchTrends();
+    queryClient.invalidateQueries({ queryKey: [["whatsappAnalytics"]] });
+    toast({
+      title: "Refreshing data",
+      description: "All analytics data is being refreshed...",
+    });
+  };
 
   const handleExport = async () => {
     try {
+      if (dateRangeError) {
+        toast({
+          title: "Invalid date range",
+          description: "Please fix the date range before exporting",
+          variant: "destructive",
+        });
+        return;
+      }
+
       let exportParams: { from?: string; to?: string } = {};
 
-      if (dateRange.from && dateRange.to) {
+      if (queryDateRange) {
         exportParams = {
-          from: new Date(dateRange.from).toISOString(),
-          to: new Date(dateRange.to).toISOString(),
+          from: queryDateRange.from,
+          to: queryDateRange.to,
         };
       }
 
@@ -159,91 +238,204 @@ export default function AnalyticsPage() {
     return `$${(cents / 100).toFixed(4)}`;
   };
 
-  if (overviewLoading || statsLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">WhatsApp Analytics</h1>
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex justify-center">
-              <RefreshCw className="h-6 w-6 animate-spin" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const isLoading = overviewLoading || statsLoading;
+  const hasError = overviewError || statsError;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">WhatsApp Analytics</h1>
-        <div className="flex items-center space-x-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">WhatsApp Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Monitor messaging costs, trends, and user activity
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
           <Button
-            onClick={() => {
-              refetchOverview();
-            }}
+            onClick={handleRefreshAll}
             variant="outline"
             size="sm"
+            disabled={isLoading}
           >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
+            <RefreshCw className={cn("h-4 w-4 mr-2", isLoading && "animate-spin")} />
+            Refresh All
           </Button>
-          <Button onClick={handleExport} variant="outline">
-            <Download className="mr-2 h-4 w-4" />
+          <Button 
+            onClick={handleExport} 
+            variant="outline"
+            size="sm"
+            disabled={isLoading}
+          >
+            <Download className="h-4 w-4 mr-2" />
             Export Data
           </Button>
         </div>
       </div>
 
+      {/* Error State */}
+      {hasError && (
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              <div>
+                <p className="font-medium">Failed to load analytics data</p>
+                <p className="text-sm text-muted-foreground">
+                  Please try refreshing the page or contact support if the issue persists.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Date Range Filter */}
       <Card>
         <CardHeader>
-          <CardTitle>Date Filter</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="text-sm font-medium">From Date</label>
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Date Range Filter
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Filter analytics data by date range
+              </CardDescription>
+            </div>
+            {queryDateRange && (
+              <Badge variant="secondary" className="gap-1">
+                <Calendar className="h-3 w-3" />
+                Filter Active
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Preset Buttons */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => applyPresetRange("today")}
+              className="text-xs"
+            >
+              Today
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => applyPresetRange("last7")}
+              className="text-xs"
+            >
+              Last 7 Days
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => applyPresetRange("last30")}
+              className="text-xs"
+            >
+              Last 30 Days
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => applyPresetRange("thisMonth")}
+              className="text-xs"
+            >
+              This Month
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => applyPresetRange("lastMonth")}
+              className="text-xs"
+            >
+              Last Month
+            </Button>
+          </div>
+
+          {/* Custom Date Range */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 pt-2 border-t">
+            <div className="flex-1">
+              <label className="text-sm font-medium mb-1.5 block">From Date</label>
               <Input
                 type="date"
                 value={dateRange.from}
                 onChange={(e) => setDateRange({ ...dateRange, from: e.target.value })}
-                className="mt-1"
+                className={cn(dateRangeError && "border-destructive")}
               />
             </div>
-            <div>
-              <label className="text-sm font-medium">To Date</label>
+            <div className="flex-1">
+              <label className="text-sm font-medium mb-1.5 block">To Date</label>
               <Input
                 type="date"
                 value={dateRange.to}
                 onChange={(e) => setDateRange({ ...dateRange, to: e.target.value })}
-                className="mt-1"
+                min={dateRange.from || undefined}
+                className={cn(dateRangeError && "border-destructive")}
               />
             </div>
-            <div className="flex items-end">
-              <Button
-                onClick={() => setDateRange({ from: "", to: "" })}
-                variant="outline"
-                size="sm"
-                className="mt-6"
-              >
-                Clear Filters
-              </Button>
+            <div className="flex items-end gap-2">
+              {(dateRange.from || dateRange.to) && (
+                <Button
+                  onClick={() => {
+                    setDateRange({ from: "", to: "" });
+                    setDateRangeError(null);
+                  }}
+                  variant="outline"
+                  size="sm"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear
+                </Button>
+              )}
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            {dateRange.from && dateRange.to
-              ? "Showing filtered data for selected date range"
-              : "Showing all data (no date filter applied)"}
-          </p>
+
+          {/* Error Message */}
+          {dateRangeError && (
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              <span>{dateRangeError}</span>
+            </div>
+          )}
+
+          {/* Status Message */}
+          {!dateRangeError && (
+            <div className="text-xs text-muted-foreground">
+              {queryDateRange ? (
+                <span>
+                  Showing data from{" "}
+                  <span className="font-medium">{format(new Date(dateRange.from), "MMM dd, yyyy")}</span>{" "}
+                  to{" "}
+                  <span className="font-medium">{format(new Date(dateRange.to), "MMM dd, yyyy")}</span>
+                </span>
+              ) : (
+                <span>Showing all available data (no date filter applied)</span>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Overview Cards */}
-      {stats && (
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="space-y-0 pb-2">
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-muted rounded w-1/2 mb-2"></div>
+                <div className="h-3 bg-muted rounded w-2/3"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : stats ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -317,7 +509,7 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
         </div>
-      )}
+      ) : null}
 
       {/* Main Analytics Tabs */}
       <Tabs defaultValue="overview" className="space-y-6">
@@ -328,28 +520,77 @@ export default function AnalyticsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {overview && <CostOverview data={overview} />}
+          {overviewLoading ? (
+            <Card>
+              <CardContent className="p-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Loading overview data...</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : overviewError ? (
+            <Card className="border-destructive">
+              <CardContent className="p-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <AlertCircle className="h-8 w-8 text-destructive" />
+                  <p className="text-sm text-destructive">Failed to load overview data</p>
+                  <Button variant="outline" size="sm" onClick={() => refetchOverview()}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : overview ? (
+            <CostOverview data={overview} />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="trends" className="space-y-6">
-          <div className="flex items-center space-x-4 mb-6">
-            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">Last 7 days</SelectItem>
-                <SelectItem value="30">Last 30 days</SelectItem>
-                <SelectItem value="60">Last 60 days</SelectItem>
-                <SelectItem value="90">Last 90 days</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {trends && <CostTrends data={trends} loading={trendsLoading} />}
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle>Cost Trends</CardTitle>
+                  <CardDescription className="mt-1">
+                    Analyze messaging costs and volume over time
+                  </CardDescription>
+                </div>
+                <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">Last 7 days</SelectItem>
+                    <SelectItem value="30">Last 30 days</SelectItem>
+                    <SelectItem value="60">Last 60 days</SelectItem>
+                    <SelectItem value="90">Last 90 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+          </Card>
+          {trendsError ? (
+            <Card className="border-destructive">
+              <CardContent className="p-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <AlertCircle className="h-8 w-8 text-destructive" />
+                  <p className="text-sm text-destructive">Failed to load trends data</p>
+                  <Button variant="outline" size="sm" onClick={() => refetchTrends()}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : trends ? (
+            <CostTrends data={trends} loading={trendsLoading} />
+          ) : null}
         </TabsContent>
 
         <TabsContent value="users" className="space-y-6">
-          <UserCostBreakdown />
+          <UserCostBreakdown dateRange={queryDateRange} />
         </TabsContent>
       </Tabs>
     </div>

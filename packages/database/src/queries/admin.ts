@@ -109,6 +109,9 @@ export async function getDashboardMetrics(db: Database) {
         user => user.createdAt >= thirtyDaysAgo
       ).length;
 
+      // Get total users count
+      const totalUsers = allUsers.length;
+
       return {
         activeTrials,
         payingUsers,
@@ -116,7 +119,61 @@ export async function getDashboardMetrics(db: Database) {
         churnRate,
         signupsLast7Days,
         signupsLast30Days,
+        totalUsers,
       };
+    }
+  );
+}
+
+export async function getDailySignups(db: Database, days: number = 30) {
+  return withQueryLogging(
+    'getDailySignups',
+    { days },
+    async () => {
+      const now = new Date();
+      const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      
+      // Get all users created in the date range
+      const allUsers = await db.query.users.findMany({
+        where: and(
+          isNull(users.deletedAt),
+          gte(users.createdAt, startDate)
+        ),
+        columns: {
+          id: true,
+          createdAt: true,
+        },
+        orderBy: [desc(users.createdAt)],
+      });
+
+      // Group by date
+      const dailySignups: Record<string, number> = {};
+      
+      // Initialize all dates in range with 0
+      for (let i = 0; i < days; i++) {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+        dailySignups[dateKey] = 0;
+      }
+
+      // Count signups per day
+      for (const user of allUsers) {
+        const dateKey = user.createdAt.toISOString().split('T')[0];
+        if (dailySignups[dateKey] !== undefined) {
+          dailySignups[dateKey]++;
+        }
+      }
+
+      // Convert to array format
+      const result = Object.entries(dailySignups)
+        .map(([date, count]) => ({
+          date,
+          signups: count,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      return result;
     }
   );
 }

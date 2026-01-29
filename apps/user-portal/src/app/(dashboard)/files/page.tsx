@@ -40,6 +40,7 @@ import {
   Users,
   Share2,
   ArrowLeft,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@imaginecalendar/ui/button";
 import { Input } from "@imaginecalendar/ui/input";
@@ -212,6 +213,35 @@ export default function FilesPage() {
   const { data: sharedResources, isLoading: isLoadingSharedResources } = useQuery(
     trpc.fileSharing.getSharedWithMe.queryOptions()
   );
+  // Get recipient shares from sharedResources
+  const myRecipientShares = useMemo(() => {
+    const shares: any[] = [];
+    if (sharedResources?.folders) {
+      sharedResources.folders.forEach((folder: any) => {
+        if (folder.shareInfo) {
+          shares.push({
+            id: folder.shareInfo.shareId,
+            resourceType: "file_folder",
+            resourceId: folder.id,
+            ...folder.shareInfo
+          });
+        }
+      });
+    }
+    if (sharedResources?.files) {
+      sharedResources.files.forEach((file: any) => {
+        if (file.shareInfo) {
+          shares.push({
+            id: file.shareInfo.shareId,
+            resourceType: "file",
+            resourceId: file.id,
+            ...file.shareInfo
+          });
+        }
+      });
+    }
+    return shares;
+  }, [sharedResources]);
 
   // Extract shared files and folders from sharedResources
   const sharedFiles = useMemo(() => {
@@ -341,6 +371,33 @@ export default function FilesPage() {
     })
   );
 
+  const exitSharedFolderMutation = useMutation(
+    trpc.fileSharing.deleteShare.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getSharedWithMe.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.fileSharing.getMyShares.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.storage.folders.list.queryKey() });
+        queryClient.invalidateQueries({ queryKey: trpc.storage.list.queryKey() });
+
+        if (selectedFolderId) {
+          setSelectedFolderId(null);
+          setViewAllFiles(true);
+        }
+        toast({
+          title: "Exited folder",
+          description: "You have been removed from this shared folder",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to exit shared folder",
+          variant: "destructive",
+        });
+      },
+    })
+  );
+
   const updateFileMutation = useMutation(
     trpc.storage.update.mutationOptions({
       onSuccess: () => {
@@ -447,6 +504,25 @@ export default function FilesPage() {
   const handleDeleteFolder = (folderId: string, folderName: string) => {
     setFolderToDelete({ id: folderId, name: folderName });
     setIsDeleteFolderDialogOpen(true);
+  };
+
+  const handleExitSharedFolder = (folderId: string, folderName: string) => {
+    const userShare = myRecipientShares.find((share: any) =>
+      share.resourceType === "file_folder" &&
+      share.resourceId === folderId
+    );
+
+    if (userShare) {
+      exitSharedFolderMutation.mutate({
+        shareId: userShare.id
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: "Unable to find share information for this folder. Please refresh the page and try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const confirmDeleteFolder = () => {
@@ -869,8 +945,8 @@ export default function FilesPage() {
       {/* Main Container */}
       <div className="mx-auto max-w-md md:max-w-4xl lg:max-w-7xl">
 
-          {/* Main Content - Three Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] xl:grid-cols-[300px_1fr_300px] gap-6 w-full">
+          {/* Main Content - Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 w-full">
             {/* Mobile Folders View - Show when no folder is selected */}
             {!selectedFolderId && !viewAllFiles && !viewAllShared && (
               <div className="lg:hidden w-full">
@@ -969,8 +1045,107 @@ export default function FilesPage() {
                                     {fileCount} files
                                   </span>
                                 )}
+                                {/* Show avatars for shared folders */}
+                                {(() => {
+                                  const shareCount = getShareCount("file_folder", folder.id);
+                                  if (shareCount > 0) {
+                                    const shares = myShares.filter(
+                                      (s: any) => s.resourceType === "file_folder" && s.resourceId === folder.id
+                                    );
+                                    return (
+                                      <div className="flex items-center gap-1 ml-auto">
+                                        {shares.slice(0, 2).map((share: any, idx: number) => {
+                                          const user = share.sharedWithUser;
+                                          if (!user) return null;
+                                          return (
+                                            <div
+                                              key={share.id}
+                                              className={cn(
+                                                "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                                getAvatarColor(user.id)
+                                              )}
+                                              style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                              title={getSharedUserDisplayName(user)}
+                                            >
+                                              {getUserInitials(user)}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                             </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                {(() => {
+                                  const shareCount = getShareCount("file_folder", folder.id);
+                                  const isShared = shareCount > 0;
+                                  return (
+                                    <DropdownMenuItem
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        if (isShared) {
+                                          openShareDetails("file_folder", folder.id, folder.name);
+                                        } else {
+                                          openShareModal("file_folder", folder.id, folder.name);
+                                        }
+                                      }}
+                                      className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                    >
+                                      {isShared ? (
+                                        <>
+                                          <Users className="h-4 w-4" />
+                                          <span>Shared</span>
+                                          <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                            {shareCount}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Share2 className="h-4 w-4" />
+                                          <span>Share</span>
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                  );
+                                })()}
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleEditFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                  <span>Edit</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleDeleteFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 rounded-md px-2 py-1.5"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span>Delete</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         );
                       })
@@ -1109,7 +1284,7 @@ export default function FilesPage() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                                 onClick={(e: React.MouseEvent) => {
                                   e.stopPropagation();
                                 }}
@@ -1178,7 +1353,7 @@ export default function FilesPage() {
                   )}
 
                   {/* Shared Section */}
-                  {(sharedFiles.length > 0 || sharedFolders.length > 0) && (
+                  {sharedFolders.length > 0 && (
                     <>
                       <div className="h-px bg-gray-200 my-2" />
                       {sharedFolders.map((folder: any) => {
@@ -1196,24 +1371,97 @@ export default function FilesPage() {
                                 : "bg-white border-gray-200 hover:bg-gray-50"
                             )}
                           >
-                            <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#FCE7F3" }}>
+                            <div className="w-12 h-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
                               <FolderClosed className="h-6 w-6 text-pink-600" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-bold text-gray-900 truncate flex items-center gap-2">
-                                {folder.name}
-                              </div>
+                              <div className="font-bold text-gray-900 truncate">{folder.name}</div>
                               <div className="flex items-center gap-2 mt-1">
                                 {fileCount > 0 && (
                                   <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 font-medium">
                                     {fileCount} files
                                   </span>
                                 )}
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                                  Shared
-                                </span>
+                                {/* Show avatars for shared folders */}
+                                {(() => {
+                                  const shares = myShares.filter(
+                                    (s: any) => s.resourceType === "file_folder" && s.resourceId === folder.id
+                                  );
+                                  if (shares.length > 0) {
+                                    return (
+                                      <div className="flex items-center gap-1 ml-auto">
+                                        {shares.slice(0, 2).map((share: any, idx: number) => {
+                                          const user = share.sharedWithUser;
+                                          if (!user) return null;
+                                          return (
+                                            <div
+                                              key={share.id}
+                                              className={cn(
+                                                "w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+                                                getAvatarColor(user.id)
+                                              )}
+                                              style={{ marginLeft: idx > 0 ? '-8px' : '0' }}
+                                              title={getSharedUserDisplayName(user)}
+                                            >
+                                              {getUserInitials(user)}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                             </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="rounded-lg shadow-lg border border-gray-200 bg-white p-1 min-w-[160px]">
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    openShareDetails("file_folder", folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                >
+                                  <Users className="h-4 w-4" />
+                                  <span>Shared</span>
+                                </DropdownMenuItem>
+                                {folder.sharePermission === "edit" && (
+                                  <DropdownMenuItem
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      handleEditFolder(folder.id, folder.name);
+                                    }}
+                                    className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1.5"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                    <span>Edit</span>
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={(e: React.MouseEvent) => {
+                                    e.stopPropagation();
+                                    handleExitSharedFolder(folder.id, folder.name);
+                                  }}
+                                  className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600 focus:bg-orange-50 rounded-md px-2 py-1.5"
+                                >
+                                  <LogOut className="h-4 w-4" />
+                                  <span>Exit</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         );
                       })}
@@ -1401,7 +1649,7 @@ export default function FilesPage() {
                       {searchQuery ? "No files match your search." : "No files yet. Upload your first file to get started!"}
                     </div>
                   ) : viewMode === "grid" ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                       {filteredFiles.map((file: FileItem) => (
                         <div
                           key={file.id}
@@ -1991,7 +2239,7 @@ export default function FilesPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <form onSubmit={handleCreateFolder}>
-            <div className="space-y-4">
+            <div className="space-y-4 mb-4">
               <div className="space-y-2">
                 <Label htmlFor="folder-name">Folder Name *</Label>
                 <Input

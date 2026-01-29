@@ -3,8 +3,10 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../init";
 import {
   getDashboardMetrics,
+  getDailySignups,
   getUsers,
   softDeleteUser,
+  deleteUserAndAllData,
   checkUserAdminStatus,
   getUserSubscription,
   updateSubscription,
@@ -354,6 +356,27 @@ export const adminRouter = createTRPCRouter({
     }
   }),
 
+  // Daily signups for chart
+  getDailySignups: adminProcedure
+    .input(
+      z.object({
+        days: z.number().min(1).max(90).default(30),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { db } = ctx;
+
+      try {
+        return await getDailySignups(db, input.days);
+      } catch (error) {
+        logger.error({ error, input }, "Failed to fetch daily signups");
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch daily signups",
+        });
+      }
+    }),
+
   // Get users with pagination and search
   getUsers: adminProcedure
     .input(
@@ -389,7 +412,7 @@ export const adminRouter = createTRPCRouter({
       }
     }),
 
-  // Soft delete user
+  // Hard delete user - completely removes user and all associated data from database
   deleteUser: adminProcedure
     .input(
       z.object({
@@ -402,7 +425,8 @@ export const adminRouter = createTRPCRouter({
       const { userId, reason } = input;
 
       try {
-        await softDeleteUser(db, userId);
+        // Completely delete user and all associated data from database
+        await deleteUserAndAllData(db, userId);
 
         logger.info(
           {
@@ -410,7 +434,7 @@ export const adminRouter = createTRPCRouter({
             deletedUserId: userId,
             reason,
           },
-          "User soft deleted by admin"
+          "User completely deleted by admin (hard delete)"
         );
 
         return { success: true };
