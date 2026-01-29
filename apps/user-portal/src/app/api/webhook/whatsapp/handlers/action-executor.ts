@@ -6496,6 +6496,45 @@ export class ActionExecutor {
   }
 
   /**
+   * Check if a one-time reminder's scheduled time has already passed (in user's timezone).
+   * Used to reject creation and ask user to suggest a different time.
+   */
+  private isOneTimeReminderTimePassed(
+    input: CreateReminderInput,
+    timezone: string | undefined,
+    defaultTime: string
+  ): boolean {
+    if ((input.frequency || 'once') !== 'once') return false;
+    const tz = timezone || 'UTC';
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+    const nowMs = now.getTime();
+    const oneMinuteMs = 60 * 1000;
+
+    let scheduledMs: number | null = null;
+
+    if (input.targetDate) {
+      scheduledMs = new Date(input.targetDate).getTime();
+    } else if (
+      input.daysFromNow !== undefined &&
+      input.daysFromNow !== null
+    ) {
+      const ct = this.getCurrentTimeInTimezone(tz);
+      const timeStr = input.time || defaultTime;
+      const parts = timeStr.split(':');
+      const h = Math.min(23, Math.max(0, parseInt(parts[0] ?? '0', 10) || 0));
+      const m = Math.min(59, Math.max(0, parseInt(parts[1] ?? '0', 10) || 0));
+      const base = new Date(Date.UTC(ct.year, ct.month, ct.day + (input.daysFromNow ?? 0), 0, 0, 0, 0));
+      const y = base.getUTCFullYear();
+      const mo = base.getUTCMonth();
+      const d = base.getUTCDate();
+      scheduledMs = this.createDateInUserTimezone(y, mo, d, h, m, tz).getTime();
+    }
+
+    if (scheduledMs == null) return false;
+    return scheduledMs < nowMs - oneMinuteMs;
+  }
+
+  /**
    * Parse schedule string to reminder input format
    * Examples:
    * - "at 5pm" → once, time: "17:00"
@@ -7592,11 +7631,23 @@ export class ActionExecutor {
         logger.warn({ error, userId: this.userId, title: parsed.taskName }, 'Failed to check for duplicate reminder titles, using original title');
       }
       
+      const freq = scheduleData.frequency || 'once';
+      let resolvedTime = scheduleData.time;
+      if (
+        !resolvedTime &&
+        freq === 'once' &&
+        scheduleData.daysFromNow !== undefined &&
+        scheduleData.daysFromNow !== null &&
+        scheduleData.daysFromNow === 0
+      ) {
+        resolvedTime = defaultTime;
+      }
+
       const reminderInput: CreateReminderInput = {
         userId: this.userId,
         title: finalTitle,
-        frequency: scheduleData.frequency || 'once',
-        time: scheduleData.time,
+        frequency: freq,
+        time: resolvedTime,
         minuteOfHour: scheduleData.minuteOfHour,
         intervalMinutes: scheduleData.intervalMinutes,
         daysFromNow: scheduleData.daysFromNow,
@@ -7618,6 +7669,20 @@ export class ActionExecutor {
         },
         'Creating reminder with input'
       );
+
+      // Check if one-time reminder time has already passed — reject and ask for a different time
+      let userTz = timezone;
+      if (!userTz) {
+        const user = await getUserById(this.db, this.userId);
+        userTz = (user as { timezone?: string } | null)?.timezone ?? 'UTC';
+      }
+      if (this.isOneTimeReminderTimePassed(reminderInput, userTz, defaultTime)) {
+        return {
+          success: false,
+          message:
+            "Shucks, the time has already passed. Please suggest a different reminder time (e.g. \"change to 5pm\", \"in 30 minutes\", or \"tomorrow at 9am\").",
+        };
+      }
 
       const reminder = await createReminder(this.db, reminderInput);
 
