@@ -8253,7 +8253,10 @@ export class ActionExecutor {
             // Otherwise, get default delay minutes from preferences
             try {
               const preferences = await getUserPreferences(this.db, this.userId);
-              if (preferences?.defaultDelayMinutes) {
+              if (preferences?.defaultDelayMinutes !== null && 
+                  preferences?.defaultDelayMinutes !== undefined && 
+                  typeof preferences.defaultDelayMinutes === 'number' &&
+                  preferences.defaultDelayMinutes > 0) {
                 delayMinutes = preferences.defaultDelayMinutes;
                 logger.info(
                   {
@@ -8261,7 +8264,17 @@ export class ActionExecutor {
                     reminderId: reminder.id,
                     defaultDelayMinutes: delayMinutes,
                   },
-                  'Using default delay minutes from preferences'
+                  'Using default delay minutes from preferences for single reminder delay'
+                );
+              } else {
+                logger.info(
+                  {
+                    userId: this.userId,
+                    reminderId: reminder.id,
+                    defaultDelayMinutes: preferences?.defaultDelayMinutes,
+                    note: 'Default delay minutes not set or invalid, will show error if no delay specified',
+                  },
+                  'Default delay minutes not available for single reminder delay'
                 );
               }
             } catch (error) {
