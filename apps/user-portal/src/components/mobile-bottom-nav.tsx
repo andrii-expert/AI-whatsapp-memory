@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Calendar, ShoppingCart, Bell, Users } from "lucide-react";
+import { LayoutDashboard, Calendar, ShoppingCart, Bell, FolderOpen } from "lucide-react";
 import { cn } from "@imaginecalendar/ui/cn";
 
 const navigationItems = [
@@ -10,7 +10,7 @@ const navigationItems = [
   { name: "Events", href: "/calendars", icon: Calendar },
   { name: "Lists", href: "/shopping-lists", icon: ShoppingCart },
   { name: "Reminders", href: "/reminders", icon: Bell },
-  { name: "Friends", href: "/friends", icon: Users },
+  { name: "Files", href: "/files", icon: FolderOpen },
 ];
 
 export function MobileBottomNav() {

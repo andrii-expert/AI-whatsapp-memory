@@ -38,9 +38,8 @@ const navigation = [
   { name: "Lists", href: "/shopping-lists", icon: ShoppingCart },
   // { name: "Tasks", href: "/tasks", icon: CheckSquare },
   { name: "Reminders", href: "/reminders", icon: Bell },
-  { name: "Friends", href: "/friends", icon: Users },
+  { name: "Files", href: "/files", icon: FolderOpen },
   // { name: "Notes", href: "/notes", icon: StickyNote },
-  { name: "Documents", href: "/document", icon: FolderOpen },
   // { name: "Address", href: "/address", icon: BookOpen },
 ];
 
@@ -191,7 +190,7 @@ export function DashboardNav() {
                           itemCount = calendars?.length || 0;
                         } else if (item.href === "/tasks") {
                           itemCount = allTasks.length;
-                        } else if (item.href === "/document") {
+                        } else if (item.href === "/files") {
                           itemCount = storageStats?.filesCount || 0;
                         } else if (item.href === "/address") {
                           itemCount = allAddresses.length;
