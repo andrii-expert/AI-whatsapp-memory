@@ -1354,9 +1354,9 @@ export default function FilesPage() {
               </div>
 
               {/* View Toggle and Files List */}
-              <div className="px-4">
+              <div>
                 {/* View Toggle */}
-                <div className="flex gap-2 mb-4">
+                <div className="flex gap-2 mb-4 px-4">
                   <div className="flex gap-0 border rounded-lg overflow-hidden">
                     <Button
                       variant={viewMode === "grid" ? "blue-primary" : "outline"}
@@ -1968,8 +1968,6 @@ export default function FilesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-        </div>
-      </div>
     </div>
   );
 }
