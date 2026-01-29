@@ -1180,7 +1180,7 @@ export default function FilesPage() {
             </div>
 
             {/* Main Content Area - Files */}
-        <div className="space-y-4">
+            <div className="space-y-4">
           <div>
             {/* Desktop - Folder breadcrumb and Upload button */}
             <div className="flex items-center justify-between mb-4 gap-4">
@@ -1771,8 +1771,7 @@ export default function FilesPage() {
               )}
             </div>
           </div>
-        </div>
-      </div>
+            </div>
 
       {/* Upload Modal */}
       <AlertDialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
@@ -2057,7 +2056,6 @@ export default function FilesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-          </div>
         </div>
       </div>
     </div>
