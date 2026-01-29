@@ -6948,11 +6948,9 @@ export class ActionExecutor {
           logger.warn({ error, userId: this.userId }, 'Failed to get user preferences for default later minutes, using default 60 minutes');
         }
         
-        // Calculate target date by adding laterMinutes to current time
-        const now = timezone 
-          ? new Date(new Date().toLocaleString('en-US', { timeZone: timezone }))
-          : new Date();
-        const laterDate = new Date(now.getTime() + laterMinutes * 60 * 1000);
+        // Calculate target date by adding laterMinutes to current time (use Date.now() for correct UTC instant)
+        const nowMs = Date.now();
+        const laterDate = new Date(nowMs + laterMinutes * 60 * 1000);
         
         // Set targetDate and time
         if (timezone) {
@@ -6984,7 +6982,7 @@ export class ActionExecutor {
           {
             userId: this.userId,
             laterMinutes,
-            now: now.toISOString(),
+            nowMs,
             laterDate: result.targetDate?.toISOString(),
             time: result.time,
             timezone,
