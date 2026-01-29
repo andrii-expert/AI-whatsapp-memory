@@ -349,7 +349,7 @@ export default function AnalyticsPage() {
         </TabsContent>
 
         <TabsContent value="users" className="space-y-6">
-          <UserCostBreakdown />
+          <UserCostBreakdown dateRange={queryDateRange} />
         </TabsContent>
       </Tabs>
     </div>

@@ -144,6 +144,7 @@ export async function getUserWhatsAppCosts(
     search?: string;
     sortBy?: 'totalCost' | 'messageCount' | 'lastMessage';
     sortOrder?: 'asc' | 'desc';
+    dateRange?: { from: Date; to: Date };
   } = {}
 ) {
   return withQueryLogging(
@@ -171,6 +172,18 @@ export async function getUserWhatsAppCosts(
           ${whatsappNumbers.phoneNumber} ILIKE ${`%${search}%`}
         )`;
         searchCondition = and(searchCondition, searchFilter)!;
+      }
+
+      // Add date range filter - filter users who have messages in the date range
+      if (options.dateRange) {
+        const dateFilter = sql`EXISTS (
+          SELECT 1 FROM ${whatsappMessageLogs}
+          WHERE ${whatsappMessageLogs.whatsappNumberId} = ${whatsappNumbers.id}
+            AND ${whatsappMessageLogs.direction} = 'outgoing'
+            AND ${whatsappMessageLogs.createdAt} >= ${options.dateRange.from}
+            AND ${whatsappMessageLogs.createdAt} <= ${options.dateRange.to}
+        )`;
+        searchCondition = and(searchCondition, dateFilter)!;
       }
 
       // Build sort condition

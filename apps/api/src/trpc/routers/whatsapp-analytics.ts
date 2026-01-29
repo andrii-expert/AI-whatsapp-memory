@@ -122,12 +122,21 @@ export const whatsappAnalyticsRouter = createTRPCRouter({
           "Fetching user WhatsApp costs"
         );
 
+        let dateRange: { from: Date; to: Date } | undefined;
+        if (input.from && input.to) {
+          dateRange = {
+            from: new Date(input.from),
+            to: new Date(input.to),
+          };
+        }
+
         return await getUserWhatsAppCosts(db, {
           page: input.page,
           limit: input.limit,
           search: input.search,
           sortBy: input.sortBy,
           sortOrder: input.sortOrder,
+          dateRange,
         });
       } catch (error) {
         logger.error({ error, input }, "Failed to fetch user WhatsApp costs");

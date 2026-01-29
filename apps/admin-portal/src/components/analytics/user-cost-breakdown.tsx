@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTRPC } from "@/trpc/client";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@imaginecalendar/ui/card";
@@ -42,7 +42,11 @@ import {
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import { format } from "date-fns";
 
-export function UserCostBreakdown() {
+interface UserCostBreakdownProps {
+  dateRange?: { from: string; to: string };
+}
+
+export function UserCostBreakdown({ dateRange }: UserCostBreakdownProps) {
   const { toast } = useToast();
   const trpc = useTRPC();
 
@@ -53,6 +57,11 @@ export function UserCostBreakdown() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
 
+  // Reset to page 1 when date range or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateRange, searchTerm]);
+
   // Fetch user costs
   const { data, isLoading, error, refetch } = useQuery(
     trpc.whatsappAnalytics.getUserCosts.queryOptions({
@@ -61,6 +70,8 @@ export function UserCostBreakdown() {
       search: searchTerm || undefined,
       sortBy,
       sortOrder,
+      from: dateRange?.from,
+      to: dateRange?.to,
     })
   );
 
