@@ -182,8 +182,9 @@ export default function FilesPage() {
   const [editFolderName, setEditFolderName] = useState("");
   const [folderToDelete, setFolderToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleteFolderDialogOpen, setIsDeleteFolderDialogOpen] = useState(false);
+  const [isCreateFolderModalOpen, setIsCreateFolderModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [viewAllFiles, setViewAllFiles] = useState(true);
+  const [viewAllFiles, setViewAllFiles] = useState(false);
   const [viewAllShared, setViewAllShared] = useState(false);
 
   // Share states
@@ -286,6 +287,7 @@ export default function FilesPage() {
         queryClient.invalidateQueries({ queryKey: trpc.storage.folders.list.queryKey() });
         toast({ title: "Folder created", variant: "success" });
         setNewFolderName("");
+        setIsCreateFolderModalOpen(false);
       },
       onError: (error) => {
         toast({
@@ -411,12 +413,18 @@ export default function FilesPage() {
     return folderMap.get(folderId) || "Uncategorized";
   };
 
+  const handleOpenCreateFolderModal = () => {
+    setNewFolderName("");
+    setIsCreateFolderModalOpen(true);
+  };
+
   const handleCreateFolder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
     createFolderMutation.mutate({ name: newFolderName.trim() }, {
       onSuccess: () => {
         setNewFolderName("");
+        setIsCreateFolderModalOpen(false);
       }
     });
   };
@@ -871,13 +879,13 @@ export default function FilesPage() {
                     <div className="flex items-center justify-between">
                       <h2 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Files</h2>
                       <Button
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={handleOpenCreateFolderModal}
                         variant="outline"
                         size="sm"
                         className="flex items-center gap-1.5"
                       >
                         <Plus className="h-4 w-4" />
-                        Upload
+                        Create Folder
                       </Button>
                     </div>
                   </div>
@@ -1969,6 +1977,44 @@ export default function FilesPage() {
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create Folder Modal */}
+      <AlertDialog open={isCreateFolderModalOpen} onOpenChange={setIsCreateFolderModalOpen}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create Folder</AlertDialogTitle>
+            <AlertDialogDescription>
+              Enter a name for your new folder
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <form onSubmit={handleCreateFolder}>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="folder-name">Folder Name *</Label>
+                <Input
+                  id="folder-name"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="Enter folder name"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                setIsCreateFolderModalOpen(false);
+                setNewFolderName("");
+              }}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction type="submit" disabled={!newFolderName.trim()}>
+                <Check className="h-4 w-4 mr-2" />
+                Create Folder
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </form>
         </AlertDialogContent>
       </AlertDialog>
     </>
