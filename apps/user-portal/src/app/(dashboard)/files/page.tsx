@@ -1991,7 +1991,7 @@ export default function FilesPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <form onSubmit={handleCreateFolder}>
-            <div className="space-y-4">
+            <div className="space-y-4 mb-4">
               <div className="space-y-2">
                 <Label htmlFor="folder-name">Folder Name *</Label>
                 <Input
