@@ -6506,8 +6506,8 @@ export class ActionExecutor {
   ): boolean {
     if ((input.frequency || 'once') !== 'once') return false;
     const tz = timezone || 'UTC';
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
-    const nowMs = now.getTime();
+    // Use Date.now() for current instant; toLocaleString → new Date() parses in server TZ and breaks comparison
+    const nowMs = Date.now();
     const oneMinuteMs = 60 * 1000;
 
     let scheduledMs: number | null = null;
