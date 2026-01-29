@@ -8319,11 +8319,26 @@ export class ActionExecutor {
           parsed.newName.match(/\bschedule\s*:\s*([^-\n]+)(?:\s*-\s*status:.*)?$/i) ||
           parsed.newName.match(/\bschedule\s+to\s+(.+?)(?:\s*-\s*status:.*)?$/i);
 
+        // "change to in 5 minutes" / "in 5 minutes" = relative-time reschedule, NOT a title change
+        const looksLikeRelativeTimeChange =
+          /\b(?:change\s+to\s+in|in\s+\d+\s+(?:minute|minutes|min|mins|hour|hours|hr|hrs|day|days)(?:\s+from\s+now)?)/i.test(
+            changes
+          ) ||
+          /(?:schedule\s+to|change\s+to|update\s+to|^to)\s+in\s+\d+\s+(?:minute|minutes|min|mins|hour|hours|hr|hrs|day|days)/i.test(
+            changes
+          );
+
         // Check if this is a title-only change (no date/time/schedule changes)
         // This check must be done early to prevent processing time/date changes when only title is being updated
-        const isTitleOnlyChange = !scheduleChangeMatch && !hasDateKeywords && !hasTimeKeywords && 
-          !changes.includes('time') && !changes.includes('date') && !changes.includes('schedule') &&
-          !changes.includes('delay');
+        const isTitleOnlyChange =
+          !scheduleChangeMatch &&
+          !hasDateKeywords &&
+          !hasTimeKeywords &&
+          !changes.includes('time') &&
+          !changes.includes('date') &&
+          !changes.includes('schedule') &&
+          !changes.includes('delay') &&
+          !looksLikeRelativeTimeChange;
 
         // Check for delay command (e.g., "delay the reminder", "delay by 10 minutes")
         const delayMatch = changes.match(/delay(?:\s+the\s+reminder)?(?:\s+by)?\s*(\d+)?\s*(?:minutes?|mins?)?/i);
