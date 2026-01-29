@@ -18,6 +18,120 @@ interface PendingEventOperation {
 
 const pendingEventOperations = new Map<string, PendingEventOperation>();
 
+/** Pending reminder create rejected due to past time; user may reply with new time (e.g. "change to 5pm"). */
+interface PendingRejectedReminderCreate {
+  title: string;
+  schedule: string;
+  recipient: string;
+  timestamp: Date;
+}
+const pendingRejectedReminderCreate = new Map<string, PendingRejectedReminderCreate>();
+
+const PENDING_REJECTED_TTL_MINUTES = 5;
+
+/**
+ * Check if user message looks like a time follow-up after "time has passed" (e.g. "change to 5pm", "5pm", "in 30 minutes").
+ */
+function isTimeFollowUpMessage(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t || t.length > 120) return false;
+  if (/^(?:change\s+to|change\s+it\s+to|make\s+it|set\s+it\s+to|how\s+about|update\s+to)\s+.+/i.test(t)) return true;
+  if (/^in\s+\d+\s*minute/i.test(t)) return true;
+  if (/^(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?$/i.test(t)) return true;
+  if (/^(?:tomorrow|today)\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?/i.test(t)) return true;
+  if (/\d{1,2}(?::\d{2})?\s*(?:am|pm)/i.test(t) && /(?:at|@|to|:)/.test(t)) return true;
+  return false;
+}
+
+/**
+ * Build new schedule string from user follow-up (e.g. "change to 5pm") and original schedule (e.g. "today at 1pm").
+ * Uses original for date part when user only gives time.
+ */
+function buildNewScheduleFromFollowUp(userMessage: string, originalSchedule: string): string | null {
+  const msg = userMessage.trim();
+  const orig = (originalSchedule || 'today').trim().toLowerCase();
+  const changeToMatch = msg.match(/(?:change\s+(?:it\s+)?to|make\s+it|set\s+it\s+to|how\s+about|update\s+to)\s+(.+)/i);
+  const tail = changeToMatch?.[1]?.trim() ?? msg;
+
+  let datePart = 'today';
+  if (/tomorrow/.test(orig)) datePart = 'tomorrow';
+  else if (/today/.test(orig)) datePart = 'today';
+  else {
+    const onDate = orig.match(/(?:on\s+)?(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(?:\d{4})?)/i);
+    if (onDate?.[1]) datePart = `on ${onDate[1].trim()}`;
+  }
+
+  if (/^in\s+\d+\s*minute/i.test(tail)) return tail;
+  const timeOnly = tail.match(/^(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)$/i);
+  if (timeOnly?.[1]) return `${datePart} at ${timeOnly[1].trim()}`;
+  const fullMatch = tail.match(/^(tomorrow|today)\s+(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+  if (fullMatch?.[1] && fullMatch?.[2]) return `${fullMatch[1]} at ${fullMatch[2].trim()}`;
+  if (/\d{1,2}(?::\d{2})?\s*(?:am|pm)/i.test(tail)) return tail;
+  return null;
+}
+
+/**
+ * If user has a pending rejected reminder create (time passed) and this message is a time follow-up
+ * (e.g. "change to 5pm"), create the reminder with the new time and send the result.
+ * Returns true if we handled it (caller should skip AI); false otherwise.
+ */
+async function tryHandlePendingRejectedReminderFollowUp(
+  text: string,
+  userId: string,
+  recipient: string,
+  db: Database,
+  whatsappService: WhatsAppService,
+  userTimezone: string
+): Promise<boolean> {
+  const pending = pendingRejectedReminderCreate.get(userId);
+  if (!pending) return false;
+
+  const ageMinutes = (Date.now() - pending.timestamp.getTime()) / (1000 * 60);
+  if (ageMinutes > PENDING_REJECTED_TTL_MINUTES) {
+    pendingRejectedReminderCreate.delete(userId);
+    return false;
+  }
+
+  if (!isTimeFollowUpMessage(text)) {
+    pendingRejectedReminderCreate.delete(userId);
+    return false;
+  }
+
+  const newSchedule = buildNewScheduleFromFollowUp(text, pending.schedule);
+  if (!newSchedule) {
+    pendingRejectedReminderCreate.delete(userId);
+    return false;
+  }
+
+  pendingRejectedReminderCreate.delete(userId);
+
+  const template = `Create a reminder: ${pending.title} - schedule: ${newSchedule} - status: active - category: General`;
+  const parsed = parseReminderTemplateToAction(
+    template,
+    true,
+    false,
+    false,
+    false,
+    false
+  );
+  parsed.resourceType = 'reminder';
+
+  const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+  const result = await executor.executeAction(parsed, userTimezone);
+
+  const msg = result.message?.trim() ?? '';
+  if (msg.length > 0) {
+    await whatsappService.sendTextMessage(recipient, msg);
+    logOutgoingMessageNonBlocking(db, recipient, userId, msg);
+  }
+
+  logger.info(
+    { userId, pendingTitle: pending.title, newSchedule, success: result.success },
+    'Handled pending rejected reminder follow-up: created reminder with new time'
+  );
+  return true;
+}
+
 // OPTIMIZATION: In-memory cache for frequently accessed data (with TTL)
 interface CachedData<T> {
   data: T;
@@ -682,6 +796,18 @@ async function analyzeAndRespond(
       }
     }
   }
+
+  // Intercept follow-up to "time has passed" (e.g. "change to 5pm") — create reminder with new time, skip AI
+  const tz = userTimezone ?? 'Africa/Johannesburg';
+  const handled = await tryHandlePendingRejectedReminderFollowUp(
+    text,
+    userId,
+    recipient,
+    db,
+    whatsappService,
+    tz
+  );
+  if (handled) return;
 
   // Step 1: Analyze message with merged prompt
   let aiResponse: string;
@@ -3085,12 +3211,22 @@ async function processAIResponse(
         const allActionsAreDeleteReminder = actionLines.every(l => /^Delete a reminder:/i.test(l) || /^Delete all reminders$/i.test(l));
 
         for (const line of actionLines) {
-          const parsed = parseReminderTemplateToAction(line, /^Create a reminder:/i.test(line), /^Update a reminder:/i.test(line) || /^Update all reminders:/i.test(line) || /^Move a reminder:/i.test(line), /^Delete a reminder:/i.test(line) || /^Delete all reminders$/i.test(line), /^Pause a reminder:/i.test(line), /^Resume a reminder:/i.test(line));
+          const isCreate = /^Create a reminder:/i.test(line);
+          const parsed = parseReminderTemplateToAction(line, isCreate, /^Update a reminder:/i.test(line) || /^Update all reminders:/i.test(line) || /^Move a reminder:/i.test(line), /^Delete a reminder:/i.test(line) || /^Delete all reminders$/i.test(line), /^Pause a reminder:/i.test(line), /^Resume a reminder:/i.test(line));
           const result = await executor.executeAction(parsed, calendarTimezone);
           if (result.success) {
             successCount++;
           } else {
             failCount++;
+            if (isCreate && result.message?.includes('time has already passed') && parsed.taskName) {
+              pendingRejectedReminderCreate.set(userId, {
+                title: parsed.taskName,
+                schedule: parsed.listFilter ?? 'today',
+                recipient,
+                timestamp: new Date(),
+              });
+              logger.info({ userId, title: parsed.taskName, schedule: parsed.listFilter }, 'Stored pending rejected reminder create (time passed); user may reply with new time');
+            }
           }
           if (result.message.trim().length > 0) {
             results.push(result.message);
