@@ -391,16 +391,74 @@ export async function deleteUserAndAllData(
     'deleteUserAndAllData',
     { userId },
     async () => {
-      const { activityLogs, payments, subscriptions, calendarConnections, whatsappNumbers } = await import('../schema');
+      const { 
+        activityLogs, 
+        payments, 
+        subscriptions, 
+        calendarConnections, 
+        whatsappNumbers,
+        userPreferences,
+        taskShares,
+        fileShares,
+        addressShares,
+        taskFolders,
+        tasks,
+        shoppingListFolders,
+        shoppingListItems,
+        noteFolders,
+        notes,
+        reminders,
+        userFileFolders,
+        userFiles,
+        addressFolders,
+        addresses,
+        friendFolders,
+        friends,
+        whatsappMessageLogs,
+        voiceMessageJobs,
+        pendingIntents,
+        conversationStates,
+        eventVerificationStates,
+      } = await import('../schema');
       
       // Delete in correct order to respect foreign key constraints
+      // Delete shares first (they reference both owner and recipient)
+      await db.delete(taskShares).where(eq(taskShares.ownerId, userId));
+      await db.delete(taskShares).where(eq(taskShares.sharedWithUserId, userId));
+      await db.delete(fileShares).where(eq(fileShares.ownerId, userId));
+      await db.delete(fileShares).where(eq(fileShares.sharedWithUserId, userId));
+      await db.delete(addressShares).where(eq(addressShares.ownerId, userId));
+      await db.delete(addressShares).where(eq(addressShares.sharedWithUserId, userId));
+      
+      // Delete user's data
       await db.delete(activityLogs).where(eq(activityLogs.userId, userId));
       await db.delete(payments).where(eq(payments.userId, userId));
       await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
       await db.delete(calendarConnections).where(eq(calendarConnections.userId, userId));
       await db.delete(whatsappNumbers).where(eq(whatsappNumbers.userId, userId));
+      await db.delete(whatsappMessageLogs).where(eq(whatsappMessageLogs.userId, userId));
+      await db.delete(voiceMessageJobs).where(eq(voiceMessageJobs.userId, userId));
+      await db.delete(pendingIntents).where(eq(pendingIntents.userId, userId));
+      await db.delete(conversationStates).where(eq(conversationStates.userId, userId));
+      await db.delete(eventVerificationStates).where(eq(eventVerificationStates.userId, userId));
+      await db.delete(userPreferences).where(eq(userPreferences.userId, userId));
       
-      // Finally delete the user
+      // Delete folders and their contents
+      await db.delete(tasks).where(eq(tasks.userId, userId));
+      await db.delete(taskFolders).where(eq(taskFolders.userId, userId));
+      await db.delete(shoppingListItems).where(eq(shoppingListItems.userId, userId));
+      await db.delete(shoppingListFolders).where(eq(shoppingListFolders.userId, userId));
+      await db.delete(notes).where(eq(notes.userId, userId));
+      await db.delete(noteFolders).where(eq(noteFolders.userId, userId));
+      await db.delete(reminders).where(eq(reminders.userId, userId));
+      await db.delete(userFiles).where(eq(userFiles.userId, userId));
+      await db.delete(userFileFolders).where(eq(userFileFolders.userId, userId));
+      await db.delete(addresses).where(eq(addresses.userId, userId));
+      await db.delete(addressFolders).where(eq(addressFolders.userId, userId));
+      await db.delete(friends).where(eq(friends.userId, userId));
+      await db.delete(friendFolders).where(eq(friendFolders.userId, userId));
+      
+      // Finally delete the user (this will cascade to any remaining related data)
       const result = await db.delete(users).where(eq(users.id, userId));
       
       return result;

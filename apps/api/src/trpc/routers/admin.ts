@@ -5,6 +5,7 @@ import {
   getDashboardMetrics,
   getUsers,
   softDeleteUser,
+  deleteUserAndAllData,
   checkUserAdminStatus,
   getUserSubscription,
   updateSubscription,
@@ -389,7 +390,7 @@ export const adminRouter = createTRPCRouter({
       }
     }),
 
-  // Soft delete user
+  // Hard delete user - completely removes user and all associated data from database
   deleteUser: adminProcedure
     .input(
       z.object({
@@ -402,7 +403,8 @@ export const adminRouter = createTRPCRouter({
       const { userId, reason } = input;
 
       try {
-        await softDeleteUser(db, userId);
+        // Completely delete user and all associated data from database
+        await deleteUserAndAllData(db, userId);
 
         logger.info(
           {
@@ -410,7 +412,7 @@ export const adminRouter = createTRPCRouter({
             deletedUserId: userId,
             reason,
           },
-          "User soft deleted by admin"
+          "User completely deleted by admin (hard delete)"
         );
 
         return { success: true };
