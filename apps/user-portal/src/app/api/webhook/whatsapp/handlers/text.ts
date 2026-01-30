@@ -1121,8 +1121,45 @@ async function processAIResponse(
     );
 
     // Handle Normal conversation - send directly to user without workflow processing
-    // BUT: Check if it's actually an event view request that AI misclassified as "normal"
+    // BUT: Check if it's actually an event/file view request that AI misclassified as "normal"
     if (titleType === 'normal') {
+      // First check if it's a file view request (check list context)
+      const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+      const listContext = (executor as any).getListContext();
+      
+      if (listContext && listContext.type === 'document' && originalUserText) {
+        // Check if user said a number (e.g., "show me 2", "2")
+        const numberMatch = originalUserText.match(/^(?:show\s+me\s+)?(\d+)$/i);
+        if (numberMatch && numberMatch[1]) {
+          const fileNumber = parseInt(numberMatch[1], 10);
+          const file = listContext.items.find((item: any) => item.number === fileNumber);
+          
+          if (file) {
+            logger.info(
+              {
+                userId,
+                fileNumber,
+                fileId: file.id,
+                originalUserText,
+              },
+              '✅ Detected file view request from list context in "normal" title'
+            );
+            
+            // Parse as file view operation
+            const parsed = executor.parseAction(`View a file: ${fileNumber}`);
+            if (parsed) {
+              parsed.resourceType = 'document';
+              const result = await executor.executeAction(parsed);
+              if (result.message.trim().length > 0) {
+                await whatsappService.sendTextMessage(recipient, result.message);
+                logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
+              }
+              return;
+            }
+          }
+        }
+      }
+      
       // Before sending "normal" response, use AI to check if user actually wants event info by number
       // This prevents AI from sending error messages when user clearly wants event overview
       if (originalUserText) {
@@ -1303,6 +1340,45 @@ async function processAIResponse(
     // Check if this is a list operation (works for all types)
     const isListOperation = actionTemplate.toLowerCase().startsWith('list ');
     const isListEvents = actionTemplate.toLowerCase().startsWith('list events:');
+    
+    // Check if it's a file view request BEFORE event detection (check list context)
+    let isFileViewFromContext = false;
+    if (originalUserText && (titleType === 'normal' || titleType === 'document')) {
+      const listContext = (executor as any).getListContext();
+      if (listContext && listContext.type === 'document') {
+        // Check if user said a number (e.g., "show me 2", "2")
+        const numberMatch = originalUserText.match(/^(?:show\s+me\s+)?(\d+)$/i);
+        if (numberMatch && numberMatch[1]) {
+          const fileNumber = parseInt(numberMatch[1], 10);
+          const file = listContext.items.find((item: any) => item.number === fileNumber);
+          if (file) {
+            isFileViewFromContext = true;
+            logger.info(
+              {
+                userId,
+                fileNumber,
+                fileId: file.id,
+                originalUserText,
+                titleType,
+              },
+              '✅ Detected file view request from list context - treating as file operation'
+            );
+            
+            // Parse as file view operation
+            const parsed = executor.parseAction(`View a file: ${fileNumber}`);
+            if (parsed) {
+              parsed.resourceType = 'document';
+              const result = await executor.executeAction(parsed);
+              if (result.message.trim().length > 0) {
+                await whatsappService.sendTextMessage(recipient, result.message);
+                logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
+              }
+              return;
+            }
+          }
+        }
+      }
+    }
     
     // For events, check if "List events: [name/number]" is actually a view/show request
     // This must be checked BEFORE handling as a list operation
@@ -2811,6 +2887,43 @@ async function processAIResponse(
                                   isNameViewInEventContext;
       
       if (isViewShowOperation) {
+        // Check if it's a file view request FIRST (before event handling)
+        if (originalUserText) {
+          const listContext = (executor as any).getListContext();
+          if (listContext && listContext.type === 'document') {
+            // Check if user said a number (e.g., "show me 2", "2")
+            const numberMatch = originalUserText.match(/^(?:show\s+me\s+)?(\d+)$/i);
+            if (numberMatch && numberMatch[1]) {
+              const fileNumber = parseInt(numberMatch[1], 10);
+              const file = listContext.items.find((item: any) => item.number === fileNumber);
+              if (file) {
+                logger.info(
+                  {
+                    userId,
+                    fileNumber,
+                    fileId: file.id,
+                    originalUserText,
+                    titleType,
+                  },
+                  '✅ Detected file view request from list context - treating as file operation, not event'
+                );
+                
+                // Parse as file view operation
+                const parsed = executor.parseAction(`View a file: ${fileNumber}`);
+                if (parsed) {
+                  parsed.resourceType = 'document';
+                  const result = await executor.executeAction(parsed);
+                  if (result.message.trim().length > 0) {
+                    await whatsappService.sendTextMessage(recipient, result.message);
+                    logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
+                  }
+                  return;
+                }
+              }
+            }
+          }
+        }
+        
         // Handle view/show event operations via ActionExecutor
         let eventActionTemplate = actionTemplate;
         
