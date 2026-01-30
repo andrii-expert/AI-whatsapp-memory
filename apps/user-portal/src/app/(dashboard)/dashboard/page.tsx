@@ -1938,11 +1938,11 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Recent Shopping List */}
+          {/* Recent List Items */}
           <div className="mt-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-[16px] font-semibold leading-[130%] text-black">
-                Recent Shopping List
+                Recent List Items
               </h2>
               <button
                 onClick={() => router.push("/lists")}
@@ -1955,7 +1955,7 @@ export default function DashboardPage() {
             <div className="rounded-2xl border border-[#EFEFEF] bg-white shadow-[0_2px_24px_0_rgba(0,0,0,0.05)]">
                     {filteredShoppingListItems.length === 0 ? (
                 <div className="px-4 py-8 text-center">
-                  <p className="text-sm text-gray-500">No items in shopping list</p>
+                  <p className="text-sm text-gray-500">No items in list</p>
                 </div>
                     ) : (
                 <>
