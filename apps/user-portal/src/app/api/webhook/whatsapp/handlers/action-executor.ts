@@ -1980,8 +1980,8 @@ export class ActionExecutor {
       let message: string;
       if (folderId) {
         if (isPrimaryFolder) {
-          // Primary folder - present as Home List
-          message = `✅ *Added to Home List:*\nItem/s: ${parsed.taskName}`;
+          // Primary folder - present as All Lists
+          message = `✅ *Added to All Lists:*\nItem/s: ${parsed.taskName}`;
         } else {
           // Not primary folder - include folder name, without the word "shopping"
           const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
@@ -1989,8 +1989,8 @@ export class ActionExecutor {
           message = `✅ *Added to ${folderName} List:*\nItem/s: ${parsed.taskName}`;
         }
       } else {
-        // No folder (goes to \"All Items\") - use Home List as the main list concept
-        message = `✅ *Added to Home List:*\nItem/s: ${parsed.taskName}`;
+        // No folder (goes to \"All Items\") - use All Lists as the main list concept
+        message = `✅ *Added to All Lists:*\nItem/s: ${parsed.taskName}`;
       }
 
       return {
@@ -4003,11 +4003,12 @@ export class ActionExecutor {
           folderRouteLower === 'all'
             ? 'All Items'
             : isPrimaryFolder || !folderName
-            ? 'Home'
+            ? 'All Lists'
             : folderName;
+        const listDisplay = listLabel === 'All Lists' ? 'All Lists' : `${listLabel} List`;
         return {
           success: true,
-          message: `🛒 *Your ${listLabel} List is empty${statusText}*`,
+          message: `🛒 *Your ${listDisplay} is empty${statusText}*`,
         };
       }
       const statusText = statusFilter ? ` (${statusFilter})` : '';
@@ -4015,9 +4016,10 @@ export class ActionExecutor {
         folderRouteLower === 'all'
           ? 'All Items'
           : isPrimaryFolder || !folderName
-          ? 'Home'
+          ? 'All Lists'
           : folderName;
-      let message = `🛍️ *${listLabel} List${statusText}:*\n`;
+      const listDisplay = listLabel === 'All Lists' ? 'All Lists' : `${listLabel} List`;
+      let message = `🛍️ *${listDisplay}${statusText}:*\n`;
 
       const displayedItems = items.slice(0, 20);
       displayedItems.forEach((item, index) => {
@@ -10511,7 +10513,7 @@ export class ActionExecutor {
   }
 
   /**
-   * Resolve folder route (e.g., "Home" or "Work/Clients") to folder ID
+   * Resolve folder route (e.g., "All Lists" or "Work/Clients") to folder ID
    * If only one part is provided, searches all subfolders across all parent folders
    */
   private async resolveFolderRoute(folderRoute: string): Promise<string | null> {
@@ -10737,13 +10739,14 @@ export class ActionExecutor {
       const rawName = parts[0];
       const folderName = rawName.toLowerCase();
 
-      // Special-case: treat common synonyms as the Home (primary) list
+      // Special-case: treat common synonyms as the primary (All Lists) list
       if (
         primaryFolder &&
         (
           folderName === 'home' ||
           folderName === 'home list' ||
           folderName === 'my home list' ||
+          folderName === 'all lists' ||
           folderName === 'shopping list' ||
           folderName === 'my shopping list'
         )

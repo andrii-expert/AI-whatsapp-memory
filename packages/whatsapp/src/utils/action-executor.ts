@@ -837,7 +837,7 @@ export class ActionExecutor {
   }
 
   /**
-   * Resolve folder route (e.g., "Home" or "Work/Clients") to folder ID
+   * Resolve folder route (e.g., "All Lists" or "Work/Clients") to folder ID
    */
   private async resolveFolderRoute(folderRoute: string): Promise<string | null> {
     const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());

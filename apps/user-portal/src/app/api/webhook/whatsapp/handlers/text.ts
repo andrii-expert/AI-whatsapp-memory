@@ -1977,17 +1977,17 @@ async function processAIResponse(
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (
-            // Match both singular and plural forms, and our current formatted header
-            result.includes('Added to ') && result.includes(' List:')
+            // Match "Added to {ListName}:" (e.g. "Added to All Lists:" or "Added to Groceries List:")
+            result.includes('Added to ') && (result.includes(' List:') || result.includes('All Lists:'))
           ) {
-            // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
+            // Extract item name from "✅ *Added to {ListName}:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to List(s)'
             let itemName: string | null = null;
             // Try to extract list label from header once
             if (!shoppingListLabel) {
-              const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
+              const headerMatch = result.match(/Added to\s+(.+?):/i);
               if (headerMatch && headerMatch[1]) {
-                shoppingListLabel = headerMatch[1].trim();
+                shoppingListLabel = headerMatch[1].trim().replace(/\*$/g, '');
               }
             }
             const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
@@ -2074,8 +2074,9 @@ async function processAIResponse(
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          const listLabel = shoppingListLabel || 'Home';
-          messageParts.push(`✅ *Added to ${listLabel} List:*\nItem/s: ${itemsText}`);
+          const listLabel = shoppingListLabel || 'All Lists';
+          const listDisplay = listLabel === 'All Lists' ? 'All Lists' : `${listLabel} List`;
+          messageParts.push(`✅ *Added to ${listDisplay}:*\nItem/s: ${itemsText}`);
         }
 
         // Format purchased items
@@ -2219,17 +2220,17 @@ async function processAIResponse(
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (
-            // Match both singular and plural forms, and our current formatted header
-            result.includes('Added to ') && result.includes(' List:')
+            // Match "Added to {ListName}:" (e.g. "Added to All Lists:" or "Added to Groceries List:")
+            result.includes('Added to ') && (result.includes(' List:') || result.includes('All Lists:'))
           ) {
-            // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
+            // Extract item name from "✅ *Added to {ListName}:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to List(s)'
             let itemName: string | null = null;
             // Try to extract list label from header once
             if (!shoppingListLabel) {
-              const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
+              const headerMatch = result.match(/Added to\s+(.+?):/i);
               if (headerMatch && headerMatch[1]) {
-                shoppingListLabel = headerMatch[1].trim();
+                shoppingListLabel = headerMatch[1].trim().replace(/\*$/g, '');
               }
             }
             const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
@@ -2316,8 +2317,9 @@ async function processAIResponse(
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          const listLabel = shoppingListLabel || 'Home';
-          messageParts.push(`✅ *Added to ${listLabel} List:*\nItem/s: ${itemsText}`);
+          const listLabel = shoppingListLabel || 'All Lists';
+          const listDisplay = listLabel === 'All Lists' ? 'All Lists' : `${listLabel} List`;
+          messageParts.push(`✅ *Added to ${listDisplay}:*\nItem/s: ${itemsText}`);
         }
         // Format purchased items
         if (purchasedItems.length > 0) {
