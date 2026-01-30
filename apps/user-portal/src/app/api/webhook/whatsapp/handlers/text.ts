@@ -1981,7 +1981,7 @@ async function processAIResponse(
             result.includes('Added to ') && result.includes(' List:')
           ) {
             // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
-            // or from legacy format: 'Added "{item}" to Shopping List(s)'
+            // or from legacy format: 'Added "{item}" to List(s)'
             let itemName: string | null = null;
             // Try to extract list label from header once
             if (!shoppingListLabel) {
@@ -1994,7 +1994,7 @@ async function processAIResponse(
             if (match1 && match1[1]) {
               itemName = match1[1].trim();
             } else {
-              const match2 = result.match(/Added\s+"([^"]+)"\s+to\s+Shopping\s+Lists?/i);
+              const match2 = result.match(/Added\s+"([^"]+)"\s+to\s+List\(s\)?/i);
               if (match2 && match2[1]) {
                 itemName = match2[1].trim();
               }
@@ -2170,7 +2170,7 @@ async function processAIResponse(
       logger.warn({ userId, titleType }, `${titleType} operations are no longer supported`);
       await whatsappService.sendTextMessage(
         recipient,
-        `I'm sorry, ${titleType} operations are not currently supported. I can help you with reminders, events, documents, shopping lists, and friends.`
+        `I'm sorry, ${titleType} operations are not currently supported. I can help you with reminders, events, documents, lists, and friends.`
       );
       return;
     }
@@ -2223,7 +2223,7 @@ async function processAIResponse(
             result.includes('Added to ') && result.includes(' List:')
           ) {
             // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
-            // or from legacy format: 'Added "{item}" to Shopping List(s)'
+            // or from legacy format: 'Added "{item}" to List(s)'
             let itemName: string | null = null;
             // Try to extract list label from header once
             if (!shoppingListLabel) {
@@ -2236,7 +2236,7 @@ async function processAIResponse(
             if (match1 && match1[1]) {
               itemName = match1[1].trim();
             } else {
-              const match2 = result.match(/Added\s+"([^"]+)"\s+to\s+Shopping\s+Lists?/i);
+              const match2 = result.match(/Added\s+"([^"]+)"\s+to\s+List\(s\)?/i);
               if (match2 && match2[1]) {
                 itemName = match2[1].trim();
               }
@@ -3394,7 +3394,7 @@ async function processAIResponse(
       logger.warn({ userId, titleType }, 'Address operations are no longer supported');
       await whatsappService.sendTextMessage(
         recipient,
-        "I'm sorry, address operations are not currently supported. I can help you with reminders, events, shopping lists, and friends."
+        "I'm sorry, address operations are not currently supported. I can help you with reminders, events, lists, and friends."
       );
       return;
     }

@@ -1898,7 +1898,7 @@ export class ActionExecutor {
     if (!parsed.taskName) {
       return {
         success: false,
-        message: "I need to know what item you'd like to add to your shopping list. Please specify the item.",
+        message: "I need to know what item you'd like to add to your list. Please specify the item.",
       };
     }
 
@@ -1913,7 +1913,7 @@ export class ActionExecutor {
         if (parsed.folderRoute && !folderId) {
           return {
             success: false,
-            message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+            message: `I couldn't find the list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
           };
         }
         // Check if the resolved folder is primary
@@ -2001,7 +2001,7 @@ export class ActionExecutor {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to add shopping item');
       return {
         success: false,
-        message: `I'm sorry, I couldn't add "${parsed.taskName}" to your shopping list. Please try again.`,
+        message: `I'm sorry, I couldn't add "${parsed.taskName}" to your list. Please try again.`,
       };
     }
   }
@@ -2405,7 +2405,7 @@ export class ActionExecutor {
     if (!parsed.folderRoute) {
       return {
         success: false,
-        message: "I need to know which shopping list folder you'd like to remove sharing from. Please specify the folder name.",
+        message: "I need to know which list folder you'd like to remove sharing from. Please specify the folder name.",
       };
     }
 
@@ -2414,7 +2414,7 @@ export class ActionExecutor {
       if (!folderId) {
         return {
           success: false,
-          message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+          message: `I couldn't find the list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
         };
       }
 
@@ -2459,7 +2459,7 @@ export class ActionExecutor {
     if (!parsed.folderRoute) {
       return {
         success: false,
-        message: "I need to know which shopping lists folder you'd like to share. Please specify the folder name.",
+        message: "I need to know which list folder you'd like to share. Please specify the folder name.",
       };
     }
 
@@ -2474,7 +2474,7 @@ export class ActionExecutor {
     if (!folderId) {
       return {
         success: false,
-        message: `I couldn't find the shopping lists folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+        message: `I couldn't find the list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
       };
     }
 
@@ -2526,7 +2526,7 @@ export class ActionExecutor {
       
       return {
         success: true,
-        message: `🔁 *Shopping List Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${recipientText}\nPermission: ${permissionLabel}`,
+        message: `🔁 *List Shared*\nFolder: ${parsed.folderRoute}\nShare to: ${recipientText}\nPermission: ${permissionLabel}`,
       };
     } catch (error) {
       logger.error(
@@ -2535,7 +2535,7 @@ export class ActionExecutor {
       );
       return {
         success: false,
-        message: `I'm sorry, I couldn't share the shopping lists folder "${parsed.folderRoute}" with ${parsed.recipient}. Please try again.`,
+        message: `I'm sorry, I couldn't share the list folder "${parsed.folderRoute}" with ${parsed.recipient}. Please try again.`,
       };
     }
   }
@@ -2758,7 +2758,7 @@ export class ActionExecutor {
       if (!context || context.type !== 'shopping') {
         return {
           success: false,
-          message: "I don't have a recent shopping list to reference. Please list your shopping items first, then delete by number.",
+          message: "I don't have a recent list to reference. Please list your items first, then delete by number.",
         };
       }
 
@@ -4048,7 +4048,7 @@ export class ActionExecutor {
       logger.error({ error, userId: this.userId, folderRoute: parsed.folderRoute }, 'Failed to list shopping items');
       return {
         success: false,
-        message: "I'm sorry, I couldn't retrieve your shopping list. Please try again.",
+        message: "I'm sorry, I couldn't retrieve your list. Please try again.",
       };
     }
   }
@@ -10792,7 +10792,7 @@ export class ActionExecutor {
     if (!parsed.folderRoute) {
       return {
         success: false,
-        message: "I need to know what shopping list folder you'd like to create. Please specify the folder name.",
+        message: "I need to know what list folder you'd like to create. Please specify the folder name.",
       };
     }
 
@@ -10803,7 +10803,7 @@ export class ActionExecutor {
     if (existingFolder) {
       return {
         success: false,
-        message: `A shopping lists folder named "${parsed.folderRoute}" already exists.`,
+        message: `A list folder named "${parsed.folderRoute}" already exists.`,
       };
     }
 
@@ -10815,13 +10815,13 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *New Shopping Lists Folder Created:*\nName: ${parsed.folderRoute}`,
+        message: `✅ *New List Folder Created:*\nName: ${parsed.folderRoute}`,
       };
     } catch (error) {
       logger.error({ error, folderName: parsed.folderRoute, userId: this.userId }, 'Failed to create shopping list folder');
       return {
         success: false,
-        message: `I'm sorry, I couldn't create the shopping lists folder "${parsed.folderRoute}". Please try again.`,
+        message: `I'm sorry, I couldn't create the list folder "${parsed.folderRoute}". Please try again.`,
       };
     }
   }
@@ -10830,7 +10830,7 @@ export class ActionExecutor {
     if (!parsed.folderRoute) {
       return {
         success: false,
-        message: "I need to know which shopping lists folder you'd like to edit. Please specify the folder name.",
+        message: "I need to know which list folder you'd like to edit. Please specify the folder name.",
       };
     }
 
@@ -10846,7 +10846,7 @@ export class ActionExecutor {
       if (!folderId) {
         return {
           success: false,
-          message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+          message: `I couldn't find the list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
         };
       }
 
@@ -10856,13 +10856,13 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `⚠️ *Shopping Lists Folder Updated:*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
+        message: `⚠️ *List Folder Updated:*\n"${parsed.folderRoute}" → "${parsed.newName}"`,
       };
     } catch (error) {
       logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to edit shopping list folder');
       return {
         success: false,
-        message: `I'm sorry, I couldn't update the shopping list folder "${parsed.folderRoute}". Please try again.`,
+        message: `I'm sorry, I couldn't update the list folder "${parsed.folderRoute}". Please try again.`,
       };
     }
   }
@@ -10871,7 +10871,7 @@ export class ActionExecutor {
     if (!parsed.folderRoute) {
       return {
         success: false,
-        message: "I need to know which shopping lists folder you'd like to delete. Please specify the folder name.",
+        message: "I need to know which list folder you'd like to delete. Please specify the folder name.",
       };
     }
 
@@ -10880,7 +10880,7 @@ export class ActionExecutor {
       if (!folderId) {
         return {
           success: false,
-          message: `I couldn't find the shopping list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
+          message: `I couldn't find the list folder "${parsed.folderRoute}". Please make sure the folder exists.`,
         };
       }
 
@@ -10888,13 +10888,13 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `⛔ *Shopping Lists Folder Deleted:*\n"${parsed.folderRoute}"`,
+        message: `⛔ *List Folder Deleted:*\n"${parsed.folderRoute}"`,
       };
     } catch (error) {
       logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to delete shopping list folder');
       return {
         success: false,
-        message: `I'm sorry, I couldn't delete the shopping lists folder "${parsed.folderRoute}". Please try again.`,
+        message: `I'm sorry, I couldn't delete the list folder "${parsed.folderRoute}". Please try again.`,
       };
     }
   }
@@ -10931,7 +10931,7 @@ export class ActionExecutor {
 
       return {
         success: true,
-        message: `✅ *New Shopping List Category Created:*\nParent: ${parsed.folderRoute}\nName: ${parsed.newName}`,
+        message: `✅ *New List Category Created:*\nParent: ${parsed.folderRoute}\nName: ${parsed.newName}`,
       };
     } catch (error) {
       logger.error({ error, parentFolder: parsed.folderRoute, categoryName: parsed.newName, userId: this.userId }, 'Failed to create shopping list category');
@@ -10980,11 +10980,11 @@ export class ActionExecutor {
       if (folders.length === 0) {
         return {
           success: true,
-          message: `📁 *You have no shopping lists folders*`,
+          message: `📁 *You have no list folders*`,
         };
       }
 
-      let message = `📁 *Shopping Lists Folders:*\n`;
+      let message = `📁 *List Folders:*\n`;
       folders.forEach((folder: any, index: number) => {
         const categoryCount = folder.subfolders?.length || 0;
         const itemCount = folder.items?.length || 0;
@@ -11010,7 +11010,7 @@ export class ActionExecutor {
       logger.error({ error, userId: this.userId }, 'Failed to list shopping list folders');
       return {
         success: false,
-        message: `I'm sorry, I couldn't list your shopping lists folders. Please try again.`,
+        message: `I'm sorry, I couldn't list your list folders. Please try again.`,
       };
     }
   }
