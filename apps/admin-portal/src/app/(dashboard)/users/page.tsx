@@ -337,13 +337,15 @@ export default function UsersPage() {
                   <TableHead>Admin</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Period End</TableHead>
+                  <TableHead>Last WhatsApp</TableHead>
+                  <TableHead>Last Login</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {!data?.users || data.users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -390,6 +392,20 @@ export default function UsersPage() {
                             Cancels on this date
                           </div>
                         )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {user.lastWhatsAppMessageAt
+                          ? format(new Date(user.lastWhatsAppMessageAt), "MMM d, yyyy HH:mm")
+                          : "—"}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {user.lastLoginAt
+                          ? format(new Date(user.lastLoginAt), "MMM d, yyyy HH:mm")
+                          : "—"}
                       </div>
                     </TableCell>
                     <TableCell>

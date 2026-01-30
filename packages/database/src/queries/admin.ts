@@ -1,7 +1,7 @@
-import { eq, isNull, desc, and, gte, or, lt, ne, like, lte } from "drizzle-orm";
+import { eq, isNull, desc, and, gte, or, lt, ne, like, lte, max, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import type { Database } from "../client";
-import { users, subscriptions, payments } from "../schema";
+import { users, subscriptions, payments, whatsappNumbers, whatsappMessageLogs } from "../schema";
 import type { PlanId } from "../schema";
 import { withQueryLogging, withMutationLogging } from "../utils/query-logger";
 
@@ -260,6 +260,30 @@ export async function getUsers(
       const paginatedUsers = filteredUsers.slice(offset, offset + limit);
       const totalPages = Math.ceil(totalCount / limit);
 
+      // Get user IDs for batch queries
+      const userIds = paginatedUsers.map(u => u.id);
+
+      // Get last WhatsApp message time for each user (from message logs)
+      const lastWhatsAppMessages = userIds.length > 0 ? await db
+        .select({
+          userId: whatsappMessageLogs.userId,
+          lastMessageAt: sql<Date | null>`MAX(${whatsappMessageLogs.createdAt})`.as('lastMessageAt'),
+        })
+        .from(whatsappMessageLogs)
+        .where(
+          and(
+            inArray(whatsappMessageLogs.userId, userIds),
+            eq(whatsappMessageLogs.direction, 'outgoing')
+          )
+        )
+        .groupBy(whatsappMessageLogs.userId) : [];
+
+      // Create a map for quick lookup
+      const lastMessageMap = new Map<string, Date | null>();
+      lastWhatsAppMessages.forEach(msg => {
+        lastMessageMap.set(msg.userId, msg.lastMessageAt);
+      });
+
       return {
         users: paginatedUsers.map(user => ({
           id: user.id,
@@ -268,6 +292,7 @@ export async function getUsers(
           phone: user.phone,
           company: user.company,
           createdAt: user.createdAt,
+          updatedAt: user.updatedAt, // Last login/activity time
           isAdmin: user.isAdmin,
           // Onboarding/Profile fields
           country: user.country,
@@ -282,6 +307,9 @@ export async function getUsers(
           currentPeriodEnd: user.subscription?.currentPeriodEnd || null,
           cancelAtPeriodEnd: user.subscription?.cancelAtPeriodEnd || false,
           cancelledAt: user.subscription?.cancelledAt || null,
+          // Activity fields
+          lastWhatsAppMessageAt: lastMessageMap.get(user.id) || null,
+          lastLoginAt: user.updatedAt, // Using updatedAt as proxy for last login
         })),
         pagination: {
           page,
