@@ -1977,8 +1977,8 @@ async function processAIResponse(
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (
-            // Match "Added to {ListName}:" (e.g. "Added to All Lists:" or "Added to Groceries List:")
-            result.includes('Added to ') && (result.includes(' List:') || result.includes('All Lists:'))
+            // Match "Added to {ListName}:" (e.g. "Added to All Lists:", "Added to Shopping List:", "Added to Groceries List:")
+            result.includes('Added to ') && (result.includes(' List:') || result.includes('All Lists:') || result.includes(' Lists:'))
           ) {
             // Extract item name from "✅ *Added to {ListName}:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to List(s)'
@@ -2075,7 +2075,12 @@ async function processAIResponse(
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
           const listLabel = shoppingListLabel || 'All Lists';
-          const listDisplay = listLabel === 'All Lists' ? 'All Lists' : `${listLabel} List`;
+          const listDisplay = (() => {
+            if (listLabel === 'All Lists') return 'All Lists';
+            const lower = listLabel.toLowerCase().trim();
+            if (lower.endsWith(' list') || lower.endsWith(' lists')) return listLabel.trim();
+            return `${listLabel.trim()} List`;
+          })();
           messageParts.push(`✅ *Added to ${listDisplay}:*\nItem/s: ${itemsText}`);
         }
 
@@ -2220,8 +2225,8 @@ async function processAIResponse(
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (
-            // Match "Added to {ListName}:" (e.g. "Added to All Lists:" or "Added to Groceries List:")
-            result.includes('Added to ') && (result.includes(' List:') || result.includes('All Lists:'))
+            // Match "Added to {ListName}:" (e.g. "Added to All Lists:", "Added to Shopping List:", "Added to Groceries List:")
+            result.includes('Added to ') && (result.includes(' List:') || result.includes('All Lists:') || result.includes(' Lists:'))
           ) {
             // Extract item name from "✅ *Added to {ListName}:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to List(s)'
@@ -2318,7 +2323,12 @@ async function processAIResponse(
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
           const listLabel = shoppingListLabel || 'All Lists';
-          const listDisplay = listLabel === 'All Lists' ? 'All Lists' : `${listLabel} List`;
+          const listDisplay = (() => {
+            if (listLabel === 'All Lists') return 'All Lists';
+            const lower = listLabel.toLowerCase().trim();
+            if (lower.endsWith(' list') || lower.endsWith(' lists')) return listLabel.trim();
+            return `${listLabel.trim()} List`;
+          })();
           messageParts.push(`✅ *Added to ${listDisplay}:*\nItem/s: ${itemsText}`);
         }
         // Format purchased items

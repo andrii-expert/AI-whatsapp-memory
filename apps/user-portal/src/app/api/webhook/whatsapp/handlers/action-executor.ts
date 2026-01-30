@@ -139,6 +139,13 @@ function normalizeTimesToX(text: string): string {
   return text.replace(/(\d+)\s*times/gi, '$1 x');
 }
 
+/** Format list/folder name for "Added to X" message - avoid "X List List" when name already ends with "List" */
+function formatListDisplayName(name: string): string {
+  const lower = name.toLowerCase().trim();
+  if (lower.endsWith(' list') || lower.endsWith(' lists')) return name.trim();
+  return `${name.trim()} List`;
+}
+
 export class ActionExecutor {
   // Constants for date parsing - defined once to avoid repetition
   private static readonly MONTH_NAMES = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -1983,20 +1990,24 @@ export class ActionExecutor {
         status: 'open',
       });
 
-      // Determine the message format based on whether it's the primary folder
+      // Determine the message format: use the list name the user specified when possible
       let message: string;
       if (folderId) {
         if (isPrimaryFolder) {
-          // Primary folder - present as All Lists
-          message = `✅ *Added to All Lists:*\nItem/s: ${normalizedName}`;
+          // Primary folder: if user explicitly said a folder name (e.g. "in Shopping List"), show that; else "All Lists"
+          const displayName = parsed.folderRoute
+            ? formatListDisplayName(parsed.folderRoute)
+            : 'All Lists';
+          message = `✅ *Added to ${displayName}:*\nItem/s: ${normalizedName}`;
         } else {
-          // Not primary folder - include folder name, without the word "shopping"
+          // Not primary folder - include folder name
           const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
           const folderName = folder?.name || parsed.folderRoute || 'List';
-          message = `✅ *Added to ${folderName} List:*\nItem/s: ${normalizedName}`;
+          const displayName = formatListDisplayName(folderName);
+          message = `✅ *Added to ${displayName}:*\nItem/s: ${normalizedName}`;
         }
       } else {
-        // No folder (goes to \"All Items\") - use All Lists as the main list concept
+        // No folder (goes to "All Items") - use All Lists
         message = `✅ *Added to All Lists:*\nItem/s: ${normalizedName}`;
       }
 
