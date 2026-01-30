@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { getUserByEmail } from "@imaginecalendar/database/queries";
+import { getUserByEmail, updateUserLastLogin } from "@imaginecalendar/database/queries";
 import { verifyPassword, generateToken } from "@imaginecalendar/api/utils/auth-helpers";
 import { z } from "zod";
 import { logger } from "@imaginecalendar/logger";
@@ -50,6 +50,9 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       );
     }
+
+    // Update last login time
+    await updateUserLastLogin(db, user.id);
 
     // Generate token
     const token = generateToken({

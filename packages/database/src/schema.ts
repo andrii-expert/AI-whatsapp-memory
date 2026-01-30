@@ -206,6 +206,9 @@ export const users = pgTable("users", {
   // UI preferences
   showWelcomeModal: boolean("show_welcome_modal").default(false).notNull(),
   
+  // Activity tracking
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { getUserByEmail, createUser } from "@imaginecalendar/database/queries";
+import { getUserByEmail, createUser, updateUserLastLogin } from "@imaginecalendar/database/queries";
 import { generateToken } from "@imaginecalendar/api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
 import { randomUUID } from "crypto";
@@ -134,6 +134,8 @@ export async function GET(request: NextRequest) {
         );
       }
       userId = user.id;
+      // Update last login time
+      await updateUserLastLogin(db, userId);
       logger.info({ userId, email }, "Google OAuth login - existing admin");
     } else {
       // Create new user (not admin by default)

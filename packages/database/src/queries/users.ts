@@ -506,3 +506,25 @@ export async function updateUserPreferences(
     }
   );
 }
+
+/**
+ * Update user's last login timestamp
+ */
+export async function updateUserLastLogin(db: Database, userId: string) {
+  return withMutationLogging(
+    'updateUserLastLogin',
+    { userId },
+    async () => {
+      const [updated] = await db
+        .update(users)
+        .set({
+          lastLoginAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning();
+      
+      return updated;
+    }
+  );
+}

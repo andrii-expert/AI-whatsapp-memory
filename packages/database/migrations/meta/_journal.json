@@ -309,6 +309,13 @@
       "when": 1769509937695,
       "tag": "0043_unusual_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1769784423319,
+      "tag": "0044_petite_firestar",
+      "breakpoints": true
     }
   ]
 }
