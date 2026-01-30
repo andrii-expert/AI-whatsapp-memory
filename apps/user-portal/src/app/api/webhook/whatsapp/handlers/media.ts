@@ -8,7 +8,7 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, getWhatsAppConfig, getWhatsAppApiUrl } from '@imaginecalendar/whatsapp';
 import type { WebhookProcessingSummary } from '../types';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { createUserFile, getUserFileFolders, getRecentMessageHistory, getPrimaryCalendar } from '@imaginecalendar/database/queries';
+import { createUserFile, getUserFileFolders, getRecentMessageHistory, getPrimaryCalendar, logOutgoingWhatsAppMessage } from '@imaginecalendar/database/queries';
 import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
 import { ActionExecutor } from './action-executor';
 import { CalendarService } from './calendar-service';
@@ -424,9 +424,25 @@ export async function handleMediaMessage(
 
     // Step 2.5: Resolve folder ID if folder name is specified
     let folderId: string | null = null;
+    let resolvedFolderName: string | null = null;
     if (folderName) {
       folderId = await resolveFileFolderRoute(db, whatsappNumber.userId, folderName);
-      if (!folderId) {
+      if (folderId) {
+        // Get the actual folder name for display
+        const folders = await getUserFileFolders(db, whatsappNumber.userId);
+        const folder = folders.find(f => f.id === folderId);
+        resolvedFolderName = folder ? folder.name : folderName;
+        logger.info(
+          {
+            messageId: message.id,
+            folderName,
+            folderId,
+            resolvedFolderName,
+            userId: whatsappNumber.userId,
+          },
+          'Folder resolved successfully'
+        );
+      } else {
         logger.warn(
           {
             messageId: message.id,
@@ -459,11 +475,34 @@ export async function handleMediaMessage(
     const fileId = `${whatsappNumber.userId}_${Date.now()}_${fileName}`;
     const fileExtension = getExtensionFromMimeType(downloadedMimeType);
     
+    // Use parsed file name (without extension) as title, or fallback to original filename without extension
+    let fileTitle: string;
+    if (parsedFileName) {
+      // If AI parsed a name, use it (remove extension if present)
+      fileTitle = parsedFileName.replace(/\.[^/.]+$/, '');
+    } else {
+      // Use the generated filename without extension
+      fileTitle = fileName.replace(/\.[^/.]+$/, '');
+    }
+    
+    logger.info(
+      {
+        messageId: message.id,
+        parsedFileName,
+        fileName,
+        fileTitle,
+        folderId,
+        folderName: resolvedFolderName,
+        userId: whatsappNumber.userId,
+      },
+      'Creating file record in database'
+    );
+    
     const file = await createUserFile(db, {
       userId: whatsappNumber.userId,
-      title: fileName.replace(/\.[^/.]+$/, ''), // Remove extension for title
+      title: fileTitle, // Use parsed name or filename without extension
       folderId: folderId, // Use resolved folder ID or null for uncategorized
-      fileName: fileName,
+      fileName: fileName, // Full filename with extension
       fileType: downloadedMimeType,
       fileSize: buffer.length,
       fileExtension: fileExtension || undefined,
@@ -482,19 +521,79 @@ export async function handleMediaMessage(
       'File record created successfully'
     );
 
-    // Step 5: Send confirmation message
+    // Step 5: Send AI analysis and confirmation message
+    // First, send AI analysis if caption was analyzed
+    if (caption && caption.trim()) {
+      try {
+        // Get message history for context
+        let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+        try {
+          const history = await getRecentMessageHistory(db, whatsappNumber.userId, 10);
+          messageHistory = history
+            .filter(msg => msg.content && msg.content.trim().length > 0)
+            .slice(0, 10)
+            .map(msg => ({
+              direction: msg.direction,
+              content: msg.content,
+            }));
+        } catch (error) {
+          logger.warn({ error, userId: whatsappNumber.userId }, 'Failed to retrieve message history for AI analysis display');
+        }
+
+        // Get user's calendar timezone
+        let userTimezone = 'Africa/Johannesburg';
+        try {
+          const calendarConnection = await getPrimaryCalendar(db, whatsappNumber.userId);
+          if (calendarConnection) {
+            const calendarService = new CalendarService(db);
+            userTimezone = await (calendarService as any).getUserTimezone(whatsappNumber.userId, calendarConnection);
+          }
+        } catch (error) {
+          logger.warn({ error, userId: whatsappNumber.userId }, 'Failed to get user timezone, using default');
+        }
+
+        // Analyze caption using AI to get the analysis result
+        const analyzer = new WhatsappTextAnalysisService();
+        const currentDate = new Date();
+        
+        const aiResponse = (await analyzer.analyzeMessage(caption, {
+          messageHistory,
+          currentDate,
+          timezone: userTimezone,
+        })).trim();
+
+        // Send AI analysis to user
+        await whatsappService.sendTextMessage(
+          message.from,
+          `🤖 *AI Analysis:*\n${aiResponse.substring(0, 1000)}`
+        );
+
+        await logOutgoingWhatsAppMessage(db, {
+          whatsappNumberId: whatsappNumber.id,
+          userId: whatsappNumber.userId,
+          messageType: 'text',
+          messageContent: `🤖 AI Analysis:\n${aiResponse.substring(0, 1000)}`,
+          isFreeMessage: true,
+        });
+      } catch (error) {
+        logger.warn({ error, userId: whatsappNumber.userId }, 'Failed to send AI analysis for media message');
+      }
+    }
+
+    // Send confirmation message
     const fileSizeMB = (buffer.length / (1024 * 1024)).toFixed(2);
-    const folderInfo = folderId && folderName ? `\n📁 *Folder:* ${folderName}` : '';
+    const folderInfo = folderId && resolvedFolderName ? `\n📁 *Folder:* ${resolvedFolderName}` : '';
+    const fileTypeDisplay = fileExtension ? fileExtension.toUpperCase() : 'FILE';
     await whatsappService.sendTextMessage(
       message.from,
-      `✅️ *New File Added*\nFile: PDF\nName: ${file.title}`
+      `✅️ *New File Added*\nFile: ${fileTypeDisplay}\nName: ${file.title}${folderInfo}`
     );
 
     await logOutgoingWhatsAppMessage(db, {
       whatsappNumberId: whatsappNumber.id,
       userId: whatsappNumber.userId,
       messageType: 'text',
-      messageContent: `File saved: ${file.title}`,
+      messageContent: `File saved: ${file.title}${folderInfo}`,
     });
 
   } catch (error) {
