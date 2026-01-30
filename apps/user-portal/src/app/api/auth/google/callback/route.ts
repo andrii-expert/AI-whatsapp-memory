@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDb } from "@imaginecalendar/database/client";
-import { getUserByEmail, createUser } from "@imaginecalendar/database/queries";
+import { getUserByEmail, createUser, updateUserLastLogin } from "@imaginecalendar/database/queries";
 import { generateToken } from "@api/utils/auth-helpers";
 import { logger } from "@imaginecalendar/logger";
 import { randomUUID } from "crypto";
@@ -82,6 +82,8 @@ export async function GET(request: NextRequest) {
     if (user) {
       // User exists, log them in
       userId = user.id;
+      // Update last login time
+      await updateUserLastLogin(db, userId);
       logger.info({ userId, email }, "Google OAuth login - existing user");
     } else {
       // Create new user

@@ -292,7 +292,6 @@ export async function getUsers(
           phone: user.phone,
           company: user.company,
           createdAt: user.createdAt,
-          updatedAt: user.updatedAt, // Last login/activity time
           isAdmin: user.isAdmin,
           // Onboarding/Profile fields
           country: user.country,
@@ -309,7 +308,7 @@ export async function getUsers(
           cancelledAt: user.subscription?.cancelledAt || null,
           // Activity fields
           lastWhatsAppMessageAt: lastMessageMap.get(user.id) || null,
-          lastLoginAt: user.updatedAt, // Using updatedAt as proxy for last login
+          lastLoginAt: user.lastLoginAt || null,
         })),
         pagination: {
           page,
