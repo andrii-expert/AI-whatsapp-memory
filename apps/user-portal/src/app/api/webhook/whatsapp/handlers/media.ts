@@ -8,7 +8,7 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, getWhatsAppConfig, getWhatsAppApiUrl } from '@imaginecalendar/whatsapp';
 import type { WebhookProcessingSummary } from '../types';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { createUserFile, getUserFileFolders, getRecentMessageHistory, getPrimaryCalendar, logOutgoingWhatsAppMessage } from '@imaginecalendar/database/queries';
+import { createUserFile, getUserFileFolders, getRecentMessageHistory, getPrimaryCalendar } from '@imaginecalendar/database/queries';
 import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
 import { ActionExecutor } from './action-executor';
 import { CalendarService } from './calendar-service';
