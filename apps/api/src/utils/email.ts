@@ -1116,7 +1116,7 @@ function getShareNotificationEmailTemplate({
   const dashboardLink = resourceType === "task" || resourceType === "task_folder"
     ? `https://dashboard.crackon.ai/tasks`
     : resourceType === "shopping_list_folder"
-    ? `https://dashboard.crackon.ai/shopping-lists`
+    ? `https://dashboard.crackon.ai/lists`
     : `https://dashboard.crackon.ai/notes`;
 
   return `

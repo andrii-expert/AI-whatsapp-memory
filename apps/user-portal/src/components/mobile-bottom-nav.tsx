@@ -8,7 +8,7 @@ import { cn } from "@imaginecalendar/ui/cn";
 const navigationItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Events", href: "/calendars", icon: Calendar },
-  { name: "Lists", href: "/shopping-lists", icon: ShoppingCart },
+  { name: "Lists", href: "/lists", icon: ShoppingCart },
   { name: "Reminders", href: "/reminders", icon: Bell },
   { name: "Files", href: "/files", icon: FolderOpen },
 ];

@@ -1902,7 +1902,7 @@ export default function DashboardPage() {
                 borderColor="#ECFCEE"
                 blurColor="#C4FFCC"
                 icon={<ShoppingCartIcon />}
-                onClick={() => router.push("/shopping-lists")}
+                onClick={() => router.push("/lists")}
               />
               <StatCard
                 number={birthdaysToday.toString()}
@@ -1945,7 +1945,7 @@ export default function DashboardPage() {
                 Recent Shopping List
               </h2>
               <button
-                onClick={() => router.push("/shopping-lists")}
+                onClick={() => router.push("/lists")}
                 className="px-2 py-2 rounded-lg border border-[#F1F1F1] bg-white"
               >
                 <span className="text-[14px] font-medium text-[#1D2228]">View All</span>
