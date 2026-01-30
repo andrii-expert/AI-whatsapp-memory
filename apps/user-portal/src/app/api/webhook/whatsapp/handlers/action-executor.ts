@@ -131,7 +131,7 @@ export interface ParsedAction {
 
 // In-memory cache to store last displayed list context for each user
 // Key: userId, Value: { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }> }
-const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string }>();
+const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder' | 'document', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string }>();
 const LIST_CONTEXT_TTL = 10 * 60 * 1000; // 10 minutes
 
 export class ActionExecutor {
@@ -284,7 +284,7 @@ export class ActionExecutor {
   /**
    * Store list context for number-based operations (deletion, viewing, etc.)
    */
-  private storeListContext(type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string): void {
+  private storeListContext(type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder' | 'document', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string): void {
     listContextCache.set(this.userId, { type, items, folderRoute });
     // Auto-cleanup after TTL
     setTimeout(() => {
@@ -295,7 +295,7 @@ export class ActionExecutor {
   /**
    * Get list context for number-based operations (deletion, viewing, etc.)
    */
-  private getListContext(): { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string } | null {
+  private getListContext(): { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder' | 'document', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string } | null {
     return listContextCache.get(this.userId) || null;
   }
   
@@ -3358,10 +3358,79 @@ export class ActionExecutor {
   }
 
   private async viewFile(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    // Check if user specified a file number (e.g., "show me 2", "2")
+    const fileNumberMatch = parsed.taskName?.match(/^(\d+)$/);
+    if (fileNumberMatch && fileNumberMatch[1]) {
+      const fileNumber = parseInt(fileNumberMatch[1], 10);
+      
+      // First, check if there's a cached file list context
+      const listContext = this.getListContext();
+      if (listContext && listContext.type === 'document' && listContext.items.length > 0) {
+        const cachedFile = listContext.items.find(item => item.number === fileNumber);
+        if (cachedFile && cachedFile.id) {
+          logger.info({ userId: this.userId, fileNumber, cachedFileId: cachedFile.id }, 'Using cached file from list context');
+          
+          // Get the file by ID
+          const allFiles = await getUserFiles(this.db, this.userId);
+          const file = allFiles.find(f => f.id === cachedFile.id);
+          
+          if (file) {
+            // Continue with file viewing logic below
+            try {
+              // Get signed URL for the file
+              const key = file.cloudflareKey || this.extractKeyFromUrl(file.cloudflareUrl);
+              let fileUrl = file.cloudflareUrl;
+              
+              if (key) {
+                try {
+                  // Generate signed URL directly using S3 client
+                  fileUrl = await this.getSignedFileUrl(key);
+                } catch (error) {
+                  logger.warn({ error, fileId: file.id, key }, 'Failed to get signed URL, using cloudflareUrl');
+                  // Fallback to cloudflareUrl if signed URL generation fails
+                }
+              }
+
+              // Determine media type based on file type
+              const isImage = file.fileType.startsWith('image/');
+              const mediaType: 'image' | 'document' = isImage ? 'image' : 'document';
+              
+              // Send file via WhatsApp
+              await this.whatsappService.sendMediaFile(
+                this.recipient,
+                fileUrl,
+                mediaType,
+                file.title, // Caption
+                isImage ? undefined : file.fileName // Filename for documents only
+              );
+
+              const fileSizeMB = (file.fileSize / (1024 * 1024)).toFixed(2);
+              return {
+                success: true,
+                message: `📄 *File sent:*\n"${file.title}"\nSize: ${fileSizeMB} MB`,
+              };
+            } catch (error) {
+              logger.error({ error, fileId: file.id, userId: this.userId }, 'Failed to send file');
+              return {
+                success: false,
+                message: `I'm sorry, I couldn't send the file "${file.title}". Please try again.`,
+              };
+            }
+          }
+        }
+      }
+      
+      // If not found in cache, return error
+      return {
+        success: false,
+        message: `I couldn't find file number ${fileNumber}. Please list your files first to see available files.`,
+      };
+    }
+    
     if (!parsed.taskName) {
       return {
         success: false,
-        message: "I need to know which file you'd like to view. Please specify the file name.",
+        message: "I need to know which file you'd like to view. Please specify the file name or number.",
       };
     }
 
@@ -3815,6 +3884,15 @@ export class ActionExecutor {
         : '';
       
       let message = `🪪 *Show All Files*\n`;
+      
+      // Store list context for numbered file view requests
+      const listItems = files.slice(0, 20).map((file, index) => ({
+        id: file.id,
+        number: index + 1,
+        name: file.title,
+      }));
+      
+      this.storeListContext('document', listItems, folderRoute || undefined);
       
       files.slice(0, 20).forEach((file, index) => {
         message += `*${index + 1}.* ${file.title}\n`;
