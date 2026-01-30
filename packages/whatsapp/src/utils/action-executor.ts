@@ -65,17 +65,17 @@ export class ActionExecutor {
     let status: string | undefined;
 
     // Shopping item operations (check before regular task)
-    if (trimmed.startsWith('Create a shopping item:')) {
+    if (trimmed.startsWith('Create a list item:')) {
       action = 'create_shopping_item';
       resourceType = 'task';
-      // Try full format first: "Create a shopping item: {item} - on folder: Shopping List"
-      const fullMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+      // Try full format first: "Create a list item: {item} - on folder: List"
+      const fullMatch = trimmed.match(/^Create a list item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
       if (fullMatch) {
         taskName = fullMatch[1].trim();
         folderRoute = fullMatch[2].trim();
       } else {
-        // Fallback: just extract the item name after "Create a shopping item:"
-        const simpleMatch = trimmed.match(/^Create a shopping item:\s*(.+)$/i);
+        // Fallback: just extract the item name after "Create a list item:"
+        const simpleMatch = trimmed.match(/^Create a list item:\s*(.+)$/i);
         if (simpleMatch) {
           taskName = simpleMatch[1].trim();
           folderRoute = 'Shopping List'; // Default to Shopping List
@@ -337,7 +337,7 @@ export class ActionExecutor {
       };
     }
 
-    // Always use "Shopping List" folder for shopping items
+    // Always use primary list folder for list items
     const shoppingFolderName = 'Shopping List';
     let folderId = await this.resolveFolderRoute(shoppingFolderName);
     

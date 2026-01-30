@@ -379,33 +379,33 @@ export class ActionExecutor {
     let permission: 'view' | 'edit' | undefined;
 
     // Shopping item operations (check before regular task)
-    if (trimmed.startsWith('Create a shopping item:')) {
+    if (trimmed.startsWith('Create a list item:')) {
       action = 'create_shopping_item';
       resourceType = 'shopping';
       let category: string | undefined;
       
       // Try format with both folder and category: "Create a shopping item: {item} - on folder: {folder} - category: {category}"
-      const folderAndCategoryMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
+      const folderAndCategoryMatch = trimmed.match(/^Create a list item:\s*(.+?)\s*-\s*on folder:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
       if (folderAndCategoryMatch) {
         taskName = folderAndCategoryMatch[1].trim();
         folderRoute = folderAndCategoryMatch[2].trim();
         category = folderAndCategoryMatch[3].trim();
       } else {
         // Try format with category only: "Create a shopping item: {item} - category: {category}"
-        const categoryOnlyMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
+        const categoryOnlyMatch = trimmed.match(/^Create a list item:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
         if (categoryOnlyMatch) {
           taskName = categoryOnlyMatch[1].trim();
           category = categoryOnlyMatch[2].trim();
           folderRoute = undefined;
         } else {
           // Try format with folder only: "Create a shopping item: {item} - on folder: {folder}"
-          const folderOnlyMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+          const folderOnlyMatch = trimmed.match(/^Create a list item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
           if (folderOnlyMatch) {
             taskName = folderOnlyMatch[1].trim();
             folderRoute = folderOnlyMatch[2].trim();
           } else {
             // Simple format: "Create a shopping item: {item}"
-            const simpleMatch = trimmed.match(/^Create a shopping item:\s*(.+)$/i);
+            const simpleMatch = trimmed.match(/^Create a list item:\s*(.+)$/i);
             if (simpleMatch) {
               taskName = simpleMatch[1].trim();
               folderRoute = undefined;
@@ -416,11 +416,11 @@ export class ActionExecutor {
         }
       }
       
-    } else if (trimmed.startsWith('List shopping items:')) {
+    } else if (trimmed.startsWith('List items:')) {
       action = 'list';
       resourceType = 'shopping';
       // Match: "List shopping items: {folder|all} - status: {open|completed|all}"
-      const matchWithStatus = trimmed.match(/^List shopping items:\s*(.+?)\s*-\s*status:\s*(.+)$/i);
+      const matchWithStatus = trimmed.match(/^List items:\s*(.+?)\s*-\s*status:\s*(.+)$/i);
       if (matchWithStatus) {
         // Preserve the raw folder route (including "all") so downstream logic
         // can distinguish between "all" vs no folder (Home list)
@@ -428,7 +428,7 @@ export class ActionExecutor {
         status = matchWithStatus[2].trim();
       } else {
         // Match: "List shopping items: {folder|all}" (no status)
-        const matchWithoutStatus = trimmed.match(/^List shopping items:\s*(.+)$/i);
+        const matchWithoutStatus = trimmed.match(/^List items:\s*(.+)$/i);
         if (matchWithoutStatus) {
           const folderOrAll = matchWithoutStatus[1].trim();
           // Preserve "all" so downstream logic can handle it specially
@@ -438,10 +438,10 @@ export class ActionExecutor {
           missingFields.push('folder or "all"');
         }
       }
-    } else if (trimmed.startsWith('Edit a shopping item:')) {
+    } else if (trimmed.startsWith('Edit a list item:')) {
       action = 'edit';
       resourceType = 'shopping';
-      const match = trimmed.match(/^Edit a shopping item:\s*(.+?)\s*-\s*to:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      const match = trimmed.match(/^Edit a list item:\s*(.+?)\s*-\s*to:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
       if (match) {
         taskName = match[1].trim();
         newName = match[2].trim();
@@ -449,11 +449,11 @@ export class ActionExecutor {
       } else {
         missingFields.push('item name, new name, or folder');
       }
-    } else if (trimmed.startsWith('Delete a shopping item:') || trimmed.startsWith('Delete shopping items:') || trimmed.startsWith('Delete shopping item:')) {
+    } else if (trimmed.startsWith('Delete a list item:') || trimmed.startsWith('Delete list items:') || trimmed.startsWith('Delete list item:')) {
       action = 'delete';
       resourceType = 'shopping';
-      // Extract everything after "Delete a shopping item:" or "Delete shopping items:" or "Delete shopping item:"
-      const afterPrefix = trimmed.replace(/^Delete (a )?shopping items?:\s*/i, '').trim();
+      // Extract everything after "Delete a list item:" or "Delete list items:" or "Delete list item:"
+      const afterPrefix = trimmed.replace(/^Delete (a )?list items?:\s*/i, '').trim();
       
       logger.info({ afterPrefix, trimmed }, 'Parsing Delete shopping item command');
       
@@ -487,7 +487,7 @@ export class ActionExecutor {
       }
       
       // Regular name-based deletion (handle both singular and plural forms)
-      const match = trimmed.match(/^Delete (a )?shopping items?:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      const match = trimmed.match(/^Delete (a )?list items?:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
       if (match) {
         taskName = match[2].trim();
         folderRoute = match[3]?.trim();
@@ -496,10 +496,10 @@ export class ActionExecutor {
         logger.warn({ trimmed, afterPrefix }, 'Failed to parse shopping item deletion');
         missingFields.push('item name or folder');
       }
-    } else if (trimmed.startsWith('Complete a shopping item:')) {
+    } else if (trimmed.startsWith('Complete a list item:')) {
       action = 'complete';
       resourceType = 'shopping';
-      const match = trimmed.match(/^Complete a shopping item:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      const match = trimmed.match(/^Complete a list item:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
       if (match) {
         taskName = match[1].trim();
         folderRoute = match[2]?.trim();
@@ -1092,19 +1092,19 @@ export class ActionExecutor {
           missingFields.push('folder name or recipient');
         }
       }
-    } else if (trimmed.startsWith('Share a shopping list folder:')) {
+    } else if (trimmed.startsWith('Share a list folder:')) {
       action = 'share';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      // Try to match with permission first: "Share a shopping list folder: {folder} - with: {recipient} - permission: {view|edit}"
-      let match = trimmed.match(/^Share a shopping list folder:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
+      // Try to match with permission first: "Share a list folder: {folder} - with: {recipient} - permission: {view|edit}"
+      let match = trimmed.match(/^Share a list folder:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
       if (match) {
         folderRoute = match[1].trim();
         recipient = match[2].trim();
         permission = (match[3].trim().toLowerCase() === 'edit' ? 'edit' : 'view') as 'view' | 'edit';
       } else {
         // Fallback: match without permission
-        match = trimmed.match(/^Share a shopping list folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+        match = trimmed.match(/^Share a list folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
         if (match) {
           folderRoute = match[1].trim();
           recipient = match[2].trim();
@@ -1142,54 +1142,54 @@ export class ActionExecutor {
       } else {
         folderRoute = undefined; // List all folders
       }
-    } else if (trimmed.startsWith('Create a shopping list folder:')) {
+    } else if (trimmed.startsWith('Create a list folder:')) {
       action = 'create';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Create a shopping list folder:\s*(.+)$/i);
+      const match = trimmed.match(/^Create a list folder:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim();
       } else {
         missingFields.push('folder name');
       }
-    } else if (trimmed.startsWith('Edit a shopping list folder:')) {
+    } else if (trimmed.startsWith('Edit a list folder:')) {
       action = 'edit';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Edit a shopping list folder:\s*(.+?)\s*-\s*to:\s*(.+)$/i);
+      const match = trimmed.match(/^Edit a list folder:\s*(.+?)\s*-\s*to:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim();
         newName = match[2].trim();
       } else {
         missingFields.push('folder name or new name');
       }
-    } else if (trimmed.startsWith('Delete a shopping list folder:')) {
+    } else if (trimmed.startsWith('Delete a list folder:')) {
       action = 'delete';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Delete a shopping list folder:\s*(.+)$/i);
+      const match = trimmed.match(/^Delete a list folder:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim();
       } else {
         missingFields.push('folder name');
       }
-    } else if (trimmed.startsWith('Create a shopping list category:') || trimmed.startsWith('Create a shopping list sub-folder:')) {
+    } else if (trimmed.startsWith('Create a list category:') || trimmed.startsWith('Create a list sub-folder:')) {
       action = 'create_subfolder';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Create a shopping list (?:category|sub-folder):\s*(.+?)\s*-\s*name:\s*(.+)$/i);
+      const match = trimmed.match(/^Create a list (?:category|sub-folder):\s*(.+?)\s*-\s*name:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim(); // parent folder
         newName = match[2].trim(); // category name
       } else {
         missingFields.push('parent folder or category name');
       }
-    } else if (trimmed.startsWith('List shopping list folders:')) {
+    } else if (trimmed.startsWith('List list folders:')) {
       action = 'list_folders';
       resourceType = 'folder';
       isShoppingListFolder = true;
       // Optional: can list all or specific parent folder's subfolders
-      const match = trimmed.match(/^List shopping list folders:\s*(.+)$/i);
+      const match = trimmed.match(/^List list folders:\s*(.+)$/i);
       if (match) {
         const folderOrAll = match[1].trim();
         folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
@@ -1464,12 +1464,12 @@ export class ActionExecutor {
 
     // Update isShoppingListFolder if it wasn't already set in parsing
     if (isShoppingListFolder === undefined) {
-      isShoppingListFolder = trimmed.startsWith('Create a shopping list folder:') ||
-        trimmed.startsWith('Edit a shopping list folder:') ||
-        trimmed.startsWith('Delete a shopping list folder:') ||
-        trimmed.startsWith('Create a shopping list category:') ||
-        trimmed.startsWith('Create a shopping list sub-folder:') ||
-        trimmed.startsWith('List shopping list folders:');
+      isShoppingListFolder = trimmed.startsWith('Create a list folder:') ||
+        trimmed.startsWith('Edit a list folder:') ||
+        trimmed.startsWith('Delete a list folder:') ||
+        trimmed.startsWith('Create a list category:') ||
+        trimmed.startsWith('Create a list sub-folder:') ||
+        trimmed.startsWith('List list folders:');
       
       isFriendFolder = trimmed.startsWith('Create a friend folder:') ||
         trimmed.startsWith('Edit a friend folder:') ||
