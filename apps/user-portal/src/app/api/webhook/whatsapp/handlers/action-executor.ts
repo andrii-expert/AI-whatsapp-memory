@@ -518,6 +518,24 @@ export class ActionExecutor {
       } else {
         missingFields.push('item name or folder');
       }
+    } else if (trimmed.startsWith('Move a list item:') || trimmed.startsWith('Move list item:')) {
+      action = 'move';
+      resourceType = 'shopping';
+      // Match: "Move a list item: {item_name} - to folder: {target_folder_route}" or with optional "from folder"
+      const matchWithFrom = trimmed.match(/^Move (a )?list item:\s*(.+?)\s*-\s*from folder:\s*(.+?)\s*-\s*to folder:\s*(.+)$/i);
+      if (matchWithFrom) {
+        taskName = matchWithFrom[2].trim();
+        folderRoute = matchWithFrom[3].trim();
+        targetFolderRoute = matchWithFrom[4].trim();
+      } else {
+        const match = trimmed.match(/^Move (a )?list item:\s*(.+?)\s*-\s*to folder:\s*(.+)$/i);
+        if (match) {
+          taskName = match[2].trim();
+          targetFolderRoute = match[3].trim();
+        } else {
+          missingFields.push('item name or target folder');
+        }
+      }
     }
     // Task operations
     else if (trimmed.startsWith('Create a task:')) {
@@ -1661,6 +1679,9 @@ export class ActionExecutor {
             return await this.completeTask(parsed);
           }
         case 'move':
+          if (parsed.resourceType === 'shopping') {
+            return await this.moveShoppingItem(parsed);
+          }
           if (parsed.resourceType === 'document') {
             return await this.moveFile(parsed);
           }
@@ -1865,6 +1886,69 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't update the item "${parsed.taskName}". Please try again.`,
+      };
+    }
+  }
+
+  private async moveShoppingItem(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.taskName || !parsed.targetFolderRoute) {
+      return {
+        success: false,
+        message: "I need to know which item to move and which list to move it to. Please specify both (e.g. 'Move milk to Groceries List').",
+      };
+    }
+
+    const targetFolderId = await this.resolveShoppingListFolderRoute(parsed.targetFolderRoute);
+    if (!targetFolderId) {
+      return {
+        success: false,
+        message: `I couldn't find the list "${parsed.targetFolderRoute}". Please make sure the list exists.`,
+      };
+    }
+
+    try {
+      let items = await getUserShoppingListItems(this.db, this.userId, {});
+
+      if (parsed.folderRoute) {
+        const sourceFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+        if (sourceFolderId) {
+          items = items.filter((item: any) => item.folderId === sourceFolderId);
+        }
+      }
+
+      const item = items.find((i: any) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
+
+      if (!item) {
+        const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
+        return {
+          success: false,
+          message: `I couldn't find the item "${parsed.taskName}"${folderText}. Please make sure the item exists.`,
+        };
+      }
+
+      if (item.folderId === targetFolderId) {
+        const targetDisplay = formatListDisplayName(parsed.targetFolderRoute);
+        return {
+          success: false,
+          message: `"${normalizeTimesToX(item.name)}" is already in ${targetDisplay}.`,
+        };
+      }
+
+      await updateShoppingListItem(this.db, item.id, this.userId, {
+        folderId: targetFolderId,
+      });
+
+      const sourceFolderText = parsed.folderRoute ? ` from ${formatListDisplayName(parsed.folderRoute)}` : '';
+      const targetDisplay = formatListDisplayName(parsed.targetFolderRoute);
+      return {
+        success: true,
+        message: `📦 *Item Moved*\n"${normalizeTimesToX(item.name)}"${sourceFolderText} to ${targetDisplay}`,
+      };
+    } catch (error) {
+      logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to move shopping item');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't move "${parsed.taskName}". Please try again.`,
       };
     }
   }

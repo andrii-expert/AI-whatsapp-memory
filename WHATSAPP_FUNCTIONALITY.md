@@ -5,6 +5,7 @@
 ### Items:
 - ✅ **Create list item**: `"add milk to list"` or `"add bread to groceries folder"`
 - ✅ **Edit list item**: `"change milk to 2% milk"` or `"edit bread to whole wheat bread in groceries"`
+- ✅ **Move list item**: `"move milk to Groceries List"` or `"move item to X List"`
 - ✅ **Delete list item**: `"remove eggs from list"` or `"delete milk from groceries"`
 - ✅ **Complete/Toggle list item**: `"mark milk as bought"` or `"got the bread"`
 - ✅ **List items**: `"show my list"` or `"show groceries folder"` (with status filters: open, completed, all)
