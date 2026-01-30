@@ -12,6 +12,7 @@
 
 ### Folders:
 - ✅ **Create list folder**: `"create a groceries folder"`
+- ✅ **Set primary list**: `"change Paul to primary list"` or `"make Paul my primary list"`
 - ✅ **Edit list folder**: `"rename groceries to food"`
 - ✅ **Delete list folder**: `"delete groceries folder"`
 - ✅ **Create list sub-folder**: `"create fruits folder in groceries"`
