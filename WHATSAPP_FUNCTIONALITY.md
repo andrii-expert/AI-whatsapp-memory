@@ -1,21 +1,21 @@
 # WhatsApp Functionality Summary
 
-## Shopping Lists ✅
+## Lists ✅
 
 ### Items:
-- ✅ **Create shopping item**: `"add milk to shopping list"` or `"add bread to groceries folder"`
-- ✅ **Edit shopping item**: `"change milk to 2% milk"` or `"edit bread to whole wheat bread in groceries"`
-- ✅ **Delete shopping item**: `"remove eggs from shopping list"` or `"delete milk from groceries"`
-- ✅ **Complete/Toggle shopping item**: `"mark milk as bought"` or `"got the bread"`
-- ✅ **List shopping items**: `"show my shopping list"` or `"show groceries folder"` (with status filters: open, completed, all)
+- ✅ **Create list item**: `"add milk to list"` or `"add bread to groceries folder"`
+- ✅ **Edit list item**: `"change milk to 2% milk"` or `"edit bread to whole wheat bread in groceries"`
+- ✅ **Delete list item**: `"remove eggs from list"` or `"delete milk from groceries"`
+- ✅ **Complete/Toggle list item**: `"mark milk as bought"` or `"got the bread"`
+- ✅ **List items**: `"show my list"` or `"show groceries folder"` (with status filters: open, completed, all)
 
 ### Folders:
-- ✅ **Create shopping list folder**: `"create a groceries folder"`
-- ✅ **Edit shopping list folder**: `"rename groceries to food"`
-- ✅ **Delete shopping list folder**: `"delete groceries folder"`
-- ✅ **Create shopping list sub-folder**: `"create fruits folder in groceries"`
-- ✅ **List shopping list folders**: `"show my shopping list folders"` or `"list folders in groceries"`
-- ✅ **Share shopping list folder**: `"share groceries folder with john@example.com"` or `"share groceries with +27123456789"` or `"share groceries with John Doe"`
+- ✅ **Create list folder**: `"create a groceries folder"`
+- ✅ **Edit list folder**: `"rename groceries to food"`
+- ✅ **Delete list folder**: `"delete groceries folder"`
+- ✅ **Create list sub-folder**: `"create fruits folder in groceries"`
+- ✅ **List list folders**: `"show my list folders"` or `"list folders in groceries"`
+- ✅ **Share list folder**: `"share groceries folder with john@example.com"` or `"share groceries with +27123456789"` or `"share groceries with John Doe"`
 
 ## Friends ✅
 
