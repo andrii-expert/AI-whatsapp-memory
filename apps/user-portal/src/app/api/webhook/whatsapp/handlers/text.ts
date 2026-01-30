@@ -893,7 +893,7 @@ async function processAIResponse(
 ): Promise<void> {
   try {
     // Parse the Title from response
-    const titleMatch = aiResponse.match(/^Title:\s*(shopping|reminder|event|friend|verification|normal)/i);
+    const titleMatch = aiResponse.match(/^Title:\s*(shopping|reminder|event|document|friend|verification|normal)/i);
     if (!titleMatch || !titleMatch[1]) {
       logger.warn(
         {
@@ -1629,7 +1629,7 @@ async function processAIResponse(
     }
     
     // Handle list operations for all types (tasks, notes, reminders, events, documents, addresses)
-    if (isListOperation && (titleType === 'shopping' || titleType === 'reminder' || titleType === 'event' || titleType === 'friend')) {
+    if (isListOperation && (titleType === 'shopping' || titleType === 'reminder' || titleType === 'event' || titleType === 'document' || titleType === 'friend')) {
       try {
         logger.info(
           {
@@ -2089,12 +2089,12 @@ async function processAIResponse(
       return;
     }
     
-    // Handle unsupported operations (task, note, document, address removed)
-    if (titleType === 'task' || titleType === 'note' || titleType === 'document' || titleType === 'address') {
+    // Handle unsupported operations (task, note, address removed - document is now supported)
+    if (titleType === 'task' || titleType === 'note' || titleType === 'address') {
       logger.warn({ userId, titleType }, `${titleType} operations are no longer supported`);
       await whatsappService.sendTextMessage(
         recipient,
-        `I'm sorry, ${titleType} operations are not currently supported. I can help you with reminders, events, shopping lists, and friends.`
+        `I'm sorry, ${titleType} operations are not currently supported. I can help you with reminders, events, documents, shopping lists, and friends.`
       );
       return;
     }
@@ -3500,6 +3500,86 @@ async function processAIResponse(
         logger.info({ userId, successCount, failCount, totalLines: actionLines.length }, 'Processed address operations');
       } else {
         logger.info({ userId, titleType }, 'No address actions parsed from template');
+      }
+    } else if (titleType === 'document') {
+      // Handle document/file operations (create, edit, delete, view, move, share, list, folder operations)
+      
+      // Send AI response to user (for debugging/transparency)
+      try {
+        await whatsappService.sendTextMessage(
+          recipient,
+          `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`
+        );
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing AI analysis message');
+        }
+      } catch (error) {
+        logger.warn({ error, userId }, 'Failed to send AI analysis to user');
+      }
+      
+      const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      const results: string[] = [];
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const actionLine of actionLines) {
+        const parsed = executor.parseAction(actionLine);
+        if (parsed) {
+          // Ensure resourceType is set to document for document operations
+          if (parsed.resourceType !== 'document' && !parsed.isFileFolder) {
+            parsed.resourceType = 'document';
+          }
+          const result = await executor.executeAction(parsed);
+          if (result.success) {
+            successCount++;
+            results.push(result.message);
+          } else {
+            failCount++;
+            results.push(result.message);
+          }
+        } else {
+          logger.warn({ userId, actionLine }, 'Failed to parse document action line');
+        }
+      }
+      
+      // Send combined results to user
+      const nonEmptyResults = results.filter(r => r.trim().length > 0);
+      if (nonEmptyResults.length > 0) {
+        const combinedMessage = nonEmptyResults.join('\n\n');
+        await whatsappService.sendTextMessage(recipient, combinedMessage);
+        
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'text',
+              messageContent: combinedMessage,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing message');
+        }
+        
+        logger.info({ userId, successCount, failCount, totalLines: actionLines.length }, 'Processed document operations');
+      } else {
+        logger.info({ userId, titleType }, 'No document actions parsed from template');
       }
     } else if (titleType === 'friend') {
       // Handle friend operations (create, update, delete, list, folder operations)
