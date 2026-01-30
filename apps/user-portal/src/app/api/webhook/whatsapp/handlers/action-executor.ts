@@ -134,6 +134,11 @@ export interface ParsedAction {
 const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder' | 'document', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string }>();
 const LIST_CONTEXT_TTL = 10 * 60 * 1000; // 10 minutes
 
+/** Normalize "X times" to "X x" for display (e.g. "10 times" → "10 x") */
+function normalizeTimesToX(text: string): string {
+  return text.replace(/(\d+)\s*times/gi, '$1 x');
+}
+
 export class ActionExecutor {
   // Constants for date parsing - defined once to avoid repetition
   private static readonly MONTH_NAMES = ['january','february','march','april','may','june','july','august','september','october','november','december'];
@@ -1839,13 +1844,14 @@ export class ActionExecutor {
         };
       }
 
+      const normalizedNewName = normalizeTimesToX(parsed.newName);
       await updateShoppingListItem(this.db, item.id, this.userId, {
-        name: parsed.newName,
+        name: normalizedNewName,
       });
 
       return {
         success: true,
-        message: `⚠️ *Shopping Item Updated:*\nNew: ${parsed.newName}`,
+        message: `⚠️ *Shopping Item Updated:*\nNew: ${normalizedNewName}`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to edit shopping item');
@@ -1968,10 +1974,11 @@ export class ActionExecutor {
         logger.info({ userId: this.userId, itemName: parsed.taskName, category }, 'Using extracted category for shopping list item via WhatsApp');
       }
 
+      const normalizedName = normalizeTimesToX(parsed.taskName);
       await createShoppingListItem(this.db, {
         userId: this.userId,
         folderId,
-        name: parsed.taskName,
+        name: normalizedName,
         category,
         status: 'open',
       });
@@ -1981,16 +1988,16 @@ export class ActionExecutor {
       if (folderId) {
         if (isPrimaryFolder) {
           // Primary folder - present as All Lists
-          message = `✅ *Added to All Lists:*\nItem/s: ${parsed.taskName}`;
+          message = `✅ *Added to All Lists:*\nItem/s: ${normalizedName}`;
         } else {
           // Not primary folder - include folder name, without the word "shopping"
           const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
           const folderName = folder?.name || parsed.folderRoute || 'List';
-          message = `✅ *Added to ${folderName} List:*\nItem/s: ${parsed.taskName}`;
+          message = `✅ *Added to ${folderName} List:*\nItem/s: ${normalizedName}`;
         }
       } else {
         // No folder (goes to \"All Items\") - use All Lists as the main list concept
-        message = `✅ *Added to All Lists:*\nItem/s: ${parsed.taskName}`;
+        message = `✅ *Added to All Lists:*\nItem/s: ${normalizedName}`;
       }
 
       return {
@@ -2779,7 +2786,7 @@ export class ActionExecutor {
       for (const item of itemsToDelete) {
         try {
           await deleteShoppingListItem(this.db, item.id, this.userId);
-          deletedNames.push(item.name || `Item ${item.number}`);
+          deletedNames.push(normalizeTimesToX(item.name || `Item ${item.number}`));
         } catch (error) {
           logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item by number');
           errors.push(`Item ${item.number}`);
@@ -2834,7 +2841,7 @@ export class ActionExecutor {
       await deleteShoppingListItem(this.db, item.id, this.userId);
       return {
         success: true,
-        message: `⛔ *Item Removed:*\nTitle: ${item.name}`,
+        message: `⛔ *Item Removed:*\nTitle: ${normalizeTimesToX(item.name || '')}`,
       };
     } catch (error) {
       logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item');
@@ -2969,8 +2976,8 @@ export class ActionExecutor {
       return {
         success: true,
         message: newStatus === 'completed' 
-          ? `✅ *Item Purchased:*\n${item.name}`
-          : `📝 *Item Reopened:*\n${item.name}`,
+          ? `✅ *Item Purchased:*\n${normalizeTimesToX(item.name || '')}`
+          : `📝 *Item Reopened:*\n${normalizeTimesToX(item.name || '')}`,
       };
     } catch (error) {
       logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to toggle shopping list item status');
@@ -4024,9 +4031,11 @@ export class ActionExecutor {
       const displayedItems = items.slice(0, 20);
       displayedItems.forEach((item, index) => {
         const statusIcon = item.status === 'completed' ? '✅' : '⬜';
-        message += `${statusIcon} *${index + 1}.* ${item.name}`;
-        if (item.description) {
-          message += ` - ${item.description}`;
+        const displayName = normalizeTimesToX(item.name || '');
+        const displayDesc = item.description ? normalizeTimesToX(item.description) : '';
+        message += `${statusIcon} *${index + 1}.* ${displayName}`;
+        if (displayDesc) {
+          message += ` - ${displayDesc}`;
         }
         message += '\n';
       });
