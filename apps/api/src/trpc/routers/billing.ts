@@ -8,6 +8,7 @@ import {
   reactivateSubscription,
   getPlanById,
   getUserById,
+  hasUserHadBetaSubscription,
 } from "@imaginecalendar/database/queries";
 import type { PlanRecord } from "@imaginecalendar/database/queries";
 import { PayFastService } from "@imaginecalendar/payments";
@@ -19,7 +20,11 @@ function computeSubscriptionPeriods(plan: PlanRecord) {
   const currentPeriodStart = new Date();
   const currentPeriodEnd = new Date(currentPeriodStart);
 
-  if (plan.payfastConfig.recurring && plan.payfastConfig.frequency) {
+  // Check if this is a Beta plan (one-time, 2 months)
+  const metadata = plan.metadata as { tier?: string; durationMonths?: number; isOneTime?: boolean } | null;
+  if (metadata?.tier === 'beta' && metadata?.isOneTime && metadata?.durationMonths) {
+    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + metadata.durationMonths);
+  } else if (plan.payfastConfig.recurring && plan.payfastConfig.frequency) {
     switch (plan.payfastConfig.frequency) {
       case 1:
         currentPeriodEnd.setDate(currentPeriodEnd.getDate() + 1);
@@ -67,6 +72,33 @@ export const billingRouter = createTRPCRouter({
     .output(subscriptionSchema.nullable())
     .query(async ({ ctx: { db, session } }) => {
       const subscription = await getUserSubscription(db, session.user.id);
+      
+      // Auto-downgrade Beta subscriptions that have expired
+      if (subscription && subscription.plan === "beta" && subscription.status === "active") {
+        const now = new Date();
+        if (subscription.currentPeriodEnd <= now) {
+          // Beta subscription has expired, downgrade to free
+          const freePlan = await getPlanById(db, "free");
+          if (freePlan) {
+            const { currentPeriodStart, currentPeriodEnd } = computeSubscriptionPeriods(freePlan);
+            const updatedSubscription = await updateSubscription(db, subscription.id, {
+              plan: "free",
+              status: "active",
+              currentPeriodStart,
+              currentPeriodEnd,
+            });
+            
+            logger.info({
+              userId: session.user.id,
+              subscriptionId: subscription.id,
+              expiredAt: subscription.currentPeriodEnd,
+            }, 'Auto-downgraded expired Beta subscription to Free');
+            
+            return updatedSubscription ?? null;
+          }
+        }
+      }
+      
       // tRPC procedures must not return undefined; return null when no subscription exists
       return subscription ?? null;
     }),
@@ -93,6 +125,17 @@ export const billingRouter = createTRPCRouter({
           code: "BAD_REQUEST",
           message: "Selected plan is not available",
         });
+      }
+
+      // Check if user is trying to subscribe to Beta plan and has already had it
+      if (normalizedPlanId === "beta") {
+        const hasHadBeta = await hasUserHadBetaSubscription(db, session.user.id);
+        if (hasHadBeta) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Beta plan can only be subscribed to once per user",
+          });
+        }
       }
 
       // Check if plan requires payment (not free plan)

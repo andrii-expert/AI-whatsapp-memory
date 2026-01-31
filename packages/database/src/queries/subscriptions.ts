@@ -146,3 +146,20 @@ export async function getExpiringTrials(db: Database) {
     }
   );
 }
+
+export async function hasUserHadBetaSubscription(db: Database, userId: string): Promise<boolean> {
+  return withQueryLogging(
+    'hasUserHadBetaSubscription',
+    { userId },
+    async () => {
+      const betaSubscription = await db.query.subscriptions.findFirst({
+        where: and(
+          eq(subscriptions.userId, userId),
+          eq(subscriptions.plan, "beta")
+        ),
+        orderBy: [desc(subscriptions.createdAt)],
+      });
+      return !!betaSubscription;
+    }
+  );
+}
