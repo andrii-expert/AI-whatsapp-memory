@@ -170,6 +170,15 @@ export default function BillingPage() {
       });
       return;
     }
+    // Check if user is trying to select Beta and has already used it
+    if (planId === "beta" && user?.betaUsedAt) {
+      toast({
+        title: "Beta plan already used",
+        description: "The Beta plan can only be subscribed to once per user.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSelectedPlanForChange(planId);
   };
 
@@ -195,6 +204,9 @@ export default function BillingPage() {
     isLoading: isLoadingSubscription,
     error: subscriptionError
   } = useQuery(trpc.billing.getSubscription.queryOptions());
+
+  // Get user data to check if beta has been used
+  const { data: user } = useQuery(trpc.user.me.queryOptions());
 
   const createSubscriptionMutation = useMutation(
     trpc.billing.createSubscription.mutationOptions({
@@ -469,6 +481,16 @@ export default function BillingPage() {
       toast({
         title: "Gold plan coming soon",
         description: "The Gold package will be available soon. Please select the Free or Silver plan for now.",
+      });
+      return;
+    }
+
+    // Prevent beta plan selection if already used
+    if (selectedPlanForChange === "beta" && user?.betaUsedAt) {
+      toast({
+        title: "Beta plan already used",
+        description: "The Beta plan can only be subscribed to once per user.",
+        variant: "destructive",
       });
       return;
     }
@@ -928,6 +950,97 @@ export default function BillingPage() {
 
                     <ul className="mt-4 space-y-2 text-sm">
                       {silverPlan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <Check className={cn("h-4 w-4 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
+                          <span className={isSelected ? "text-white" : "text-gray-700"}>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </label>
+                );
+              })()}
+
+              {/* Beta Plan */}
+              {(() => {
+                const betaPlan = plans.find(p => p.id === 'beta');
+                if (!betaPlan) return null;
+                const isSelected = (selectedPlanForChange || currentPlanId) === 'beta';
+                const isCurrentPlan = currentPlanId === 'beta';
+                const hasUsedBeta = !!user?.betaUsedAt;
+                const isDisabled = hasUsedBeta;
+                
+                return (
+                  <label
+                    key="beta"
+                    htmlFor="plan-beta"
+                    className={cn(
+                      "relative flex flex-col p-5 rounded-2xl border-2 transition-all",
+                      isDisabled 
+                        ? "cursor-not-allowed opacity-60 border-gray-200 bg-gray-50"
+                        : isSelected
+                        ? "cursor-pointer border-orange-500 bg-orange-500 text-white shadow-xl"
+                        : "cursor-pointer border-gray-200 bg-white hover:border-orange-300"
+                    )}
+                    onClick={() => !isDisabled && handleSelectPlan('beta')}
+                  >
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className={cn(
+                        "text-xs font-bold px-4 py-1.5 rounded-full shadow-md",
+                        isSelected ? "bg-white text-orange-500" : "bg-orange-500 text-white"
+                      )}>
+                        Beta
+                      </span>
+                    </div>
+                    <RadioGroupItem
+                      value="beta"
+                      id="plan-beta"
+                      disabled={isDisabled}
+                      className={cn(
+                        "absolute top-4 right-4",
+                        isSelected && "!border-white !text-white [&_svg]:!fill-white",
+                        isDisabled && "opacity-50"
+                      )}
+                    />
+
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className={cn("h-5 w-5", isSelected ? "text-white" : "text-orange-600")} />
+                        <span className="font-semibold text-lg">{betaPlan.name}</span>
+                      </div>
+                      {isCurrentPlan && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                          Current Plan
+                        </span>
+                      )}
+                      {hasUsedBeta && !isCurrentPlan && (
+                        <span className="text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-700 font-medium">
+                          Already Used
+                        </span>
+                      )}
+                    </div>
+                    <div className={cn("text-3xl font-bold", isSelected ? "text-white" : "text-gray-900")}>
+                      {isLoadingRates || !exchangeRates ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-gray-600")} />
+                          <span className={cn("text-sm", isSelected ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                        </div>
+                      ) : (
+                        <>
+                          {formatCurrency(betaPlan.amountCents, selectedCurrency, exchangeRates)}
+                          <span className="text-sm text-gray-600 ml-1"> / {betaPlan.billingPeriod}</span>
+                        </>
+                      )}
+                    </div>
+                    <p className={cn("mt-1 text-xs", isSelected ? "text-white/80" : "text-gray-500")}>
+                      {betaPlan.description}
+                    </p>
+                    {hasUsedBeta && !isCurrentPlan && (
+                      <p className="mt-2 text-xs text-orange-600 font-medium">
+                        You've already used the Beta plan. It can only be subscribed to once.
+                      </p>
+                    )}
+                    <ul className="mt-4 space-y-2 text-sm">
+                      {betaPlan.features.map((feature, i) => (
                         <li key={i} className="flex items-center gap-2">
                           <Check className={cn("h-4 w-4 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
                           <span className={isSelected ? "text-white" : "text-gray-700"}>{feature}</span>
