@@ -1216,7 +1216,7 @@ export class ActionExecutor {
       } else {
         missingFields.push('folder name');
       }
-    } else if (trimmed.startsWith('Set primary list:') || (trimmed.startsWith('Change ') && /to\s+primary(\s+list)?$/i.test(trimmed)) || /^Make\s+(?:the\s+)?(.+?)\s+as\s+primary(\s+list)?$/i.test(trimmed)) {
+    } else if (trimmed.startsWith('Set primary list:') || (trimmed.startsWith('Change ') && /to\s+primary(\s+list)?$/i.test(trimmed))) {
       action = 'set_primary';
       resourceType = 'folder';
       isShoppingListFolder = true;
@@ -1224,16 +1224,12 @@ export class ActionExecutor {
       if (setPrimaryMatch) {
         folderRoute = setPrimaryMatch[1].trim();
       } else {
+        // Match "Change X to Primary" or "Change X to Primary list"
         const changeMatch = trimmed.match(/^Change\s+(.+?)\s+to\s+primary(\s+list)?$/i);
         if (changeMatch) {
           folderRoute = changeMatch[1].trim();
         } else {
-          const makeMatch = trimmed.match(/^Make\s+(?:the\s+)?(.+?)\s+as\s+primary(\s+list)?$/i);
-          if (makeMatch) {
-            folderRoute = makeMatch[1].trim();
-          } else {
-            missingFields.push('list name');
-          }
+          missingFields.push('list name');
         }
       }
     } else if (trimmed.startsWith('Create a list category:') || trimmed.startsWith('Create a list sub-folder:')) {
@@ -10885,7 +10881,18 @@ export class ActionExecutor {
       const rawName = parts[0];
       const folderName = rawName.toLowerCase();
 
-      // Special-case: treat common synonyms as the primary list (uses the user's actual primary folder, e.g. "Home List")
+      // First check if there's an actual folder with this name (e.g. "Home List" when user says "make Home List primary")
+      // This must come BEFORE synonyms so we resolve to the correct folder, not the current primary
+      const rootFolder = this.findFolderByName(folders, rawName);
+      if (rootFolder) {
+        return rootFolder.id;
+      }
+      const foundCategory = this.findSubfolderByName(folders, rawName);
+      if (foundCategory) {
+        return foundCategory.id;
+      }
+
+      // Fallback: treat common synonyms as the primary list (e.g. "add milk to primary list" when no folder named "primary list" exists)
       if (
         primaryFolder &&
         (
@@ -10902,19 +10909,7 @@ export class ActionExecutor {
       ) {
         return primaryFolder.id;
       }
-      
-      // First check if it's a root folder (with fuzzy matching)
-      const rootFolder = this.findFolderByName(folders, rawName);
-      if (rootFolder) {
-        return rootFolder.id;
-      }
-      
-      // If not found as root folder, search all categories recursively
-      const foundCategory = this.findSubfolderByName(folders, rawName);
-      if (foundCategory) {
-        return foundCategory.id;
-      }
-      
+
       return null;
     }
     

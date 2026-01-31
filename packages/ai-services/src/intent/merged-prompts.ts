@@ -822,7 +822,7 @@ export function buildMergedWhatsappPrompt(
     '    • "add milk to groceries folder" → Create a list item: Milk - on folder: Groceries',
     '    • "create a groceries folder" → Create a list folder: Groceries',
     '    • "rename groceries to food" → Edit a list folder: Groceries - to: Food',
-    '    • "change Paul to primary list" / "make Paul my primary list" / "make the Home List as primary" → Set primary list: Paul (or Home List)',
+    '    • "change Paul to primary list" / "make Paul my primary list" → Set primary list: Paul',
     '    • "delete groceries folder" → Delete a list folder: Groceries',
     '    • "share drink list with family" → Share a list folder: Drink list - with: Family - permission: view',
     '    • "share grocery list with family friends" → Share a list folder: Grocery list - with: Family - permission: view',
