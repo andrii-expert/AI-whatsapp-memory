@@ -4137,29 +4137,22 @@ export class ActionExecutor {
         status: statusFilter,
       });
 
-      if (items.length === 0) {
-        const statusText = statusFilter ? ` (${statusFilter})` : '';
-        const listLabel =
-          folderRouteLower === 'all'
-            ? 'All Items'
-            : isPrimaryFolder || !folderName
-            ? 'All Lists'
-            : folderName;
-        const listDisplay = listLabel === 'All Lists' ? 'All Lists' : `${listLabel} List`;
-        return {
-          success: true,
-          message: `🛒 *Your ${listDisplay} is empty${statusText}*`,
-        };
-      }
-      const statusText = statusFilter ? ` (${statusFilter})` : '';
-      const listLabel =
+      // Header format: "All Items" when all lists, "All Lists" for primary, "X items" for specific list (e.g. "Home items" not "Home List List")
+      const listDisplay =
         folderRouteLower === 'all'
           ? 'All Items'
           : isPrimaryFolder || !folderName
           ? 'All Lists'
-          : folderName;
-      const listDisplay = listLabel === 'All Lists' ? 'All Lists' : `${listLabel} List`;
-      let message = `🛍️ *${listDisplay}${statusText}:*\n`;
+          : `${(folderName || '').replace(/\s+list$/i, '').trim() || folderName} items`;
+      if (items.length === 0) {
+        const statusText = statusFilter ? ` (${statusFilter})` : '';
+        return {
+          success: true,
+          message: `📋 *Your ${listDisplay} is empty${statusText}*`,
+        };
+      }
+      const statusText = statusFilter ? ` (${statusFilter})` : '';
+      let message = `📋 *${listDisplay}${statusText}:*\n`;
 
       const displayedItems = items.slice(0, 20);
       displayedItems.forEach((item, index) => {
