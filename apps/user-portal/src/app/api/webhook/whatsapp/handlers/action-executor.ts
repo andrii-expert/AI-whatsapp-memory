@@ -67,7 +67,6 @@ import {
   deleteShoppingListFolder,
   getShoppingListFolderById,
   getPrimaryShoppingListFolder,
-  setPrimaryShoppingListFolder,
   getUserFriends,
   getFriendById,
   createFriend,
@@ -134,30 +133,6 @@ export interface ParsedAction {
 // Key: userId, Value: { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder', items: Array<{ id: string, number: number, name?: string, calendarId?: string }> }
 const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder' | 'document', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string }>();
 const LIST_CONTEXT_TTL = 10 * 60 * 1000; // 10 minutes
-
-/** Format quantity as "Xx Item" (e.g. "Cake 10 times" → "10x Cake", "10 times Cake" → "10x Cake") */
-function normalizeTimesToX(text: string): string {
-  const t = text.trim();
-  // "Cake 10 times" or "Cake 10 x" → "10x Cake"
-  const suffixMatch = t.match(/^(.+?)\s+(\d+)\s*(?:x|times)\s*$/i);
-  if (suffixMatch) {
-    return `${suffixMatch[2]}x ${suffixMatch[1].trim()}`;
-  }
-  // "10 times Cake" or "10x Cake" → "10x Cake" (already correct or normalize)
-  const prefixMatch = t.match(/^(\d+)\s*(?:x|times)\s+(.+)$/i);
-  if (prefixMatch) {
-    return `${prefixMatch[1]}x ${prefixMatch[2].trim()}`;
-  }
-  // Fallback: "10 times" → "10 x" for any remaining cases
-  return t.replace(/(\d+)\s*times/gi, '$1x');
-}
-
-/** Format list/folder name for "Added to X" message - avoid "X List List" when name already ends with "List" */
-function formatListDisplayName(name: string): string {
-  const lower = name.toLowerCase().trim();
-  if (lower.endsWith(' list') || lower.endsWith(' lists')) return name.trim();
-  return `${name.trim()} List`;
-}
 
 export class ActionExecutor {
   // Constants for date parsing - defined once to avoid repetition
@@ -404,33 +379,33 @@ export class ActionExecutor {
     let permission: 'view' | 'edit' | undefined;
 
     // Shopping item operations (check before regular task)
-    if (trimmed.startsWith('Create a list item:')) {
+    if (trimmed.startsWith('Create a shopping item:')) {
       action = 'create_shopping_item';
       resourceType = 'shopping';
       let category: string | undefined;
       
       // Try format with both folder and category: "Create a shopping item: {item} - on folder: {folder} - category: {category}"
-      const folderAndCategoryMatch = trimmed.match(/^Create a list item:\s*(.+?)\s*-\s*on folder:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
+      const folderAndCategoryMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
       if (folderAndCategoryMatch) {
         taskName = folderAndCategoryMatch[1].trim();
         folderRoute = folderAndCategoryMatch[2].trim();
         category = folderAndCategoryMatch[3].trim();
       } else {
         // Try format with category only: "Create a shopping item: {item} - category: {category}"
-        const categoryOnlyMatch = trimmed.match(/^Create a list item:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
+        const categoryOnlyMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*category:\s*(.+)$/i);
         if (categoryOnlyMatch) {
           taskName = categoryOnlyMatch[1].trim();
           category = categoryOnlyMatch[2].trim();
           folderRoute = undefined;
         } else {
           // Try format with folder only: "Create a shopping item: {item} - on folder: {folder}"
-          const folderOnlyMatch = trimmed.match(/^Create a list item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
+          const folderOnlyMatch = trimmed.match(/^Create a shopping item:\s*(.+?)\s*-\s*on folder:\s*(.+)$/i);
           if (folderOnlyMatch) {
             taskName = folderOnlyMatch[1].trim();
             folderRoute = folderOnlyMatch[2].trim();
           } else {
             // Simple format: "Create a shopping item: {item}"
-            const simpleMatch = trimmed.match(/^Create a list item:\s*(.+)$/i);
+            const simpleMatch = trimmed.match(/^Create a shopping item:\s*(.+)$/i);
             if (simpleMatch) {
               taskName = simpleMatch[1].trim();
               folderRoute = undefined;
@@ -441,11 +416,11 @@ export class ActionExecutor {
         }
       }
       
-    } else if (trimmed.startsWith('List items:')) {
+    } else if (trimmed.startsWith('List shopping items:')) {
       action = 'list';
       resourceType = 'shopping';
       // Match: "List shopping items: {folder|all} - status: {open|completed|all}"
-      const matchWithStatus = trimmed.match(/^List items:\s*(.+?)\s*-\s*status:\s*(.+)$/i);
+      const matchWithStatus = trimmed.match(/^List shopping items:\s*(.+?)\s*-\s*status:\s*(.+)$/i);
       if (matchWithStatus) {
         // Preserve the raw folder route (including "all") so downstream logic
         // can distinguish between "all" vs no folder (Home list)
@@ -453,7 +428,7 @@ export class ActionExecutor {
         status = matchWithStatus[2].trim();
       } else {
         // Match: "List shopping items: {folder|all}" (no status)
-        const matchWithoutStatus = trimmed.match(/^List items:\s*(.+)$/i);
+        const matchWithoutStatus = trimmed.match(/^List shopping items:\s*(.+)$/i);
         if (matchWithoutStatus) {
           const folderOrAll = matchWithoutStatus[1].trim();
           // Preserve "all" so downstream logic can handle it specially
@@ -463,10 +438,10 @@ export class ActionExecutor {
           missingFields.push('folder or "all"');
         }
       }
-    } else if (trimmed.startsWith('Edit a list item:')) {
+    } else if (trimmed.startsWith('Edit a shopping item:')) {
       action = 'edit';
       resourceType = 'shopping';
-      const match = trimmed.match(/^Edit a list item:\s*(.+?)\s*-\s*to:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      const match = trimmed.match(/^Edit a shopping item:\s*(.+?)\s*-\s*to:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
       if (match) {
         taskName = match[1].trim();
         newName = match[2].trim();
@@ -474,11 +449,11 @@ export class ActionExecutor {
       } else {
         missingFields.push('item name, new name, or folder');
       }
-    } else if (trimmed.startsWith('Delete a list item:') || trimmed.startsWith('Delete list items:') || trimmed.startsWith('Delete list item:')) {
+    } else if (trimmed.startsWith('Delete a shopping item:') || trimmed.startsWith('Delete shopping items:') || trimmed.startsWith('Delete shopping item:')) {
       action = 'delete';
       resourceType = 'shopping';
-      // Extract everything after "Delete a list item:" or "Delete list items:" or "Delete list item:"
-      const afterPrefix = trimmed.replace(/^Delete (a )?list items?:\s*/i, '').trim();
+      // Extract everything after "Delete a shopping item:" or "Delete shopping items:" or "Delete shopping item:"
+      const afterPrefix = trimmed.replace(/^Delete (a )?shopping items?:\s*/i, '').trim();
       
       logger.info({ afterPrefix, trimmed }, 'Parsing Delete shopping item command');
       
@@ -512,7 +487,7 @@ export class ActionExecutor {
       }
       
       // Regular name-based deletion (handle both singular and plural forms)
-      const match = trimmed.match(/^Delete (a )?list items?:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      const match = trimmed.match(/^Delete (a )?shopping items?:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
       if (match) {
         taskName = match[2].trim();
         folderRoute = match[3]?.trim();
@@ -521,33 +496,15 @@ export class ActionExecutor {
         logger.warn({ trimmed, afterPrefix }, 'Failed to parse shopping item deletion');
         missingFields.push('item name or folder');
       }
-    } else if (trimmed.startsWith('Complete a list item:')) {
+    } else if (trimmed.startsWith('Complete a shopping item:')) {
       action = 'complete';
       resourceType = 'shopping';
-      const match = trimmed.match(/^Complete a list item:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
+      const match = trimmed.match(/^Complete a shopping item:\s*(.+?)(?:\s*-\s*on folder:\s*(.+))?$/i);
       if (match) {
         taskName = match[1].trim();
         folderRoute = match[2]?.trim();
       } else {
         missingFields.push('item name or folder');
-      }
-    } else if (trimmed.startsWith('Move a list item:') || trimmed.startsWith('Move list item:')) {
-      action = 'move';
-      resourceType = 'shopping';
-      // Match: "Move a list item: {item_name} - to folder: {target_folder_route}" or with optional "from folder"
-      const matchWithFrom = trimmed.match(/^Move (a )?list item:\s*(.+?)\s*-\s*from folder:\s*(.+?)\s*-\s*to folder:\s*(.+)$/i);
-      if (matchWithFrom) {
-        taskName = matchWithFrom[2].trim();
-        folderRoute = matchWithFrom[3].trim();
-        targetFolderRoute = matchWithFrom[4].trim();
-      } else {
-        const match = trimmed.match(/^Move (a )?list item:\s*(.+?)\s*-\s*to folder:\s*(.+)$/i);
-        if (match) {
-          taskName = match[2].trim();
-          targetFolderRoute = match[3].trim();
-        } else {
-          missingFields.push('item name or target folder');
-        }
       }
     }
     // Task operations
@@ -1135,19 +1092,19 @@ export class ActionExecutor {
           missingFields.push('folder name or recipient');
         }
       }
-    } else if (trimmed.startsWith('Share a list folder:')) {
+    } else if (trimmed.startsWith('Share a shopping list folder:')) {
       action = 'share';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      // Try to match with permission first: "Share a list folder: {folder} - with: {recipient} - permission: {view|edit}"
-      let match = trimmed.match(/^Share a list folder:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
+      // Try to match with permission first: "Share a shopping list folder: {folder} - with: {recipient} - permission: {view|edit}"
+      let match = trimmed.match(/^Share a shopping list folder:\s*(.+?)\s*-\s*with:\s*(.+?)\s*-\s*permission:\s*(view|edit)$/i);
       if (match) {
         folderRoute = match[1].trim();
         recipient = match[2].trim();
         permission = (match[3].trim().toLowerCase() === 'edit' ? 'edit' : 'view') as 'view' | 'edit';
       } else {
         // Fallback: match without permission
-        match = trimmed.match(/^Share a list folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
+        match = trimmed.match(/^Share a shopping list folder:\s*(.+?)\s*-\s*with:\s*(.+)$/i);
         if (match) {
           folderRoute = match[1].trim();
           recipient = match[2].trim();
@@ -1185,70 +1142,54 @@ export class ActionExecutor {
       } else {
         folderRoute = undefined; // List all folders
       }
-    } else if (trimmed.startsWith('Create a list folder:')) {
+    } else if (trimmed.startsWith('Create a shopping list folder:')) {
       action = 'create';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Create a list folder:\s*(.+)$/i);
+      const match = trimmed.match(/^Create a shopping list folder:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim();
       } else {
         missingFields.push('folder name');
       }
-    } else if (trimmed.startsWith('Edit a list folder:')) {
+    } else if (trimmed.startsWith('Edit a shopping list folder:')) {
       action = 'edit';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Edit a list folder:\s*(.+?)\s*-\s*to:\s*(.+)$/i);
+      const match = trimmed.match(/^Edit a shopping list folder:\s*(.+?)\s*-\s*to:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim();
         newName = match[2].trim();
       } else {
         missingFields.push('folder name or new name');
       }
-    } else if (trimmed.startsWith('Delete a list folder:')) {
+    } else if (trimmed.startsWith('Delete a shopping list folder:')) {
       action = 'delete';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Delete a list folder:\s*(.+)$/i);
+      const match = trimmed.match(/^Delete a shopping list folder:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim();
       } else {
         missingFields.push('folder name');
       }
-    } else if (trimmed.startsWith('Set primary list:') || (trimmed.startsWith('Change ') && /to\s+primary(\s+list)?$/i.test(trimmed))) {
-      action = 'set_primary';
-      resourceType = 'folder';
-      isShoppingListFolder = true;
-      const setPrimaryMatch = trimmed.match(/^Set primary list:\s*(.+)$/i);
-      if (setPrimaryMatch) {
-        folderRoute = setPrimaryMatch[1].trim();
-      } else {
-        // Match "Change X to Primary" or "Change X to Primary list"
-        const changeMatch = trimmed.match(/^Change\s+(.+?)\s+to\s+primary(\s+list)?$/i);
-        if (changeMatch) {
-          folderRoute = changeMatch[1].trim();
-        } else {
-          missingFields.push('list name');
-        }
-      }
-    } else if (trimmed.startsWith('Create a list category:') || trimmed.startsWith('Create a list sub-folder:')) {
+    } else if (trimmed.startsWith('Create a shopping list category:') || trimmed.startsWith('Create a shopping list sub-folder:')) {
       action = 'create_subfolder';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Create a list (?:category|sub-folder):\s*(.+?)\s*-\s*name:\s*(.+)$/i);
+      const match = trimmed.match(/^Create a shopping list (?:category|sub-folder):\s*(.+?)\s*-\s*name:\s*(.+)$/i);
       if (match) {
         folderRoute = match[1].trim(); // parent folder
         newName = match[2].trim(); // category name
       } else {
         missingFields.push('parent folder or category name');
       }
-    } else if (trimmed.startsWith('List list folders:')) {
+    } else if (trimmed.startsWith('List shopping list folders:')) {
       action = 'list_folders';
       resourceType = 'folder';
       isShoppingListFolder = true;
       // Optional: can list all or specific parent folder's subfolders
-      const match = trimmed.match(/^List list folders:\s*(.+)$/i);
+      const match = trimmed.match(/^List shopping list folders:\s*(.+)$/i);
       if (match) {
         const folderOrAll = match[1].trim();
         folderRoute = folderOrAll.toLowerCase() === 'all' ? undefined : folderOrAll;
@@ -1523,13 +1464,12 @@ export class ActionExecutor {
 
     // Update isShoppingListFolder if it wasn't already set in parsing
     if (isShoppingListFolder === undefined) {
-      isShoppingListFolder = trimmed.startsWith('Create a list folder:') ||
-        trimmed.startsWith('Edit a list folder:') ||
-        trimmed.startsWith('Delete a list folder:') ||
-        trimmed.startsWith('Set primary list:') ||
-        trimmed.startsWith('Create a list category:') ||
-        trimmed.startsWith('Create a list sub-folder:') ||
-        trimmed.startsWith('List list folders:');
+      isShoppingListFolder = trimmed.startsWith('Create a shopping list folder:') ||
+        trimmed.startsWith('Edit a shopping list folder:') ||
+        trimmed.startsWith('Delete a shopping list folder:') ||
+        trimmed.startsWith('Create a shopping list category:') ||
+        trimmed.startsWith('Create a shopping list sub-folder:') ||
+        trimmed.startsWith('List shopping list folders:');
       
       isFriendFolder = trimmed.startsWith('Create a friend folder:') ||
         trimmed.startsWith('Edit a friend folder:') ||
@@ -1709,21 +1649,10 @@ export class ActionExecutor {
             return await this.completeTask(parsed);
           }
         case 'move':
-          if (parsed.resourceType === 'shopping') {
-            return await this.moveShoppingItem(parsed);
-          }
           if (parsed.resourceType === 'document') {
             return await this.moveFile(parsed);
           }
           return await this.moveTask(parsed);
-        case 'set_primary':
-          if (parsed.isShoppingListFolder) {
-            return await this.setPrimaryListFolder(parsed);
-          }
-          return {
-            success: false,
-            message: "I'm sorry, I couldn't set the primary list. Please try again.",
-          };
         case 'share':
           if (parsed.resourceType === 'task') {
             return await this.shareTask(parsed);
@@ -1910,83 +1839,19 @@ export class ActionExecutor {
         };
       }
 
-      const normalizedNewName = normalizeTimesToX(parsed.newName);
       await updateShoppingListItem(this.db, item.id, this.userId, {
-        name: normalizedNewName,
+        name: parsed.newName,
       });
 
       return {
         success: true,
-        message: `⚠️ *Shopping Item Updated:*\nNew: ${normalizedNewName}`,
+        message: `⚠️ *Shopping Item Updated:*\nNew: ${parsed.newName}`,
       };
     } catch (error) {
       logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to edit shopping item');
       return {
         success: false,
         message: `I'm sorry, I couldn't update the item "${parsed.taskName}". Please try again.`,
-      };
-    }
-  }
-
-  private async moveShoppingItem(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
-    if (!parsed.taskName || !parsed.targetFolderRoute) {
-      return {
-        success: false,
-        message: "I need to know which item to move and which list to move it to. Please specify both (e.g. 'Move milk to Groceries List').",
-      };
-    }
-
-    const targetFolderId = await this.resolveShoppingListFolderRoute(parsed.targetFolderRoute);
-    if (!targetFolderId) {
-      return {
-        success: false,
-        message: `I couldn't find the list "${parsed.targetFolderRoute}". Please make sure the list exists.`,
-      };
-    }
-
-    try {
-      let items = await getUserShoppingListItems(this.db, this.userId, {});
-
-      if (parsed.folderRoute) {
-        const sourceFolderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
-        if (sourceFolderId) {
-          items = items.filter((item: any) => item.folderId === sourceFolderId);
-        }
-      }
-
-      const item = items.find((i: any) => i.name.toLowerCase() === parsed.taskName!.toLowerCase());
-
-      if (!item) {
-        const folderText = parsed.folderRoute ? ` in "${parsed.folderRoute}"` : '';
-        return {
-          success: false,
-          message: `I couldn't find the item "${parsed.taskName}"${folderText}. Please make sure the item exists.`,
-        };
-      }
-
-      if (item.folderId === targetFolderId) {
-        const targetDisplay = formatListDisplayName(parsed.targetFolderRoute);
-        return {
-          success: false,
-          message: `"${normalizeTimesToX(item.name)}" is already in ${targetDisplay}.`,
-        };
-      }
-
-      await updateShoppingListItem(this.db, item.id, this.userId, {
-        folderId: targetFolderId,
-      });
-
-      const sourceFolderText = parsed.folderRoute ? ` from ${formatListDisplayName(parsed.folderRoute)}` : '';
-      const targetDisplay = formatListDisplayName(parsed.targetFolderRoute);
-      return {
-        success: true,
-        message: `📦 *Item Moved*\n"${normalizeTimesToX(item.name)}"${sourceFolderText} to ${targetDisplay}`,
-      };
-    } catch (error) {
-      logger.error({ error, itemName: parsed.taskName, userId: this.userId }, 'Failed to move shopping item');
-      return {
-        success: false,
-        message: `I'm sorry, I couldn't move "${parsed.taskName}". Please try again.`,
       };
     }
   }
@@ -2103,34 +1968,29 @@ export class ActionExecutor {
         logger.info({ userId: this.userId, itemName: parsed.taskName, category }, 'Using extracted category for shopping list item via WhatsApp');
       }
 
-      const normalizedName = normalizeTimesToX(parsed.taskName);
       await createShoppingListItem(this.db, {
         userId: this.userId,
         folderId,
-        name: normalizedName,
+        name: parsed.taskName,
         category,
         status: 'open',
       });
 
-      // Determine the message format: use the list name the user specified when possible
+      // Determine the message format based on whether it's the primary folder
       let message: string;
       if (folderId) {
         if (isPrimaryFolder) {
-          // Primary folder: always show the actual folder name (e.g. "Home List"), not "All Lists"
-          const displayName = primaryFolder?.name
-            ? formatListDisplayName(primaryFolder.name)
-            : (parsed.folderRoute ? formatListDisplayName(parsed.folderRoute) : 'All Lists');
-          message = `✅ *Added to ${displayName}:*\nItem/s: ${normalizedName}`;
+          // Primary folder - present as Home List
+          message = `✅ *Added to Home List:*\nItem/s: ${parsed.taskName}`;
         } else {
-          // Not primary folder - include folder name
+          // Not primary folder - include folder name, without the word "shopping"
           const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
           const folderName = folder?.name || parsed.folderRoute || 'List';
-          const displayName = formatListDisplayName(folderName);
-          message = `✅ *Added to ${displayName}:*\nItem/s: ${normalizedName}`;
+          message = `✅ *Added to ${folderName} List:*\nItem/s: ${parsed.taskName}`;
         }
       } else {
-        // No folder (goes to "All Items") - use All Lists
-        message = `✅ *Added to All Lists:*\nItem/s: ${normalizedName}`;
+        // No folder (goes to \"All Items\") - use Home List as the main list concept
+        message = `✅ *Added to Home List:*\nItem/s: ${parsed.taskName}`;
       }
 
       return {
@@ -2919,7 +2779,7 @@ export class ActionExecutor {
       for (const item of itemsToDelete) {
         try {
           await deleteShoppingListItem(this.db, item.id, this.userId);
-          deletedNames.push(normalizeTimesToX(item.name || `Item ${item.number}`));
+          deletedNames.push(item.name || `Item ${item.number}`);
         } catch (error) {
           logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item by number');
           errors.push(`Item ${item.number}`);
@@ -2974,7 +2834,7 @@ export class ActionExecutor {
       await deleteShoppingListItem(this.db, item.id, this.userId);
       return {
         success: true,
-        message: `⛔ *Item Removed:*\nTitle: ${normalizeTimesToX(item.name || '')}`,
+        message: `⛔ *Item Removed:*\nTitle: ${item.name}`,
       };
     } catch (error) {
       logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to delete shopping list item');
@@ -3109,8 +2969,8 @@ export class ActionExecutor {
       return {
         success: true,
         message: newStatus === 'completed' 
-          ? `✅ *Item Purchased:*\n${normalizeTimesToX(item.name || '')}`
-          : `📝 *Item Reopened:*\n${normalizeTimesToX(item.name || '')}`,
+          ? `✅ *Item Purchased:*\n${item.name}`
+          : `📝 *Item Reopened:*\n${item.name}`,
       };
     } catch (error) {
       logger.error({ error, itemId: item.id, userId: this.userId }, 'Failed to toggle shopping list item status');
@@ -4137,31 +3997,34 @@ export class ActionExecutor {
         status: statusFilter,
       });
 
-      // Header format: "All Items" when all lists, "All Lists" for primary, "X items" for specific list (e.g. "Home items" not "Home List List")
-      const listDisplay =
-        folderRouteLower === 'all'
-          ? 'All Items'
-          : isPrimaryFolder || !folderName
-          ? 'All Lists'
-          : `${(folderName || '').replace(/\s+list$/i, '').trim() || folderName} items`;
       if (items.length === 0) {
         const statusText = statusFilter ? ` (${statusFilter})` : '';
+        const listLabel =
+          folderRouteLower === 'all'
+            ? 'All Items'
+            : isPrimaryFolder || !folderName
+            ? 'Home'
+            : folderName;
         return {
           success: true,
-          message: `📋 *Your ${listDisplay} is empty${statusText}*`,
+          message: `🛒 *Your ${listLabel} List is empty${statusText}*`,
         };
       }
       const statusText = statusFilter ? ` (${statusFilter})` : '';
-      let message = `📋 *${listDisplay}${statusText}:*\n`;
+      const listLabel =
+        folderRouteLower === 'all'
+          ? 'All Items'
+          : isPrimaryFolder || !folderName
+          ? 'Home'
+          : folderName;
+      let message = `🛍️ *${listLabel} List${statusText}:*\n`;
 
       const displayedItems = items.slice(0, 20);
       displayedItems.forEach((item, index) => {
         const statusIcon = item.status === 'completed' ? '✅' : '⬜';
-        const displayName = normalizeTimesToX(item.name || '');
-        const displayDesc = item.description ? normalizeTimesToX(item.description) : '';
-        message += `${statusIcon} *${index + 1}.* ${displayName}`;
-        if (displayDesc) {
-          message += ` - ${displayDesc}`;
+        message += `${statusIcon} *${index + 1}.* ${item.name}`;
+        if (item.description) {
+          message += ` - ${item.description}`;
         }
         message += '\n';
       });
@@ -10648,7 +10511,7 @@ export class ActionExecutor {
   }
 
   /**
-   * Resolve folder route (e.g., "All Lists" or "Work/Clients") to folder ID
+   * Resolve folder route (e.g., "Home" or "Work/Clients") to folder ID
    * If only one part is provided, searches all subfolders across all parent folders
    */
   private async resolveFolderRoute(folderRoute: string): Promise<string | null> {
@@ -10865,12 +10728,7 @@ export class ActionExecutor {
    * Handles singular/plural variations (e.g., "grocery" matches "Groceries")
    */
   private async resolveShoppingListFolderRoute(folderRoute: string): Promise<string | null> {
-    // Normalize: strip "the " prefix and " as primary" suffix (e.g. "the Home List" → "Home List")
-    const normalizedRoute = folderRoute
-      .replace(/^\s*the\s+/i, '')
-      .replace(/\s+as\s+primary\s*$/i, '')
-      .trim();
-    const parts = normalizedRoute.split(/[\/→>]/).map(p => p.trim());
+    const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
     const folders = await getUserShoppingListFolders(this.db, this.userId);
     const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
 
@@ -10879,35 +10737,32 @@ export class ActionExecutor {
       const rawName = parts[0];
       const folderName = rawName.toLowerCase();
 
-      // First check if there's an actual folder with this name (e.g. "Home List" when user says "make Home List primary")
-      // This must come BEFORE synonyms so we resolve to the correct folder, not the current primary
-      const rootFolder = this.findFolderByName(folders, rawName);
-      if (rootFolder) {
-        return rootFolder.id;
-      }
-      const foundCategory = this.findSubfolderByName(folders, rawName);
-      if (foundCategory) {
-        return foundCategory.id;
-      }
-
-      // Fallback: treat common synonyms as the primary list (e.g. "add milk to primary list" when no folder named "primary list" exists)
+      // Special-case: treat common synonyms as the Home (primary) list
       if (
         primaryFolder &&
         (
           folderName === 'home' ||
           folderName === 'home list' ||
           folderName === 'my home list' ||
-          folderName === 'all lists' ||
           folderName === 'shopping list' ||
-          folderName === 'my shopping list' ||
-          folderName === 'primary' ||
-          folderName === 'primary list' ||
-          folderName === 'the primary list'
+          folderName === 'my shopping list'
         )
       ) {
         return primaryFolder.id;
       }
-
+      
+      // First check if it's a root folder (with fuzzy matching)
+      const rootFolder = this.findFolderByName(folders, rawName);
+      if (rootFolder) {
+        return rootFolder.id;
+      }
+      
+      // If not found as root folder, search all categories recursively
+      const foundCategory = this.findSubfolderByName(folders, rawName);
+      if (foundCategory) {
+        return foundCategory.id;
+      }
+      
       return null;
     }
     
@@ -11008,52 +10863,6 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't update the list folder "${parsed.folderRoute}". Please try again.`,
-      };
-    }
-  }
-
-  private async setPrimaryListFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
-    if (!parsed.folderRoute) {
-      return {
-        success: false,
-        message: "I need to know which list to set as primary. Please specify the list name (e.g. 'Change Paul to Primary list').",
-      };
-    }
-
-    try {
-      const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
-      if (!folderId) {
-        return {
-          success: false,
-          message: `I couldn't find the list "${parsed.folderRoute}". Please make sure the list exists.`,
-        };
-      }
-
-      await setPrimaryShoppingListFolder(this.db, folderId, this.userId);
-
-      const displayName = formatListDisplayName(parsed.folderRoute);
-      return {
-        success: true,
-        message: `⭐ *Primary List Updated*\n"${displayName}" is now your primary list.`,
-      };
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to set primary list folder');
-      if (errMsg.includes('Only root folders')) {
-        return {
-          success: false,
-          message: "Only top-level lists can be set as primary. Categories (sub-folders) cannot be the primary list.",
-        };
-      }
-      if (errMsg.includes('No permission')) {
-        return {
-          success: false,
-          message: "You can only set your own lists as primary. Shared lists cannot be set as primary.",
-        };
-      }
-      return {
-        success: false,
-        message: `I'm sorry, I couldn't set "${parsed.folderRoute}" as primary. Please try again.`,
       };
     }
   }

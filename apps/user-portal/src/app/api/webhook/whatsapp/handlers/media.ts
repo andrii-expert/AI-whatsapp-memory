@@ -521,7 +521,66 @@ export async function handleMediaMessage(
       'File record created successfully'
     );
 
-    // Step 5: Send confirmation message
+    // Step 5: Send AI analysis and confirmation message
+    // First, send AI analysis if caption was analyzed
+    if (caption && caption.trim()) {
+      try {
+        // Get message history for context
+        let messageHistory: Array<{ direction: 'incoming' | 'outgoing'; content: string }> = [];
+        try {
+          const history = await getRecentMessageHistory(db, whatsappNumber.userId, 10);
+          messageHistory = history
+            .filter(msg => msg.content && msg.content.trim().length > 0)
+            .slice(0, 10)
+            .map(msg => ({
+              direction: msg.direction,
+              content: msg.content,
+            }));
+        } catch (error) {
+          logger.warn({ error, userId: whatsappNumber.userId }, 'Failed to retrieve message history for AI analysis display');
+        }
+
+        // Get user's calendar timezone
+        let userTimezone = 'Africa/Johannesburg';
+        try {
+          const calendarConnection = await getPrimaryCalendar(db, whatsappNumber.userId);
+          if (calendarConnection) {
+            const calendarService = new CalendarService(db);
+            userTimezone = await (calendarService as any).getUserTimezone(whatsappNumber.userId, calendarConnection);
+          }
+        } catch (error) {
+          logger.warn({ error, userId: whatsappNumber.userId }, 'Failed to get user timezone, using default');
+        }
+
+        // Analyze caption using AI to get the analysis result
+        const analyzer = new WhatsappTextAnalysisService();
+        const currentDate = new Date();
+        
+        const aiResponse = (await analyzer.analyzeMessage(caption, {
+          messageHistory,
+          currentDate,
+          timezone: userTimezone,
+        })).trim();
+
+        // Send AI analysis to user
+        await whatsappService.sendTextMessage(
+          message.from,
+          `🤖 *AI Analysis:*\n${aiResponse.substring(0, 1000)}`
+        );
+
+        await logOutgoingWhatsAppMessage(db, {
+          whatsappNumberId: whatsappNumber.id,
+          userId: whatsappNumber.userId,
+          messageType: 'text',
+          messageContent: `🤖 AI Analysis:\n${aiResponse.substring(0, 1000)}`,
+          isFreeMessage: true,
+        });
+      } catch (error) {
+        logger.warn({ error, userId: whatsappNumber.userId }, 'Failed to send AI analysis for media message');
+      }
+    }
+
+    // Send confirmation message
     const fileSizeMB = (buffer.length / (1024 * 1024)).toFixed(2);
     const folderInfo = folderId && resolvedFolderName ? `\n📁 *Folder:* ${resolvedFolderName}` : '';
     const fileTypeDisplay = fileExtension ? fileExtension.toUpperCase() : 'FILE';
