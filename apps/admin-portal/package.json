@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "(cd ../.. && cp .env apps/admin-portal/.env.local) && NODE_ENV=production next build",
+    "build": "(cd ../.. && [ -f .env ] && cp .env apps/admin-portal/.env.local || true) && NODE_ENV=production next build",
     "clean": "git clean -xdf .next .turbo node_modules",
-    "dev": "(cd ../.. && cp .env apps/admin-portal/.env.local) && next dev -p 3001",
+    "dev": "(cd ../.. && [ -f .env ] && cp .env apps/admin-portal/.env.local || true) && next dev -p 3001",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",

@@ -721,7 +721,7 @@ export default function FriendsPage() {
                 <div className="mt-3">
                   <UpgradePrompt
                     feature="Friends"
-                    requiredTier="silver"
+                    requiredTier="pro"
                     variant="alert"
                     className="border-amber-200 bg-amber-50 text-amber-900"
                   />

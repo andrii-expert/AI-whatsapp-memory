@@ -1,5 +1,5 @@
 import type { Database } from '@imaginecalendar/database/client';
-import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar, getWhatsAppCalendars, getUserAddresses, getUserFriends } from '@imaginecalendar/database/queries';
+import { getVerifiedWhatsappNumberByPhone, logIncomingWhatsAppMessage, logOutgoingWhatsAppMessage, getRecentMessageHistory, getPrimaryCalendar, getWhatsAppCalendars, getUserAddresses, getUserFriends, getUserById } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, matchesVerificationPhrase } from '@imaginecalendar/whatsapp';
 import { WhatsappTextAnalysisService, IntentAnalysisService, type CalendarIntent, calendarIntentSchema } from '@imaginecalendar/ai-services';
@@ -204,11 +204,9 @@ function isValidTemplateResponse(text: string): boolean {
     /^Edit a task folder:/i,
     /^Delete a task folder:/i,
     /^Share a task folder:/i,
-    /^Share a list folder:/i,
-    /^Move a list item:/i,
-    /^Set primary list:/i,
+    /^Share a shopping list folder:/i,
     /^Create a task sub-folder:/i,
-    /^Create a list category:/i,
+    /^Create a shopping list category:/i,
     /^Create a reminder:/i,
     /^Update a reminder:/i,
     /^Update all reminders:/i,
@@ -895,7 +893,7 @@ async function processAIResponse(
 ): Promise<void> {
   try {
     // Parse the Title from response
-    const titleMatch = aiResponse.match(/^Title:\s*(shopping|reminder|event|document|friend|verification|normal)/i);
+    const titleMatch = aiResponse.match(/^Title:\s*(shopping|reminder|event|document|friend|verification|normal|dashboard)/i);
     if (!titleMatch || !titleMatch[1]) {
       logger.warn(
         {
@@ -908,6 +906,57 @@ async function processAIResponse(
     }
 
     const titleType = titleMatch[1].toLowerCase();
+    
+    // Handle dashboard requests
+    if (titleType === 'dashboard') {
+      try {
+        // Get user information
+        const user = await getUserById(db, userId);
+        const userName = user?.firstName 
+          ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
+          : 'there';
+        
+        // Get dashboard URL
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dashboard.crackon.ai';
+        const dashboardUrl = `${appUrl}/dashboard`;
+        
+        // Send dashboard message with button
+        await whatsappService.sendCTAButtonMessage(recipient, {
+          bodyText: `Hi, ${userName}!\nYou can see your dashboard here.`,
+          buttonText: 'Open Dashboard',
+          buttonUrl: dashboardUrl,
+        });
+        
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'interactive',
+              messageContent: `Dashboard link: ${dashboardUrl}`,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing dashboard message');
+        }
+        
+        logger.info({ userId, dashboardUrl }, 'Dashboard request handled successfully');
+        return; // Exit early, don't process further
+      } catch (error) {
+        logger.error(
+          {
+            error,
+            userId,
+            originalUserText,
+          },
+          'Failed to send dashboard message'
+        );
+        // Continue with normal processing if dashboard handling fails
+      }
+    }
     
     // Extract the action template (everything after Title line)
     const actionLines = aiResponse
@@ -1967,17 +2016,17 @@ async function processAIResponse(
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (
-            // Match "Added to {ListName}:" (e.g. "Added to All Lists:", "Added to Shopping List:", "Added to Groceries List:")
-            result.includes('Added to ') && (result.includes(' List:') || result.includes('All Lists:') || result.includes(' Lists:'))
+            // Match both singular and plural forms, and our current formatted header
+            result.includes('Added to ') && result.includes(' List:')
           ) {
-            // Extract item name from "✅ *Added to {ListName}:*\nItem/s: {item}"
+            // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to List(s)'
             let itemName: string | null = null;
             // Try to extract list label from header once
             if (!shoppingListLabel) {
-              const headerMatch = result.match(/Added to\s+(.+?):/i);
+              const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
               if (headerMatch && headerMatch[1]) {
-                shoppingListLabel = headerMatch[1].trim().replace(/\*$/g, '');
+                shoppingListLabel = headerMatch[1].trim();
               }
             }
             const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
@@ -2064,14 +2113,8 @@ async function processAIResponse(
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          const listLabel = shoppingListLabel || 'All Lists';
-          const listDisplay = (() => {
-            if (listLabel === 'All Lists') return 'All Lists';
-            const lower = listLabel.toLowerCase().trim();
-            if (lower.endsWith(' list') || lower.endsWith(' lists')) return listLabel.trim();
-            return `${listLabel.trim()} List`;
-          })();
-          messageParts.push(`✅ *Added to ${listDisplay}:*\nItem/s: ${itemsText}`);
+          const listLabel = shoppingListLabel || 'Home';
+          messageParts.push(`✅ *Added to ${listLabel} List:*\nItem/s: ${itemsText}`);
         }
 
         // Format purchased items
@@ -2215,17 +2258,17 @@ async function processAIResponse(
           if (result.startsWith('SHOPPING_ITEM_ADDED:')) {
             shoppingItems.push(result.replace('SHOPPING_ITEM_ADDED:', ''));
           } else if (
-            // Match "Added to {ListName}:" (e.g. "Added to All Lists:", "Added to Shopping List:", "Added to Groceries List:")
-            result.includes('Added to ') && (result.includes(' List:') || result.includes('All Lists:') || result.includes(' Lists:'))
+            // Match both singular and plural forms, and our current formatted header
+            result.includes('Added to ') && result.includes(' List:')
           ) {
-            // Extract item name from "✅ *Added to {ListName}:*\nItem/s: {item}"
+            // Extract item name from "✅ *Added to {ListName} List:*\nItem/s: {item}"
             // or from legacy format: 'Added "{item}" to List(s)'
             let itemName: string | null = null;
             // Try to extract list label from header once
             if (!shoppingListLabel) {
-              const headerMatch = result.match(/Added to\s+(.+?):/i);
+              const headerMatch = result.match(/Added to\s+(.+?)\s+List:/i);
               if (headerMatch && headerMatch[1]) {
-                shoppingListLabel = headerMatch[1].trim().replace(/\*$/g, '');
+                shoppingListLabel = headerMatch[1].trim();
               }
             }
             const match1 = result.match(/Item\/s:\s*([^\n]+)/i);
@@ -2312,14 +2355,8 @@ async function processAIResponse(
             : shoppingItems.length === 2
             ? `${shoppingItems[0]} and ${shoppingItems[1]}`
             : `${shoppingItems.slice(0, -1).join(', ')} and ${shoppingItems[shoppingItems.length - 1]}`;
-          const listLabel = shoppingListLabel || 'All Lists';
-          const listDisplay = (() => {
-            if (listLabel === 'All Lists') return 'All Lists';
-            const lower = listLabel.toLowerCase().trim();
-            if (lower.endsWith(' list') || lower.endsWith(' lists')) return listLabel.trim();
-            return `${listLabel.trim()} List`;
-          })();
-          messageParts.push(`✅ *Added to ${listDisplay}:*\nItem/s: ${itemsText}`);
+          const listLabel = shoppingListLabel || 'Home';
+          messageParts.push(`✅ *Added to ${listLabel} List:*\nItem/s: ${itemsText}`);
         }
         // Format purchased items
         if (purchasedItems.length > 0) {
