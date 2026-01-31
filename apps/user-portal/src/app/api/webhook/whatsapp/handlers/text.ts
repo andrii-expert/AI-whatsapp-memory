@@ -1737,22 +1737,6 @@ async function processAIResponse(
             'Parsed list operation, executing'
           );
           
-          // Send AI response to user (for debugging/transparency)
-          // When showing list items, use "Title: All Items" instead of "Title: shopping"
-          const displayAIResponse = actionTemplate.toLowerCase().startsWith('list items:')
-            ? aiResponse.replace(/^Title:\s*shopping/i, 'Title: All Items')
-            : aiResponse;
-          try {
-            await whatsappService.sendTextMessage(
-              recipient,
-              `🤖 AI Response:\n${displayAIResponse.substring(0, 500)}`
-            );
-            // OPTIMIZATION: Non-blocking logging
-            logOutgoingMessageNonBlocking(db, recipient, userId, `🤖 AI Response:\n${displayAIResponse.substring(0, 500)}`);
-          } catch (error) {
-            logger.warn({ error, userId }, 'Failed to send AI response to user');
-          }
-          
           // Get timezone for list operations (needed for reminder filtering)
           let listTimezone = userTimezone || 'Africa/Johannesburg';
           if (parsed.resourceType === 'reminder' || parsed.resourceType === 'event') {
@@ -2429,84 +2413,6 @@ async function processAIResponse(
       return; // Exit early after handling task operation (legacy - disabled)
     }
     
-    // Legacy document handler removed (disabled)
-    if (false && titleType === 'document') {
-      // Send AI response to user (as requested)
-      try {
-        await whatsappService.sendTextMessage(
-          recipient,
-          `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
-        );
-        // Log outgoing message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing AI response message');
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to send AI response to user');
-      }
-      
-      // Split action template into individual lines for multi-item support
-      const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      
-      const results: string[] = [];
-      let successCount = 0;
-      let failCount = 0;
-      
-      for (const actionLine of actionLines) {
-        const parsed = executor.parseAction(actionLine);
-        if (parsed) {
-          const result = await executor.executeAction(parsed);
-          if (result.success) {
-            successCount++;
-            results.push(result.message);
-          } else {
-            failCount++;
-            results.push(result.message);
-          }
-        } else {
-          logger.warn({ userId, actionLine }, 'Failed to parse document action line');
-        }
-      }
-      
-      // Send combined results to user (filter out empty messages from button sends)
-      const nonEmptyResults = results.filter(r => r.trim().length > 0);
-      if (nonEmptyResults.length > 0) {
-        const combinedMessage = nonEmptyResults.join('\n');
-        await whatsappService.sendTextMessage(recipient, combinedMessage);
-        
-        // Log outgoing message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: combinedMessage,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing message');
-        }
-        
-        logger.info({ userId, successCount, failCount, totalLines: actionLines.length }, 'Processed document operations');
-      } else {
-        logger.info({ userId, titleType }, 'No actions parsed from template');
-      }
-      return; // Exit early after handling document operation
-    }
     
     // Handle event operations (create, update, delete, view, show)
     if (titleType === 'event') {
@@ -3194,31 +3100,6 @@ async function processAIResponse(
         'Processing non-list event operation (create/update/delete)'
       );
 
-      // Send AI response to user for debugging (as requested)
-      try {
-        await whatsappService.sendTextMessage(
-          recipient,
-          `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
-        );
-        // Log outgoing message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: `🤖 AI Response:\n${aiResponse.substring(0, 500)}`,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing message');
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to send AI response to user');
-      }
-
       // Handle non-list event operations (create, update, delete)
       if (originalUserText) {
         // Create, Update, or Delete event - use calendar intent analysis
@@ -3239,20 +3120,6 @@ async function processAIResponse(
       const isPause = /^Pause a reminder:/i.test(actionTemplate);
       const isResume = /^Resume a reminder:/i.test(actionTemplate);
       const isList = /^List reminders:/i.test(actionTemplate);
-      
-      // Send AI response to user (as requested)
-      if (!isList) {
-        try {
-          await whatsappService.sendTextMessage(
-            recipient,
-            `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
-          );
-          // OPTIMIZATION: Non-blocking logging
-          logOutgoingMessageNonBlocking(db, recipient, userId, `🤖 AI Response:\n${aiResponse.substring(0, 500)}`);
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to send AI response to user');
-        }
-      }
       
       // OPTIMIZATION: Reuse cached calendar connection and timezone
       let calendarTimezone = userTimezone || 'Africa/Johannesburg'; // Default fallback
@@ -3284,18 +3151,6 @@ async function processAIResponse(
       
       if (isList) {
         // List reminders is handled by action executor
-        // Send AI response to user for debugging
-        try {
-          await whatsappService.sendTextMessage(
-            recipient,
-            `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
-          );
-          // OPTIMIZATION: Non-blocking logging
-          logOutgoingMessageNonBlocking(db, recipient, userId, `🤖 AI Response:\n${aiResponse.substring(0, 500)}`);
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to send AI response to user');
-        }
-        
         const parsed = executor.parseAction(actionTemplate);
         if (parsed) {
           parsed.resourceType = 'reminder';
@@ -3558,31 +3413,6 @@ async function processAIResponse(
       
       // Handle address operations (create, update, delete, get, list)
       
-      // Send AI response to user (for debugging/transparency)
-      try {
-        await whatsappService.sendTextMessage(
-          recipient,
-          `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`
-        );
-        // Log outgoing message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing AI analysis message');
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to send AI analysis to user');
-      }
-      
       const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       
       const results: string[] = [];
@@ -3634,31 +3464,6 @@ async function processAIResponse(
       }
     } else if (titleType === 'document') {
       // Handle document/file operations (create, edit, delete, view, move, share, list, folder operations)
-      
-      // Send AI response to user (for debugging/transparency)
-      try {
-        await whatsappService.sendTextMessage(
-          recipient,
-          `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`
-        );
-        // Log outgoing message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing AI analysis message');
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to send AI analysis to user');
-      }
       
       const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       
@@ -3714,31 +3519,6 @@ async function processAIResponse(
       }
     } else if (titleType === 'friend') {
       // Handle friend operations (create, update, delete, list, folder operations)
-      
-      // Send AI response to user (for debugging/transparency)
-      try {
-        await whatsappService.sendTextMessage(
-          recipient,
-          `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`
-        );
-        // Log outgoing message
-        try {
-          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
-          if (whatsappNumber) {
-            await logOutgoingWhatsAppMessage(db, {
-              whatsappNumberId: whatsappNumber.id,
-              userId,
-              messageType: 'text',
-              messageContent: `🤖 AI Analysis:\n${aiResponse.substring(0, 500)}`,
-              isFreeMessage: true,
-            });
-          }
-        } catch (error) {
-          logger.warn({ error, userId }, 'Failed to log outgoing AI analysis message');
-        }
-      } catch (error) {
-        logger.warn({ error, userId }, 'Failed to send AI analysis to user');
-      }
       
       const actionLines = actionTemplate.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       
