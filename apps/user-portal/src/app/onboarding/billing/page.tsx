@@ -131,7 +131,7 @@ function BillingOnboardingContent() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [expandedPlans, setExpandedPlans] = useState<string[]>([]); // Track which plans are expanded
+  const [expandedPlans, setExpandedPlans] = useState<string[]>(["beta"]); // Track which plans are expanded - Beta open by default
   
   // Currency state - default to ZAR for all users
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>("ZAR");
