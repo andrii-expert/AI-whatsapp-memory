@@ -31,12 +31,28 @@ export function usePlanLimits(): UsePlanLimitsReturn {
     trpc.plans.listActive.queryOptions()
   );
   
-  const currentPlan = plans.find(p => p.id === subscription?.plan);
+  // Try to get the plan from active plans first
+  let currentPlan = plans.find(p => p.id === subscription?.plan);
+  
+  // If plan not found in active plans but we have a subscription, try to fetch it directly
+  const planId = subscription?.plan;
+  const { data: planById, isLoading: isLoadingPlanById } = useQuery({
+    ...trpc.plans.get.queryOptions({ id: planId || '' }),
+    enabled: !!planId && !currentPlan && !isLoadingPlans,
+    retry: false, // Don't retry if plan not found
+  });
+  
+  // Use the plan from direct fetch if we couldn't find it in active plans
+  // Ignore errors (plan might be archived/inactive, but we still want to use its metadata)
+  if (!currentPlan && planById) {
+    currentPlan = planById;
+  }
+  
   const metadata = (currentPlan?.metadata as Record<string, unknown> | null) || null;
   
   const limits = getPlanLimits(metadata);
   const tier = getPlanTier(metadata);
-  const isLoading = isLoadingSubscription || isLoadingPlans;
+  const isLoading = isLoadingSubscription || isLoadingPlans || isLoadingPlanById;
 
   return {
     limits,
