@@ -67,6 +67,7 @@ import {
   deleteShoppingListFolder,
   getShoppingListFolderById,
   getPrimaryShoppingListFolder,
+  setPrimaryShoppingListFolder,
   getUserFriends,
   getFriendById,
   createFriend,
@@ -1203,6 +1204,21 @@ export class ActionExecutor {
       } else {
         missingFields.push('folder name');
       }
+    } else if (trimmed.startsWith('Set primary list:') || (trimmed.startsWith('Change ') && /to\s+primary\s+list/i.test(trimmed))) {
+      action = 'set_primary';
+      resourceType = 'folder';
+      isShoppingListFolder = true;
+      const setPrimaryMatch = trimmed.match(/^Set primary list:\s*(.+)$/i);
+      if (setPrimaryMatch) {
+        folderRoute = setPrimaryMatch[1].trim();
+      } else {
+        const changeMatch = trimmed.match(/^Change\s+(.+?)\s+to\s+primary\s+list$/i);
+        if (changeMatch) {
+          folderRoute = changeMatch[1].trim();
+        } else {
+          missingFields.push('list name');
+        }
+      }
     } else if (trimmed.startsWith('Create a list category:') || trimmed.startsWith('Create a list sub-folder:')) {
       action = 'create_subfolder';
       resourceType = 'folder';
@@ -1497,6 +1513,7 @@ export class ActionExecutor {
       isShoppingListFolder = trimmed.startsWith('Create a list folder:') ||
         trimmed.startsWith('Edit a list folder:') ||
         trimmed.startsWith('Delete a list folder:') ||
+        trimmed.startsWith('Set primary list:') ||
         trimmed.startsWith('Create a list category:') ||
         trimmed.startsWith('Create a list sub-folder:') ||
         trimmed.startsWith('List list folders:');
@@ -1686,6 +1703,14 @@ export class ActionExecutor {
             return await this.moveFile(parsed);
           }
           return await this.moveTask(parsed);
+        case 'set_primary':
+          if (parsed.isShoppingListFolder) {
+            return await this.setPrimaryListFolder(parsed);
+          }
+          return {
+            success: false,
+            message: "I'm sorry, I couldn't set the primary list. Please try again.",
+          };
         case 'share':
           if (parsed.resourceType === 'task') {
             return await this.shareTask(parsed);
@@ -10970,6 +10995,52 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't update the list folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  private async setPrimaryListFolder(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which list to set as primary. Please specify the list name (e.g. 'Change Paul to Primary list').",
+      };
+    }
+
+    try {
+      const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the list "${parsed.folderRoute}". Please make sure the list exists.`,
+        };
+      }
+
+      await setPrimaryShoppingListFolder(this.db, folderId, this.userId);
+
+      const displayName = formatListDisplayName(parsed.folderRoute);
+      return {
+        success: true,
+        message: `⭐ *Primary List Updated*\n"${displayName}" is now your primary list (All Lists).`,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to set primary list folder');
+      if (errMsg.includes('Only root folders')) {
+        return {
+          success: false,
+          message: "Only top-level lists can be set as primary. Categories (sub-folders) cannot be the primary list.",
+        };
+      }
+      if (errMsg.includes('No permission')) {
+        return {
+          success: false,
+          message: "You can only set your own lists as primary. Shared lists cannot be set as primary.",
+        };
+      }
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't set "${parsed.folderRoute}" as primary. Please try again.`,
       };
     }
   }
