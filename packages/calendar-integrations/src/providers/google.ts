@@ -255,6 +255,16 @@ export class GoogleCalendarProvider implements CalendarProvider {
         attendees,
       };
 
+      // Include Google Meet in initial creation to avoid sending 2 emails (create + patch would trigger "Updated invitation")
+      if (params.createGoogleMeet) {
+        event.conferenceData = {
+          createRequest: {
+            requestId: `meet-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            conferenceSolutionKey: { type: "hangoutsMeet" },
+          },
+        };
+      }
+
       // Add color if specified
       if (params.color) {
         // Convert our color names to Google Calendar color IDs
@@ -295,11 +305,15 @@ export class GoogleCalendarProvider implements CalendarProvider {
         };
       }
 
-      const response = await calendar.events.insert({
+      const insertOptions: any = {
         calendarId: params.calendarId,
         requestBody: event,
-        sendUpdates: 'all', // Send email notifications to attendees
-      });
+        sendUpdates: 'all', // Send email notifications to attendees (single email now - Meet included in create)
+      };
+      if (params.createGoogleMeet) {
+        insertOptions.conferenceDataVersion = 1; // Required for conference creation in insert
+      }
+      const response = await calendar.events.insert(insertOptions);
 
       if (!response.data.id || !response.data.summary) {
         throw new Error('Invalid response from Google Calendar API');
@@ -307,85 +321,34 @@ export class GoogleCalendarProvider implements CalendarProvider {
 
       let conferenceUrl: string | undefined;
 
-      // If Google Meet was requested, add conference via patch
+      // If Google Meet was requested, extract URL from response (or fetch after brief delay - Meet creation is async)
       if (params.createGoogleMeet) {
-        try {
-          // Generate unique request ID
-          const requestId = `meet-${response.data.id}-${Date.now()}`;
-
-          await calendar.events.patch({
-            calendarId: params.calendarId,
-            eventId: response.data.id,
-            requestBody: {
-              conferenceData: {
-                createRequest: {
-                  requestId: requestId,
-                  conferenceSolutionKey: {
-                    type: "hangoutsMeet"
-                  }
-                }
-              }
-            },
-            conferenceDataVersion: 1,
-            sendUpdates: 'all',
-          });
-
-          // Wait for conference creation and fetch the URL
-          await new Promise(resolve => setTimeout(resolve, 5000));
-
-          const eventDetails = await calendar.events.get({
-            calendarId: params.calendarId,
-            eventId: response.data.id,
-            conferenceDataVersion: 1,
-            fields: 'id,summary,description,start,end,location,attendees,htmlLink,conferenceData',
-          });
-
-          if (eventDetails.data.conferenceData?.entryPoints && Array.isArray(eventDetails.data.conferenceData.entryPoints)) {
-            // Look for video conference entry point (Google Meet)
-            const meetEntryPoint = eventDetails.data.conferenceData.entryPoints.find(
+        const extractMeetUrl = (data: any): string | undefined => {
+          if (data?.conferenceData?.entryPoints && Array.isArray(data.conferenceData.entryPoints)) {
+            const meetEntryPoint = data.conferenceData.entryPoints.find(
               (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
             );
-            if (meetEntryPoint?.uri && typeof meetEntryPoint.uri === 'string' && meetEntryPoint.uri.trim()) {
-              conferenceUrl = meetEntryPoint.uri.trim();
-            } else {
-              // Fallback: check all entry points for any URI that looks like a Meet link
-              for (const entryPoint of eventDetails.data.conferenceData.entryPoints) {
-                if (entryPoint.uri && typeof entryPoint.uri === 'string' && entryPoint.uri.includes('meet.google.com') && entryPoint.uri.trim()) {
-                  conferenceUrl = entryPoint.uri.trim();
-                  break;
-                }
-              }
+            if (meetEntryPoint?.uri) return meetEntryPoint.uri.trim();
+            for (const ep of data.conferenceData.entryPoints) {
+              if (ep.uri?.includes('meet.google.com')) return ep.uri.trim();
             }
           }
-        } catch (error) {
-          console.warn('Failed to create Google Meet conference:', error);
-          // Try alternative approach - check if conference was created anyway
+          return undefined;
+        };
+        conferenceUrl = extractMeetUrl(response.data);
+        if (!conferenceUrl) {
           try {
+            // Meet creation is async - wait and fetch (GET does not send emails)
+            await new Promise(resolve => setTimeout(resolve, 3000));
             const eventDetails = await calendar.events.get({
               calendarId: params.calendarId,
               eventId: response.data.id,
               conferenceDataVersion: 1,
+              fields: 'conferenceData',
             });
-
-            if (eventDetails.data.conferenceData?.entryPoints && Array.isArray(eventDetails.data.conferenceData.entryPoints)) {
-              // Look for video conference entry point (Google Meet)
-              const meetEntryPoint = eventDetails.data.conferenceData.entryPoints.find(
-                (entry: any) => entry.entryPointType === 'video' || entry.entryPointType === 'hangoutsMeet'
-              );
-              if (meetEntryPoint?.uri && typeof meetEntryPoint.uri === 'string' && meetEntryPoint.uri.trim()) {
-                conferenceUrl = meetEntryPoint.uri.trim();
-              } else {
-                // Fallback: check all entry points for any URI that looks like a Meet link
-                for (const entryPoint of eventDetails.data.conferenceData.entryPoints) {
-                  if (entryPoint.uri && typeof entryPoint.uri === 'string' && entryPoint.uri.includes('meet.google.com') && entryPoint.uri.trim()) {
-                    conferenceUrl = entryPoint.uri.trim();
-                    break;
-                  }
-                }
-              }
-            }
-          } catch (retryError) {
-            console.warn('Failed to fetch conference data on retry:', retryError);
+            conferenceUrl = extractMeetUrl(eventDetails.data);
+          } catch (error) {
+            console.warn('Failed to fetch Google Meet URL after create:', error);
           }
         }
       }
