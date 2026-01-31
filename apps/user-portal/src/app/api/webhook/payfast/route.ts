@@ -20,7 +20,11 @@ function computeSubscriptionPeriods(plan: PlanRecord) {
   const currentPeriodStart = new Date();
   const currentPeriodEnd = new Date(currentPeriodStart);
 
-  if (plan.payfastConfig.recurring && plan.payfastConfig.frequency) {
+  // Check if this is a Beta plan (one-time, 2 months)
+  const metadata = plan.metadata as { tier?: string; durationMonths?: number; isOneTime?: boolean } | null;
+  if (metadata?.tier === 'beta' && metadata?.isOneTime && metadata?.durationMonths) {
+    currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + metadata.durationMonths);
+  } else if (plan.payfastConfig.recurring && plan.payfastConfig.frequency) {
     switch (plan.payfastConfig.frequency) {
       case 1:
         currentPeriodEnd.setDate(currentPeriodEnd.getDate() + 1);

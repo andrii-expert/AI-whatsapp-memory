@@ -14,7 +14,7 @@ export type PlanLimits = {
   maxFriends?: number | null; // null = unlimited friends
 };
 
-export type PlanTier = 'free' | 'silver' | 'gold';
+export type PlanTier = 'free' | 'silver' | 'gold' | 'beta';
 export type BillingCycle = 'none' | 'monthly' | 'annual';
 
 export interface PlanMetadata {
@@ -130,21 +130,25 @@ export function getUpgradeMessage(feature: string, currentTier: PlanTier): strin
       free: 'Upgrade to Silver to unlock WhatsApp reminders',
       silver: 'Available in your plan',
       gold: 'Available in your plan',
+      beta: 'Available in your plan',
     },
     notes: {
       free: 'Upgrade to Gold to unlock Notes & Shared Notes',
       silver: 'Upgrade to Gold to unlock Notes & Shared Notes',
       gold: 'Available in your plan',
+      beta: 'Available in your plan',
     },
     multipleCalendars: {
       free: 'Upgrade to Silver to unlock multiple calendars',
       silver: 'Available in your plan',
       gold: 'Available in your plan',
+      beta: 'Available in your plan',
     },
     unlimitedEvents: {
       free: 'Upgrade to Silver for unlimited events',
       silver: 'Available in your plan',
       gold: 'Available in your plan',
+      beta: 'Available in your plan',
     },
   };
 
@@ -175,6 +179,7 @@ export function needsUpgrade(currentTier: PlanTier, requiredTier: PlanTier): boo
     free: 0,
     silver: 1,
     gold: 2,
+    beta: 2, // Beta has same features as gold
   };
 
   return tierOrder[currentTier] < tierOrder[requiredTier];

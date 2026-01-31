@@ -208,6 +208,45 @@ const PLAN_SEEDS: SeedPlan[] = [
       hasMultipleSubCalendars: true,
     },
   },
+  
+  // BETA PACKAGE - ONE TIME (2 months, auto-downgrades to free)
+  {
+    id: "beta",
+    name: "Beta",
+    description: "Try premium features for 2 months - one time only",
+    billingPeriod: "for 2 months",
+    displayPrice: "R0",
+    amountCents: 0,
+    monthlyPriceCents: 0,
+    trialDays: 0,
+    status: "active",
+    sortOrder: 6,
+    metadata: { tier: "beta", billingCycle: "none", isOneTime: true, durationMonths: 2 },
+    payfastConfig: {
+      recurring: false,
+      frequency: null,
+    },
+    features: [
+      "Unlimited calendar events",
+      "Multiple calendars & sub-calendars",
+      "Multiple sub-calendar view",
+      "Interval event reminders before meetings",
+      "WhatsApp reminders (e.g., remind me in 30 mins)",
+      "Notes & shared notes",
+      "Google & Microsoft Calendar sync",
+      "Priority support",
+      "One-time subscription only",
+      "Auto-downgrades to Free after 2 months",
+    ],
+    limits: {
+      maxEvents: null, // unlimited
+      maxCalendars: 50,
+      hasReminders: true,
+      hasNotes: true,
+      hasSharedNotes: true,
+      hasMultipleSubCalendars: true,
+    },
+  },
 ];
 
 async function seedPlans() {
