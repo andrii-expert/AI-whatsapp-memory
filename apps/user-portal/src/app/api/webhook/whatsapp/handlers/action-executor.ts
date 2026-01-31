@@ -135,9 +135,21 @@ export interface ParsedAction {
 const listContextCache = new Map<string, { type: 'tasks' | 'notes' | 'shopping' | 'event' | 'reminder' | 'document', items: Array<{ id: string, number: number, name?: string, calendarId?: string }>, folderRoute?: string }>();
 const LIST_CONTEXT_TTL = 10 * 60 * 1000; // 10 minutes
 
-/** Normalize "X times" to "X x" for display (e.g. "10 times" → "10 x") */
+/** Format quantity as "Xx Item" (e.g. "Cake 10 times" → "10x Cake", "10 times Cake" → "10x Cake") */
 function normalizeTimesToX(text: string): string {
-  return text.replace(/(\d+)\s*times/gi, '$1 x');
+  const t = text.trim();
+  // "Cake 10 times" or "Cake 10 x" → "10x Cake"
+  const suffixMatch = t.match(/^(.+?)\s+(\d+)\s*(?:x|times)\s*$/i);
+  if (suffixMatch) {
+    return `${suffixMatch[2]}x ${suffixMatch[1].trim()}`;
+  }
+  // "10 times Cake" or "10x Cake" → "10x Cake" (already correct or normalize)
+  const prefixMatch = t.match(/^(\d+)\s*(?:x|times)\s+(.+)$/i);
+  if (prefixMatch) {
+    return `${prefixMatch[1]}x ${prefixMatch[2].trim()}`;
+  }
+  // Fallback: "10 times" → "10 x" for any remaining cases
+  return t.replace(/(\d+)\s*times/gi, '$1x');
 }
 
 /** Format list/folder name for "Added to X" message - avoid "X List List" when name already ends with "List" */
