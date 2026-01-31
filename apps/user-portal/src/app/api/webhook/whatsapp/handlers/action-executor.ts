@@ -11034,7 +11034,7 @@ export class ActionExecutor {
       const displayName = formatListDisplayName(parsed.folderRoute);
       return {
         success: true,
-        message: `⭐ *Primary List Updated*\n"${displayName}" is now your primary list (All Lists).`,
+        message: `⭐ *Primary List Updated*\n"${displayName}" is now your primary list.`,
       };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
