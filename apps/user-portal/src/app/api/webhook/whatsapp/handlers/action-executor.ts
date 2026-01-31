@@ -10872,7 +10872,12 @@ export class ActionExecutor {
    * Handles singular/plural variations (e.g., "grocery" matches "Groceries")
    */
   private async resolveShoppingListFolderRoute(folderRoute: string): Promise<string | null> {
-    const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
+    // Normalize: strip "the " prefix and " as primary" suffix (e.g. "the Home List" → "Home List")
+    const normalizedRoute = folderRoute
+      .replace(/^\s*the\s+/i, '')
+      .replace(/\s+as\s+primary\s*$/i, '')
+      .trim();
+    const parts = normalizedRoute.split(/[\/→>]/).map(p => p.trim());
     const folders = await getUserShoppingListFolders(this.db, this.userId);
     const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
 
