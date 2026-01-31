@@ -50,6 +50,12 @@ export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLim
   }
 
   const limits = metadata.limits as PlanLimits;
+  // For maxFriends, if not explicitly set in limits, use tier-based default
+  // This ensures silver/beta plans get unlimited friends even if maxFriends is not in limits object
+  const maxFriends = limits.maxFriends !== undefined 
+    ? limits.maxFriends 
+    : defaultLimits.maxFriends;
+  
   return {
     maxEvents: limits.maxEvents ?? defaultLimits.maxEvents,
     maxCalendars: limits.maxCalendars ?? defaultLimits.maxCalendars,
@@ -57,7 +63,7 @@ export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLim
     hasNotes: limits.hasNotes ?? defaultLimits.hasNotes,
     hasSharedNotes: limits.hasSharedNotes ?? defaultLimits.hasSharedNotes,
     hasMultipleSubCalendars: limits.hasMultipleSubCalendars ?? defaultLimits.hasMultipleSubCalendars,
-    maxFriends: limits.maxFriends ?? defaultLimits.maxFriends,
+    maxFriends: maxFriends,
   };
 }
 
