@@ -52,9 +52,17 @@ export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLim
   const limits = metadata.limits as PlanLimits;
   // For maxFriends, if not explicitly set in limits, use tier-based default
   // This ensures silver/beta plans get unlimited friends even if maxFriends is not in limits object
-  const maxFriends = limits.maxFriends !== undefined 
-    ? limits.maxFriends 
-    : defaultLimits.maxFriends;
+  // IMPORTANT: If tier is not 'free', always set maxFriends to null (unlimited) regardless of what's in limits
+  let maxFriends: number | null;
+  if (tier !== 'free') {
+    // Silver/pro, gold, and beta users always get unlimited friends
+    maxFriends = null;
+  } else {
+    // For free tier, use the value from limits if set, otherwise use default (2)
+    maxFriends = limits.maxFriends !== undefined 
+      ? limits.maxFriends 
+      : defaultLimits.maxFriends;
+  }
   
   return {
     maxEvents: limits.maxEvents ?? defaultLimits.maxEvents,
