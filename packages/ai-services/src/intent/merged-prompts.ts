@@ -760,6 +760,7 @@ export function buildMergedWhatsappPrompt(
     "        Create a list item: Milk - on folder: Groceries",
     '    • "add cake in Shopping List" / "add X in [list name]" → ALWAYS include - on folder: when user specifies a list',
     "        Create a list item: Cake - on folder: Shopping List",
+    '    • "add keys to the primary list" / "add X to primary" → Create a list item: Keys - on folder: primary list',
     '    • "groceries: apples, bananas, oranges" →',
     "        Create a list item: Apples - on folder: Groceries",
     "        Create a list item: Bananas - on folder: Groceries",

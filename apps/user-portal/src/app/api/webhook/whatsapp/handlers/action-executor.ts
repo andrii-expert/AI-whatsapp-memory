@@ -2116,10 +2116,10 @@ export class ActionExecutor {
       let message: string;
       if (folderId) {
         if (isPrimaryFolder) {
-          // Primary folder: if user explicitly said a folder name (e.g. "in Shopping List"), show that; else "All Lists"
-          const displayName = parsed.folderRoute
-            ? formatListDisplayName(parsed.folderRoute)
-            : 'All Lists';
+          // Primary folder: always show the actual folder name (e.g. "Home List"), not "All Lists"
+          const displayName = primaryFolder?.name
+            ? formatListDisplayName(primaryFolder.name)
+            : (parsed.folderRoute ? formatListDisplayName(parsed.folderRoute) : 'All Lists');
           message = `✅ *Added to ${displayName}:*\nItem/s: ${normalizedName}`;
         } else {
           // Not primary folder - include folder name
@@ -10881,7 +10881,7 @@ export class ActionExecutor {
       const rawName = parts[0];
       const folderName = rawName.toLowerCase();
 
-      // Special-case: treat common synonyms as the primary (All Lists) list
+      // Special-case: treat common synonyms as the primary list (uses the user's actual primary folder, e.g. "Home List")
       if (
         primaryFolder &&
         (
@@ -10890,7 +10890,10 @@ export class ActionExecutor {
           folderName === 'my home list' ||
           folderName === 'all lists' ||
           folderName === 'shopping list' ||
-          folderName === 'my shopping list'
+          folderName === 'my shopping list' ||
+          folderName === 'primary' ||
+          folderName === 'primary list' ||
+          folderName === 'the primary list'
         )
       ) {
         return primaryFolder.id;
