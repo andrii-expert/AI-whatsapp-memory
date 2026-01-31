@@ -32,6 +32,7 @@ export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLim
   const tier = (metadata?.tier as PlanTier | undefined) ?? "free";
 
   // Default limits; friends default depends on tier
+  // Beta users are treated the same as silver/pro users
   const defaultLimits: PlanLimits = {
     maxEvents: 15,
     maxCalendars: 10, // Allow multiple calendars by default
@@ -40,6 +41,7 @@ export function getPlanLimits(metadata: Record<string, unknown> | null): PlanLim
     hasSharedNotes: false,
     hasMultipleSubCalendars: false,
     // Free plan: explicitly limit friends to 2 unless overridden in metadata
+    // Beta and silver/pro plans get unlimited friends (null)
     maxFriends: tier === "free" ? 2 : null,
   };
 
@@ -127,7 +129,7 @@ export function hasFeature(feature: keyof PlanLimits, limits: PlanLimits): boole
 export function getUpgradeMessage(feature: string, currentTier: PlanTier): string {
   const messages: Record<string, Record<PlanTier, string>> = {
     reminders: {
-      free: 'Upgrade to Silver to unlock WhatsApp reminders',
+      free: 'Upgrade to Pro to unlock WhatsApp reminders',
       silver: 'Available in your plan',
       gold: 'Available in your plan',
       beta: 'Available in your plan',
@@ -139,13 +141,13 @@ export function getUpgradeMessage(feature: string, currentTier: PlanTier): strin
       beta: 'Available in your plan',
     },
     multipleCalendars: {
-      free: 'Upgrade to Silver to unlock multiple calendars',
+      free: 'Upgrade to Pro to unlock multiple calendars',
       silver: 'Available in your plan',
       gold: 'Available in your plan',
       beta: 'Available in your plan',
     },
     unlimitedEvents: {
-      free: 'Upgrade to Silver for unlimited events',
+      free: 'Upgrade to Pro for unlimited events',
       silver: 'Available in your plan',
       gold: 'Available in your plan',
       beta: 'Available in your plan',
@@ -179,7 +181,7 @@ export function needsUpgrade(currentTier: PlanTier, requiredTier: PlanTier): boo
     free: 0,
     silver: 1,
     gold: 2,
-    beta: 2, // Beta has same features as gold
+    beta: 1, // Beta is treated the same as silver/pro for feature access
   };
 
   return tierOrder[currentTier] < tierOrder[requiredTier];

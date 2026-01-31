@@ -9,14 +9,14 @@ import { cn } from "@imaginecalendar/ui/cn";
 
 interface UpgradePromptProps {
   feature: string;
-  requiredTier: 'silver' | 'gold';
+  requiredTier: 'pro' | 'gold';
   variant?: 'alert' | 'card' | 'inline';
   className?: string;
 }
 
 const TIER_INFO = {
-  silver: {
-    name: 'Silver',
+  pro: {
+    name: 'Pro',
     icon: Zap,
     color: 'text-purple-600',
     bgColor: 'bg-purple-50',
@@ -113,7 +113,7 @@ export function UpgradePrompt({ feature, requiredTier, variant = 'alert', classN
 }
 
 interface FeatureLockedOverlayProps {
-  requiredTier: 'silver' | 'gold';
+  requiredTier: 'pro' | 'gold';
   className?: string;
   children?: React.ReactNode;
 }
