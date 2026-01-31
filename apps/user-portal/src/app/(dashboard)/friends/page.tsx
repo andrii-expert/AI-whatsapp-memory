@@ -204,6 +204,11 @@ export default function FriendsPage() {
 
   // Plan limits for friends
   const { limits, canAddFriend, getFriendsRemaining, tier, isLoading: isLoadingLimits } = usePlanLimits();
+  
+  // Get subscription and plan info for debugging
+  const { data: subscription } = useQuery(trpc.billing.getSubscription.queryOptions());
+  const { data: plans = [] } = useQuery(trpc.plans.listActive.queryOptions());
+  const currentPlan = plans.find(p => p.id === subscription?.plan);
 
   // Debounce search term
   useEffect(() => {
@@ -714,6 +719,19 @@ export default function FriendsPage() {
                 </Button>
               </div>
             </div>
+            {/* Debug: Show plan info */}
+            {!isLoadingLimits && (
+              <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
+                <div><strong>Plan ID:</strong> {subscription?.plan || 'none'}</div>
+                <div><strong>Tier:</strong> {tier}</div>
+                <div><strong>maxFriends:</strong> {limits.maxFriends === null ? 'null (unlimited)' : limits.maxFriends === undefined ? 'undefined' : limits.maxFriends}</div>
+                <div><strong>typeof maxFriends:</strong> {typeof limits.maxFriends}</div>
+                <div><strong>Current friends:</strong> {allAddresses.length}</div>
+                <div><strong>canAddFriend:</strong> {canAddFriend(allAddresses.length) ? 'true' : 'false'}</div>
+                <div><strong>Should show limit:</strong> {typeof limits.maxFriends === 'number' && !canAddFriend(allAddresses.length) ? 'YES' : 'NO'}</div>
+              </div>
+            )}
+            
             {/* Free plan limit message - only show if maxFriends is a number (limited) and user has reached the limit */}
             {/* Silver/pro, gold, and beta users have unlimited friends (maxFriends === null) and should never see this */}
             {!isLoadingLimits &&
