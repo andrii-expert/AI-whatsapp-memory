@@ -85,6 +85,8 @@ import {
   logOutgoingWhatsAppMessage,
   getUserSubscription,
   getPlanById,
+  getPlanTier,
+  getPlanLimits,
 } from '@imaginecalendar/database/queries';
 import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService } from '@imaginecalendar/whatsapp';
@@ -11785,35 +11787,43 @@ export class ActionExecutor {
       // Fetch current friends count
       const existingFriends = await getUserFriends(this.db, this.userId);
 
-      // Default free plan limit is 2 friends; paid plans can be configured via metadata.maxFriends
+      // Default free plan limit is 2 friends; paid plans (silver/pro, gold, beta) get unlimited
       const defaultFreeFriendLimit = 2;
 
-      // Try to load subscription & plan metadata to see if there is a specific maxFriends limit
-      let effectiveMaxFriends: number | null = null;
+      // Try to load subscription & plan metadata to determine friend limit
+      let maxFriends: number | null = defaultFreeFriendLimit; // Default to free limit
       try {
         const subscription = await getUserSubscription(this.db, this.userId);
         if (subscription?.plan) {
           const plan = await getPlanById(this.db, subscription.plan);
           const metadata = (plan?.metadata as any) || null;
+          const tier = getPlanTier(metadata);
           const limits = getPlanLimits(metadata);
-          effectiveMaxFriends =
-            typeof limits.maxFriends === 'number' ? limits.maxFriends : null;
+          
+          // Beta users are treated the same as silver/pro users (unlimited friends)
+          // Free plan: 2 friends limit
+          // Silver/pro, gold, and beta: unlimited (null)
+          if (tier === 'free') {
+            maxFriends = typeof limits.maxFriends === 'number' ? limits.maxFriends : defaultFreeFriendLimit;
+          } else {
+            // Silver/pro, gold, or beta - unlimited friends
+            maxFriends = null;
+          }
         }
       } catch (error) {
         logger.warn(
           { error, userId: this.userId },
           'Failed to resolve subscription/plan for friend limit; falling back to default free limit'
         );
+        maxFriends = defaultFreeFriendLimit;
       }
 
-      const maxFriends =
-        effectiveMaxFriends !== null ? effectiveMaxFriends : defaultFreeFriendLimit;
-
-      if (existingFriends.length >= maxFriends) {
+      // If maxFriends is null, user has unlimited friends (silver/pro, gold, or beta)
+      if (maxFriends !== null && existingFriends.length >= maxFriends) {
         return {
           success: false,
           message:
-            "You’ve reached the maximum number of friends for your current plan. Please upgrade your subscription in the app to add more friends.",
+            "You've reached the maximum number of friends for your current plan. Please upgrade to Pro in the app to add more friends.",
         };
       }
 
