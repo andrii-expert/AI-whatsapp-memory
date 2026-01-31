@@ -50,8 +50,32 @@ export function usePlanLimits(): UsePlanLimitsReturn {
   
   const metadata = (currentPlan?.metadata as Record<string, unknown> | null) || null;
   
-  const limits = getPlanLimits(metadata);
-  const tier = getPlanTier(metadata);
+  // Get tier from metadata, but fallback to plan ID if metadata doesn't have tier
+  let tier = getPlanTier(metadata);
+  // Fallback: if tier is 'free' but plan ID suggests otherwise, infer tier from plan ID
+  if (tier === 'free' && subscription?.plan) {
+    const planId = subscription.plan;
+    if (planId === 'beta') {
+      tier = 'beta';
+    } else if (planId.startsWith('silver')) {
+      tier = 'silver';
+    } else if (planId.startsWith('gold')) {
+      tier = 'gold';
+    }
+  }
+  
+  // Get limits from metadata
+  let limits = getPlanLimits(metadata);
+  
+  // CRITICAL: If tier is not free (silver/pro, gold, or beta), ensure maxFriends is null (unlimited)
+  // This is a safety check in case metadata has incorrect limits
+  if (tier !== 'free' && limits.maxFriends !== null && limits.maxFriends !== undefined) {
+    limits = {
+      ...limits,
+      maxFriends: null,
+    };
+  }
+  
   const isLoading = isLoadingSubscription || isLoadingPlans || isLoadingPlanById;
 
   return {
