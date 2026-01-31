@@ -1738,13 +1738,17 @@ async function processAIResponse(
           );
           
           // Send AI response to user (for debugging/transparency)
+          // When showing list items, use "Title: All Items" instead of "Title: shopping"
+          const displayAIResponse = actionTemplate.toLowerCase().startsWith('list items:')
+            ? aiResponse.replace(/^Title:\s*shopping/i, 'Title: All Items')
+            : aiResponse;
           try {
             await whatsappService.sendTextMessage(
               recipient,
-              `🤖 AI Response:\n${aiResponse.substring(0, 500)}`
+              `🤖 AI Response:\n${displayAIResponse.substring(0, 500)}`
             );
             // OPTIMIZATION: Non-blocking logging
-            logOutgoingMessageNonBlocking(db, recipient, userId, `🤖 AI Response:\n${aiResponse.substring(0, 500)}`);
+            logOutgoingMessageNonBlocking(db, recipient, userId, `🤖 AI Response:\n${displayAIResponse.substring(0, 500)}`);
           } catch (error) {
             logger.warn({ error, userId }, 'Failed to send AI response to user');
           }
