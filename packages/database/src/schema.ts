@@ -209,6 +209,9 @@ export const users = pgTable("users", {
   // Activity tracking
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   
+  // Beta subscription tracking
+  betaUsedAt: timestamp("beta_used_at", { withTimezone: true }),
+  
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({

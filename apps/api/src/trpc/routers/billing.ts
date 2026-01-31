@@ -8,7 +8,7 @@ import {
   reactivateSubscription,
   getPlanById,
   getUserById,
-  hasUserHadBetaSubscription,
+  updateUser,
 } from "@imaginecalendar/database/queries";
 import type { PlanRecord } from "@imaginecalendar/database/queries";
 import { PayFastService } from "@imaginecalendar/payments";
@@ -127,10 +127,10 @@ export const billingRouter = createTRPCRouter({
         });
       }
 
-      // Check if user is trying to subscribe to Beta plan and has already had it
+      // Check if user is trying to subscribe to Beta plan and has already used it
       if (normalizedPlanId === "beta") {
-        const hasHadBeta = await hasUserHadBetaSubscription(db, session.user.id);
-        if (hasHadBeta) {
+        const user = await getUserById(db, session.user.id);
+        if (user?.betaUsedAt) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Beta plan can only be subscribed to once per user",
@@ -174,6 +174,17 @@ export const billingRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to create subscription",
         });
+      }
+
+      // Mark beta as used if user subscribed to beta plan
+      if (normalizedPlanId === "beta") {
+        await updateUser(db, session.user.id, {
+          betaUsedAt: new Date(),
+        });
+        logger.info({
+          userId: session.user.id,
+          subscriptionId: subscription.id,
+        }, 'User subscribed to Beta plan - marked betaUsedAt');
       }
 
       // Send subscription confirmation email
@@ -278,6 +289,17 @@ export const billingRouter = createTRPCRouter({
           });
         }
 
+        // Check if user is trying to switch to Beta plan and has already used it
+        if (normalizedPlanId === "beta") {
+          const user = await getUserById(db, session.user.id);
+          if (user?.betaUsedAt) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Beta plan can only be subscribed to once per user",
+            });
+          }
+        }
+
         const [currentPlanRecord, newPlanRecord] = await Promise.all([
           getPlanById(db, subscription.plan),
           getPlanById(db, normalizedPlanId),
@@ -301,6 +323,42 @@ export const billingRouter = createTRPCRouter({
             code: "INTERNAL_SERVER_ERROR",
             message: "Unable to load current subscription plan",
           });
+        }
+
+        // Handle Beta plan (free, one-time subscription)
+        if (normalizedPlanId === "beta") {
+          const { currentPeriodStart, currentPeriodEnd, trialEndsAt } = computeSubscriptionPeriods(newPlanRecord);
+          const updatedSubscription = await updateSubscription(db, subscription.id, {
+            plan: newPlanRecord.id,
+            status: "active",
+            currentPeriodStart,
+            currentPeriodEnd,
+            trialEndsAt: trialEndsAt ?? undefined,
+          });
+
+          if (!updatedSubscription) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Failed to update subscription",
+            });
+          }
+
+          // Mark beta as used
+          const user = await getUserById(db, session.user.id);
+          if (user && !user.betaUsedAt) {
+            await updateUser(db, session.user.id, {
+              betaUsedAt: new Date(),
+            });
+            logger.info({
+              userId: session.user.id,
+              subscriptionId: subscription.id,
+            }, 'User switched to Beta plan - marked betaUsedAt');
+          }
+
+          return {
+            type: "success" as const,
+            subscription: updatedSubscription
+          };
         }
 
         const currentPlanIsTrial = isTrialPlan(currentPlanRecord);
