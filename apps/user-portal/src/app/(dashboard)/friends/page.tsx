@@ -750,9 +750,10 @@ export default function FriendsPage() {
                 </Button>
               </div>
             </div>
-            {/* Free plan limit message - only show if maxFriends is a number (limited) and user has reached the limit */}
+            {/* Free plan limit message - only show if user is on free tier, maxFriends is a number (limited), and user has reached the limit */}
             {/* Silver/pro, gold, and beta users have unlimited friends (maxFriends === null) and should never see this */}
             {!isLoadingLimits &&
+              tier === 'free' &&
               typeof limits.maxFriends === 'number' &&
               !canAddFriend(allAddresses.length) && (
                 <div className="mt-3">
@@ -848,7 +849,7 @@ export default function FriendsPage() {
                             <div className="font-bold text-gray-900 text-[15px] flex gap-2 items-center flex-wrap">
                               {address.name}
                               {/* Tag badges */}
-                              {Array.isArray(address.tags) && address.tags.length > 0 && address.tags.map((tag, idx) => (
+                              {Array.isArray(address.tags) && address.tags.length > 0 && address.tags.map((tag: string, idx: number) => (
                                 <span key={idx} className="px-2 py-0.5 text-[11px] font-medium bg-blue-100 text-blue-800 rounded-full">
                                   {tag}
                                 </span>
