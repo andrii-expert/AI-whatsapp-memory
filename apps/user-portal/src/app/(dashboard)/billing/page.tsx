@@ -24,7 +24,9 @@ import {
   ChevronLeft,
   Sparkles,
   Zap,
-  Crown
+  Crown,
+  CheckCircle2,
+  Lock
 } from "lucide-react";
 import Link from "next/link";
 import { useTRPC } from "@/trpc/client";
@@ -967,27 +969,37 @@ export default function BillingPage() {
                 const isSelected = (selectedPlanForChange || currentPlanId) === 'beta';
                 const isCurrentPlan = currentPlanId === 'beta';
                 const hasUsedBeta = !!user?.betaUsedAt;
-                const isDisabled = hasUsedBeta;
+                const isDisabled = hasUsedBeta && !isCurrentPlan;
                 
                 return (
                   <label
                     key="beta"
                     htmlFor="plan-beta"
                     className={cn(
-                      "relative flex flex-col p-5 rounded-2xl border-2 transition-all",
+                      "relative flex flex-col p-5 rounded-lg border-2 transition-all overflow-hidden",
                       isDisabled 
-                        ? "cursor-not-allowed opacity-60 border-gray-200 bg-gray-50"
+                        ? "cursor-not-allowed border-orange-200 bg-gradient-to-br from-orange-50 to-orange-100/50"
                         : isSelected
                         ? "cursor-pointer border-orange-500 bg-orange-500 text-white shadow-xl"
                         : "cursor-pointer border-gray-200 bg-white hover:border-orange-300"
                     )}
                     onClick={() => !isDisabled && handleSelectPlan('beta')}
                   >
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                    {/* Disabled overlay pattern */}
+                    {isDisabled && (
+                      <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23f97316\" fill-opacity=\"0.03\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-30 pointer-events-none" />
+                    )}
+                    
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
                       <span className={cn(
-                        "text-xs font-bold px-4 py-1.5 rounded-full shadow-md",
-                        isSelected ? "bg-white text-orange-500" : "bg-orange-500 text-white"
+                        "text-xs font-semibold px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5",
+                        isDisabled 
+                          ? "bg-orange-100 text-orange-700 border border-orange-200"
+                          : isSelected 
+                          ? "bg-white text-orange-500" 
+                          : "bg-orange-500 text-white"
                       )}>
+                        {isDisabled && <Lock className="h-3 w-3" />}
                         Beta
                       </span>
                     </div>
@@ -996,29 +1008,41 @@ export default function BillingPage() {
                       id="plan-beta"
                       disabled={isDisabled}
                       className={cn(
-                        "absolute top-4 right-4",
+                        "absolute top-4 right-4 z-10",
                         isSelected && "!border-white !text-white [&_svg]:!fill-white",
-                        isDisabled && "opacity-50"
+                        isDisabled && "opacity-40"
                       )}
                     />
 
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-2 relative z-10">
                       <div className="flex items-center gap-2">
-                        <Zap className={cn("h-5 w-5", isSelected ? "text-white" : "text-orange-600")} />
-                        <span className="font-semibold text-lg">{betaPlan.name}</span>
+                        <Zap className={cn(
+                          "h-5 w-5",
+                          isDisabled ? "text-orange-400" : isSelected ? "text-white" : "text-orange-600"
+                        )} />
+                        <span className={cn(
+                          "font-semibold text-lg",
+                          isDisabled ? "text-gray-600" : isSelected ? "text-white" : "text-gray-900"
+                        )}>
+                          {betaPlan.name}
+                        </span>
                       </div>
                       {isCurrentPlan && (
-                        <span className="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                        <span className="text-xs px-3 py-1 rounded-lg bg-green-100 text-green-700 font-medium border border-green-200">
                           Current Plan
                         </span>
                       )}
-                      {hasUsedBeta && !isCurrentPlan && (
-                        <span className="text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-700 font-medium">
-                          Already Used
+                      {isDisabled && (
+                        <span className="text-xs px-3 py-1 rounded-lg bg-orange-100 text-orange-700 font-medium border border-orange-200 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Previously Used
                         </span>
                       )}
                     </div>
-                    <div className={cn("text-3xl font-bold", isSelected ? "text-white" : "text-gray-900")}>
+                    <div className={cn(
+                      "text-3xl font-bold relative z-10",
+                      isDisabled ? "text-gray-500" : isSelected ? "text-white" : "text-gray-900"
+                    )}>
                       {isLoadingRates || !exchangeRates ? (
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className={cn("h-6 w-6 animate-spin", isSelected ? "text-white" : "text-gray-600")} />
@@ -1027,23 +1051,48 @@ export default function BillingPage() {
                       ) : (
                         <>
                           {formatCurrency(betaPlan.amountCents, selectedCurrency, exchangeRates)}
-                          <span className="text-sm text-gray-600 ml-1"> / {betaPlan.billingPeriod}</span>
+                          <span className={cn(
+                            "text-sm ml-1",
+                            isDisabled ? "text-gray-400" : isSelected ? "text-white/80" : "text-gray-600"
+                          )}>
+                            / {betaPlan.billingPeriod}
+                          </span>
                         </>
                       )}
                     </div>
-                    <p className={cn("mt-1 text-xs", isSelected ? "text-white/80" : "text-gray-500")}>
+                    <p className={cn(
+                      "mt-1 text-xs relative z-10",
+                      isDisabled ? "text-gray-500" : isSelected ? "text-white/80" : "text-gray-500"
+                    )}>
                       {betaPlan.description}
                     </p>
-                    {hasUsedBeta && !isCurrentPlan && (
-                      <p className="mt-2 text-xs text-orange-600 font-medium">
-                        You've already used the Beta plan. It can only be subscribed to once.
-                      </p>
+                    {isDisabled && (
+                      <div className="mt-3 p-3 rounded-lg bg-orange-50 border border-orange-200 relative z-10">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-orange-900">
+                              Beta Access Completed
+                            </p>
+                            <p className="text-xs text-orange-700 mt-0.5">
+                              You've already enjoyed the Beta experience. Thank you for helping us improve!
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     )}
-                    <ul className="mt-4 space-y-2 text-sm">
+                    <ul className={cn("mt-4 space-y-2 text-sm relative z-10", isDisabled && "opacity-75")}>
                       {betaPlan.features.map((feature, i) => (
                         <li key={i} className="flex items-center gap-2">
-                          <Check className={cn("h-4 w-4 flex-shrink-0", isSelected ? "text-white" : "text-green-600")} />
-                          <span className={isSelected ? "text-white" : "text-gray-700"}>{feature}</span>
+                          <Check className={cn(
+                            "h-4 w-4 flex-shrink-0",
+                            isDisabled ? "text-orange-300" : isSelected ? "text-white" : "text-green-600"
+                          )} />
+                          <span className={cn(
+                            isDisabled ? "text-gray-600" : isSelected ? "text-white" : "text-gray-700"
+                          )}>
+                            {feature}
+                          </span>
                         </li>
                       ))}
                     </ul>
