@@ -205,6 +205,7 @@ function isValidTemplateResponse(text: string): boolean {
     /^Delete a task folder:/i,
     /^Share a task folder:/i,
     /^Share a list folder:/i,
+    /^Move a list item:/i,
     /^Create a task sub-folder:/i,
     /^Create a list category:/i,
     /^Create a reminder:/i,
