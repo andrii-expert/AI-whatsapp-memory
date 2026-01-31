@@ -131,7 +131,7 @@ function BillingOnboardingContent() {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [expandedPlans, setExpandedPlans] = useState<string[]>(["beta"]); // Track which plans are expanded - Beta open by default
+  const [expandedPlans, setExpandedPlans] = useState<string[]>([]); // Track which plans are expanded
   
   // Currency state - default to ZAR for all users
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>("ZAR");
@@ -504,6 +504,166 @@ function BillingOnboardingContent() {
 
           {/* Plan cards - Collapsible */}
           <Accordion type="multiple" value={expandedPlans} onValueChange={setExpandedPlans} className="space-y-4">
+            {/* Beta plan */}
+            {betaPlan && (
+              <AccordionItem value="beta" className="border-none">
+                <div
+                  className={cn(
+                    "rounded-lg border-2 p-5 transition-all relative",
+                    currentUserData?.betaUsedAt && selectedPlanId !== "beta"
+                      ? "cursor-not-allowed border-orange-200 bg-gradient-to-br from-orange-50 to-orange-100/50"
+                      : selectedPlanId === "beta"
+                      ? "cursor-pointer border-orange-500 bg-orange-500 text-white shadow-xl"
+                      : "cursor-pointer border-gray-200 bg-white hover:border-orange-300"
+                  )}
+                  onClick={() => !currentUserData?.betaUsedAt && handleSelectPlan("beta")}
+                >
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
+                    <span className={cn(
+                      "text-xs font-bold px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5",
+                      currentUserData?.betaUsedAt && selectedPlanId !== "beta"
+                        ? "bg-orange-100 text-orange-700 border border-orange-200"
+                        : selectedPlanId === "beta" 
+                        ? "bg-white text-orange-500" 
+                        : "bg-orange-500 text-white"
+                    )}>
+                      {currentUserData?.betaUsedAt && selectedPlanId !== "beta" && <Lock className="h-3 w-3" />}
+                      Beta
+                    </span>
+                  </div>
+                  
+                  {/* Disabled overlay pattern */}
+                  {currentUserData?.betaUsedAt && selectedPlanId !== "beta" && (
+                    <div 
+                      className="absolute inset-0 opacity-30 pointer-events-none rounded-lg overflow-hidden"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f97316' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                      }}
+                    />
+                  )}
+                  <AccordionTrigger 
+                    className="hover:no-underline py-0 relative z-10" 
+                    disabled={currentUserData?.betaUsedAt && selectedPlanId !== "beta"}
+                  >
+                    <div className="flex items-center justify-between w-full mr-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className={cn(
+                          "h-5 w-5",
+                          currentUserData?.betaUsedAt && selectedPlanId !== "beta" 
+                            ? "text-orange-400" 
+                            : selectedPlanId === "beta" 
+                            ? "text-white" 
+                            : "text-orange-600"
+                        )} />
+                        <span className={cn(
+                          "font-semibold text-lg",
+                          currentUserData?.betaUsedAt && selectedPlanId !== "beta"
+                            ? "text-gray-600"
+                            : selectedPlanId === "beta"
+                            ? "text-white"
+                            : "text-gray-900"
+                        )}>
+                          {betaPlan.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {currentPlanId === "beta" && (
+                          <span className="text-xs px-3 py-1 rounded-lg bg-green-100 text-green-700 font-medium border border-green-200">
+                            Current Plan
+                          </span>
+                        )}
+                        {currentUserData?.betaUsedAt && selectedPlanId !== "beta" && (
+                          <span className="text-xs px-3 py-1 rounded-lg bg-orange-100 text-orange-700 font-medium border border-orange-200 flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Previously Used
+                          </span>
+                        )}
+                        <div className={cn(
+                          "text-md font-bold",
+                          currentUserData?.betaUsedAt && selectedPlanId !== "beta"
+                            ? "text-gray-500"
+                            : selectedPlanId === "beta"
+                            ? "text-white"
+                            : "text-gray-900"
+                        )}>
+                          {isLoadingRates || !exchangeRates ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className={cn("h-6 w-6 animate-spin", selectedPlanId === "beta" ? "text-white" : "text-gray-600")} />
+                              <span className={cn("text-sm", selectedPlanId === "beta" ? "text-white/90" : "text-gray-500")}>Loading...</span>
+                            </div>
+                          ) : (
+                            <>
+                              {formatCurrency(betaPlan.amountCents, selectedCurrency, exchangeRates)}
+                              <span className={cn(
+                                "text-sm ml-1",
+                                currentUserData?.betaUsedAt && selectedPlanId !== "beta"
+                                  ? "text-gray-400"
+                                  : selectedPlanId === "beta"
+                                  ? "text-white/80"
+                                  : "text-gray-600"
+                              )}>
+                                / {betaPlan.billingPeriod}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="relative z-10">
+                    <p className={cn(
+                      "mt-1 text-xs",
+                      currentUserData?.betaUsedAt && selectedPlanId !== "beta"
+                        ? "text-gray-500"
+                        : selectedPlanId === "beta"
+                        ? "text-white/80"
+                        : "text-gray-500"
+                    )}>
+                      {betaPlan.description}
+                    </p>
+                    {currentUserData?.betaUsedAt && selectedPlanId !== "beta" && (
+                      <div className="mt-3 p-3 rounded-lg bg-orange-50 border border-orange-200">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-orange-900">
+                              Beta Access Completed
+                            </p>
+                            <p className="text-xs text-orange-700 mt-0.5">
+                              You've already enjoyed the Beta experience. Thank you for helping us improve!
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <ul className={cn("mt-4 space-y-2 text-sm", currentUserData?.betaUsedAt && selectedPlanId !== "beta" && "opacity-75")}>
+                      {betaPlan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          <Check className={cn(
+                            "h-4 w-4 flex-shrink-0",
+                            currentUserData?.betaUsedAt && selectedPlanId !== "beta"
+                              ? "text-orange-300"
+                              : selectedPlanId === "beta"
+                              ? "text-white"
+                              : "text-green-600"
+                          )} />
+                          <span className={cn(
+                            currentUserData?.betaUsedAt && selectedPlanId !== "beta"
+                              ? "text-gray-600"
+                              : selectedPlanId === "beta"
+                              ? "text-white"
+                              : "text-gray-700"
+                          )}>
+                            {feature}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </AccordionContent>
+                </div>
+              </AccordionItem>
+            )}
+
             {/* Free plan */}
             {freePlan && (
               <AccordionItem value="free" className="border-none">
@@ -568,8 +728,8 @@ function BillingOnboardingContent() {
                   className={cn(
                     "rounded-2xl border-2 p-5 cursor-pointer transition-all relative",
                     selectedPlanId === silverPlan.id
-                      ? "border-purple-500 bg-purple-500 text-white shadow-xl"
-                      : "border-gray-200 bg-white hover:border-purple-300"
+                      ? "border-[#036cea] bg-[#036cea] text-white shadow-xl"
+                      : "border-gray-200 bg-white hover:border-[#036cea]"
                   )}
                   onClick={() => handleSelectPlan(silverPlan.id)}
                 >
@@ -581,7 +741,7 @@ function BillingOnboardingContent() {
                   <AccordionTrigger className="hover:no-underline py-0">
                     <div className="flex items-center justify-between w-full mr-2">
                       <div className="flex items-center gap-2">
-                        <Zap className={cn("h-5 w-5", selectedPlanId === silverPlan.id ? "text-white" : "text-purple-600")} />
+                        <Zap className={cn("h-5 w-5", selectedPlanId === silverPlan.id ? "text-white" : "text-[#036cea]")} />
                         <span className="font-semibold text-lg">{silverPlan.name.replace(" Annual", "")}</span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -608,7 +768,7 @@ function BillingOnboardingContent() {
                   </AccordionTrigger>
                   <AccordionContent>
                     {!isLoadingRates && exchangeRates && isAnnual && silverPlan.monthlyPriceCents > 0 && (
-                      <p className={cn("text-xs mt-1", selectedPlanId === silverPlan.id ? "text-white/80" : "text-purple-700")}>
+                      <p className={cn("text-xs mt-1", selectedPlanId === silverPlan.id ? "text-white/80" : "text-[#036cea]")}>
                         {formatCurrency(silverPlan.monthlyPriceCents, selectedCurrency, exchangeRates)}/month when paid annually
                       </p>
                     )}
@@ -635,8 +795,8 @@ function BillingOnboardingContent() {
                   className={cn(
                     "rounded-2xl border-2 p-5 cursor-not-allowed opacity-70 transition-all relative",
                     selectedPlanId === goldPlan.id
-                      ? "border-[#036cea] bg-[#036cea] text-white shadow-xl"
-                      : "border-gray-200 bg-white hover:border-[#036cea]"
+                      ? "border-blue-500 bg-blue-500 text-white shadow-xl"
+                      : "border-gray-200 bg-white hover:border-blue-300"
                   )}
                   onClick={() => handleSelectPlan(goldPlan.id)}
                 >
@@ -704,7 +864,7 @@ function BillingOnboardingContent() {
                     : selectedPlanId === "beta"
                     ? "bg-orange-600 hover:bg-orange-700"
                     : selectedPlanId?.includes("silver")
-                    ? "bg-purple-600 hover:bg-purple-700"
+                    ? "bg-[#036cea] hover:bg-[#0255b8]"
                     : "bg-blue-600 hover:bg-blue-700"
                 )}
                 disabled={isSubscribing || isCompleting}
