@@ -10,6 +10,7 @@ import {
   getPaymentByMPaymentId,
   getPlanById,
   getUserById,
+  updateUser,
 } from '@imaginecalendar/database/queries';
 import type { PlanRecord } from '@imaginecalendar/database/queries';
 import { z } from 'zod';
@@ -255,6 +256,20 @@ export async function POST(req: NextRequest) {
         if (!subscription) {
           logger.error({ userId }, 'Subscription not found after create/update');
           return new Response('OK', { status: 200 });
+        }
+
+        // Mark beta as used if user subscribed to beta plan
+        if (planRecord.id === "beta") {
+          const user = await getUserById(db, userId);
+          if (user && !user.betaUsedAt) {
+            await updateUser(db, userId, {
+              betaUsedAt: new Date(),
+            });
+            logger.info({
+              userId,
+              subscriptionId: subscription.id,
+            }, 'User subscribed to Beta plan via PayFast - marked betaUsedAt');
+          }
         }
 
         // Create payment record with auto-generated invoice
