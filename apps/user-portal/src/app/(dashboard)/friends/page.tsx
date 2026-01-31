@@ -706,7 +706,7 @@ export default function FriendsPage() {
                   className="hidden lg:flex items-center gap-1.5"
                   disabled={
                     isLoadingLimits ||
-                    (tier === 'free' && !canAddFriend(allAddresses.length))
+                    (tier === 'free' && limits.maxFriends !== null && limits.maxFriends !== undefined && !canAddFriend(allAddresses.length))
                   }
                 >
                   <Plus className="h-4 w-4" />
@@ -714,9 +714,12 @@ export default function FriendsPage() {
                 </Button>
               </div>
             </div>
-            {/* Free plan limit message - only show for free plan users */}
+            {/* Free plan limit message - only show for free plan users who have reached the limit */}
+            {/* Silver/pro, gold, and beta users have unlimited friends (maxFriends === null) and should never see this */}
             {!isLoadingLimits &&
               tier === 'free' &&
+              limits.maxFriends !== null &&
+              limits.maxFriends !== undefined &&
               !canAddFriend(allAddresses.length) && (
                 <div className="mt-3">
                   <UpgradePrompt
@@ -937,12 +940,16 @@ export default function FriendsPage() {
           backgroundColor:
             !isLoadingLimits &&
             tier === 'free' &&
+            limits.maxFriends !== null &&
+            limits.maxFriends !== undefined &&
             !canAddFriend(allAddresses.length)
               ? '#E5E7EB'
               : '#2563EB',
           color:
             !isLoadingLimits &&
             tier === 'free' &&
+            limits.maxFriends !== null &&
+            limits.maxFriends !== undefined &&
             !canAddFriend(allAddresses.length)
               ? '#6B7280'
               : '#FFFFFF',
@@ -950,7 +957,7 @@ export default function FriendsPage() {
         title="Add Friend"
         disabled={
           isLoadingLimits ||
-          (tier === 'free' && !canAddFriend(allAddresses.length))
+          (tier === 'free' && limits.maxFriends !== null && limits.maxFriends !== undefined && !canAddFriend(allAddresses.length))
         }
       >
         <Plus className="h-6 w-6" />
