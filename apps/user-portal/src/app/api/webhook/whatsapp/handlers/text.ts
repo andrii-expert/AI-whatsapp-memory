@@ -907,6 +907,57 @@ async function processAIResponse(
 
     const titleType = titleMatch[1].toLowerCase();
     
+    // Handle dashboard requests
+    if (titleType === 'dashboard') {
+      try {
+        // Get user information
+        const user = await getUserById(db, userId);
+        const userName = user?.firstName 
+          ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
+          : 'there';
+        
+        // Get dashboard URL
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dashboard.crackon.ai';
+        const dashboardUrl = `${appUrl}/dashboard`;
+        
+        // Send dashboard message with button
+        await whatsappService.sendCTAButtonMessage(recipient, {
+          bodyText: `Hi, ${userName}!\nYou can see your dashboard here.`,
+          buttonText: 'Open Dashboard',
+          buttonUrl: dashboardUrl,
+        });
+        
+        // Log outgoing message
+        try {
+          const whatsappNumber = await getVerifiedWhatsappNumberByPhone(db, recipient);
+          if (whatsappNumber) {
+            await logOutgoingWhatsAppMessage(db, {
+              whatsappNumberId: whatsappNumber.id,
+              userId,
+              messageType: 'interactive',
+              messageContent: `Dashboard link: ${dashboardUrl}`,
+              isFreeMessage: true,
+            });
+          }
+        } catch (error) {
+          logger.warn({ error, userId }, 'Failed to log outgoing dashboard message');
+        }
+        
+        logger.info({ userId, dashboardUrl }, 'Dashboard request handled successfully');
+        return; // Exit early, don't process further
+      } catch (error) {
+        logger.error(
+          {
+            error,
+            userId,
+            originalUserText,
+          },
+          'Failed to send dashboard message'
+        );
+        // Continue with normal processing if dashboard handling fails
+      }
+    }
+    
     // Extract the action template (everything after Title line)
     const actionLines = aiResponse
       .split('\n')
