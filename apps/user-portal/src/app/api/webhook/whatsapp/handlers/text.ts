@@ -1881,9 +1881,18 @@ async function processAIResponse(
       const results: string[] = [];
       let successCount = 0;
       let failCount = 0;
+
+      // User said "add X to (the) primary list" - ensure we use primary folder even if AI output a different list name
+      const userSaidPrimaryList = originalUserText && /(?:add|put).*(?:to|in)\s+(?:the\s+)?primary\s*(?:list)?/i.test(originalUserText);
       
       for (const actionLine of actionLines) {
-        let parsed = executor.parseAction(actionLine);
+        let lineToParse = actionLine;
+        if (userSaidPrimaryList && /^Create a list item:\s*.+\s*-\s*on folder:\s*.+$/i.test(actionLine)) {
+          // Replace only the folder value so we preserve "- category: X" if present
+          lineToParse = actionLine.replace(/\-\s*on folder:\s*[^-]+/, ' - on folder: primary list');
+          logger.info({ actionLine, lineToParse, originalUserText }, 'Overriding folder to primary list (user said primary)');
+        }
+        let parsed = executor.parseAction(lineToParse);
         
         // If parsing failed but we have a shopping context, try to handle "delete X,Y" format
         // Check both the actionLine and originalUserText

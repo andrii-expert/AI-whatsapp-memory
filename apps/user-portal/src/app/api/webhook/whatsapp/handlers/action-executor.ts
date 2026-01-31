@@ -1216,7 +1216,7 @@ export class ActionExecutor {
       } else {
         missingFields.push('folder name');
       }
-    } else if (trimmed.startsWith('Set primary list:') || (trimmed.startsWith('Change ') && /to\s+primary(\s+list)?$/i.test(trimmed))) {
+    } else if (trimmed.startsWith('Set primary list:') || (trimmed.startsWith('Change ') && /to\s+primary(\s+list)?$/i.test(trimmed)) || /^Make\s+(?:the\s+)?(.+?)\s+as\s+primary(\s+list)?$/i.test(trimmed)) {
       action = 'set_primary';
       resourceType = 'folder';
       isShoppingListFolder = true;
@@ -1224,12 +1224,16 @@ export class ActionExecutor {
       if (setPrimaryMatch) {
         folderRoute = setPrimaryMatch[1].trim();
       } else {
-        // Match "Change X to Primary" or "Change X to Primary list"
         const changeMatch = trimmed.match(/^Change\s+(.+?)\s+to\s+primary(\s+list)?$/i);
         if (changeMatch) {
           folderRoute = changeMatch[1].trim();
         } else {
-          missingFields.push('list name');
+          const makeMatch = trimmed.match(/^Make\s+(?:the\s+)?(.+?)\s+as\s+primary(\s+list)?$/i);
+          if (makeMatch) {
+            folderRoute = makeMatch[1].trim();
+          } else {
+            missingFields.push('list name');
+          }
         }
       }
     } else if (trimmed.startsWith('Create a list category:') || trimmed.startsWith('Create a list sub-folder:')) {
