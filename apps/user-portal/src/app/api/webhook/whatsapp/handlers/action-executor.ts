@@ -7772,6 +7772,47 @@ export class ActionExecutor {
         };
       }
 
+      // Check reminder limit for free users (max 15 reminders)
+      try {
+        const subscription = await getUserSubscription(this.db, this.userId);
+        if (subscription?.plan) {
+          const plan = await getPlanById(this.db, subscription.plan);
+          const metadata = (plan?.metadata as Record<string, unknown> | null) || null;
+          const tier = getPlanTier(metadata);
+          
+          if (tier === 'free') {
+            const reminders = await getRemindersByUserId(this.db, this.userId);
+            const MAX_REMINDERS_FREE = 15;
+            
+            if (reminders.length >= MAX_REMINDERS_FREE) {
+              logger.info(
+                {
+                  userId: this.userId,
+                  tier,
+                  reminderCount: reminders.length,
+                  limit: MAX_REMINDERS_FREE,
+                },
+                'Reminder creation blocked - free plan limit reached'
+              );
+              
+              return {
+                success: false,
+                message: `🔔 *Reminder Limit Reached*\n\nOn the Free plan you can create up to 15 reminders. Upgrade to Pro to create more reminders.\n\nUpgrade at: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.imaginecalendar.com'}/billing`,
+              };
+            }
+          }
+        }
+      } catch (error) {
+        logger.error(
+          {
+            error,
+            userId: this.userId,
+          },
+          'Failed to check plan limits for reminder creation'
+        );
+        // Continue with reminder creation if plan check fails (fail open)
+      }
+
       const reminder = await createReminder(this.db, reminderInput);
 
       logger.info(
@@ -10807,6 +10848,48 @@ export class ActionExecutor {
         success: false,
         message: `A list folder named "${parsed.folderRoute}" already exists.`,
       };
+    }
+
+    // Check folder limit for free users (max 2 folders)
+    try {
+      const subscription = await getUserSubscription(this.db, this.userId);
+      if (subscription?.plan) {
+        const plan = await getPlanById(this.db, subscription.plan);
+        const metadata = (plan?.metadata as Record<string, unknown> | null) || null;
+        const tier = getPlanTier(metadata);
+        
+        if (tier === 'free') {
+          // Count only top-level folders (no parentId)
+          const topLevelFolders = existingFolders.filter(f => !f.parentId);
+          const MAX_FOLDERS_FREE = 2;
+          
+          if (topLevelFolders.length >= MAX_FOLDERS_FREE) {
+            logger.info(
+              {
+                userId: this.userId,
+                tier,
+                folderCount: topLevelFolders.length,
+                limit: MAX_FOLDERS_FREE,
+              },
+              'Shopping list folder creation blocked - free plan limit reached'
+            );
+            
+            return {
+              success: false,
+              message: `📁 *Folder Limit Reached*\n\nOn the Free plan you can create up to 2 list folders. Upgrade to Pro to create more folders.\n\nUpgrade at: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.imaginecalendar.com'}/billing`,
+            };
+          }
+        }
+      }
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          userId: this.userId,
+        },
+        'Failed to check plan limits for shopping list folder creation'
+      );
+      // Continue with folder creation if plan check fails (fail open)
     }
 
     try {
