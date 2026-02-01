@@ -8,7 +8,7 @@ import { logger } from '@imaginecalendar/logger';
 import { WhatsAppService, getWhatsAppConfig, getWhatsAppApiUrl } from '@imaginecalendar/whatsapp';
 import type { WebhookProcessingSummary } from '../types';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { createUserFile, getUserFileFolders, getRecentMessageHistory, getPrimaryCalendar } from '@imaginecalendar/database/queries';
+import { createUserFile, getUserFileFolders, getRecentMessageHistory, getPrimaryCalendar, getUserSubscription, getPlanById, getPlanTier } from '@imaginecalendar/database/queries';
 import { WhatsappTextAnalysisService } from '@imaginecalendar/ai-services';
 import { ActionExecutor } from './action-executor';
 import { CalendarService } from './calendar-service';
@@ -375,6 +375,51 @@ export async function handleMediaMessage(
   const caption = mediaData.caption || '';
   const originalFileName = mediaData.filename || '';
   const mimeType = mediaData.mime_type || (mediaType === 'image' ? 'image/jpeg' : 'application/octet-stream');
+
+  // Check if user is on free plan - file uploads are not allowed for free users
+  try {
+    const subscription = await getUserSubscription(db, whatsappNumber.userId);
+    if (subscription?.plan) {
+      const plan = await getPlanById(db, subscription.plan);
+      const metadata = (plan?.metadata as Record<string, unknown> | null) || null;
+      const tier = getPlanTier(metadata);
+      
+      if (tier === 'free') {
+        logger.info(
+          {
+            messageId: message.id,
+            userId: whatsappNumber.userId,
+            tier,
+          },
+          'File upload blocked for free plan user'
+        );
+        
+        await whatsappService.sendTextMessage(
+          message.from,
+          "📁 *File Upload Not Available*\n\nFile uploads are only available for Pro and Gold plans. Please upgrade your plan to upload files via WhatsApp.\n\nYou can upgrade at: " + (process.env.NEXT_PUBLIC_APP_URL || 'https://app.imaginecalendar.com') + "/billing"
+        );
+
+        await logOutgoingWhatsAppMessage(db, {
+          whatsappNumberId: whatsappNumber.id,
+          userId: whatsappNumber.userId,
+          messageType: 'text',
+          messageContent: 'File upload blocked - free plan limitation',
+        });
+
+        return;
+      }
+    }
+  } catch (error) {
+    logger.error(
+      {
+        error,
+        messageId: message.id,
+        userId: whatsappNumber.userId,
+      },
+      'Failed to check user plan for file upload'
+    );
+    // Continue with upload if plan check fails (fail open)
+  }
 
   try {
     logger.info(

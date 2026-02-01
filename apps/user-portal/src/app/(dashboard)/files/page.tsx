@@ -87,6 +87,8 @@ import {
   isAllowedFileType,
   MAX_FILE_SIZE,
 } from "@/lib/cloudflare-upload";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
 
 type ViewMode = "grid" | "list";
 type SortBy = "date" | "name" | "size";
@@ -205,6 +207,10 @@ export default function FilesPage() {
   const { data: allFolders = [], isLoading: isLoadingFolders } = useQuery(
     trpc.storage.folders.list.queryOptions()
   );
+
+  // Plan limits for file uploads
+  const { tier, isLoading: isLoadingLimits } = usePlanLimits();
+  const isFreeUser = tier === 'free';
 
   // Fetch sharing data
   const { data: myShares = [], isLoading: isLoadingShares } = useQuery(
@@ -591,6 +597,20 @@ export default function FilesPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Check if user is on free plan
+    if (isFreeUser) {
+      toast({
+        title: "Upgrade Required",
+        description: "File uploads are only available for Pro and Gold plans. Please upgrade to upload files.",
+        variant: "error",
+      });
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
 
     if (!isAllowedFileType(file.type)) {
       toast({
@@ -1562,8 +1582,19 @@ export default function FilesPage() {
                       })()}
                       {/* Desktop Upload Button */}
                       <Button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => {
+                          if (isFreeUser) {
+                            toast({
+                              title: "Upgrade Required",
+                              description: "File uploads are only available for Pro and Gold plans. Please upgrade to upload files.",
+                              variant: "error",
+                            });
+                            return;
+                          }
+                          fileInputRef.current?.click();
+                        }}
+                        disabled={isLoadingLimits || isFreeUser}
+                        className="hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Plus className="h-4 w-4" />
                         Upload File
@@ -1571,6 +1602,18 @@ export default function FilesPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Upgrade Prompt for Free Users */}
+                {!isLoadingLimits && isFreeUser && (
+                  <div className="px-4 pb-4 lg:px-0">
+                    <UpgradePrompt
+                      feature="File Uploads"
+                      requiredTier="pro"
+                      variant="alert"
+                      className="border-amber-200 bg-amber-50 text-amber-900"
+                    />
+                  </div>
+                )}
 
                 {/* Search and Sort Bar */}
                 <div className="pb-4 lg:px-0 lg:pb-4 mb-4 w-full flex gap-3">
@@ -1926,8 +1969,19 @@ export default function FilesPage() {
 
                 {/* Floating Action Button - Mobile Only */}
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="lg:hidden fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50"
+                  onClick={() => {
+                    if (isFreeUser) {
+                      toast({
+                        title: "Upgrade Required",
+                        description: "File uploads are only available for Pro and Gold plans. Please upgrade to upload files.",
+                        variant: "error",
+                      });
+                      return;
+                    }
+                    fileInputRef.current?.click();
+                  }}
+                  disabled={isLoadingLimits || isFreeUser}
+                  className="lg:hidden fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Upload File"
                 >
                   <Plus className="h-6 w-6" />
