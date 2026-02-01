@@ -1,4 +1,13 @@
 import { formatDateToLocalLabel } from '../utils/timezone';
+import { routeMessageToDomains } from './merged-prompts-router';
+import {
+  buildShrunkShoppingPrompt,
+  buildShrunkReminderPrompt,
+  buildShrunkEventPrompt,
+  buildShrunkDocumentPrompt,
+  buildShrunkFriendPrompt,
+  buildShrunkNotePrompt,
+} from './merged-prompts-shrunk';
 
 export interface MergedPromptOptions {
   verificationCode?: string;
@@ -85,6 +94,29 @@ export function buildMergedWhatsappPrompt(
   const nextWeekDatesText = Object.entries(nextWeekDates)
     .map(([day, date]) => `  • Next week ${day}: ${date}`)
     .join('\n');
+
+  // Shrunk prompt: when router detects single domain, use condensed prompt (~60-70% fewer tokens)
+  const domains = routeMessageToDomains(userMessage);
+  if (domains.length === 1 && domains[0] !== 'all' && domains[0] !== 'dashboard') {
+    const domain = domains[0];
+    const opts = { ...options, defaultStatusLabel: defaultStatus, defaultCalendarLabel: defaultCalendar };
+    switch (domain) {
+      case 'shopping':
+        return buildShrunkShoppingPrompt(userMessage, opts);
+      case 'reminder':
+        return buildShrunkReminderPrompt(userMessage, opts);
+      case 'event':
+        return buildShrunkEventPrompt(userMessage, opts);
+      case 'document':
+        return buildShrunkDocumentPrompt(userMessage, opts);
+      case 'friend':
+        return buildShrunkFriendPrompt(userMessage, opts);
+      case 'note':
+        return buildShrunkNotePrompt(userMessage, opts);
+      default:
+        break; // fall through to full prompt
+    }
+  }
 
   return [
     "You are the CrackOn WhatsApp Assistant.",
@@ -1092,24 +1124,17 @@ export function buildMergedWhatsappPrompt(
     "      - \"Clear all reminders\" → Delete all reminders",
     "      - \"Delete everything\" (when context is reminders) → Delete all reminders",
     "",
-    "  Delete all {passed|expired|old|paused} reminders",
+    "  Delete all {passed|expired|old|past|paused} reminders",
     "    • Use this when user wants to delete reminders by status",
-    "    • CRITICAL: These are BULK deletion commands - use the exact format below",
-    "    • The format should be: \"Delete a reminder: all {status}\" or \"Delete a reminder: {status}\"",
-    "    • Status options: passed, expired, old, paused",
-    "    • Examples:",
-    "      - \"Delete all passed reminders\" → Delete a reminder: all passed",
-    "      - \"Delete all expired reminders\" → Delete a reminder: all expired",
-    "      - \"Delete all old reminders\" → Delete a reminder: all old",
-    "      - \"Delete all paused reminders\" → Delete a reminder: all paused",
-    "      - \"Remove all passed reminders\" → Delete a reminder: all passed",
-    "      - \"Clear all expired reminders\" → Delete a reminder: all expired",
-    "      - \"Delete passed reminders\" → Delete a reminder: all passed",
-    "      - \"Delete expired reminders\" → Delete a reminder: all expired",
-    "      - \"Delete old reminders\" → Delete a reminder: all old",
-    "      - \"Delete paused reminders\" → Delete a reminder: all paused",
-    "      - \"Remove passed reminders\" → Delete a reminder: all passed",
-    "      - \"Clear expired reminders\" → Delete a reminder: all expired",
+    "    • CRITICAL: These are BULK deletion commands - use the exact format: \"Delete a reminder: all old\"",
+    "    • old, past, expired, passed, paused = SAME thing (reminders that are done/over/inactive). Use: Delete a reminder: all old",
+    "    • Examples (all map to same action):",
+    "      - \"Delete all old reminders\" / \"Delete old reminders\" → Delete a reminder: all old",
+    "      - \"Delete all past reminders\" / \"Delete past reminders\" → Delete a reminder: all old",
+    "      - \"Delete all expired reminders\" / \"Delete expired reminders\" → Delete a reminder: all old",
+    "      - \"Delete all passed reminders\" / \"Delete passed reminders\" → Delete a reminder: all old",
+    "      - \"Delete all paused reminders\" / \"Delete paused reminders\" → Delete a reminder: all old",
+    "      - \"Remove all old reminders\" / \"Clear old reminders\" → Delete a reminder: all old",
     "",
     "  LIST/QUERY OPERATIONS:",
     "  List reminders: {timeframe|status|type|category|all}",
@@ -1643,6 +1668,11 @@ export function buildMergedWhatsappPrompt(
     "     - \"Delete all\" (after listing reminders) → Title: reminder\nDelete all reminders",
     "     - \"Remove all reminders\" → Title: reminder\nDelete all reminders",
     "     - \"Clear all\" (when context is reminders) → Title: reminder\nDelete all reminders",
+    "     - \"Delete all old reminders\" / \"Delete old reminders\" / \"Clear old reminders\" → Title: reminder\nDelete a reminder: all old",
+    "     - \"Delete all past reminders\" / \"Delete past reminders\" → Title: reminder\nDelete a reminder: all old",
+    "     - \"Delete all expired reminders\" / \"Delete expired reminders\" → Title: reminder\nDelete a reminder: all old",
+    "     - \"Delete all passed reminders\" / \"Delete passed reminders\" → Title: reminder\nDelete a reminder: all old",
+    "     - \"Delete all paused reminders\" / \"Delete paused reminders\" → Title: reminder\nDelete a reminder: all old",
     "",
     "   • QUERY: \"show\", \"list\", \"view\", \"display\", \"what\", \"what are\"",
     "     Direct:",
