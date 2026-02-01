@@ -9354,33 +9354,16 @@ export class ActionExecutor {
 
       const taskNameLower = parsed.taskName.toLowerCase().trim();
 
-      // Handle bulk deletion by status (with or without "all")
-      // Support variations like: "all passed", "all passed reminders", "passed", "passed reminders", "all expired", etc.
-      const hasStatusKeyword = taskNameLower.includes('passed') || 
-                               taskNameLower.includes('expired') || 
-                               taskNameLower.includes('old') || 
-                               taskNameLower.includes('paused');
-      
+      // Handle bulk deletion: old, past, expired, passed, paused = all mean the same (non-active-upcoming reminders)
+      const bulkKeywords = ['passed', 'expired', 'old', 'past', 'paused'];
+      const hasStatusKeyword = bulkKeywords.some(kw => taskNameLower.includes(kw));
       const hasAllKeyword = taskNameLower.includes('all');
-      
-      // Also check for exact matches or patterns that indicate bulk deletion
-      const isExactBulkMatch = taskNameLower === 'passed' ||
-                               taskNameLower === 'expired' ||
-                               taskNameLower === 'old' ||
-                               taskNameLower === 'paused' ||
-                               taskNameLower === 'passed reminders' ||
-                               taskNameLower === 'expired reminders' ||
-                               taskNameLower === 'old reminders' ||
-                               taskNameLower === 'paused reminders' ||
-                               taskNameLower === 'all passed' ||
-                               taskNameLower === 'all expired' ||
-                               taskNameLower === 'all old' ||
-                               taskNameLower === 'all paused' ||
-                               taskNameLower === 'all passed reminders' ||
-                               taskNameLower === 'all expired reminders' ||
-                               taskNameLower === 'all old reminders' ||
-                               taskNameLower === 'all paused reminders';
-      
+      const isExactBulkMatch = bulkKeywords.some(kw =>
+        taskNameLower === kw ||
+        taskNameLower === `${kw} reminders` ||
+        taskNameLower === `all ${kw}` ||
+        taskNameLower === `all ${kw} reminders`
+      );
       const isBulkDelete = hasStatusKeyword && (hasAllKeyword || isExactBulkMatch);
 
       if (isBulkDelete) {
@@ -9397,19 +9380,11 @@ export class ActionExecutor {
         const user = await getUserById(this.db, this.userId);
         const userTimezone = user?.timezone || 'UTC';
 
-        let remindersToDelete: any[] = [];
-        let filterType = '';
-
-        if (taskNameLower.includes('paused')) {
-          remindersToDelete = allReminders.filter(r => !r.active);
-          filterType = 'paused';
-        } else if (taskNameLower.includes('passed') || taskNameLower.includes('expired')) {
-          remindersToDelete = allReminders.filter(r => this.isReminderPassed(r, userTimezone));
-          filterType = taskNameLower.includes('expired') ? 'expired' : 'passed';
-        } else if (taskNameLower.includes('old')) {
-          remindersToDelete = allReminders.filter(r => this.isReminderOld(r));
-          filterType = 'old';
-        }
+        // old, past, expired, passed, paused = same: delete reminders that are passed OR old OR paused
+        const remindersToDelete = allReminders.filter(r =>
+          this.isReminderPassed(r, userTimezone) || this.isReminderOld(r) || !r.active
+        );
+        const filterType = 'old';
 
         if (remindersToDelete.length === 0) {
           return {
