@@ -7778,8 +7778,22 @@ export class ActionExecutor {
         if (subscription?.plan) {
           const plan = await getPlanById(this.db, subscription.plan);
           const metadata = (plan?.metadata as Record<string, unknown> | null) || null;
-          const tier = getPlanTier(metadata);
           
+          // Get tier from metadata, but fallback to plan ID if metadata doesn't have tier
+          let tier = getPlanTier(metadata);
+          // Fallback: if tier is 'free' but plan ID suggests otherwise, infer tier from plan ID
+          if (tier === 'free' && subscription.plan) {
+            const planId = subscription.plan;
+            if (planId === 'beta') {
+              tier = 'beta';
+            } else if (planId.startsWith('silver')) {
+              tier = 'silver';
+            } else if (planId.startsWith('gold')) {
+              tier = 'gold';
+            }
+          }
+          
+          // Only apply limit to free users - beta, silver/pro, and gold users have unlimited reminders
           if (tier === 'free') {
             const reminders = await getRemindersByUserId(this.db, this.userId);
             const MAX_REMINDERS_FREE = 15;
@@ -7789,6 +7803,7 @@ export class ActionExecutor {
                 {
                   userId: this.userId,
                   tier,
+                  planId: subscription.plan,
                   reminderCount: reminders.length,
                   limit: MAX_REMINDERS_FREE,
                 },
@@ -7800,6 +7815,16 @@ export class ActionExecutor {
                 message: `🔔 *Reminder Limit Reached*\n\nOn the Free plan you can create up to 15 reminders. Upgrade to Pro to create more reminders.\n\nUpgrade at: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.imaginecalendar.com'}/billing`,
               };
             }
+          } else {
+            // Beta, silver/pro, or gold - unlimited reminders, no limit check needed
+            logger.debug(
+              {
+                userId: this.userId,
+                tier,
+                planId: subscription.plan,
+              },
+              'Reminder creation allowed - user is on paid plan (unlimited reminders)'
+            );
           }
         }
       } catch (error) {
