@@ -62,7 +62,6 @@ import { ShareDetailsModal } from "@/components/share-details-modal";
 import { format } from "date-fns";
 import { usePlanLimits } from "@/hooks/use-plan-limits";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
-import { Badge } from "@imaginecalendar/ui/badge";
 
 export default function FriendsPage() {
   const trpc = useTRPC();
@@ -205,34 +204,6 @@ export default function FriendsPage() {
 
   // Plan limits for friends
   const { limits, canAddFriend, getFriendsRemaining, tier, isLoading: isLoadingLimits } = usePlanLimits();
-  
-  // Get subscription and plan info for display
-  const { data: subscription } = useQuery(trpc.billing.getSubscription.queryOptions());
-  const { data: plans = [] } = useQuery(trpc.plans.listActive.queryOptions());
-  const currentPlan = plans.find(p => p.id === subscription?.plan);
-  
-  // Get plan name for display
-  const getPlanDisplayName = () => {
-    if (!subscription?.plan) return 'Free';
-    if (subscription.plan === 'beta') return 'Beta';
-    if (subscription.plan === 'free') return 'Free';
-    if (subscription.plan.startsWith('silver')) return 'Pro';
-    if (subscription.plan.startsWith('gold')) return 'Gold';
-    return currentPlan?.name || subscription.plan;
-  };
-  
-  const getTierBadgeColor = () => {
-    switch (tier) {
-      case 'beta':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'silver':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'gold':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
 
   // Debounce search term
   useEffect(() => {
@@ -717,14 +688,7 @@ export default function FriendsPage() {
           {/* Header */}
           <div className="px-4 pt-6 pb-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Friends</h1>
-                {!isLoadingLimits && subscription && (
-                  <Badge className={cn("text-xs font-medium", getTierBadgeColor())}>
-                    {getPlanDisplayName()}
-                  </Badge>
-                )}
-              </div>
+              <h1 className="text-[20px] font-semibold leading-[130%] text-[#141718]">Your Friends</h1>
               <div className="flex items-center gap-2">
                 <Button
                   onClick={() => setIsInviteModalOpen(true)}
