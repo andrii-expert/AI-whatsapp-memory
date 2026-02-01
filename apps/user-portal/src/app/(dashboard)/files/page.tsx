@@ -211,6 +211,10 @@ export default function FilesPage() {
   // Plan limits for file uploads
   const { tier, isLoading: isLoadingLimits } = usePlanLimits();
   const isFreeUser = tier === 'free';
+  const isProOrBeta = tier === 'silver' || tier === 'beta';
+  
+  // 2GB storage limit for Pro and Beta users
+  const STORAGE_LIMIT_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 
   // Fetch sharing data
   const { data: myShares = [], isLoading: isLoadingShares } = useQuery(
@@ -612,6 +616,37 @@ export default function FilesPage() {
       return;
     }
 
+    // Check storage limit for Pro and Beta users (2GB)
+    if (isProOrBeta && stats) {
+      const currentStorage = stats.storageUsed || 0;
+      if (currentStorage >= STORAGE_LIMIT_BYTES) {
+        toast({
+          title: "Storage Limit Reached",
+          description: "You've reached limitation.",
+          variant: "error",
+        });
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+      
+      // Check if adding this file would exceed the limit
+      if (currentStorage + file.size > STORAGE_LIMIT_BYTES) {
+        toast({
+          title: "Storage Limit Reached",
+          description: "You've reached limitation.",
+          variant: "error",
+        });
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+    }
+
     if (!isAllowedFileType(file.type)) {
       toast({
         title: "Invalid file type",
@@ -639,6 +674,32 @@ export default function FilesPage() {
   // Handle upload
   const handleUpload = async () => {
     if (!selectedFile || !uploadTitle.trim()) return;
+
+    // Double-check storage limit before uploading (in case stats changed)
+    if (isProOrBeta && stats) {
+      const currentStorage = stats.storageUsed || 0;
+      if (currentStorage >= STORAGE_LIMIT_BYTES) {
+        toast({
+          title: "Storage Limit Reached",
+          description: "You've reached limitation.",
+          variant: "error",
+        });
+        setIsUploadModalOpen(false);
+        resetUploadForm();
+        return;
+      }
+      
+      if (currentStorage + selectedFile.size > STORAGE_LIMIT_BYTES) {
+        toast({
+          title: "Storage Limit Reached",
+          description: "You've reached limitation.",
+          variant: "error",
+        });
+        setIsUploadModalOpen(false);
+        resetUploadForm();
+        return;
+      }
+    }
 
     setIsUploading(true);
     setUploadProgress(10);
@@ -1591,9 +1652,18 @@ export default function FilesPage() {
                             });
                             return;
                           }
+                          // Check storage limit for Pro/Beta users
+                          if (isProOrBeta && stats && stats.storageUsed >= STORAGE_LIMIT_BYTES) {
+                            toast({
+                              title: "Storage Limit Reached",
+                              description: "You've reached limitation.",
+                              variant: "error",
+                            });
+                            return;
+                          }
                           fileInputRef.current?.click();
                         }}
-                        disabled={isLoadingLimits || isFreeUser}
+                        disabled={isLoadingLimits || isFreeUser || (isProOrBeta && stats && stats.storageUsed >= STORAGE_LIMIT_BYTES)}
                         className="hidden lg:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Plus className="h-4 w-4" />
@@ -1978,9 +2048,18 @@ export default function FilesPage() {
                       });
                       return;
                     }
+                    // Check storage limit for Pro/Beta users
+                    if (isProOrBeta && stats && stats.storageUsed >= STORAGE_LIMIT_BYTES) {
+                      toast({
+                        title: "Storage Limit Reached",
+                        description: "You've reached limitation.",
+                        variant: "error",
+                      });
+                      return;
+                    }
                     fileInputRef.current?.click();
                   }}
-                  disabled={isLoadingLimits || isFreeUser}
+                  disabled={isLoadingLimits || isFreeUser || (isProOrBeta && stats && stats.storageUsed >= STORAGE_LIMIT_BYTES)}
                   className="lg:hidden fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all z-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Upload File"
                 >
