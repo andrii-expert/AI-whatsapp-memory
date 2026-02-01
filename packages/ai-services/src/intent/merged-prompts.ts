@@ -1,13 +1,4 @@
 import { formatDateToLocalLabel } from '../utils/timezone';
-import { routeMessageToDomains } from './merged-prompts-router';
-import {
-  buildShrunkShoppingPrompt,
-  buildShrunkReminderPrompt,
-  buildShrunkEventPrompt,
-  buildShrunkDocumentPrompt,
-  buildShrunkFriendPrompt,
-  buildShrunkNotePrompt,
-} from './merged-prompts-shrunk';
 
 export interface MergedPromptOptions {
   verificationCode?: string;
@@ -94,29 +85,6 @@ export function buildMergedWhatsappPrompt(
   const nextWeekDatesText = Object.entries(nextWeekDates)
     .map(([day, date]) => `  • Next week ${day}: ${date}`)
     .join('\n');
-
-  // Shrunk prompt: when router detects single domain, use condensed prompt (~60-70% fewer tokens)
-  const domains = routeMessageToDomains(userMessage);
-  if (domains.length === 1 && domains[0] !== 'all' && domains[0] !== 'dashboard') {
-    const domain = domains[0];
-    const opts = { ...options, defaultStatusLabel: defaultStatus, defaultCalendarLabel: defaultCalendar };
-    switch (domain) {
-      case 'shopping':
-        return buildShrunkShoppingPrompt(userMessage, opts);
-      case 'reminder':
-        return buildShrunkReminderPrompt(userMessage, opts);
-      case 'event':
-        return buildShrunkEventPrompt(userMessage, opts);
-      case 'document':
-        return buildShrunkDocumentPrompt(userMessage, opts);
-      case 'friend':
-        return buildShrunkFriendPrompt(userMessage, opts);
-      case 'note':
-        return buildShrunkNotePrompt(userMessage, opts);
-      default:
-        break; // fall through to full prompt
-    }
-  }
 
   return [
     "You are the CrackOn WhatsApp Assistant.",
