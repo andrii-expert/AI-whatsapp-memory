@@ -1451,9 +1451,28 @@ export default function RemindersPage() {
       payload.intervalMinutes = form.intervalMinutes;
     } else if (form.frequency === "once") {
       if (form.targetDate && form.targetDate.trim() !== "") {
-        payload.targetDate = new Date(form.targetDate);
+        // Parse datetime-local input correctly (format: "YYYY-MM-DDTHH:mm")
+        // datetime-local returns local time without timezone, so we need to parse it as local time
+        const dateTimeString = form.targetDate.trim();
+        // Split into date and time parts
+        const [datePart, timePart] = dateTimeString.split('T');
+        if (datePart && timePart) {
+          const [year, month, day] = datePart.split('-').map(Number);
+          const [hours, minutes] = timePart.split(':').map(Number);
+          // Create date in local timezone (not UTC)
+          // This ensures the time entered by the user is preserved exactly
+          const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+          payload.targetDate = localDate;
+        } else {
+          // Fallback to original parsing if format is unexpected
+          payload.targetDate = new Date(form.targetDate);
+        }
       } else {
         payload.daysFromNow = form.daysFromNow;
+        // Include time field when using daysFromNow
+        if (form.time) {
+          payload.time = form.time;
+        }
       }
     } else if (form.frequency === "weekly") {
       payload.daysOfWeek = form.daysOfWeek;
