@@ -4028,7 +4028,7 @@ export class ActionExecutor {
             : (folderName && folderName.trim()) ? folderName : 'Your';
         return {
           success: true,
-          message: `🛒 *Your ${listLabel} List is empty${statusText}*`,
+          message: `📝 *Your ${listLabel} List is empty${statusText}*`,
         };
       }
       const statusText = statusFilter ? ` (${statusFilter})` : '';
@@ -4037,7 +4037,7 @@ export class ActionExecutor {
         folderRouteLower === 'all'
           ? 'All Items'
           : (folderName && folderName.trim()) ? folderName : 'Your';
-      let message = `🛍️ *${listLabel} List${statusText}:*\n`;
+      let message = `📝 *${listLabel} List${statusText}:*\n`;
 
       const displayedItems = items.slice(0, 20);
       displayedItems.forEach((item, index) => {
