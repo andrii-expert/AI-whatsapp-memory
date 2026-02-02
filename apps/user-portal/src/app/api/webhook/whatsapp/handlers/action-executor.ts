@@ -419,19 +419,20 @@ export class ActionExecutor {
         }
       }
       
-    } else if (trimmed.startsWith('List shopping items:')) {
+    } else if (trimmed.startsWith('List items:') || trimmed.startsWith('List shopping items:')) {
       action = 'list';
       resourceType = 'shopping';
-      // Match: "List shopping items: {folder|all} - status: {open|completed|all}"
-      const matchWithStatus = trimmed.match(/^List shopping items:\s*(.+?)\s*-\s*status:\s*(.+)$/i);
+      // Match: "List items: {folder|all} - status: ..." or "List shopping items: ..."
+      const listItemsPrefix = trimmed.startsWith('List items:') ? 'List items:' : 'List shopping items:';
+      const matchWithStatus = trimmed.match(new RegExp(`^${listItemsPrefix}\\s*(.+?)\\s*-\\s*status:\\s*(.+)$`, 'i'));
       if (matchWithStatus) {
         // Preserve the raw folder route (including "all") so downstream logic
         // can distinguish between "all" vs no folder (Home list)
         folderRoute = matchWithStatus[1].trim();
         status = matchWithStatus[2].trim();
       } else {
-        // Match: "List shopping items: {folder|all}" (no status)
-        const matchWithoutStatus = trimmed.match(/^List shopping items:\s*(.+)$/i);
+        // Match: "List items: {folder|all}" or "List shopping items: ..." (no status)
+        const matchWithoutStatus = trimmed.match(new RegExp(`^${listItemsPrefix}\\s*(.+)$`, 'i'));
         if (matchWithoutStatus) {
           const folderOrAll = matchWithoutStatus[1].trim();
           // Preserve "all" so downstream logic can handle it specially
@@ -1145,11 +1146,12 @@ export class ActionExecutor {
       } else {
         folderRoute = undefined; // List all folders
       }
-    } else if (trimmed.startsWith('Create a shopping list folder:')) {
+    } else if (trimmed.startsWith('Create a list folder:') || trimmed.startsWith('Create a shopping list folder:')) {
       action = 'create';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Create a shopping list folder:\s*(.+)$/i);
+      const prefix = trimmed.startsWith('Create a list folder:') ? 'Create a list folder:' : 'Create a shopping list folder:';
+      const match = trimmed.match(new RegExp(`^${prefix}\\s*(.+)$`, 'i'));
       if (match) {
         folderRoute = match[1].trim();
       } else {
@@ -1165,22 +1167,24 @@ export class ActionExecutor {
       } else {
         missingFields.push('folder name');
       }
-    } else if (trimmed.startsWith('Edit a shopping list folder:')) {
+    } else if (trimmed.startsWith('Edit a list folder:') || trimmed.startsWith('Edit a shopping list folder:')) {
       action = 'edit';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Edit a shopping list folder:\s*(.+?)\s*-\s*to:\s*(.+)$/i);
+      const prefix = trimmed.startsWith('Edit a list folder:') ? 'Edit a list folder:' : 'Edit a shopping list folder:';
+      const match = trimmed.match(new RegExp(`^${prefix}\\s*(.+?)\\s*-\\s*to:\\s*(.+)$`, 'i'));
       if (match) {
         folderRoute = match[1].trim();
         newName = match[2].trim();
       } else {
         missingFields.push('folder name or new name');
       }
-    } else if (trimmed.startsWith('Delete a shopping list folder:')) {
+    } else if (trimmed.startsWith('Delete a list folder:') || trimmed.startsWith('Delete a shopping list folder:')) {
       action = 'delete';
       resourceType = 'folder';
       isShoppingListFolder = true;
-      const match = trimmed.match(/^Delete a shopping list folder:\s*(.+)$/i);
+      const prefix = trimmed.startsWith('Delete a list folder:') ? 'Delete a list folder:' : 'Delete a shopping list folder:';
+      const match = trimmed.match(new RegExp(`^${prefix}\\s*(.+)$`, 'i'));
       if (match) {
         folderRoute = match[1].trim();
       } else {
@@ -1477,9 +1481,12 @@ export class ActionExecutor {
 
     // Update isShoppingListFolder if it wasn't already set in parsing
     if (isShoppingListFolder === undefined) {
-      isShoppingListFolder = trimmed.startsWith('Create a shopping list folder:') ||
+      isShoppingListFolder = trimmed.startsWith('Create a list folder:') ||
+        trimmed.startsWith('Create a shopping list folder:') ||
+        trimmed.startsWith('Edit a list folder:') ||
         trimmed.startsWith('Edit a shopping list folder:') ||
         trimmed.startsWith('Set primary list:') ||
+        trimmed.startsWith('Delete a list folder:') ||
         trimmed.startsWith('Delete a shopping list folder:') ||
         trimmed.startsWith('Create a shopping list category:') ||
         trimmed.startsWith('Create a shopping list sub-folder:') ||
