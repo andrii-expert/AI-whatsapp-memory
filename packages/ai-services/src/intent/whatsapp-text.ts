@@ -114,7 +114,6 @@ export class WhatsappTextAnalysisService {
         model: this.model,
         prompt,
         temperature: 0.2, // Lower temperature for more consistent, template-following responses
-        maxOutputTokens: 512, // Limit output - responses are typically Title + 1–2 lines; reduces latency
       });
 
       const response = result.text.trim();
