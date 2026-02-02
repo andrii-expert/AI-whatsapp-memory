@@ -1998,21 +1998,21 @@ export class ActionExecutor {
         status: 'open',
       });
 
-      // Determine the message format based on whether it's the primary folder
+      // Determine the message format: use actual folder name (e.g. School List when primary is School)
       let message: string;
       if (folderId) {
-        if (isPrimaryFolder) {
-          // Primary folder - present as Home List
-          message = `✅ *Added to Home List:*\nItem/s: ${parsed.taskName}`;
+        if (isPrimaryFolder && primaryFolder?.name) {
+          // Primary folder - show its actual name (e.g. "School List", not "Home List")
+          message = `✅ *Added to ${primaryFolder.name} List:*\nItem/s: ${parsed.taskName}`;
         } else {
-          // Not primary folder - include folder name, without the word "shopping"
+          // Not primary folder - include folder name
           const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
           const folderName = folder?.name || parsed.folderRoute || 'List';
           message = `✅ *Added to ${folderName} List:*\nItem/s: ${parsed.taskName}`;
         }
       } else {
-        // No folder (goes to \"All Items\") - use Home List as the main list concept
-        message = `✅ *Added to Home List:*\nItem/s: ${parsed.taskName}`;
+        // No folder (no primary set; item goes to All Items) - generic message
+        message = `✅ *Added to your list:*\nItem/s: ${parsed.taskName}`;
       }
 
       return {
@@ -4021,24 +4021,22 @@ export class ActionExecutor {
 
       if (items.length === 0) {
         const statusText = statusFilter ? ` (${statusFilter})` : '';
+        // Use actual folder name (e.g. School) when showing primary list, not "Home"
         const listLabel =
           folderRouteLower === 'all'
             ? 'All Items'
-            : isPrimaryFolder || !folderName
-            ? 'Home'
-            : folderName;
+            : (folderName && folderName.trim()) ? folderName : 'Your';
         return {
           success: true,
           message: `🛒 *Your ${listLabel} List is empty${statusText}*`,
         };
       }
       const statusText = statusFilter ? ` (${statusFilter})` : '';
+      // Use actual folder name (e.g. School) when showing primary list, not "Home"
       const listLabel =
         folderRouteLower === 'all'
           ? 'All Items'
-          : isPrimaryFolder || !folderName
-          ? 'Home'
-          : folderName;
+          : (folderName && folderName.trim()) ? folderName : 'Your';
       let message = `🛍️ *${listLabel} List${statusText}:*\n`;
 
       const displayedItems = items.slice(0, 20);
