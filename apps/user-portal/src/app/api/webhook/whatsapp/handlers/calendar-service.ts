@@ -2013,7 +2013,12 @@ export class CalendarService implements ICalendarService {
             timeMax.setHours(23, 59, 59, 999);
             break;
           case 'all':
-            // No time range - get all events
+            // "Show all meetings" = upcoming events only (exclude past)
+            timeMin = new Date(now);
+            timeMin.setHours(0, 0, 0, 0);
+            timeMax = new Date(now);
+            timeMax.setDate(timeMax.getDate() + 30);
+            timeMax.setHours(23, 59, 59, 999);
             break;
         }
       } else if (intent.startDate || intent.targetEventDate) {
