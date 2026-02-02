@@ -1473,9 +1473,16 @@ export default function RemindersPage() {
         if (datePart && timePart) {
           const [year, month, day] = datePart.split('-').map(Number);
           const [hours, minutes] = timePart.split(':').map(Number);
-          // Create date in local timezone (not UTC)
-          // This ensures the time entered by the user is preserved exactly
+          
+          // Create date string in ISO format with explicit timezone offset
+          // We need to create a date that represents the exact local time the user entered
+          // The datetime-local input gives us local time, so we create a Date in local timezone
+          // When this Date is serialized to JSON (for API), it will be in UTC, but the backend
+          // should store it as-is and we'll convert it back when displaying
           const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+          
+          // The Date object represents the correct moment in time
+          // When serialized, it becomes UTC, but we'll handle conversion on display
           payload.targetDate = localDate;
         } else {
           // Fallback to original parsing if format is unexpected
@@ -1588,6 +1595,27 @@ export default function RemindersPage() {
     const ampm = hour >= 12 ? "PM" : "AM";
     const hour12 = hour % 12 || 12;
     return `${hour12}:${minutes || "00"} ${ampm}`;
+  };
+
+  // Helper function to get time for display (handles both time string and targetDate)
+  const getDisplayTime = (reminder: any) => {
+    // For "once" reminders with targetDate, extract time from targetDate
+    if (reminder.frequency === "once" && reminder.targetDate) {
+      const targetDate = reminder.targetDate instanceof Date 
+        ? reminder.targetDate 
+        : new Date(reminder.targetDate);
+      // Format time from targetDate in user's timezone
+      const userTimezone = (user as any)?.timezone || 'Africa/Johannesburg';
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: userTimezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      return formatter.format(targetDate);
+    }
+    // For other reminders, use the time string
+    return formatTime(reminder.time);
   };
 
   // Helper function to calculate time until next occurrence
@@ -2065,7 +2093,7 @@ export default function RemindersPage() {
               {filtered.map((r, index) => {
                 const timeUntilNext = getTimeUntilNext(r);
                 const frequencyText = getFrequencyText(r);
-                const timeText = formatTime(r.time);
+                const timeText = getDisplayTime(r);
                 
                 return (
                   <div
