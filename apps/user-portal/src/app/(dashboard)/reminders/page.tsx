@@ -120,6 +120,19 @@ function pad(n: number): string {
 }
 
 /**
+ * Format a Date object for datetime-local input (YYYY-MM-DDTHH:mm)
+ * This preserves the local time without timezone conversion
+ */
+function formatDateForDateTimeLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+/**
  * Create a Date object representing a specific time today in the user's timezone
  */
 function parseTimeStringToToday(timeStr: string, timezone?: string): Date {
@@ -944,7 +957,7 @@ export default function RemindersPage() {
       minuteOfHour: 0,
       intervalMinutes: 5,
       daysFromNow: 1,
-      targetDate: tomorrow.toISOString().slice(0, 16), // Format for datetime-local input
+      targetDate: formatDateForDateTimeLocal(tomorrow), // Format for datetime-local input (preserves local time)
       dayOfMonth: 1,
       month: 1,
       daysOfWeek: [1], // Default to Monday
@@ -1338,10 +1351,11 @@ export default function RemindersPage() {
 
   const openEditForm = useCallback((reminder: Reminder) => {
     const targetDateValue = reminder.targetDate
-      ? (reminder.targetDate instanceof Date
-        ? reminder.targetDate
-        : new Date(reminder.targetDate)
-      ).toISOString().slice(0, 16)
+      ? formatDateForDateTimeLocal(
+          reminder.targetDate instanceof Date
+            ? reminder.targetDate
+            : new Date(reminder.targetDate)
+        )
       : initialFormState.targetDate;
 
     setForm({
@@ -2564,7 +2578,7 @@ export default function RemindersPage() {
                       if (v === "date") {
                         const now = new Date();
                         now.setHours(9, 0, 0, 0);
-                        setForm({ ...form, targetDate: now.toISOString().slice(0, 16), daysFromNow: 0 });
+                        setForm({ ...form, targetDate: formatDateForDateTimeLocal(now), daysFromNow: 0 });
                       } else {
                         setForm({ ...form, targetDate: "", daysFromNow: 1 });
                       }
@@ -2593,7 +2607,7 @@ export default function RemindersPage() {
                         setForm({ ...form, targetDate: e.target.value })
                       }
                       className="h-11"
-                      min={new Date().toISOString().slice(0, 16)}
+                      min={formatDateForDateTimeLocal(new Date())}
                     />
                     <p className="text-xs text-gray-500">
                       Reminder will trigger on this specific date and time
