@@ -881,7 +881,7 @@ export function buildMergedWhatsappPrompt(
     "  Edit a shopping list folder: {current_folder_route} - to: {new_name}",
     "  Set primary list: {folder_route}",
     "    • ⚠️ CRITICAL: \"Change X to primary\" / \"Make X primary\" / \"Set X as primary\" = Set primary list. NEVER use Edit or ask for clarification!",
-    "    • NEVER output \"already set as primary\" or similar - ALWAYS use Set primary list: X. The system checks DB and responds correctly.",
+    "    • NEVER output \"already set as primary\" or \"Would you like to change it to a different list\" - ALWAYS output Set primary list: X. You cannot know which list is primary; the system executes and responds.",
     "    • Use the list name the user gave (e.g. \"Home List\", \"Homt List\"). The system will match \"Homt\" to \"Home\".",
     "    • Examples: \"Change Home List to primary\" → Set primary list: Home List",
     "      \"Change Homt List to primary\" → Set primary list: Homt List (or Home List)",

@@ -10804,7 +10804,9 @@ export class ActionExecutor {
     folderRoute: string,
     options?: { ownedOnly?: boolean }
   ): Promise<string | null> {
-    const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
+    // Normalize: strip leading "the " so "The Gym list" matches stored "Gym list"
+    const normalizedRoute = folderRoute.replace(/^\s*the\s+/i, '').trim();
+    const parts = normalizedRoute.split(/[\/→>]/).map(p => p.trim());
     let folders = await getUserShoppingListFolders(this.db, this.userId);
     const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
 
@@ -11002,15 +11004,8 @@ export class ActionExecutor {
       const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
       const folderName = folder?.name ?? parsed.folderRoute;
 
-      // Check actual DB state: if already primary, inform user (don't assume - verify)
-      const currentPrimary = await getPrimaryShoppingListFolder(this.db, this.userId);
-      if (currentPrimary?.id === folderId) {
-        return {
-          success: true,
-          message: `ℹ️ *${folderName}* is already your primary list.`,
-        };
-      }
-
+      // Always perform the update (no-op if already primary). Never claim "already primary"
+      // from code - that was causing false positives when resolution was wrong.
       await setPrimaryShoppingListFolder(this.db, folderId, this.userId);
 
       logger.info({ userId: this.userId, folderId, folderName }, 'Set primary shopping list folder');
