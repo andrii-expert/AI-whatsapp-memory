@@ -67,6 +67,7 @@ import {
   deleteShoppingListFolder,
   getShoppingListFolderById,
   getPrimaryShoppingListFolder,
+  setPrimaryShoppingListFolder,
   getUserFriends,
   getFriendById,
   createFriend,
@@ -1154,6 +1155,16 @@ export class ActionExecutor {
       } else {
         missingFields.push('folder name');
       }
+    } else if (trimmed.startsWith('Set primary list:')) {
+      action = 'set_primary';
+      resourceType = 'folder';
+      isShoppingListFolder = true;
+      const match = trimmed.match(/^Set primary list:\s*(.+)$/i);
+      if (match && match[1].trim()) {
+        folderRoute = match[1].trim();
+      } else {
+        missingFields.push('folder name');
+      }
     } else if (trimmed.startsWith('Edit a shopping list folder:')) {
       action = 'edit';
       resourceType = 'folder';
@@ -1468,6 +1479,7 @@ export class ActionExecutor {
     if (isShoppingListFolder === undefined) {
       isShoppingListFolder = trimmed.startsWith('Create a shopping list folder:') ||
         trimmed.startsWith('Edit a shopping list folder:') ||
+        trimmed.startsWith('Set primary list:') ||
         trimmed.startsWith('Delete a shopping list folder:') ||
         trimmed.startsWith('Create a shopping list category:') ||
         trimmed.startsWith('Create a shopping list sub-folder:') ||
@@ -1764,6 +1776,14 @@ export class ActionExecutor {
           return {
             success: false,
             message: "I'm sorry, I couldn't understand what you want to show.",
+          };
+        case 'set_primary':
+          if (parsed.isShoppingListFolder) {
+            return await this.setPrimaryShoppingList(parsed);
+          }
+          return {
+            success: false,
+            message: "I'm sorry, I couldn't set the primary list. Please try again.",
           };
         case 'create_subfolder':
           if (parsed.isShoppingListFolder) {
@@ -10744,7 +10764,16 @@ export class ActionExecutor {
       const shorter = n1.length < n2.length ? n1 : n2;
       if (shorter.length >= 4) return true;
     }
-    
+
+    // Single-character typo tolerance (e.g. "homt" matches "home", "Homt List" matches "Home List")
+    if (n1.length === n2.length && n1.length >= 4 && n1.length <= 20) {
+      let diffCount = 0;
+      for (let i = 0; i < n1.length && diffCount <= 1; i++) {
+        if (n1[i] !== n2[i]) diffCount++;
+      }
+      if (diffCount === 1) return true;
+    }
+
     return false;
   }
 
@@ -10907,6 +10936,43 @@ export class ActionExecutor {
       return {
         success: false,
         message: `I'm sorry, I couldn't create the list folder "${parsed.folderRoute}". Please try again.`,
+      };
+    }
+  }
+
+  private async setPrimaryShoppingList(parsed: ParsedAction): Promise<{ success: boolean; message: string }> {
+    if (!parsed.folderRoute) {
+      return {
+        success: false,
+        message: "I need to know which list you want to set as primary. Please specify the list name.",
+      };
+    }
+
+    try {
+      const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      if (!folderId) {
+        return {
+          success: false,
+          message: `I couldn't find the list "${parsed.folderRoute}". Please make sure the list exists.`,
+        };
+      }
+
+      const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
+      const folderName = folder?.name ?? parsed.folderRoute;
+
+      await setPrimaryShoppingListFolder(this.db, folderId, this.userId);
+
+      logger.info({ userId: this.userId, folderId, folderName }, 'Set primary shopping list folder');
+
+      return {
+        success: true,
+        message: `✅ *Primary List Updated:*\n${folderName} is now your primary list.`,
+      };
+    } catch (error) {
+      logger.error({ error, folderRoute: parsed.folderRoute, userId: this.userId }, 'Failed to set primary shopping list folder');
+      return {
+        success: false,
+        message: `I'm sorry, I couldn't set "${parsed.folderRoute}" as primary. Please try again.`,
       };
     }
   }
