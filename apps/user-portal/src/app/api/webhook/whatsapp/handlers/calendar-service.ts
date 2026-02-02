@@ -2,7 +2,7 @@
 // Copied from voice-worker for use in text message handling
 
 import type { Database } from '@imaginecalendar/database/client';
-import { getPrimaryCalendar, updateCalendarTokens, getWhatsAppCalendars, getCalendarsByIds, getCalendarsByProviderCalendarIds } from '@imaginecalendar/database/queries';
+import { getPrimaryCalendar, updateCalendarTokens, getWhatsAppCalendars, getCalendarsByIds, getCalendarsByProviderCalendarIds, getUserSubscription, getPlanById, getPlanTier, getUserCalendars } from '@imaginecalendar/database/queries';
 import { createCalendarProvider } from '@imaginecalendar/calendar-integrations/factory';
 import type { Contact, CalendarProvider } from '@imaginecalendar/calendar-integrations/types';
 import type { ICalendarService, CalendarIntent } from '@imaginecalendar/ai-services';
@@ -564,6 +564,92 @@ export class CalendarService implements ICalendarService {
         'Sending event to calendar provider with calendar timezone'
       );
       
+      // Check event limit for free users (max 15 events)
+      try {
+        const subscription = await getUserSubscription(this.db, userId);
+        if (subscription?.plan) {
+          const plan = await getPlanById(this.db, subscription.plan);
+          const metadata = (plan?.metadata as Record<string, unknown> | null) || null;
+          const tier = getPlanTier(metadata);
+          
+          if (tier === 'free') {
+            const MAX_EVENTS_FREE = 15;
+            
+            // Query all events from all user's calendars to count them
+            const userCalendars = await getUserCalendars(this.db, userId);
+            const activeCalendars = userCalendars.filter(cal => cal.isActive);
+            
+            let totalEventCount = 0;
+            const now = new Date();
+            const oneYearAgo = new Date(now);
+            oneYearAgo.setFullYear(now.getFullYear() - 1);
+            const oneYearAhead = new Date(now);
+            oneYearAhead.setFullYear(now.getFullYear() + 1);
+            
+            // Count events from all active calendars
+            for (const cal of activeCalendars) {
+              try {
+                const calProvider = createCalendarProvider(cal.provider);
+                const accessToken = cal.accessToken;
+                if (!accessToken) continue;
+                
+                const events = await this.withTokenRefresh(
+                  cal.id,
+                  accessToken,
+                  cal.refreshToken || null,
+                  calProvider,
+                  async (token) => {
+                    try {
+                      return await calProvider.searchEvents(token, {
+                        calendarId: cal.calendarId || 'primary',
+                        timeMin: oneYearAgo,
+                        timeMax: oneYearAhead,
+                        maxResults: 10000,
+                      });
+                    } catch (error) {
+                      logger.warn({ error, calendarId: cal.id, userId }, 'Failed to search events for limit check');
+                      return [];
+                    }
+                  }
+                );
+                
+                totalEventCount += events.length || 0;
+              } catch (error) {
+                logger.warn({ error, calendarId: cal.id, userId }, 'Failed to query calendar for event limit check');
+                // Continue with other calendars
+              }
+            }
+            
+            if (totalEventCount >= MAX_EVENTS_FREE) {
+              logger.info(
+                {
+                  userId,
+                  tier,
+                  eventCount: totalEventCount,
+                  limit: MAX_EVENTS_FREE,
+                },
+                'Event creation blocked - free plan limit reached'
+              );
+              
+              return {
+                success: false,
+                action: 'CREATE',
+                message: `📅 *Event Limit Reached*\n\nOn the Free plan you can create up to 15 events. Upgrade to Pro to create more events.\n\nUpgrade at: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.imaginecalendar.com'}/billing`,
+              };
+            }
+          }
+        }
+      } catch (error) {
+        logger.error(
+          {
+            error,
+            userId,
+          },
+          'Failed to check plan limits for event creation'
+        );
+        // Continue with event creation if plan check fails (fail open)
+      }
+
       // Check if user wants Google Meet (check description and location for keywords)
       // Also create Google Meet if no location is provided
       const descriptionLower = intent.description?.toLowerCase() || '';

@@ -34,6 +34,8 @@ import { Label } from "@imaginecalendar/ui/label";
 import { ShareButton } from "@/components/share-button";
 import { ShareDetailsModal } from "@/components/share-details-modal";
 import { ProductAutocomplete } from "@/components/product-autocomplete";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -873,6 +875,12 @@ export default function ShoppingListPage() {
 
   const allOwnedFolders = useMemo(() => flattenFolders(folders), [folders]);
 
+  // Plan limits for shopping list folders
+  const { tier, isLoading: isLoadingLimits } = usePlanLimits();
+  const isFreeUser = tier === 'free';
+  const MAX_FOLDERS_FREE = 2;
+  const canCreateFolder = !isFreeUser || allOwnedFolders.length < MAX_FOLDERS_FREE;
+
   // Sort folders to show "General" at the top
   const sortedFolders = useMemo(() => {
     // Only show top-level folders (no subfolders)
@@ -1444,6 +1452,17 @@ export default function ShoppingListPage() {
   const handleCreateFolder = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newFolderName.trim()) return;
+
+    // Check folder limit for free users
+    if (isFreeUser && allOwnedFolders.length >= MAX_FOLDERS_FREE) {
+      toast({
+        title: "Folder Limit Reached",
+        description: "On the Free plan you can create up to 2 list folders. Upgrade to Pro to create more folders.",
+        variant: "error",
+      });
+      return;
+    }
+
     createFolderMutation.mutate({ 
       name: newFolderName.trim(),
       icon: selectedIcon,
@@ -2083,11 +2102,23 @@ export default function ShoppingListPage() {
                         variant="outline"
                         size="sm"
                         className="flex items-center gap-1.5"
+                        disabled={isLoadingLimits || (isFreeUser && allOwnedFolders.length >= MAX_FOLDERS_FREE)}
                       >
                         <Plus className="h-4 w-4" />
                         Add New
                       </Button>
                     </div>
+                    {/* Upgrade Prompt for Free Users */}
+                    {!isLoadingLimits && isFreeUser && allOwnedFolders.length >= MAX_FOLDERS_FREE && (
+                      <div className="mt-3">
+                        <UpgradePrompt
+                          feature="List Folders"
+                          requiredTier="pro"
+                          variant="alert"
+                          className="border-amber-200 bg-amber-50 text-amber-900"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Search Bar */}
@@ -2461,11 +2492,23 @@ export default function ShoppingListPage() {
                 variant="outline"
                 size="sm"
                 className="flex items-center gap-1.5"
+                disabled={isLoadingLimits || (isFreeUser && allOwnedFolders.length >= MAX_FOLDERS_FREE)}
               >
                 <Plus className="h-4 w-4" />
                 Add New
               </Button>
             </div>
+            {/* Upgrade Prompt for Free Users */}
+            {!isLoadingLimits && isFreeUser && allOwnedFolders.length >= MAX_FOLDERS_FREE && (
+              <div className="mt-3">
+                <UpgradePrompt
+                  feature="List Folders"
+                  requiredTier="pro"
+                  variant="alert"
+                  className="border-amber-200 bg-amber-50 text-amber-900"
+                />
+              </div>
+            )}
 
             {/* Search Bar */}
             <div className="relative">

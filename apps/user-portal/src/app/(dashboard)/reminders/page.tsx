@@ -57,6 +57,8 @@ import {
 import { useToast } from "@imaginecalendar/ui/use-toast";
 import Link from "next/link";
 import { Home, ChevronLeft, Clock } from "lucide-react";
+import { usePlanLimits } from "@/hooks/use-plan-limits";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
 
 // ==================== TYPES ====================
 
@@ -893,6 +895,12 @@ export default function RemindersPage() {
     trpc.reminders.list.queryOptions()
   );
 
+  // Plan limits for reminders
+  const { tier, isLoading: isLoadingLimits } = usePlanLimits();
+  const isFreeUser = tier === 'free';
+  const MAX_REMINDERS_FREE = 15;
+  const canCreateReminder = !isFreeUser || reminders.length < MAX_REMINDERS_FREE;
+
   const [query, setQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1464,6 +1472,16 @@ export default function RemindersPage() {
         // Update existing reminder
         await updateMutation.mutateAsync({ id: form.id, ...payload });
       } else {
+        // Check reminder limit for free users before creating
+        if (isFreeUser && reminders.length >= MAX_REMINDERS_FREE) {
+          toast({
+            title: "Reminder Limit Reached",
+            description: "On the Free plan you can create up to 15 reminders. Upgrade to Pro to create more reminders.",
+            variant: "error",
+          });
+          return;
+        }
+        
         // Create new reminder
         await createMutation.mutateAsync(payload);
       }
@@ -1473,7 +1491,7 @@ export default function RemindersPage() {
     } catch (error) {
       // Error handling is done in the mutation
     }
-  }, [form, toast, resetForm, createMutation, updateMutation]);
+  }, [form, toast, resetForm, createMutation, updateMutation, isFreeUser, reminders.length]);
 
   const confirmDelete = useCallback((id: string) => {
     setReminderToDelete(id);
@@ -1981,11 +1999,24 @@ export default function RemindersPage() {
                   variant="outline"
                   size="sm"
                   className="hidden lg:flex items-center gap-1.5"
+                  disabled={isLoadingLimits || (isFreeUser && reminders.length >= MAX_REMINDERS_FREE)}
                 >
                   <Plus className="h-4 w-4" />
                   Add New
                 </Button>
         </div>
+
+        {/* Upgrade Prompt for Free Users */}
+        {!isLoadingLimits && isFreeUser && reminders.length >= MAX_REMINDERS_FREE && (
+          <div className="px-4 mt-3">
+            <UpgradePrompt
+              feature="Reminders"
+              requiredTier="pro"
+              variant="alert"
+              className="border-amber-200 bg-amber-50 text-amber-900"
+            />
+          </div>
+        )}
 
         {/* Reminders List */}
         <div className="px-4 pb-20">
@@ -2097,7 +2128,8 @@ export default function RemindersPage() {
         {/* Floating Action Button */}
         <button
           onClick={openNewForm}
-          className="fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg flex items-center justify-center transition-colors z-50 lg:hidden"
+          disabled={isLoadingLimits || (isFreeUser && reminders.length >= MAX_REMINDERS_FREE)}
+          className="fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg flex items-center justify-center transition-colors z-50 lg:hidden disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="h-6 w-6 text-white" />
         </button>

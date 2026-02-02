@@ -564,6 +564,7 @@ export default function DashboardPage() {
   const { data: shoppingListItems = [] } = useQuery(trpc.shoppingList.list.queryOptions({}));
   const { data: sharedResources } = useQuery(trpc.taskSharing.getSharedWithMe.queryOptions());
   const { data: friends = [] } = useQuery(trpc.friends.list.queryOptions());
+  const { data: storageStats } = useQuery(trpc.storage.stats.queryOptions());
   
   // Fetch addresses
   const { data: addresses = [] } = useQuery(trpc.addresses.list.queryOptions());
@@ -1897,7 +1898,7 @@ export default function DashboardPage() {
             <div className="flex gap-2">
               <StatCard
                 number={totalShoppingListItems.toString()}
-                label="Remaining Purchase"
+                label="Active List Items"
                 iconBg="#F2FFF4"
                 borderColor="#ECFCEE"
                 blurColor="#C4FFCC"
@@ -1927,13 +1928,13 @@ export default function DashboardPage() {
                 onClick={() => router.push("/friends")}
               />
               <StatCard
-                number={allCombinedNotes.length.toString()}
-                label="Notes Created"
+                number={(storageStats?.filesCount || 0).toString()}
+                label="Files Uploaded"
                 iconBg="#F2F5FF"
                 borderColor="#F0F4FF"
                 blurColor="#C5D2FF"
-                icon={<ArticleIcon />}
-              onClick={() => router.push("/notes")}
+                icon={<FileIcon />}
+                onClick={() => router.push("/files")}
               />
             </div>
           </div>
@@ -3656,6 +3657,19 @@ function ArticleIcon() {
 </g>
 </svg>
 
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<mask id="mask0_file_icon" style={{ maskType: "alpha" as const }} maskUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
+<rect width="16" height="16" fill="#D9D9D9"/>
+</mask>
+<g mask="url(#mask0_file_icon)">
+<path d="M9.33333 2H4.66667C4.3 2 3.98611 2.13056 3.725 2.39167C3.46389 2.65278 3.33333 2.96667 3.33333 3.33333V12.6667C3.33333 13.0333 3.46389 13.3472 3.725 13.6083C3.98611 13.8694 4.3 14 4.66667 14H11.3333C11.7 14 12.0139 13.8694 12.275 13.6083C12.5361 13.3472 12.6667 13.0333 12.6667 12.6667V5.33333L9.33333 2ZM10 6.66667V12.6667H4.66667V3.33333H8.66667V6.66667H10ZM6 8.66667H10C10.1889 8.66667 10.3472 8.73056 10.475 8.85833C10.6028 8.98611 10.6667 9.14444 10.6667 9.33333C10.6667 9.52222 10.6028 9.68056 10.475 9.80833C10.3472 9.93611 10.1889 10 10 10H6C5.81111 10 5.65278 9.93611 5.525 9.80833C5.39722 9.68056 5.33333 9.52222 5.33333 9.33333C5.33333 9.14444 5.39722 8.98611 5.525 8.85833C5.65278 8.73056 5.81111 8.66667 6 8.66667ZM6 11.3333H10C10.1889 11.3333 10.3472 11.3972 10.475 11.525C10.6028 11.6528 10.6667 11.8111 10.6667 12C10.6667 12.1889 10.6028 12.3472 10.475 12.475C10.3472 12.6028 10.1889 12.6667 10 12.6667H6C5.81111 12.6667 5.65278 12.6028 5.525 12.475C5.39722 12.3472 5.33333 12.1889 5.33333 12C5.33333 11.8111 5.39722 11.6528 5.525 11.525C5.65278 11.3972 5.81111 11.3333 6 11.3333Z" fill="#4867CC"/>
+</g>
+</svg>
   );
 }
 

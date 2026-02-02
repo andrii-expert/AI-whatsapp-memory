@@ -1612,7 +1612,9 @@ export default function CalendarsPage() {
   );
   
   // Get plan limits
-  const { limits, canAddCalendar, getCalendarsRemaining, tier } = usePlanLimits();
+  const { limits, canAddCalendar, getCalendarsRemaining, tier, isLoading: isLoadingLimits } = usePlanLimits();
+  const isFreeUser = tier === 'free';
+  const MAX_EVENTS_FREE = 15;
 
   // Fetch events from all active calendars
   const activeCalendars = useMemo(() => calendars.filter((cal: any) => cal.isActive), [calendars]);
@@ -1731,6 +1733,42 @@ export default function CalendarsPage() {
         });
       });
   }, [eventQueries, activeCalendars]);
+
+  // Query all events from a wider time range (1 year back to 1 year forward) for limit checking
+  const limitCheckTimeRange = useMemo(() => {
+    const now = new Date();
+    const oneYearAgo = new Date(now);
+    oneYearAgo.setFullYear(now.getFullYear() - 1);
+    const oneYearAhead = new Date(now);
+    oneYearAhead.setFullYear(now.getFullYear() + 1);
+    return {
+      timeMin: oneYearAgo.toISOString(),
+      timeMax: oneYearAhead.toISOString(),
+    };
+  }, []);
+
+  const eventCountQueries = useQueries({
+    queries: activeCalendars.map((cal: any) => ({
+      ...trpc.calendar.getEvents.queryOptions({
+        calendarId: cal.id,
+        timeMin: limitCheckTimeRange.timeMin,
+        timeMax: limitCheckTimeRange.timeMax,
+        maxResults: 10000,
+      }),
+      enabled: isFreeUser && cal.isActive && !!cal.id,
+    })),
+  });
+
+  // Count all events across all calendars for limit check
+  const totalEventCount = useMemo(() => {
+    if (!isFreeUser) return 0; // Only count for free users
+    return eventCountQueries.reduce((total, query) => {
+      return total + (query.data?.length || 0);
+    }, 0);
+  }, [eventCountQueries, isFreeUser]);
+
+  const canCreateEvent = !isFreeUser || totalEventCount < MAX_EVENTS_FREE;
+
   // Count only active calendars for limit check
   const activeCalendarCount = calendars.filter((cal: any) => cal.isActive).length;
   const canAddMore = canAddCalendar(activeCalendarCount);
@@ -2319,6 +2357,16 @@ export default function CalendarsPage() {
       toast({
         title: "Calendar required",
         description: "Please select at least one calendar for the event.",
+        variant: "error",
+      });
+      return;
+    }
+
+    // Check event limit for free users
+    if (isFreeUser && totalEventCount >= MAX_EVENTS_FREE) {
+      toast({
+        title: "Event Limit Reached",
+        description: "On the Free plan you can create up to 15 events. Upgrade to Pro to create more events.",
         variant: "error",
       });
       return;
@@ -2959,11 +3007,23 @@ export default function CalendarsPage() {
                 variant="blue-primary"
                 className="w-full sm:w-auto text-sm sm:text-base"
                 onClick={() => setCreateEventDialogOpen(true)}
+                disabled={isLoadingLimits || (isFreeUser && totalEventCount >= MAX_EVENTS_FREE)}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Event
               </Button>
             </div>
+            {/* Upgrade Prompt for Free Users */}
+            {!isLoadingLimits && isFreeUser && totalEventCount >= MAX_EVENTS_FREE && (
+              <div className="px-4 mb-4">
+                <UpgradePrompt
+                  feature="Events"
+                  requiredTier="pro"
+                  variant="alert"
+                  className="border-amber-200 bg-amber-50 text-amber-900"
+                />
+              </div>
+            )}
 
             {/* Calendar Header */}
             <div className="flex items-center justify-center gap-2 sm:gap-3 mb-4">
@@ -3194,6 +3254,14 @@ export default function CalendarsPage() {
                         <Button
                           variant="outline"
                           onClick={() => {
+                            if (isFreeUser && totalEventCount >= MAX_EVENTS_FREE) {
+                              toast({
+                                title: "Event Limit Reached",
+                                description: "On the Free plan you can create up to 15 events. Upgrade to Pro to create more events.",
+                                variant: "error",
+                              });
+                              return;
+                            }
                             setEventTitle("");
                             setEventDate(format(displayDate, "yyyy-MM-dd"));
                             setEventTime("");
@@ -3208,6 +3276,7 @@ export default function CalendarsPage() {
                             setSelectedCalendarIds([]);
                             setCreateEventDialogOpen(true);
                           }}
+                          disabled={isLoadingLimits || (isFreeUser && totalEventCount >= MAX_EVENTS_FREE)}
                           className="text-sm"
                         >
                           <Plus className="h-4 w-4 mr-2" />
@@ -3330,6 +3399,14 @@ export default function CalendarsPage() {
                     <Button
                       variant="outline"
                       onClick={() => {
+                        if (isFreeUser && totalEventCount >= MAX_EVENTS_FREE) {
+                          toast({
+                            title: "Event Limit Reached",
+                            description: "On the Free plan you can create up to 15 events. Upgrade to Pro to create more events.",
+                            variant: "error",
+                          });
+                          return;
+                        }
                         setEventTitle("");
                         setEventDate(format(displayDate, "yyyy-MM-dd"));
                         setEventTime("");
@@ -3344,6 +3421,7 @@ export default function CalendarsPage() {
                         setSelectedCalendarIds([]);
                         setCreateEventDialogOpen(true);
                       }}
+                      disabled={isLoadingLimits || (isFreeUser && totalEventCount >= MAX_EVENTS_FREE)}
                       className="text-sm"
                     >
                       <Plus className="h-4 w-4 mr-2" />
@@ -3492,8 +3570,19 @@ export default function CalendarsPage() {
 
         {/* Floating Action Button for Add Event - Mobile only */}
         <button
-          onClick={() => setCreateEventDialogOpen(true)}
-          className="fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg flex items-center justify-center transition-colors z-50 lg:hidden"
+          onClick={() => {
+            if (isFreeUser && totalEventCount >= MAX_EVENTS_FREE) {
+              toast({
+                title: "Event Limit Reached",
+                description: "On the Free plan you can create up to 15 events. Upgrade to Pro to create more events.",
+                variant: "error",
+              });
+              return;
+            }
+            setCreateEventDialogOpen(true);
+          }}
+          disabled={isLoadingLimits || (isFreeUser && totalEventCount >= MAX_EVENTS_FREE)}
+          className="fixed bottom-20 left-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg flex items-center justify-center transition-colors z-50 lg:hidden disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="h-6 w-6 text-white" />
         </button>
@@ -4032,7 +4121,8 @@ export default function CalendarsPage() {
                 !eventTitle.trim() ||
                 !eventDate ||
                 selectedCalendarIds.length === 0 ||
-                createEventMutation.isPending
+                createEventMutation.isPending ||
+                (isFreeUser && totalEventCount >= MAX_EVENTS_FREE)
               }
               className="flex-1 bg-blue-400 hover:bg-blue-500 text-white rounded-lg border-0"
             >
