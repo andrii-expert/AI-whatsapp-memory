@@ -10851,13 +10851,28 @@ export class ActionExecutor {
     }
 
     // Check folder limit for free users (max 2 folders)
+    // Beta users should not have folder limits (same as silver/pro users)
     try {
       const subscription = await getUserSubscription(this.db, this.userId);
       if (subscription?.plan) {
         const plan = await getPlanById(this.db, subscription.plan);
         const metadata = (plan?.metadata as Record<string, unknown> | null) || null;
-        const tier = getPlanTier(metadata);
         
+        // Get tier from metadata, but fallback to plan ID if metadata doesn't have tier
+        let tier = getPlanTier(metadata);
+        // Fallback: if tier is 'free' but plan ID suggests otherwise, infer tier from plan ID
+        if (tier === 'free' && subscription.plan) {
+          const planId = subscription.plan;
+          if (planId === 'beta') {
+            tier = 'beta';
+          } else if (planId.startsWith('silver')) {
+            tier = 'silver';
+          } else if (planId.startsWith('gold')) {
+            tier = 'gold';
+          }
+        }
+        
+        // Only apply limit to free users - beta, silver/pro, and gold users have unlimited folders
         if (tier === 'free') {
           // Count only top-level folders (no parentId)
           const topLevelFolders = existingFolders.filter(f => !f.parentId);
@@ -10874,9 +10889,28 @@ export class ActionExecutor {
               'Shopping list folder creation blocked - free plan limit reached'
             );
             
+            // Send button message instead of plain text
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://dashboard.crackon.ai';
+            const billingUrl = `${appUrl}/billing`;
+            
+            try {
+              await this.sendSingleButtonMessage(
+                '📁 *Folder Limit Reached*\n\nOn the Free plan you can create up to 2 list folders. Upgrade to Pro to create more folders.',
+                'Upgrade Now',
+                billingUrl
+              );
+            } catch (buttonError) {
+              logger.warn({ error: buttonError, userId: this.userId }, 'Failed to send button message, falling back to text');
+              // Fallback to text message if button fails
+              await this.whatsappService.sendTextMessage(
+                this.recipient,
+                `📁 *Folder Limit Reached*\n\nOn the Free plan you can create up to 2 list folders. Upgrade to Pro to create more folders.\n\nUpgrade at: ${billingUrl}`
+              );
+            }
+            
             return {
               success: false,
-              message: `📁 *Folder Limit Reached*\n\nOn the Free plan you can create up to 2 list folders. Upgrade to Pro to create more folders.\n\nUpgrade at: ${process.env.NEXT_PUBLIC_APP_URL || 'https://app.imaginecalendar.com'}/billing`,
+              message: '', // Empty message since we already sent the button message
             };
           }
         }
