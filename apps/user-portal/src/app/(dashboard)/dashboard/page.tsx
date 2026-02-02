@@ -1497,21 +1497,21 @@ export default function DashboardPage() {
     });
   }, [allCalendarEvents, calendars, userPreferences]);
 
-  // Get next events (upcoming events, not just today)
+  // Get completed events (events that have ended)
   const scheduledEvents = useMemo(() => {
     if (!processedEvents || processedEvents.length === 0) return [];
     
     // Get current date for filtering
     const now = new Date();
     
-    // Filter events that start from now onwards (upcoming events)
-    const upcomingEvents = processedEvents.filter(event => {
-      // Include events that haven't ended yet
-      return event.end.getTime() >= now.getTime();
+    // Filter events that have already ended (completed/ticked events)
+    const completedEvents = processedEvents.filter(event => {
+      // Include events that have ended (past events)
+      return event.end.getTime() < now.getTime();
     });
     
     // Format events for display (same as calendar page)
-    const formattedEvents = upcomingEvents.map((event: any) => {
+    const formattedEvents = completedEvents.map((event: any) => {
       const startDate = event.start;
       const endDate = event.end;
       
@@ -1562,10 +1562,10 @@ export default function DashboardPage() {
       };
     });
     
-    // Sort by start time (earliest first)
-    formattedEvents.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+    // Sort by end time (most recent first for completed events)
+    formattedEvents.sort((a, b) => b.endDate.getTime() - a.endDate.getTime());
     
-    return formattedEvents.slice(0, 3); // Show next 3 events
+    return formattedEvents.slice(0, 3); // Show most recent 3 completed events
   }, [processedEvents, userPreferences]);
 
   const shouldShowReminders = true;
@@ -2008,7 +2008,7 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-2">
                     {scheduledEvents.length === 0 ? (
                   <div className="px-4 py-8 text-center">
-                    <p className="text-sm text-gray-500">No upcoming events</p>
+                    <p className="text-sm text-gray-500">No completed events</p>
                   </div>
                     ) : (
                       scheduledEvents.map((event: any) => {
