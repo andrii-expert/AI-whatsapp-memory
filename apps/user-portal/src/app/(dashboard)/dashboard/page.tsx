@@ -1464,9 +1464,34 @@ export default function DashboardPage() {
     return sorted.slice(0, 10); // Show up to 10 notes
   }, [allCombinedNotes]);
 
-  // Process events for display (EXACT same as calendar page)
+  // Get selected calendar IDs from localStorage (same as calendars page)
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
+    // Try to load from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('selectedCalendarIds');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+
+  // Initialize selectedCalendarIds with active calendars if empty (same as calendars page)
+  useEffect(() => {
+    if (calendars && calendars.length > 0 && selectedCalendarIds.length === 0) {
+      const activeCalendars = calendars.filter((cal: any) => cal.isActive);
+      if (activeCalendars.length > 0 && activeCalendars[0]?.id) {
+        setSelectedCalendarIds([activeCalendars[0].id]);
+      }
+    }
+  }, [calendars, selectedCalendarIds.length]);
+
+  // Process events for display (EXACT same as calendar page - filter by selected calendars)
   const processedEvents = useMemo(() => {
-    return allCalendarEvents.map((event: any) => {
+    // Filter by selected calendars first (same as calendars page)
+    const filteredEvents = allCalendarEvents.filter((event: any) => 
+      selectedCalendarIds.length === 0 || selectedCalendarIds.includes(event.calendarId)
+    );
+    
+    return filteredEvents.map((event: any) => {
       const calendar = calendars?.find((cal: any) => cal.id === event.calendarId);
       const provider = calendar?.provider || "google";
       // Use color from event or default based on provider
@@ -1495,23 +1520,23 @@ export default function DashboardPage() {
         userTimezone, // Use user's timezone for all formatting
       };
     });
-  }, [allCalendarEvents, calendars, userPreferences]);
+  }, [allCalendarEvents, calendars, userPreferences, selectedCalendarIds]);
 
-  // Get completed events (events that have ended)
+  // Get next events (upcoming events, not just today)
   const scheduledEvents = useMemo(() => {
     if (!processedEvents || processedEvents.length === 0) return [];
     
     // Get current date for filtering
     const now = new Date();
     
-    // Filter events that have already ended (completed/ticked events)
-    const completedEvents = processedEvents.filter(event => {
-      // Include events that have ended (past events)
-      return event.end.getTime() < now.getTime();
+    // Filter events that start from now onwards (upcoming events)
+    const upcomingEvents = processedEvents.filter(event => {
+      // Include events that haven't ended yet
+      return event.end.getTime() >= now.getTime();
     });
     
     // Format events for display (same as calendar page)
-    const formattedEvents = completedEvents.map((event: any) => {
+    const formattedEvents = upcomingEvents.map((event: any) => {
       const startDate = event.start;
       const endDate = event.end;
       
@@ -1562,10 +1587,10 @@ export default function DashboardPage() {
       };
     });
     
-    // Sort by end time (most recent first for completed events)
-    formattedEvents.sort((a, b) => b.endDate.getTime() - a.endDate.getTime());
+    // Sort by start time (earliest first)
+    formattedEvents.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     
-    return formattedEvents.slice(0, 3); // Show most recent 3 completed events
+    return formattedEvents.slice(0, 3); // Show next 3 events
   }, [processedEvents, userPreferences]);
 
   const shouldShowReminders = true;
@@ -1754,18 +1779,14 @@ export default function DashboardPage() {
     const now = new Date();
     const today = startOfDay(now);
     
-    // Filter events for today that have already ended (ticked/completed events)
-    const todayCompletedEvents = processedEvents.filter(event => {
-      // Check if event is happening today
+    // Filter events for today using same logic
+    const todayEvents = processedEvents.filter(event => {
       const eventStart = startOfDay(event.start);
       const eventEnd = endOfDay(event.end);
-      const isToday = (today >= eventStart && today <= eventEnd) || isSameDay(event.start, now);
-      
-      // Only include events that have already ended (ticked/completed)
-      return isToday && event.end.getTime() < now.getTime();
+      return (today >= eventStart && today <= eventEnd) || isSameDay(event.start, now);
     });
     
-    return todayCompletedEvents.length;
+    return todayEvents.length;
   }, [processedEvents]);
   
   const totalQuickNotes = useMemo(() => {
@@ -2012,7 +2033,7 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-2">
                     {scheduledEvents.length === 0 ? (
                   <div className="px-4 py-8 text-center">
-                    <p className="text-sm text-gray-500">No completed events</p>
+                    <p className="text-sm text-gray-500">No upcoming events</p>
                   </div>
                     ) : (
                       scheduledEvents.map((event: any) => {
