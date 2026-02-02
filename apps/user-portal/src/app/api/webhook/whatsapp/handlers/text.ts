@@ -967,6 +967,34 @@ async function processAIResponse(
     
     const actionTemplate = actionLines.join('\n');
     
+    // CRITICAL: "Change X list to primary" - always run set-primary from user text and never send AI response.
+    // The AI cannot know which list is primary; it sometimes wrongly says "X is already primary". Intercept for any titleType.
+    if (originalUserText) {
+      const setPrimaryMatch = originalUserText.match(
+        /(?:change|make|set)\s+(?:the\s+)?(.+?)\s+(?:to\s+|as\s+)?primary(?:\s+list)?\.?$/i
+      );
+      if (setPrimaryMatch && setPrimaryMatch[1]) {
+        const listName = setPrimaryMatch[1].trim();
+        if (listName.length > 0) {
+          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+          const parsed = executor.parseAction(`Set primary list: ${listName}`);
+          if (parsed && parsed.action === 'set_primary' && parsed.folderRoute) {
+            const tz = userTimezone || 'Africa/Johannesburg';
+            const result = await executor.executeAction(parsed, tz);
+            if (result.message.trim().length > 0) {
+              await whatsappService.sendTextMessage(recipient, result.message);
+              logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
+              logger.info(
+                { userId, listName, originalUserText },
+                'Set-primary: ran from user text (ignore AI title/response)'
+              );
+              return;
+            }
+          }
+        }
+      }
+    }
+    
     // CRITICAL: Use AI to analyze if user wants to view an event by number
     // This must happen BEFORE any other processing to catch cases where AI misclassifies
     if (originalUserText) {
@@ -1366,6 +1394,33 @@ async function processAIResponse(
             'Failed to analyze event view request with AI in normal title section, continuing with normal flow'
           );
           // Continue with normal processing if AI analysis fails
+        }
+      }
+
+      // CRITICAL: If user said "change X list to primary" but AI returned Normal (e.g. "already set as primary"),
+      // run set-primary ourselves and send our result - never send the AI's wrong "already primary" response.
+      if (originalUserText) {
+        const setPrimaryMatch = originalUserText.match(
+          /(?:change|make|set)\s+(?:the\s+)?(.+?)\s+(?:to\s+|as\s+)?primary(?:\s+list)?\.?$/i
+        );
+        if (setPrimaryMatch && setPrimaryMatch[1]) {
+          const listName = setPrimaryMatch[1].trim();
+          if (listName.length > 0) {
+            const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+            const parsed = executor.parseAction(`Set primary list: ${listName}`);
+            if (parsed && parsed.action === 'set_primary' && parsed.folderRoute) {
+              const result = await executor.executeAction(parsed, userTimezone);
+              if (result.message.trim().length > 0) {
+                await whatsappService.sendTextMessage(recipient, result.message);
+                logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
+                logger.info(
+                  { userId, listName, originalUserText },
+                  'Override: ran set-primary from user text (AI had returned Normal)'
+                );
+                return;
+              }
+            }
+          }
         }
       }
       
