@@ -10994,6 +10994,15 @@ export class ActionExecutor {
       const folder = await getShoppingListFolderById(this.db, folderId, this.userId);
       const folderName = folder?.name ?? parsed.folderRoute;
 
+      // Check actual DB state: if already primary, inform user (don't assume - verify)
+      const currentPrimary = await getPrimaryShoppingListFolder(this.db, this.userId);
+      if (currentPrimary?.id === folderId) {
+        return {
+          success: true,
+          message: `ℹ️ *${folderName}* is already your primary list.`,
+        };
+      }
+
       await setPrimaryShoppingListFolder(this.db, folderId, this.userId);
 
       logger.info({ userId: this.userId, folderId, folderName }, 'Set primary shopping list folder');
