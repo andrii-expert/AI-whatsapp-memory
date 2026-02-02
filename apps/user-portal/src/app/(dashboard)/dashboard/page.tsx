@@ -1898,7 +1898,7 @@ export default function DashboardPage() {
             <div className="flex gap-2">
               <StatCard
                 number={totalShoppingListItems.toString()}
-                label="Remaining Purchase"
+                label="Active List Items"
                 iconBg="#F2FFF4"
                 borderColor="#ECFCEE"
                 blurColor="#C4FFCC"
