@@ -10798,43 +10798,50 @@ export class ActionExecutor {
    * Resolve shopping list folder route (e.g., "Groceries" or "Groceries/Fruits") to folder ID
    * Similar to resolveFolderRoute but for shopping list folders
    * Handles singular/plural variations (e.g., "grocery" matches "Groceries")
+   * @param options.ownedOnly - When true (e.g. for set-primary), only search owned folders. Never use synonyms.
    */
-  private async resolveShoppingListFolderRoute(folderRoute: string): Promise<string | null> {
+  private async resolveShoppingListFolderRoute(
+    folderRoute: string,
+    options?: { ownedOnly?: boolean }
+  ): Promise<string | null> {
     const parts = folderRoute.split(/[\/→>]/).map(p => p.trim());
-    const folders = await getUserShoppingListFolders(this.db, this.userId);
+    let folders = await getUserShoppingListFolders(this.db, this.userId);
     const primaryFolder = await getPrimaryShoppingListFolder(this.db, this.userId);
+
+    // For set-primary: only consider owned folders (user can only set their own as primary)
+    if (options?.ownedOnly) {
+      folders = folders.filter((f: any) => !f.isSharedWithMe);
+    }
 
     // If only one part is provided, search all categories recursively
     if (parts.length === 1) {
       const rawName = parts[0];
       const folderName = rawName.toLowerCase();
 
-      // Special-case: treat common synonyms as the Home (primary) list
-      if (
-        primaryFolder &&
-        (
-          folderName === 'home' ||
-          folderName === 'home list' ||
-          folderName === 'my home list' ||
-          folderName === 'shopping list' ||
-          folderName === 'my shopping list'
-        )
-      ) {
-        return primaryFolder.id;
-      }
-      
-      // First check if it's a root folder (with fuzzy matching)
+      // CRITICAL: Check for actual folder by name FIRST (before synonyms).
+      // Never resolve "School List" or "Home List" to current primary - find the actual folder.
       const rootFolder = this.findFolderByName(folders, rawName);
       if (rootFolder) {
         return rootFolder.id;
       }
-      
-      // If not found as root folder, search all categories recursively
+
+      // If not found as root folder, search categories
       const foundCategory = this.findSubfolderByName(folders, rawName);
       if (foundCategory) {
         return foundCategory.id;
       }
-      
+
+      // Fallback: explicit "primary/default/main" terms only - never hardcoded folder-like names
+      if (!options?.ownedOnly && primaryFolder) {
+        const primarySynonyms = [
+          'primary', 'primary list', 'main', 'main list', 'default', 'default list',
+          'my list', 'the list'
+        ];
+        if (primarySynonyms.includes(folderName)) {
+          return primaryFolder.id;
+        }
+      }
+
       return null;
     }
     
@@ -10983,7 +10990,8 @@ export class ActionExecutor {
     }
 
     try {
-      const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute);
+      // ownedOnly: true - must find the actual folder by name, never use synonyms
+      const folderId = await this.resolveShoppingListFolderRoute(parsed.folderRoute, { ownedOnly: true });
       if (!folderId) {
         return {
           success: false,
