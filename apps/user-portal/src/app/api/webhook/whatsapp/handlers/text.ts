@@ -967,6 +967,51 @@ async function processAIResponse(
     
     const actionTemplate = actionLines.join('\n');
     
+    // CRITICAL: "Show all items" / "list all items" - list items, NOT files. AI sometimes routes to List files.
+    if (originalUserText && /^(?:show|list|display)\s+(?:me\s+)?(?:all\s+)?items\.?$/i.test(originalUserText.trim())) {
+      const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+      const parsed = executor.parseAction('List items: all - status: all');
+      if (parsed && parsed.action === 'list') {
+        parsed.resourceType = 'shopping';
+        const tz = userTimezone || 'Africa/Johannesburg';
+        const result = await executor.executeAction(parsed, tz);
+        if (result.message.trim().length > 0) {
+          await whatsappService.sendTextMessage(recipient, result.message);
+          logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
+          logger.info({ userId, originalUserText }, 'Show-all-items: ran as List items (ignore AI files)');
+          return;
+        }
+      }
+    }
+
+    // CRITICAL: "Create a list called X" - always create list folder, never file folder.
+    // The AI sometimes maps "create a list" to "Create a file folder" (document). Intercept for any titleType.
+    if (originalUserText) {
+      const createListMatch = originalUserText.match(
+        /(?:create|make)\s+(?:a\s+)?list\s+(?:(?:called|named)\s+)?["']?([^"'\n]+)["']?\.?$/i
+      );
+      if (createListMatch && createListMatch[1]) {
+        const listName = createListMatch[1].trim();
+        if (listName.length > 0) {
+          const executor = new ActionExecutor(db, userId, whatsappService, recipient);
+          const parsed = executor.parseAction(`Create a list folder: ${listName}`);
+          if (parsed && parsed.action === 'create' && parsed.folderRoute && parsed.isShoppingListFolder) {
+            const tz = userTimezone || 'Africa/Johannesburg';
+            const result = await executor.executeAction(parsed, tz);
+            if (result.message.trim().length > 0) {
+              await whatsappService.sendTextMessage(recipient, result.message);
+              logOutgoingMessageNonBlocking(db, recipient, userId, result.message);
+              logger.info(
+                { userId, listName, originalUserText },
+                'Create-list: ran as list folder (ignore AI file folder)'
+              );
+              return;
+            }
+          }
+        }
+      }
+    }
+
     // CRITICAL: "Change X list to primary" - always run set-primary from user text and never send AI response.
     // The AI cannot know which list is primary; it sometimes wrongly says "X is already primary". Intercept for any titleType.
     if (originalUserText) {
