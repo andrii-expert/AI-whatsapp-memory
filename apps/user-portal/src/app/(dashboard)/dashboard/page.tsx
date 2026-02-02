@@ -1754,14 +1754,18 @@ export default function DashboardPage() {
     const now = new Date();
     const today = startOfDay(now);
     
-    // Filter events for today using same logic
-    const todayEvents = processedEvents.filter(event => {
+    // Filter events for today that have already ended (ticked/completed events)
+    const todayCompletedEvents = processedEvents.filter(event => {
+      // Check if event is happening today
       const eventStart = startOfDay(event.start);
       const eventEnd = endOfDay(event.end);
-      return (today >= eventStart && today <= eventEnd) || isSameDay(event.start, now);
+      const isToday = (today >= eventStart && today <= eventEnd) || isSameDay(event.start, now);
+      
+      // Only include events that have already ended (ticked/completed)
+      return isToday && event.end.getTime() < now.getTime();
     });
     
-    return todayEvents.length;
+    return todayCompletedEvents.length;
   }, [processedEvents]);
   
   const totalQuickNotes = useMemo(() => {
